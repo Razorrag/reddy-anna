@@ -6,7 +6,7 @@ const router = express.Router();
 // Get all game settings
 router.get('/settings', async (req, res) => {
   try {
-    const settings = await query('SELECT setting_key, setting_value, description FROM game_settings');
+    const settings = await query('game_settings', 'select');
     
     // Convert array to object for easier access
     const settingsObj = {};
@@ -82,10 +82,23 @@ router.put('/settings', async (req, res) => {
     }
     
     for (const setting of settings) {
-      await query(
-        'INSERT INTO game_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT (setting_key) DO UPDATE SET setting_value = $2, updated_at = CURRENT_TIMESTAMP',
-        [setting.key, setting.value]
-      );
+      // Check if setting exists
+      const existing = await query('game_settings', 'select', {
+        where: { column: 'setting_key', value: setting.key }
+      });
+      
+      if (existing.length > 0) {
+        // Update existing setting
+        await query('game_settings', 'update', {
+          where: { column: 'setting_key', value: setting.key },
+          data: { setting_value: setting.value, updated_at: new Date().toISOString() }
+        });
+      } else {
+        // Insert new setting
+        await query('game_settings', 'insert', {
+          data: { setting_key: setting.key, setting_value: setting.value }
+        });
+      }
     }
     
     res.json({
@@ -112,10 +125,9 @@ router.get('/settings/:key', async (req, res) => {
   try {
     const { key } = req.params;
     
-    const result = await query(
-      'SELECT setting_key, setting_value, description FROM game_settings WHERE setting_key = $1',
-      [key]
-    );
+    const result = await query('game_settings', 'select', {
+      where: { column: 'setting_key', value: key }
+    });
     
     if (result.length === 0) {
       return res.status(404).json({
@@ -144,7 +156,7 @@ router.get('/settings/:key', async (req, res) => {
 // Get all stream settings
 router.get('/stream-settings', async (req, res) => {
   try {
-    const settings = await query('SELECT setting_key, setting_value, description FROM stream_settings');
+    const settings = await query('stream_settings', 'select');
     
     // Convert array to object for easier access
     const settingsObj = {};
@@ -211,10 +223,23 @@ router.put('/stream-settings', async (req, res) => {
     ];
     
     for (const setting of settings) {
-      await query(
-        'INSERT INTO stream_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT (setting_key) DO UPDATE SET setting_value = $2, updated_at = CURRENT_TIMESTAMP',
-        [setting.key, setting.value]
-      );
+      // Check if setting exists
+      const existing = await query('stream_settings', 'select', {
+        where: { column: 'setting_key', value: setting.key }
+      });
+      
+      if (existing.length > 0) {
+        // Update existing setting
+        await query('stream_settings', 'update', {
+          where: { column: 'setting_key', value: setting.key },
+          data: { setting_value: setting.value, updated_at: new Date().toISOString() }
+        });
+      } else {
+        // Insert new setting
+        await query('stream_settings', 'insert', {
+          data: { setting_key: setting.key, setting_value: setting.value }
+        });
+      }
     }
     
     res.json({
@@ -318,10 +343,22 @@ router.post('/set-opening-card', async (req, res) => {
     };
     
     // Update database
-    await query(
-      'INSERT INTO game_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = CURRENT_TIMESTAMP',
-      ['opening_card', card]
-    );
+    const existing = await query('game_settings', 'select', {
+      where: { column: 'setting_key', value: 'opening_card' }
+    });
+    
+    if (existing.length > 0) {
+      // Update existing setting
+      await query('game_settings', 'update', {
+        where: { column: 'setting_key', value: 'opening_card' },
+        data: { setting_value: card, updated_at: new Date().toISOString() }
+      });
+    } else {
+      // Insert new setting
+      await query('game_settings', 'insert', {
+        data: { setting_key: 'opening_card', setting_value: card }
+      });
+    }
     
     res.json({
       success: true,

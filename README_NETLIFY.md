@@ -25,7 +25,7 @@ Before deploying, update the backend URL in `config.js`:
 ```javascript
 // In config.js, update this line with your actual backend URL
 production: {
-  API_BASE_URL: 'https://your-backend-url.com'  // Replace with your actual backend URL
+  API_BASE_URL: 'https://reddy-anna-59l3.onrender.com'  // Replace with your actual backend URL
 }
 ```
 
@@ -55,7 +55,7 @@ After deployment, you need to set up API redirects:
 1. Go to Site settings > Build & deploy > Redirects
 2. Add a redirect rule:
    - From: `/api/*`
-   - To: `https://your-backend-url.com/api/:splat`
+   - To: `https://reddy-anna-59l3.onrender.com/api/:splat`
    - Status code: 200
    - Force: Yes
 
@@ -63,7 +63,7 @@ After deployment, you need to set up API redirects:
 
 1. Go to Site settings > Build & deploy > Environment
 2. Add environment variables if needed:
-   - `API_BASE_URL`: Your backend URL
+   - `API_BASE_URL`: `https://reddy-anna-59l3.onrender.com`
 
 ## Step 6: Test Your Deployment
 

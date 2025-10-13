@@ -26,13 +26,17 @@ router.post(
 
       const { fullName, mobile, email, password, referralCode } = req.body;
 
-      const existingByMobile = await query('SELECT id FROM users WHERE mobile = $1', [mobile]);
+      const existingByMobile = await query('users', 'select', {
+        where: { column: 'mobile', value: mobile }
+      });
       if (existingByMobile.length > 0) {
         return res.status(409).json({ message: 'Mobile already registered' });
       }
 
       if (email) {
-        const existingByEmail = await query('SELECT id FROM users WHERE email = $1', [email]);
+        const existingByEmail = await query('users', 'select', {
+          where: { column: 'email', value: email }
+        });
         if (existingByEmail.length > 0) {
           return res.status(409).json({ message: 'Email already registered' });
         }
@@ -40,10 +44,16 @@ router.post(
 
       const passwordHash = await bcrypt.hash(password, 10);
 
-      await query(
-        'INSERT INTO users (full_name, mobile, email, referral_code, password_hash, created_at) VALUES ($1, $2, $3, $4, $5, NOW())',
-        [fullName, mobile, email || null, referralCode || null, passwordHash]
-      );
+      await query('users', 'insert', {
+        data: {
+          full_name: fullName,
+          mobile: mobile,
+          email: email || null,
+          referral_code: referralCode || null,
+          password_hash: passwordHash,
+          created_at: new Date().toISOString()
+        }
+      });
 
       return res.status(201).json({ message: 'Signup successful' });
     } catch (err) {
@@ -66,7 +76,9 @@ router.post(
       }
 
       const { mobile, password } = req.body;
-      const users = await query('SELECT id, full_name, mobile, email, password_hash FROM users WHERE mobile = $1', [mobile]);
+      const users = await query('users', 'select', {
+        where: { column: 'mobile', value: mobile }
+      });
       if (users.length === 0) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
@@ -92,7 +104,9 @@ router.get('/profile', async (req, res, next) => {
             return res.status(400).json({ message: 'User ID required' });
         }
 
-        const users = await query('SELECT id, full_name, mobile, email, referral_code, date_of_birth, address, city, state, created_at FROM users WHERE id = $1', [userId]);
+        const users = await query('users', 'select', {
+          where: { column: 'id', value: userId }
+        });
         if (users.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -134,61 +148,40 @@ router.put('/profile', [
         const { userId, name, email, dateOfBirth, address, city, state } = req.body;
         
         // Check if user exists
-        const users = await query('SELECT id FROM users WHERE id = $1', [userId]);
+        const users = await query('users', 'select', {
+          where: { column: 'id', value: userId }
+        });
         if (users.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
 
         // Check if email is already taken by another user
         if (email) {
-            const existingEmail = await query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
-            if (existingEmail.length > 0) {
+            const existingEmail = await query('users', 'select', {
+              where: { column: 'email', value: email }
+            });
+            if (existingEmail.length > 0 && existingEmail[0].id !== parseInt(userId)) {
                 return res.status(409).json({ message: 'Email already taken' });
             }
         }
 
         // Update user
-        const updateFields = [];
-        const updateValues = [];
-        let paramIndex = 1;
+        const updateData = {};
+        if (name) updateData.full_name = name;
+        if (email !== undefined) updateData.email = email;
+        if (dateOfBirth) updateData.date_of_birth = dateOfBirth;
+        if (address !== undefined) updateData.address = address;
+        if (city) updateData.city = city;
+        if (state) updateData.state = state;
         
-        if (name) {
-            updateFields.push(`full_name = ${paramIndex}`);
-            updateValues.push(name);
-            paramIndex++;
-        }
-        if (email) {
-            updateFields.push(`email = ${paramIndex}`);
-            updateValues.push(email);
-            paramIndex++;
-        }
-        if (dateOfBirth) {
-            updateFields.push(`date_of_birth = ${paramIndex}`);
-            updateValues.push(dateOfBirth);
-            paramIndex++;
-        }
-        if (address !== undefined) {
-            updateFields.push(`address = ${paramIndex}`);
-            updateValues.push(address);
-            paramIndex++;
-        }
-        if (city) {
-            updateFields.push(`city = ${paramIndex}`);
-            updateValues.push(city);
-            paramIndex++;
-        }
-        if (state) {
-            updateFields.push(`state = ${paramIndex}`);
-            updateValues.push(state);
-            paramIndex++;
-        }
-        
-        if (updateFields.length === 0) {
+        if (Object.keys(updateData).length === 0) {
             return res.status(400).json({ message: 'No fields to update' });
         }
         
-        updateValues.push(userId);
-        await query(`UPDATE users SET ${updateFields.join(', ')} WHERE id = ${paramIndex}`, updateValues);
+        await query('users', 'update', {
+          where: { column: 'id', value: userId },
+          data: updateData
+        });
 
         return res.json({ message: 'Profile updated successfully' });
     } catch (err) {
@@ -205,7 +198,9 @@ router.get('/dashboard', async (req, res, next) => {
         }
 
         // Get user info
-        const users = await query('SELECT full_name, mobile, email, date_of_birth, address, city, state FROM users WHERE id = $1', [userId]);
+        const users = await query('users', 'select', {
+          where: { column: 'id', value: userId }
+        });
         if (users.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -287,7 +282,9 @@ router.put('/change-password', [
         const { userId, currentPassword, newPassword } = req.body;
         
         // Get user with password hash
-        const users = await query('SELECT id, password_hash FROM users WHERE id = $1', [userId]);
+        const users = await query('users', 'select', {
+          where: { column: 'id', value: userId }
+        });
         if (users.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -304,7 +301,10 @@ router.put('/change-password', [
         const newPasswordHash = await bcrypt.hash(newPassword, 10);
         
         // Update password
-        await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newPasswordHash, userId]);
+        await query('users', 'update', {
+          where: { column: 'id', value: userId },
+          data: { password_hash: newPasswordHash }
+        });
 
         return res.json({ message: 'Password changed successfully' });
     } catch (err) {
@@ -317,25 +317,16 @@ router.put('/change-password', [
 // Get all users (admin only)
 router.get('/admin/users', async (req, res, next) => {
     try {
-        const users = await query(`
-            SELECT 
-                id, 
-                full_name, 
-                mobile, 
-                email, 
-                referral_code, 
-                date_of_birth, 
-                address, 
-                city, 
-                state, 
-                created_at,
-                CASE 
-                    WHEN id IN (SELECT user_id FROM blocked_users) THEN 'Inactive'
-                    ELSE 'Active'
-                END as status
-            FROM users 
-            ORDER BY created_at DESC
-        `);
+        const users = await query('users', 'select');
+        
+        // Add status field based on blocked_users table
+        const blockedUsers = await query('blocked_users', 'select');
+        const blockedUserIds = new Set(blockedUsers.map(u => u.user_id));
+        
+        const usersWithStatus = users.map(user => ({
+            ...user,
+            status: blockedUserIds.has(user.id) ? 'Inactive' : 'Active'
+        })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         
         return res.json(users);
     } catch (err) {
@@ -364,14 +355,18 @@ router.post('/admin/users', [
         const { fullName, mobile, email, password, dateOfBirth, address, city, state, referralCode } = req.body;
 
         // Check if mobile already exists
-        const existingMobile = await query('SELECT id FROM users WHERE mobile = $1', [mobile]);
+        const existingMobile = await query('users', 'select', {
+          where: { column: 'mobile', value: mobile }
+        });
         if (existingMobile.length > 0) {
             return res.status(409).json({ message: 'Mobile number already registered' });
         }
 
         // Check if email already exists
         if (email) {
-            const existingEmail = await query('SELECT id FROM users WHERE email = $1', [email]);
+            const existingEmail = await query('users', 'select', {
+              where: { column: 'email', value: email }
+            });
             if (existingEmail.length > 0) {
                 return res.status(409).json({ message: 'Email already registered' });
             }
@@ -381,10 +376,20 @@ router.post('/admin/users', [
         const passwordHash = await bcrypt.hash(password, 10);
 
         // Insert new user
-        await query(`
-            INSERT INTO users (full_name, mobile, email, password_hash, date_of_birth, address, city, state, referral_code, created_at) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-        `, [fullName, mobile, email || null, passwordHash, dateOfBirth || null, address || null, city || null, state || null, referralCode || null]);
+        await query('users', 'insert', {
+          data: {
+            full_name: fullName,
+            mobile: mobile,
+            email: email || null,
+            password_hash: passwordHash,
+            date_of_birth: dateOfBirth || null,
+            address: address || null,
+            city: city || null,
+            state: state || null,
+            referral_code: referralCode || null,
+            created_at: new Date().toISOString()
+          }
+        });
 
         return res.status(201).json({ 
             message: 'User created successfully' 
@@ -415,79 +420,52 @@ router.put('/admin/users/:userId', [
         const { fullName, mobile, email, dateOfBirth, address, city, state, referralCode } = req.body;
 
         // Check if user exists
-        const users = await query('SELECT id FROM users WHERE id = $1', [userId]);
+        const users = await query('users', 'select', {
+          where: { column: 'id', value: userId }
+        });
         if (users.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
 
         // Check if mobile is taken by another user
         if (mobile) {
-            const existingMobile = await query('SELECT id FROM users WHERE mobile = $1 AND id != $2', [mobile, userId]);
-            if (existingMobile.length > 0) {
+            const existingMobile = await query('users', 'select', {
+              where: { column: 'mobile', value: mobile }
+            });
+            if (existingMobile.length > 0 && existingMobile[0].id !== parseInt(userId)) {
                 return res.status(409).json({ message: 'Mobile number already taken' });
             }
         }
 
         // Check if email is taken by another user
         if (email) {
-            const existingEmail = await query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
-            if (existingEmail.length > 0) {
+            const existingEmail = await query('users', 'select', {
+              where: { column: 'email', value: email }
+            });
+            if (existingEmail.length > 0 && existingEmail[0].id !== parseInt(userId)) {
                 return res.status(409).json({ message: 'Email already taken' });
             }
         }
 
-        // Build update query
-        const updateFields = [];
-        const updateValues = [];
-        let paramIndex = 1;
+        // Build update data
+        const updateData = {};
+        if (fullName) updateData.full_name = fullName;
+        if (mobile) updateData.mobile = mobile;
+        if (email !== undefined) updateData.email = email;
+        if (dateOfBirth !== undefined) updateData.date_of_birth = dateOfBirth;
+        if (address !== undefined) updateData.address = address;
+        if (city) updateData.city = city;
+        if (state) updateData.state = state;
+        if (referralCode !== undefined) updateData.referral_code = referralCode;
         
-        if (fullName) {
-            updateFields.push(`full_name = ${paramIndex}`);
-            updateValues.push(fullName);
-            paramIndex++;
-        }
-        if (mobile) {
-            updateFields.push(`mobile = ${paramIndex}`);
-            updateValues.push(mobile);
-            paramIndex++;
-        }
-        if (email !== undefined) {
-            updateFields.push(`email = ${paramIndex}`);
-            updateValues.push(email);
-            paramIndex++;
-        }
-        if (dateOfBirth !== undefined) {
-            updateFields.push(`date_of_birth = ${paramIndex}`);
-            updateValues.push(dateOfBirth);
-            paramIndex++;
-        }
-        if (address !== undefined) {
-            updateFields.push(`address = ${paramIndex}`);
-            updateValues.push(address);
-            paramIndex++;
-        }
-        if (city) {
-            updateFields.push(`city = ${paramIndex}`);
-            updateValues.push(city);
-            paramIndex++;
-        }
-        if (state) {
-            updateFields.push(`state = ${paramIndex}`);
-            updateValues.push(state);
-            paramIndex++;
-        }
-        if (referralCode !== undefined) {
-            updateFields.push(`referral_code = ${paramIndex}`);
-            updateValues.push(referralCode);
-            paramIndex++;
-        }
-        
-        if (updateFields.length === 0) {
+        if (Object.keys(updateData).length === 0) {
             return res.status(400).json({ message: 'No fields to update' });
         }
         
-        updateValues.push(userId);
-        await query(`UPDATE users SET ${updateFields.join(', ')} WHERE id = ${paramIndex}`, updateValues);
+        await query('users', 'update', {
+          where: { column: 'id', value: userId },
+          data: updateData
+        });
 
         return res.json({ message: 'User updated successfully' });
     } catch (err) {
@@ -509,17 +487,28 @@ router.put('/admin/users/:userId/block', [
         const { blocked } = req.body;
 
         // Check if user exists
-        const users = await query('SELECT id FROM users WHERE id = $1', [userId]);
+        const users = await query('users', 'select', {
+          where: { column: 'id', value: userId }
+        });
         if (users.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
 
         if (blocked) {
             // Block user - insert into blocked_users table
-            await query('INSERT INTO blocked_users (user_id, blocked_at) VALUES ($1, NOW()) ON CONFLICT (user_id) DO NOTHING', [userId]);
+            const existingBlock = await query('blocked_users', 'select', {
+              where: { column: 'user_id', value: userId }
+            });
+            if (existingBlock.length === 0) {
+              await query('blocked_users', 'insert', {
+                data: { user_id: userId, blocked_at: new Date().toISOString() }
+              });
+            }
         } else {
             // Unblock user - remove from blocked_users table
-            await query('DELETE FROM blocked_users WHERE user_id = $1', [userId]);
+            await query('blocked_users', 'delete', {
+              where: { column: 'user_id', value: userId }
+            });
         }
 
         return res.json({ 
@@ -546,7 +535,9 @@ router.post('/admin/login', [
         const { username, password } = req.body;
 
         // Find admin by username
-        const admins = await query('SELECT * FROM admins WHERE username = $1', [username]);
+        const admins = await query('admins', 'select', {
+          where: { column: 'username', value: username }
+        });
         
         if (admins.length === 0) {
             return res.status(401).json({ message: 'Invalid username or password' });
@@ -567,7 +558,10 @@ router.post('/admin/login', [
         }
 
         // Update last login
-        await query('UPDATE admins SET last_login = NOW() WHERE id = $1', [admin.id]);
+        await query('admins', 'update', {
+          where: { column: 'id', value: admin.id },
+          data: { last_login: new Date().toISOString() }
+        });
 
         // Return admin info (without password)
         const adminInfo = {
