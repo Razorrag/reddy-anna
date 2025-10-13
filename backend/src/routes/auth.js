@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
-import { query } from '../db.js';
+import { query } from '../db-supabase.js';
 
 const router = Router();
 
