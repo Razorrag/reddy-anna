@@ -50,7 +50,7 @@
     <section class="start-game-section">
         <div class="container">
             <div class="start-game-container">
-                <!-- Game Header -->
+                <!-- 1. Header (Back button, title, live indicator) -->
                 <div class="game-header">
                     <button class="back-btn" onclick="window.location.href='game.html'">
                         <i class="fas fa-arrow-left"></i>
@@ -86,130 +86,88 @@
                     </div>
                 </div>
 
-                <!-- Main Betting Interface -->
-                <div class="betting-interface">
-                    <!-- Timer -->
+                <!-- 2. Circular Timer (Large, centered, animated) -->
+                <div class="circular-timer-container">
                     <div class="game-timer">
                         <i class="fas fa-clock"></i>
                         <span id="gameTimer">30</span>s
                     </div>
-                    
-                    <div class="betting-container">
-                        <!-- Main Betting Areas -->
-                        <div class="main-betting-areas">
-                            <div class="betting-zone andar-zone" id="andarZone">
-                                <div class="zone-content1">
-                                    <div class="zone-text1">
-                                        <div class="zone-label1">ANDAR
-                                        1:1</div>
-                                    </div>
-                                    <!-- <div class="zone-card1">
-                                        <div class="playing-card">
-                                            <div class="card-top">9</div>
-                                            <div class="card-suit">♥</div>
-                                            <div class="card-center">
-                                                <div class="card-hearts">
-                                                    <span>♥</span><span>♥</span><span>♥</span>
-                                                    <span>♥</span><span>♥</span><span>♥</span>
-                                                    <span>♥</span><span>♥</span><span>♥</span>
-                                                </div>
-                                            </div>
-                                            <div class="card-bottom">
-                                                <div class="card-suit">♥</div>
-                                                <div class="card-number">9</div>
-                                            </div>
-                                        </div>
-                                    </div> -->
-                                   
-                                </div>
-                                <img src="coins/Select Coins.png" alt="Andar Image" class="andar-zone-image">
-                                <img src="cards/D7.png" alt="Andar Image 2" class="andar-zone-image-2">
-                                <div class="bet-amount" id="andarBet">₹0</div>
-                            </div>
+                </div>
 
-                            <div class="central-card-area">
-                            <div class="central-card-display" id="centralCardDisplay">
-                                <div class="card-icon">🃏</div>
-                                <div class="card-text">Select Opening Card</div>
-                            </div>
-                            </div>
-
-                            <div class="betting-zone bahar-zone" id="baharZone">
-                                <div class="zone-text2">
-                                        <div class="zone-label2">BAHAR 
-                                        1:1</div>
-                                    </div>
-                                <!-- <div class="zone-content2">
-                                    <div class="zone-card2">
-                                        <div class="playing-card">
-                                            <div class="card-top">9</div>
-                                            <div class="card-suit">♥</div>
-                                            <div class="card-center">
-                                                <div class="card-hearts">
-                                                    <span>♥</span><span>♥</span><span>♥</span>
-                                                    <span>♥</span><span>♥</span><span>♥</span>
-                                                    <span>♥</span><span>♥</span><span>♥</span>
-                                                </div>
-                                            </div>
-                                            <div class="card-bottom">
-                                                <div class="card-suit">♥</div>
-                                                <div class="card-number">9</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                </div> -->
-                                <img src="coins/Select Coins.png" alt="Bahar Image" class="bahar-zone-image">
-                                <img src="cards/DQ.png" alt="Bahar Image 2" class="bahar-zone-image-2">
-                                <div class="bet-amount" id="baharBet">₹0</div>
-                            </div>
-                        </div>
-
-                        <!-- Chip Selection -->
-                        
-
+                <!-- 3. Central Card Display (Opening card) -->
+                <div class="central-card-area">
+                    <div class="central-card-display" id="centralCardDisplay">
+                        <div class="card-icon">🃏</div>
+                        <div class="card-text">Select Opening Card</div>
                     </div>
                 </div>
 
-                <!-- Game Controls -->
-                 <div class="coins-container">
-                    <div class="chip-selection-section">
-                            <!-- <h3 class="chip-selection-title">Select Coins</h3> -->
-                            <div class="chip-selection">
-                                <button class="chip-btn" data-amount="100000" onclick="updateshowcoins(event)">
-                                    <img src="coins/100000.png" alt="₹100000" class="chip-image">
-                                    <span class="chip-amount">₹100000</span>
-                                </button>
-                                <button class="chip-btn" data-amount="50000" onclick="updateshowcoins(event)">
-                                    <img src="coins/50000.png" alt="₹50000" class="chip-image">
-                                    <span class="chip-amount">₹50000</span>
-                                </button>
-                                <button class="chip-btn" data-amount="40000" onclick="updateshowcoins(event)">
-                                    <img src="coins/40000.png" alt="₹40000" class="chip-image">
-                                    <span class="chip-amount">₹40000</span>
-                                </button>
-                                <button class="chip-btn" data-amount="30000" onclick="updateshowcoins(event)">
-                                    <img src="coins/30000.png" alt="₹30000" class="chip-image">
-                                    <span class="chip-amount">₹30000</span>
-                                </button>
-                                <button class="chip-btn" data-amount="20000" onclick="updateshowcoins(event)">
-                                    <img src="coins/20000.png" alt="₹20000" class="chip-image">
-                                    <span class="chip-amount">₹20000</span>
-                                </button>
-                                <button class="chip-btn" data-amount="10000" onclick="updateshowcoins(event)">
-                                    <img src="coins/10000.png" alt="₹10000" class="chip-image">
-                                    <span class="chip-amount">₹10000</span>
-                                </button>
-                                <button class="chip-btn" data-amount="5000" onclick="updateshowcoins(event)">
-                                    <img src="coins/5000.png" alt="₹5000" class="chip-image">
-                                    <span class="chip-amount">₹5000</span>
-                                </button>
-                                    <button class="chip-btn" data-amount="2500" onclick="updateshowcoins(event)">
-                                    <img src="coins/2500.png" alt="₹2500" class="chip-image">
-                                    <span class="chip-amount">₹2500</span>
-                                </button>
+                <!-- 4. Andar/Bahar Betting Areas (Stacked vertically) -->
+                <div class="betting-container">
+                    <div class="main-betting-areas">
+                        <div class="betting-zone andar-zone" id="andarZone">
+                            <div class="zone-content1">
+                                <div class="zone-text1">
+                                    <div class="zone-label1">ANDAR 1:1</div>
+                                </div>
                             </div>
+                            <img src="coins/Select Coins.png" alt="Andar Image" class="andar-zone-image">
+                            <img src="cards/D7.png" alt="Andar Image 2" class="andar-zone-image-2">
+                            <div class="bet-amount" id="andarBet">₹0</div>
                         </div>
+
+                        <div class="betting-zone bahar-zone" id="baharZone">
+                            <div class="zone-text2">
+                                <div class="zone-label2">BAHAR 1:1</div>
+                            </div>
+                            <img src="coins/Select Coins.png" alt="Bahar Image" class="bahar-zone-image">
+                            <img src="cards/DQ.png" alt="Bahar Image 2" class="bahar-zone-image-2">
+                            <div class="bet-amount" id="baharBet">₹0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Chip Selection (Scrollable horizontal list) -->
+                <div class="coins-container">
+                    <div class="chip-selection-section">
+                        <div class="chip-selection">
+                            <button class="chip-btn" data-amount="100000" onclick="updateshowcoins(event)">
+                                <img src="coins/100000.png" alt="₹100000" class="chip-image">
+                                <span class="chip-amount">₹100000</span>
+                            </button>
+                            <button class="chip-btn" data-amount="50000" onclick="updateshowcoins(event)">
+                                <img src="coins/50000.png" alt="₹50000" class="chip-image">
+                                <span class="chip-amount">₹50000</span>
+                            </button>
+                            <button class="chip-btn" data-amount="40000" onclick="updateshowcoins(event)">
+                                <img src="coins/40000.png" alt="₹40000" class="chip-image">
+                                <span class="chip-amount">₹40000</span>
+                            </button>
+                            <button class="chip-btn" data-amount="30000" onclick="updateshowcoins(event)">
+                                <img src="coins/30000.png" alt="₹30000" class="chip-image">
+                                <span class="chip-amount">₹30000</span>
+                            </button>
+                            <button class="chip-btn" data-amount="20000" onclick="updateshowcoins(event)">
+                                <img src="coins/20000.png" alt="₹20000" class="chip-image">
+                                <span class="chip-amount">₹20000</span>
+                            </button>
+                            <button class="chip-btn" data-amount="10000" onclick="updateshowcoins(event)">
+                                <img src="coins/10000.png" alt="₹10000" class="chip-image">
+                                <span class="chip-amount">₹10000</span>
+                            </button>
+                            <button class="chip-btn" data-amount="5000" onclick="updateshowcoins(event)">
+                                <img src="coins/5000.png" alt="₹5000" class="chip-image">
+                                <span class="chip-amount">₹5000</span>
+                            </button>
+                            <button class="chip-btn" data-amount="2500" onclick="updateshowcoins(event)">
+                                <img src="coins/2500.png" alt="₹2500" class="chip-image">
+                                <span class="chip-amount">₹2500</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Game Controls (Below everything) -->
                 <div class="game-controls">
                     <button class="control-btn" onclick="showHistory()">
                         <i class="fas fa-history"></i>
@@ -235,8 +193,6 @@
                     </button>
                     
                     <img src="coins/Select Coins.png" alt="" class="select-coins" onclick="showcoins()">
-                    
-                </div>
                 </div>
 
                 <!-- Recent Results -->
@@ -253,7 +209,7 @@
                     <div class="result-chip red">5</div>
                 </div>
 
-                <!-- Player Info -->
+                <!-- 7. Player Info (Bottom) -->
                 <div class="player-info">
                     <div class="info-left">
                         <div class="info-item">

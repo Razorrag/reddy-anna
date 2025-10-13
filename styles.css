@@ -1750,9 +1750,16 @@ html {
     z-index: 10;
 }
 
+/* Circular Timer Container */
+.circular-timer-container {
+    text-align: center;
+    margin: 20px 0;
+    position: relative;
+}
+
 .game-timer {
     text-align: center;
-    margin-bottom: 15px;
+    margin: 20px 0;
     color: var(--gold-primary);
     font-size: 24px;
     font-weight: 600;
@@ -1778,6 +1785,20 @@ html {
     100% {
         box-shadow: 0 5px 15px rgba(255, 215, 0, 0.2);
     }
+}
+
+/* Circular timer effect for desktop */
+.game-timer::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px;
+    height: 120px;
+    border: 4px solid rgba(255, 215, 0, 0.3);
+    border-radius: 50%;
+    z-index: -1;
 }
 
 .game-timer i {
@@ -2420,6 +2441,108 @@ html {
 }
 
 @media (max-width: 768px) {
+    /* Make video full width */
+    .stream-video video {
+        height: 220px; /* Fixed height for mobile */
+        width: 100%;
+    }
+
+    /* Circular Timer */
+    .circular-timer-container {
+        text-align: center;
+        margin: 20px 0;
+    }
+    
+    .game-timer {
+        text-align: center;
+        margin: 20px 0;
+        font-size: 2.5rem; /* Much larger */
+        color: var(--gold-primary);
+        font-weight: bold;
+        position: relative;
+        display: inline-block;
+    }
+
+    /* Create circular timer effect */
+    .game-timer::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 120px;
+        height: 120px;
+        border: 4px solid rgba(255, 215, 0, 0.3);
+        border-radius: 50%;
+        z-index: -1;
+    }
+
+    /* Central card display */
+    .central-card-display {
+        width: 100px;
+        height: 140px;
+        margin: 20px auto;
+        position: relative;
+    }
+
+    /* Betting zones - stack vertically on mobile */
+    .main-betting-areas {
+        display: flex !important;
+        flex-direction: column;
+        gap: 10px;
+        margin: 20px 0;
+    }
+
+    .betting-zone {
+        padding: 20px;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    /* Andar and Bahar side by side horizontally */
+    .betting-zone {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    /* Chip selection - horizontal scroll */
+    .chip-selection {
+        display: flex !important;
+        gap: 15px;
+        overflow-x: auto;
+        padding: 10px;
+        justify-content: flex-start;
+    }
+
+    .chip-btn {
+        flex-shrink: 0;
+        min-width: 70px;
+    }
+
+    /* Game controls - horizontal row */
+    .game-controls {
+        display: flex;
+        justify-content: space-around;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 10px 0;
+    }
+
+    .control-btn {
+        min-width: 70px;
+        padding: 10px 8px;
+        font-size: 0.8rem;
+    }
+
+    /* Player info - full width */
+    .player-info {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
     .start-game-container {
         padding: 15px;
     }
@@ -2459,7 +2582,7 @@ html {
     }
     
     .stream-video video {
-        height: 250px !important;
+        height: 220px !important;
         margin-top: 0 !important;
         object-fit: cover;
         width: 100%;
@@ -2495,28 +2618,9 @@ html {
         margin-top: 20px;
     }
     
-    .game-timer {
-        font-size: 20px;
-        padding: 12px;
-        margin-bottom: 15px;
-        width: 90%;
-        min-height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
     .game-timer i {
         font-size: 18px;
         margin-right: 8px;
-    }
-    
-    .main-betting-areas {
-        display: flex;
-        flex-direction: column;
-        gap: 15px;
-        align-items: stretch;
-        height: auto;
     }
     
     .central-card-area {
@@ -2531,21 +2635,6 @@ html {
     .central-card {
         width: 50px;
         height: 70px;
-    }
-    
-    .betting-zone {
-        padding: 20px;
-        min-height: 150px;
-        border-radius: 15px;
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-        width: 100%;
-        touch-action: manipulation;
-        /* Ensure minimum touch target size */
-        min-height: 44px;
     }
     
     .andar-zone {
@@ -2668,12 +2757,6 @@ html {
         max-width: 60px;
     }
     
-    .chip-selection {
-        flex-wrap: wrap;
-        gap: 15px;
-        padding: 15px 0;
-    }
-    
     .chip-image {
         width: 85px;
         height: 85px;
@@ -2690,23 +2773,6 @@ html {
         min-width: 44px;
         min-height: 44px;
         padding: 10px;
-    }
-    
-    .game-controls {
-        gap: 20px;
-        padding: 20px 0;
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-    
-    .control-btn {
-        min-width: 100px;
-        padding: 18px 20px;
-        font-size: 14px;
-        touch-action: manipulation;
-        margin: 5px;
-        /* Ensure minimum touch target size */
-        min-height: 44px;
     }
     
     .player-info {
