@@ -9,14 +9,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Video Background -->
-    <div class="video-background">
-        <video autoplay muted loop playsinline>
-            <source src="hero images/uhd_30fps.mp4" type="video/mp4">
-        </video>
-    </div>
-    <div class="video-overlay"></div>
-    
     <!-- Header -->
     <header class="header">
         <nav class="navbar">
@@ -99,38 +91,49 @@
                     <div class="game-timer">
                         <i class="fas fa-clock"></i>
                         <span id="gameTimer">30</span>s
+                        <div class="round-info" id="roundInfo">Round 1</div>
                     </div>
                 </div>
 
-                <!-- 3. Central Card Display (Opening card) -->
-                <div class="central-card-area">
-                    <div class="central-card-display" id="centralCardDisplay">
-                        <div class="card-icon">🃏</div>
-                        <div class="card-text">Select Opening Card</div>
-                    </div>
-                </div>
-
-                <!-- 4. Andar/Bahar Betting Areas (Stacked vertically) -->
-                <div class="betting-container">
+                <!-- 3. Main betting area container -->
+                <div class="betting-interface">
                     <div class="main-betting-areas">
+                        <!-- ANDAR ZONE -->
                         <div class="betting-zone andar-zone" id="andarZone">
                             <div class="zone-content1">
                                 <div class="zone-text1">
                                     <div class="zone-label1">ANDAR 1:1</div>
+                                    <div class="zone-odds">1:1</div>
                                 </div>
+                            </div>
+                            <div class="zone-chip">
+                                <div class="bet-amount" id="andarBet">₹0</div>
                             </div>
                             <img src="coins/Select Coins.png" alt="Andar Image" class="andar-zone-image">
                             <img src="cards/D7.png" alt="Andar Image 2" class="andar-zone-image-2">
-                            <div class="bet-amount" id="andarBet">₹0</div>
                         </div>
 
+                        <!-- CENTRAL CARD AREA -->
+                        <div class="central-card-area">
+                            <div class="central-card-display" id="centralCardDisplay">
+                                <div class="card-icon">🃏</div>
+                                <div class="card-text">Select Opening Card</div>
+                            </div>
+                        </div>
+
+                        <!-- BAHAR ZONE -->
                         <div class="betting-zone bahar-zone" id="baharZone">
-                            <div class="zone-text2">
-                                <div class="zone-label2">BAHAR 1:1</div>
+                            <div class="zone-content2">
+                                <div class="zone-text2">
+                                    <div class="zone-label2">BAHAR 1:1</div>
+                                    <div class="zone-odds">1:1</div>
+                                </div>
+                            </div>
+                            <div class="zone-chip">
+                                <div class="bet-amount" id="baharBet">₹0</div>
                             </div>
                             <img src="coins/Select Coins.png" alt="Bahar Image" class="bahar-zone-image">
                             <img src="cards/DQ.png" alt="Bahar Image 2" class="bahar-zone-image-2">
-                            <div class="bet-amount" id="baharBet">₹0</div>
                         </div>
                     </div>
                 </div>

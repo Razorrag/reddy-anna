@@ -1866,7 +1866,7 @@ html {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     gap: 10px;
-    margin-bottom: -5px;
+    margin-bottom: 10px;
     align-items: stretch;
     height: 250px;
 }
@@ -2525,13 +2525,22 @@ html {
         z-index: -1;
     }
 
-    /* Betting zones - three-layer layout on mobile */
+    /* Betting zones - three-panel layout on mobile */
     .main-betting-areas {
-        display: grid !important;
-        grid-template-columns: 1fr auto 1fr;
-        gap: 5px;
-        margin: 20px 0;
-        height: 180px;
+        display: flex !important;
+        flex-direction: column;
+        height: auto;
+        gap: 10px;
+    }
+
+    .betting-zone {
+        min-height: 100px;
+        height: auto;
+    }
+
+    .central-card-area {
+        order: -1; /* Place in the center of the column */
+        height: 120px;
     }
 
     .betting-zone {
