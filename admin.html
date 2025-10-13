@@ -437,6 +437,14 @@
     </style>
 </head>
 <body>
+    <!-- Video Background -->
+    <div class="video-background">
+        <video autoplay muted loop playsinline>
+            <source src="hero images/uhd_30fps.mp4" type="video/mp4">
+        </video>
+    </div>
+    <div class="video-overlay"></div>
+    
     <div class="admin-container">
         <div class="admin-header">
             <h1 class="admin-title">Admin Panel</h1>
@@ -1927,7 +1935,7 @@
                         referralCode: userReferral || null
                     };
                     
-                    const API_BASE_URL = window.API_BASE_URL || 'http://localhost:4000';
+                    const API_BASE_URL = window.API_BASE_URL;
                     const response = await fetch(`${API_BASE_URL}/api/auth/admin/users/${userId}`, {
                         method: 'PUT',
                         headers: {
@@ -1962,7 +1970,7 @@
                         referralCode: userReferral || null
                     };
                     
-                    const API_BASE_URL = window.API_BASE_URL || 'http://localhost:4000';
+                    const API_BASE_URL = window.API_BASE_URL;
                     const response = await fetch(`${API_BASE_URL}/api/auth/admin/users`, {
                         method: 'POST',
                         headers: {
@@ -2000,7 +2008,7 @@
                     return;
                 }
                 
-                const API_BASE_URL = window.API_BASE_URL || 'http://localhost:4000';
+                const API_BASE_URL = window.API_BASE_URL;
                 const response = await fetch(`${API_BASE_URL}/api/auth/admin/users/${userId}/block`, {
                     method: 'PUT',
                     headers: {
@@ -2210,7 +2218,7 @@
         // Load all users from API
         async function loadUsers() {
             try {
-                const API_BASE_URL = window.API_BASE_URL || 'http://localhost:4000';
+                const API_BASE_URL = window.API_BASE_URL;
                 const response = await fetch(`${API_BASE_URL}/api/auth/admin/users`);
                 const data = await response.json();
                 

@@ -9,6 +9,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- Video Background -->
+    <div class="video-background">
+        <video autoplay muted loop playsinline>
+            <source src="hero images/uhd_30fps.mp4" type="video/mp4">
+        </video>
+    </div>
+    <div class="video-overlay"></div>
+    
     <!-- Header -->
     <header class="header">
         <nav class="navbar">
@@ -160,7 +168,7 @@
             }
 
             try {
-                const API_BASE_URL = window.API_BASE_URL || 'http://localhost:4000';
+                const API_BASE_URL = window.API_BASE_URL;
                 const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
