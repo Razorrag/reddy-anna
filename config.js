@@ -7,15 +7,15 @@ const CONFIG = {
   
   // Production environment (Netlify)
   production: {
-    API_BASE_URL: window.BACKEND_URL || 'https://reddy-anna-59l3.onrender.com'  // Will be set by environment
+    API_BASE_URL: 'https://reddy-anna-59l3.onrender.com'
   }
 };
 
 // Determine current environment
 const environment = window.location.hostname === 'localhost' ? 'development' : 'production';
 
+// Set global API_BASE_URL for backward compatibility
+window.API_BASE_URL = CONFIG[environment].API_BASE_URL;
+
 // Export the appropriate configuration
 window.API_CONFIG = CONFIG[environment];
-
-// Set global API_BASE_URL for backward compatibility
-window.API_BASE_URL = window.API_CONFIG.API_BASE_URL;

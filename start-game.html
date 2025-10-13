@@ -256,8 +256,16 @@
         </a>
     </div>
 
+    <script src="config.js"></script>
     <script src="script.js"></script>
     <script>
+        // Ensure API_BASE_URL is properly set
+        if (!window.API_BASE_URL || window.API_BASE_URL === 'undefined') {
+            window.API_BASE_URL = window.location.hostname === 'localhost'
+                ? 'http://localhost:4000'
+                : 'https://reddy-anna-59l3.onrender.com';
+        }
+        
         let selectedChip = 0;
         let andarBet = 0;
         let baharBet = 0;
