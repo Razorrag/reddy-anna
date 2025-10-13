@@ -1804,18 +1804,19 @@ html {
     text-align: center;
     margin: 20px 0;
     color: var(--gold-primary);
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 36px;
+    font-weight: 700;
     background: rgba(0, 0, 0, 0.5);
-    border: 2px solid var(--gold-primary);
-    border-radius: 15px;
-    padding: 12px;
+    border: 3px solid var(--gold-primary);
+    border-radius: 20px;
+    padding: 20px 30px;
     display: inline-block;
     position: relative;
     left: 50%;
     transform: translateX(-50%);
-    box-shadow: 0 5px 15px rgba(255, 215, 0, 0.2);
+    box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
     animation: timerPulse 2s infinite;
+    min-width: 300px;
 }
 
 @keyframes timerPulse {
@@ -1837,16 +1838,16 @@ html {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 120px;
-    height: 120px;
-    border: 4px solid rgba(255, 215, 0, 0.3);
+    width: 160px;
+    height: 160px;
+    border: 5px solid rgba(255, 215, 0, 0.3);
     border-radius: 50%;
     z-index: -1;
 }
 
 .game-timer i {
-    margin-right: 10px;
-    font-size: 22px;
+    margin-right: 15px;
+    font-size: 32px;
 }
 
 .betting-container {
@@ -2477,15 +2478,16 @@ html {
     }
     
     .game-timer {
-        font-size: 28px;
-        padding: 15px;
+        font-size: 32px;
+        padding: 18px 25px;
         margin-bottom: 20px;
-        width: 300px;
+        width: 320px;
+        min-width: 320px;
     }
     
     .game-timer i {
-        font-size: 24px;
-        margin-right: 12px;
+        font-size: 28px;
+        margin-right: 15px;
     }
 }
 
@@ -2510,12 +2512,13 @@ html {
     .game-timer {
         text-align: center;
         margin: 15px 0;
-        font-size: 2rem; /* Slightly smaller for better fit */
+        font-size: 2.5rem; /* Bigger for mobile */
         color: var(--gold-primary);
         font-weight: bold;
         position: relative;
         display: inline-block;
-        padding: 10px 15px;
+        padding: 15px 20px;
+        min-width: 250px;
     }
 
     /* Create circular timer effect */
