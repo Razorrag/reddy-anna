@@ -31,38 +31,39 @@ export const query = async (table, actionOrOptions, options = {}) => {
     if (typeof actionOrOptions === 'string') {
       action = actionOrOptions;
       queryOptions = options || {};
-    } else if (typeof actionOrOptions === 'object') {
+    } else if (typeof actionOrOptions === 'object' && actionOrOptions !== null) {
       queryOptions = actionOrOptions;
     }
     
+    let queryBuilder;
     let result;
     
     switch (action) {
       case 'select':
-        let query = supabase.from(table).select(queryOptions.select || '*');
-        if (queryOptions.where) query = query.eq(queryOptions.where.column, queryOptions.where.value);
-        if (queryOptions.order) query = query.order(queryOptions.order.column, { ascending: queryOptions.order.ascending });
-        if (queryOptions.limit) query = query.limit(queryOptions.limit);
-        result = await query;
+        queryBuilder = supabase.from(table).select(queryOptions.select || '*');
+        if (queryOptions.where) queryBuilder = queryBuilder.eq(queryOptions.where.column, queryOptions.where.value);
+        if (queryOptions.order) queryBuilder = queryBuilder.order(queryOptions.order.column, { ascending: queryOptions.order.ascending });
+        if (queryOptions.limit) queryBuilder = queryBuilder.limit(queryOptions.limit);
+        result = await queryBuilder;
         break;
         
       case 'insert':
-        query = supabase.from(table).insert(queryOptions.data);
-        if (queryOptions.select) query = query.select(queryOptions.select);
-        result = await query;
+        queryBuilder = supabase.from(table).insert(queryOptions.data);
+        if (queryOptions.select) queryBuilder = queryBuilder.select(queryOptions.select);
+        result = await queryBuilder;
         break;
         
       case 'update':
-        query = supabase.from(table).update(queryOptions.data);
-        if (queryOptions.where) query = query.eq(queryOptions.where.column, queryOptions.where.value);
-        if (queryOptions.select) query = query.select(queryOptions.select);
-        result = await query;
+        queryBuilder = supabase.from(table).update(queryOptions.data);
+        if (queryOptions.where) queryBuilder = queryBuilder.eq(queryOptions.where.column, queryOptions.where.value);
+        if (queryOptions.select) queryBuilder = queryBuilder.select(queryOptions.select);
+        result = await queryBuilder;
         break;
         
       case 'delete':
-        query = supabase.from(table).delete();
-        if (queryOptions.where) query = query.eq(queryOptions.where.column, queryOptions.where.value);
-        result = await query;
+        queryBuilder = supabase.from(table).delete();
+        if (queryOptions.where) queryBuilder = queryBuilder.eq(queryOptions.where.column, queryOptions.where.value);
+        result = await queryBuilder;
         break;
         
       default:
