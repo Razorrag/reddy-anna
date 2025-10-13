@@ -7,7 +7,7 @@ const CONFIG = {
   
   // Production environment (Netlify)
   production: {
-    API_BASE_URL: window.BACKEND_URL || 'https://your-actual-backend-url.onrender.com'  // Will be set by environment
+    API_BASE_URL: window.BACKEND_URL || 'https://reddy-anna-59l3.onrender.com'  // Will be set by environment
   }
 };
 
