@@ -86,15 +86,6 @@
                     </div>
                 </div>
 
-                <!-- 2. Circular Timer (Large, centered, animated) -->
-                <div class="circular-timer-container">
-                    <div class="game-timer">
-                        <i class="fas fa-clock"></i>
-                        <span id="gameTimer">30</span>s
-                        <div class="round-info" id="roundInfo">Round 1</div>
-                    </div>
-                </div>
-
                 <!-- 3. Main betting area container -->
                 <div class="betting-interface">
                     <div class="main-betting-areas">
@@ -103,14 +94,13 @@
                             <div class="zone-content1">
                                 <div class="zone-text1">
                                     <div class="zone-label1">ANDAR 1:1</div>
-                                    <div class="zone-odds">1:1</div>
                                 </div>
-                            </div>
-                            <div class="zone-chip">
-                                <div class="bet-amount" id="andarBet">₹0</div>
                             </div>
                             <img src="coins/Select Coins.png" alt="Andar Image" class="andar-zone-image">
                             <img src="cards/D7.png" alt="Andar Image 2" class="andar-zone-image-2">
+                            <div class="zone-bottom">
+                                <div class="bet-amount" id="andarBet">₹0</div>
+                            </div>
                         </div>
 
                         <!-- CENTRAL CARD AREA -->
@@ -126,15 +116,23 @@
                             <div class="zone-content2">
                                 <div class="zone-text2">
                                     <div class="zone-label2">BAHAR 1:1</div>
-                                    <div class="zone-odds">1:1</div>
                                 </div>
-                            </div>
-                            <div class="zone-chip">
-                                <div class="bet-amount" id="baharBet">₹0</div>
                             </div>
                             <img src="coins/Select Coins.png" alt="Bahar Image" class="bahar-zone-image">
                             <img src="cards/DQ.png" alt="Bahar Image 2" class="bahar-zone-image-2">
+                            <div class="zone-bottom">
+                                <div class="bet-amount" id="baharBet">₹0</div>
+                            </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- 4. Circular Timer with Round Number -->
+                <div class="circular-timer-container">
+                    <div class="game-timer">
+                        <i class="fas fa-clock"></i>
+                        <span id="gameTimer">30</span>s
+                        <div class="round-info" id="roundInfo">Round 1</div>
                     </div>
                 </div>
 

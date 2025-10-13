@@ -1692,21 +1692,18 @@ html {
 /* Live Stream Box */
 .live-stream-box {
     margin-bottom: 20px;
-    height: 600px;
+    height: 400px;
     position: relative;
 }
 
 .stream-container {
     background: rgba(0, 0, 0, 0.9);
-    border: 0px solid var(--gold-primary);
-    border-radius: 0px;
+    border: 2px solid var(--gold-primary);
+    border-radius: 15px;
     overflow: hidden;
-    position: fixed;
-    top: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 40px);
-    max-width: 1160px;
+    position: relative;
+    width: 100%;
+    height: 100%;
     z-index: 1;
     box-shadow: 0 10px 50px rgba(0, 0, 0, 0.8);
 }
@@ -1714,14 +1711,13 @@ html {
 .stream-video {
     position: relative;
     width: 100%;
-    height: 600px;
+    height: 100%;
     background: var(--primary-black);
 }
 
 .stream-video video {
     width: 100%;
-    height: 88%;
-    margin-top: 79px;
+    height: 100%;
     object-fit: cover;
 }
 
@@ -1976,6 +1972,11 @@ html {
     align-items: flex-end;
 }
 
+.zone-bottom {
+    margin-top: auto;
+    text-align: center;
+}
+
 .central-card-area {
     width: 150px;
     min-height: 250px;
@@ -1986,6 +1987,7 @@ html {
     border-radius: 50%;
     border: 3px solid var(--gold-primary);
     position: relative;
+    z-index: 2; /* Ensure it appears above other elements */
 }
 
 .central-card {
@@ -2489,8 +2491,13 @@ html {
 
 @media (max-width: 768px) {
     /* Make video full width */
-    .stream-video video {
+    .live-stream-box {
         height: 220px; /* Fixed height for mobile */
+        margin-bottom: 15px;
+    }
+    
+    .stream-video video {
+        height: 100%;
         width: 100%;
     }
 
@@ -3011,10 +3018,39 @@ html {
         z-index: 3;
     }
     
-    /* Ensure proper spacing for three-layer layout on mobile */
+    /* Ensure proper spacing for three-panel layout on mobile */
     .betting-container {
         margin: 15px 0;
         padding: 15px 10px;
+    }
+    
+    .main-betting-areas {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+        height: auto;
+        gap: 15px;
+    }
+
+    .andar-zone {
+        order: 1;
+        border-radius: 15px;
+    }
+
+    .central-card-area {
+        order: 2;
+        width: 120px;
+        height: 160px;
+        margin: 0 auto;
+    }
+
+    .bahar-zone {
+        order: 3;
+        border-radius: 15px;
+    }
+
+    .central-card-display {
+        width: 100px;
+        height: 140px;
     }
     
     /* Add subtle animation for better user experience */
