@@ -39,30 +39,30 @@ export const query = async (table, actionOrOptions, options = {}) => {
     
     switch (action) {
       case 'select':
-        result = await supabase.from(table).select(queryOptions.select || '*');
-        if (queryOptions.where) result = result.eq(queryOptions.where.column, queryOptions.where.value);
-        if (queryOptions.order) result = result.order(queryOptions.order.column, { ascending: queryOptions.order.ascending });
-        if (queryOptions.limit) result = result.limit(queryOptions.limit);
-        result = await result;
+        let query = supabase.from(table).select(queryOptions.select || '*');
+        if (queryOptions.where) query = query.eq(queryOptions.where.column, queryOptions.where.value);
+        if (queryOptions.order) query = query.order(queryOptions.order.column, { ascending: queryOptions.order.ascending });
+        if (queryOptions.limit) query = query.limit(queryOptions.limit);
+        result = await query;
         break;
         
       case 'insert':
-        result = await supabase.from(table).insert(queryOptions.data);
-        if (queryOptions.select) result = result.select(queryOptions.select);
-        result = await result;
+        query = supabase.from(table).insert(queryOptions.data);
+        if (queryOptions.select) query = query.select(queryOptions.select);
+        result = await query;
         break;
         
       case 'update':
-        result = supabase.from(table).update(queryOptions.data);
-        if (queryOptions.where) result = result.eq(queryOptions.where.column, queryOptions.where.value);
-        if (queryOptions.select) result = result.select(queryOptions.select);
-        result = await result;
+        query = supabase.from(table).update(queryOptions.data);
+        if (queryOptions.where) query = query.eq(queryOptions.where.column, queryOptions.where.value);
+        if (queryOptions.select) query = query.select(queryOptions.select);
+        result = await query;
         break;
         
       case 'delete':
-        result = supabase.from(table).delete();
-        if (queryOptions.where) result = result.eq(queryOptions.where.column, queryOptions.where.value);
-        result = await result;
+        query = supabase.from(table).delete();
+        if (queryOptions.where) query = query.eq(queryOptions.where.column, queryOptions.where.value);
+        result = await query;
         break;
         
       default:
