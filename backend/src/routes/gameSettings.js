@@ -319,215 +319,250 @@ router.put('/stream-settings', async (req, res) => {
 
 // Game state management endpoints
 let gameState = {
-  phase: 'waiting', // waiting, round1, round2, completed
-  openingCard: null,
-  currentTimer: 0,
-  round1Bets: { andar: 0, bahar: 0 },
-  round2Bets: { andar: 0, bahar: 0 },
-  selectedCards: { andar: [], bahar: [] },
-  winner: null,
-  gameId: null,
-  bettingOpen: false,
-  currentRound: 0
+    phase: 'waiting', // waiting, round1, round2, completed
+    openingCard: null,
+    currentTimer: 0,
+    round1Bets: { andar: 0, bahar: 0 },
+    round2Bets: { andar: 0, bahar: 0 },
+    selectedCards: { andar: [], bahar: [] },
+    winner: null,
+    gameId: null,
+    bettingOpen: false,
+    currentRound: 0
 };
 
-// Get current game state
-router.get('/game-state', async (req, res) => {
-  try {
-    res.json({
-      success: true,
-      data: gameState
-    });
-  } catch (error) {
-    console.error('Error fetching game state:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch game state'
-    });
-  }
+// Separate game state and betting amount management
+// Get general game state (phase, timer, winner, etc.)
+router.get('/state', async (req, res) => {
+    try {
+        res.json({
+            success: true,
+            data: {
+                phase: gameState.phase,
+                currentTimer: gameState.currentTimer,
+                openingCard: gameState.openingCard,
+                selectedCards: gameState.selectedCards,
+                winner: gameState.winner,
+                gameId: gameState.gameId,
+                bettingOpen: gameState.bettingOpen,
+                currentRound: gameState.currentRound,
+                timestamp: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching game state:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch game state'
+        });
+    }
 });
 
-// Get current betting amounts
+// Get just the betting amounts (separate call for better performance)
 router.get('/betting-amounts', async (req, res) => {
-  try {
-    res.json({
-      success: true,
-      data: {
-        round1Bets: gameState.round1Bets,
-        round2Bets: gameState.round2Bets,
-        currentRound: gameState.currentRound,
-        phase: gameState.phase
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching betting amounts:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch betting amounts'
-    });
-  }
+    try {
+        res.json({
+            success: true,
+            data: {
+                round1Bets: gameState.round1Bets,
+                round2Bets: gameState.round2Bets,
+                currentRound: gameState.currentRound,
+                phase: gameState.phase,
+                gameId: gameState.gameId,
+                timestamp: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching betting amounts:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch betting amounts'
+        });
+    }
+});
+
+// Get complete game state (legacy endpoint for compatibility)
+router.get('/game-state', async (req, res) => {
+    try {
+        res.json({
+            success: true,
+            data: gameState
+        });
+    } catch (error) {
+        console.error('Error fetching game state:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch game state'
+        });
+    }
 });
 
 // Update opening card
 router.post('/set-opening-card', async (req, res) => {
-  try {
-    const { card } = req.body;
-    
-    if (!card) {
-      return res.status(400).json({
-        success: false,
-        message: 'Card is required'
-      });
-    }
-    
-    // Clear previous game state when setting new opening card
-    gameState = {
-      phase: 'waiting',
-      openingCard: card,
-      currentTimer: 0,
-      round1Bets: { andar: 0, bahar: 0 },
-      round2Bets: { andar: 0, bahar: 0 },
-      selectedCards: { andar: [], bahar: [] },
-      winner: null,
-      gameId: null,
-      bettingOpen: false,
-      currentRound: 0
-    };
-    
-    // Try to update database
     try {
-      // Update database
-      const existing = await query('game_settings', 'select', {
-        where: { column: 'setting_key', value: 'opening_card' }
-      });
-      
-      if (existing.length > 0) {
-        // Update existing setting
-        await query('game_settings', 'update', {
-          where: { column: 'setting_key', value: 'opening_card' },
-          data: { setting_value: card, updated_at: new Date().toISOString() }
+        const { card } = req.body;
+        
+        if (!card) {
+            return res.status(400).json({
+                success: false,
+                message: 'Card is required'
+            });
+        }
+        
+        // Generate new game ID for this game session
+        const newGameId = Date.now().toString();
+        
+        // Clear previous game state when setting new opening card
+        gameState = {
+            phase: 'waiting',
+            openingCard: card,
+            currentTimer: 0,
+            round1Bets: { andar: 0, bahar: 0 },
+            round2Bets: { andar: 0, bahar: 0 },
+            selectedCards: { andar: [], bahar: [] },
+            winner: null,
+            gameId: newGameId,
+            bettingOpen: false,
+            currentRound: 0
+        };
+        
+        // Try to update database
+        try {
+            // Update database
+            const existing = await query('game_settings', 'select', {
+                where: { column: 'setting_key', value: 'opening_card' }
+            });
+            
+            if (existing.length > 0) {
+                // Update existing setting
+                await query('game_settings', 'update', {
+                    where: { column: 'setting_key', value: 'opening_card' },
+                    data: { setting_value: card, updated_at: new Date().toISOString() }
+                });
+            } else {
+                // Insert new setting
+                await query('game_settings', 'insert', {
+                    data: { setting_key: 'opening_card', setting_value: card }
+                });
+            }
+        } catch (dbError) {
+            console.error('Database error during opening card update:', dbError);
+            // Continue without database update
+        }
+        
+        res.json({
+            success: true,
+            message: 'Opening card set successfully - New game started',
+            data: {
+                openingCard: card,
+                gameId: newGameId,
+                gameReset: true
+            }
         });
-      } else {
-        // Insert new setting
-        await query('game_settings', 'insert', {
-          data: { setting_key: 'opening_card', setting_value: card }
+    } catch (error) {
+        console.error('Error setting opening card:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to set opening card'
         });
-      }
-    } catch (dbError) {
-      console.error('Database error during opening card update:', dbError);
-      // Continue without database update
     }
-    
-    res.json({
-      success: true,
-      message: 'Opening card set successfully - Previous game state cleared',
-      data: { 
-        openingCard: card,
-        gameState: gameState
-      }
-    });
-  } catch (error) {
-    console.error('Error setting opening card:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to set opening card'
-    });
-  }
 });
 
 // Start timer for a round
 router.post('/start-timer', async (req, res) => {
-  try {
-    const { round, duration } = req.body;
-    
-    if (!round || !duration) {
-      return res.status(400).json({
-        success: false,
-        message: 'Round and duration are required'
-      });
+    try {
+        const { round, duration } = req.body;
+        
+        if (!round || !duration) {
+            return res.status(400).json({
+                success: false,
+                message: 'Round and duration are required'
+            });
+        }
+        
+        if (duration < 10 || duration > 300) {
+            return res.status(400).json({
+                success: false,
+                message: 'Duration must be between 10 and 300 seconds'
+            });
+        }
+        
+        // Clear previous round data when starting new round
+        if (round === 'round1') {
+            // Clear all previous game data for new game
+            gameState.round1Bets = { andar: 0, bahar: 0 };
+            gameState.round2Bets = { andar: 0, bahar: 0 };
+            gameState.selectedCards = { andar: [], bahar: [] };
+            gameState.winner = null;
+        } else if (round === 'round2') {
+            // Clear only Round 2 data, keep Round 1 data
+            gameState.round2Bets = { andar: 0, bahar: 0 };
+            // Keep selected cards from Round 1
+        }
+        
+        gameState.phase = round;
+        gameState.currentTimer = duration;
+        gameState.bettingOpen = true;
+        gameState.currentRound = round === 'round1' ? 1 : 2;
+        
+        res.json({
+            success: true,
+            message: `Timer started for ${round}`,
+            data: {
+                phase: gameState.phase,
+                timer: gameState.currentTimer,
+                bettingOpen: gameState.bettingOpen,
+                currentRound: gameState.currentRound,
+                timestamp: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error('Error starting timer:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to start timer'
+        });
     }
-    
-    if (duration < 10 || duration > 300) {
-      return res.status(400).json({
-        success: false,
-        message: 'Duration must be between 10 and 300 seconds'
-      });
-    }
-    
-    // Clear previous round data when starting new round
-    if (round === 'round1') {
-      // Clear all previous game data for new game
-      gameState.round1Bets = { andar: 0, bahar: 0 };
-      gameState.round2Bets = { andar: 0, bahar: 0 };
-      gameState.selectedCards = { andar: [], bahar: [] };
-      gameState.winner = null;
-    } else if (round === 'round2') {
-      // Clear only Round 2 data, keep Round 1 data
-      gameState.round2Bets = { andar: 0, bahar: 0 };
-      // Keep selected cards from Round 1
-    }
-    
-    gameState.phase = round;
-    gameState.currentTimer = duration;
-    gameState.gameId = Date.now().toString();
-    gameState.bettingOpen = true;
-    gameState.currentRound = round === 'round1' ? 1 : 2;
-    
-    res.json({
-      success: true,
-      message: `Timer started for ${round} - Previous ${round} data cleared`,
-      data: { 
-        phase: gameState.phase,
-        timer: gameState.currentTimer,
-        gameId: gameState.gameId,
-        bettingOpen: gameState.bettingOpen,
-        currentRound: gameState.currentRound,
-        gameState: gameState
-      }
-    });
-  } catch (error) {
-    console.error('Error starting timer:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to start timer'
-    });
-  }
 });
 
-// Update timer countdown
+// Update timer countdown (backend-controlled timer)
 router.post('/update-timer', async (req, res) => {
-  try {
-    const { timer } = req.body;
-    
-    if (timer === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: 'Timer value is required'
-      });
+    try {
+        const { timer } = req.body;
+        
+        if (timer === undefined || timer === null) {
+            return res.status(400).json({
+                success: false,
+                message: 'Timer value is required'
+            });
+        }
+        
+        // Update timer value
+        gameState.currentTimer = parseInt(timer);
+        
+        // If timer reaches 0, stop betting
+        if (gameState.currentTimer <= 0) {
+            gameState.bettingOpen = false;
+            gameState.phase = gameState.phase === 'round1' ? 'round1_complete' : 'round2_complete';
+        }
+        
+        res.json({
+            success: true,
+            message: 'Timer updated',
+            data: {
+                timer: gameState.currentTimer,
+                bettingOpen: gameState.bettingOpen,
+                phase: gameState.phase,
+                timestamp: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error('Error updating timer:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update timer'
+        });
     }
-    
-    gameState.currentTimer = timer;
-    
-    // If timer reaches 0, stop betting
-    if (timer <= 0) {
-      gameState.bettingOpen = false;
-    }
-    
-    res.json({
-      success: true,
-      message: 'Timer updated',
-      data: { 
-        timer: gameState.currentTimer,
-        bettingOpen: gameState.bettingOpen
-      }
-    });
-  } catch (error) {
-    console.error('Error updating timer:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update timer'
-    });
-  }
 });
 
 // Submit betting totals
@@ -616,32 +651,69 @@ router.post('/select-cards', async (req, res) => {
 
 // Reset game state
 router.post('/reset-game', async (req, res) => {
-  try {
-    gameState = {
-      phase: 'waiting',
-      openingCard: null,
-      currentTimer: 0,
-      round1Bets: { andar: 0, bahar: 0 },
-      round2Bets: { andar: 0, bahar: 0 },
-      selectedCards: { andar: [], bahar: [] },
-      winner: null,
-      gameId: null,
-      bettingOpen: false,
-      currentRound: 0
-    };
-    
-    res.json({
-      success: true,
-      message: 'Game reset successfully',
-      data: gameState
-    });
-  } catch (error) {
-    console.error('Error resetting game:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to reset game'
-    });
-  }
+    try {
+        const newGameId = Date.now().toString();
+        
+        gameState = {
+            phase: 'waiting',
+            openingCard: null,
+            currentTimer: 0,
+            round1Bets: { andar: 0, bahar: 0 },
+            round2Bets: { andar: 0, bahar: 0 },
+            selectedCards: { andar: [], bahar: [] },
+            winner: null,
+            gameId: newGameId,
+            bettingOpen: false,
+            currentRound: 0
+        };
+        
+        res.json({
+            success: true,
+            message: 'Game reset successfully',
+            data: {
+                gameState: gameState,
+                gameReset: true,
+                newGameId: newGameId
+            }
+        });
+    } catch (error) {
+        console.error('Error resetting game:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to reset game'
+        });
+    }
+});
+
+// Game reset notification endpoint
+router.post('/game-reset-notification', async (req, res) => {
+    try {
+        const { gameId } = req.body;
+        
+        // Check if this is a new game
+        if (gameId && gameId !== gameState.gameId) {
+            res.json({
+                success: true,
+                data: {
+                    newGame: true,
+                    gameId: gameId
+                }
+            });
+        } else {
+            res.json({
+                success: true,
+                data: {
+                    newGame: false
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error checking game reset:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to check game reset'
+        });
+    }
 });
 
 // Helper function to check winner

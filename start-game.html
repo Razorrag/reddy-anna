@@ -4,14 +4,48 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Andar Bahar - Start Game | Reddy Anna Kossu</title>
-    <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
     <style>
-        /* Page specific styles for the game page */
+        /* Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Theme Colors */
+            --primary-black: #0a0a0a;
+            --secondary-black: #1a1a1a;
+            --accent-black: #2a2a2a;
+            --gold-primary: #ffd700;
+            --gold-secondary: #ffed4e;
+            --red-primary: #dc143c;
+            --purple-primary: #6a0dad;
+            --white: #ffffff;
+            --gray-light: #f8f9fa;
+            --gray-dark: #6c757d;
+
+            /* Gradients */
+            --gradient-gold: linear-gradient(135deg, var(--gold-primary) 0%, var(--gold-secondary) 100%);
+            --gradient-red: linear-gradient(135deg, var(--red-primary) 0%, #ff4757 100%);
+
+            /* Typography */
+            --font-primary: 'Poppins', sans-serif;
+            --font-secondary: 'Poppins', sans-serif;
+        }
+
+        /* Page specific styles */
+        html {
+            scroll-behavior: smooth;
+        }
+
         html, body {
             height: 100%;
             margin: 0;
+            font-family: var(--font-secondary);
             background-color: var(--primary-black);
         }
 
@@ -19,11 +53,98 @@
             display: flex;
             flex-direction: column;
         }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--primary-black); }
+        ::-webkit-scrollbar-thumb { background: var(--gradient-gold); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--gold-secondary); }
 
+        /* Header Styles */
         .header {
             flex-shrink: 0;
             position: relative; /* Let it be part of the flow */
             z-index: 100;
+            background: rgba(10, 10, 10, 0.95);
+            border-bottom: 2px solid var(--gold-primary);
+        }
+
+        .navbar {
+            padding: 15px 0;
+        }
+
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .logo h1 {
+            font-family: var(--font-primary);
+            font-size: 24px;
+            font-weight: 400;
+            color: var(--gold-primary);
+        }
+
+        .nav-menu {
+            display: flex;
+        }
+
+        .nav-list {
+            display: flex;
+            list-style: none;
+            gap: 20px;
+        }
+
+        .nav-link {
+            color: var(--white);
+            text-decoration: none;
+            font-weight: 400;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--gradient-gold);
+            transition: width 0.3s ease;
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        .nav-link:hover {
+            color: var(--gold-primary);
+        }
+
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            cursor: pointer;
+            gap: 4px;
+        }
+
+        .hamburger span {
+            width: 25px;
+            height: 3px;
+            background: var(--gold-primary);
+            transition: all 0.3s ease;
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
         
         .live-clock {
@@ -36,85 +157,16 @@
             border: 1px solid var(--gold-primary);
         }
 
-        .game-body {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
-
-        /* Video Stream Section */
-        .video-section {
-            width: 100%;
-            height: 50vh; /* 50% of the viewport height */
-            background-color: #000;
-            position: relative;
-        }
-
-        .video-section video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        /* Circular Timer */
-        .circular-timer-container {
-            display: flex;
-            justify-content: center;
-            padding: 20px 0;
-            background-color: var(--primary-black);
-            border-bottom: 2px solid var(--gold-primary);
-        }
-
-        .circular-timer {
-            position: relative;
-            width: 120px;
-            height: 120px;
-        }
-
-        .timer-background {
-            fill: none;
-            stroke: var(--accent-black);
-            stroke-width: 8;
-        }
-
-        .timer-progress {
-            fill: none;
-            stroke: var(--gold-primary);
-            stroke-width: 8;
-            stroke-linecap: round;
-            transform: rotate(-90deg);
-            transform-origin: 60px 60px;
-            stroke-dasharray: 339.292;
-            stroke-dashoffset: 0;
-            transition: stroke-dashoffset 1s linear;
-        }
-
-        .timer-content {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .timer-value {
-            font-size: 28px;
-            font-weight: 700;
-            color: var(--gold-primary);
-            line-height: 1;
-        }
-
-        .round-info {
-            font-size: 12px;
+        .language-dropdown {
+            background: var(--accent-black);
             color: var(--white);
-            margin-top: 5px;
+            border: 1px solid var(--gold-primary);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
         }
-
+        
         /* Wallet Dropdown */
         .wallet-dropdown {
             position: relative;
@@ -174,6 +226,103 @@
             color: var(--gold-primary);
         }
 
+        /* Main Game Body */
+        .game-body {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow-y: auto; /* Allow scrolling for game content if needed */
+        }
+
+        /* Video Stream Section */
+        .video-section {
+            width: 100%;
+            height: 50vh; /* 50% of the viewport height */
+            background-color: #000;
+            position: relative;
+        }
+
+        .video-section video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Circular Timer */
+        .circular-timer-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px 0;
+            background-color: var(--primary-black);
+            border-bottom: 2px solid var(--gold-primary);
+            position: relative;
+        }
+
+        .circular-timer {
+            position: relative;
+            width: 120px;
+            height: 120px;
+        }
+
+        .timer-background {
+            fill: none;
+            stroke: var(--accent-black);
+            stroke-width: 8;
+        }
+
+        .timer-progress {
+            fill: none;
+            stroke: var(--gold-primary);
+            stroke-width: 8;
+            stroke-linecap: round;
+            transform: rotate(-90deg);
+            transform-origin: 60px 60px;
+            stroke-dasharray: 339.292;
+            stroke-dashoffset: 0;
+            transition: stroke-dashoffset 1s linear;
+        }
+
+        .timer-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .timer-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--gold-primary);
+            line-height: 1;
+        }
+
+        .round-info {
+            font-size: 12px;
+            color: var(--white);
+            margin-top: 5px;
+        }
+
+        /* Bet Limits Display */
+        #betLimitsDisplay {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            border: 1px solid var(--gold-primary);
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+        }
+
         /* Game Content Section */
         .game-interface {
             flex-grow: 1;
@@ -184,18 +333,40 @@
             gap: 1.5rem;
             background: var(--secondary-black);
         }
+        
+        .recent-results {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
 
-        .three-panel-layout {
+        .result-chip {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--white);
+        }
+
+        .result-chip.red { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .result-chip.blue { background: linear-gradient(135deg, #3498db, #2980b9); }
+
+        /* --- KEY CHANGE: Main Betting Area Layout --- */
+        .main-betting-areas {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: 1fr 1fr 1fr; /* Three EQUAL columns */
             gap: 1rem;
             width: 100%;
             max-width: 1100px;
+            align-items: stretch; /* Ensure all columns have the same height */
         }
 
-        .betting-panel {
-            padding: 1rem;
-            min-height: 220px;
+        .betting-zone, .central-card-area {
             border-radius: 15px;
             border: 2px solid rgba(255, 215, 0, 0.3);
             cursor: pointer;
@@ -205,35 +376,45 @@
             flex-direction: column;
             justify-content: space-between;
             align-items: stretch;
-        }
-        
-        .panel-top {
+            min-height: 220px;
+            padding: 1rem;
             text-align: center;
-            padding-bottom: 0.5rem;
         }
-        
-        .andar-panel {
-            background: linear-gradient(135deg, #8B0000, #A52A2A);
-        }
-        
-        .bahar-panel {
-            background: linear-gradient(135deg, #000080, #4169E1);
-        }
-        
-        .center-panel {
-            background: linear-gradient(135deg, #1a1a2e, #16213e);
-            border: 3px solid var(--gold-primary);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .betting-panel:hover {
+
+        .betting-zone:hover, .central-card-area:hover {
             transform: translateY(-5px);
+            border-color: var(--gold-primary);
             box-shadow: 0 10px 25px rgba(255, 215, 0, 0.3);
         }
         
-        .panel-label {
+        .andar-zone { background: linear-gradient(135deg, #8B0000, #A52A2A); }
+        .bahar-zone { background: linear-gradient(135deg, #000080, #4169E1); }
+        .central-card-area { background: #2C2C2C; border: 3px solid var(--gold-primary); cursor: default; }
+        
+        .zone-header, .zone-footer {
+            padding: 5px;
+        }
+
+        .zone-label {
+            font-family: var(--font-primary);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--white);
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
+            letter-spacing: 2px;
+        }
+        
+        .zone-content1 {
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .zone-content2 {
+            display: flex;
+            align-items: flex-end;
+        }
+
+        .zone-label1, .zone-label2 {
             font-family: var(--font-primary);
             font-size: 13px;
             font-weight: 700;
@@ -241,17 +422,49 @@
             text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
             letter-spacing: 2px;
         }
-        
-        .panel-content {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            flex-grow: 1;
+
+        .zone-bottom {
+            margin-top: auto;
         }
         
-        .panel-bottom {
-            margin-top: auto;
+        .andar-zone-image {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+        }
+
+        .bahar-zone-image {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+        }
+
+        .andar-zone-image-2 {
+            position: absolute;
+            right: 20%;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 70px;
+            height: 100px;
+            object-fit: contain;
+        }
+
+        .bahar-zone-image-2 {
+            position: absolute;
+            left: 20%;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 70px;
+            height: 100px;
+            object-fit: contain;
         }
         
         .bet-amount {
@@ -259,218 +472,347 @@
             color: var(--gold-primary);
             font-weight: 700;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-            padding: 8px;
             background: rgba(0, 0, 0, 0.4);
             border-radius: 8px;
-            text-align: center;
+            padding: 8px;
+            display: inline-block;
         }
-        
-        .coin-image {
-            position: absolute;
-            width: 60px;
-            height: 60px;
-            object-fit: contain;
-        }
-        
-        .andar-coin {
-            left: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        
-        .bahar-coin {
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        
-        .card-image {
-            position: absolute;
-            width: 70px;
-            height: 100px;
-            object-fit: contain;
-        }
-        
-        .andar-card {
-            right: 20%;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        
-        .bahar-card {
-            left: 20%;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        
+
         .central-card-display {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(255, 215, 0, 0.3);
-        }
-        
-        .card-icon {
-            font-size: 2rem;
-            margin-bottom: 5px;
-            text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
-        }
-        
-        .card-text {
-            font-family: 'Poppins', sans-serif;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: #ffd700;
-            text-align: center;
-        }
-
-        .central-card-display {
-            position: relative;
-            transform: none;
-            left: auto;
-            top: auto;
-            width: 100%;
             height: 100%;
         }
 
+        .card-icon {
+            font-size: 4rem;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+        }
+
+        .card-text {
+            font-family: var(--font-primary);
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--gold-primary);
+            margin-top: 10px;
+        }
+        
+        /* --- KEY CHANGE: Controls and Chip Selection --- */
         .bottom-controls-wrapper {
             width: 100%;
             max-width: 1100px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 1.5rem;
+            gap: 1rem;
         }
         
         .chip-selection {
-            display: none; /* Hidden by default, shown when button is clicked */
+            display: none; /* Hidden by default */
+            justify-content: center;
+            gap: 15px;
+            overflow-x: auto;
+            padding: 10px;
+            width: 100%;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        }
+        
+        .chip-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .chip-image {
+            width: 70px;
+            height: 70px;
+            object-fit: contain;
+            transition: all 0.3s ease;
+        }
+
+        .chip-amount {
+            color: var(--white);
+            font-size: 12px;
+        }
+
+        .chip-btn:hover .chip-image {
+            transform: scale(1.1);
+        }
+
+        .chip-btn.active .chip-image {
+            transform: scale(1.2);
+            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
         }
         
         .game-controls {
-            position: relative;
-            bottom: auto; left: auto; right: auto;
-        }
-
-        .player-info {
-            width: 100%;
-            max-width: 1100px;
-            position: relative;
-            bottom: auto; left: auto; right: auto;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
         }
         
-        .recent-results {
-            position: relative;
-            top: auto; left: auto; right: auto;
+        .selected-chip-display {
+            height: 68px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--gradient-gold);
+            color: var(--primary-black);
+            border-radius: 15px;
+            padding: 8px 15px;
+            min-width: 80px;
+            font-weight: 600;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.3);
+        }
+        .selected-chip-display:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.5);
+        }
+        .chip-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+        .chip-text {
+            font-size: 0.8rem;
+        }
+        
+        .control-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--gold-primary);
+            border-radius: 15px;
+            padding: 15px 20px;
+            color: var(--white);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 80px;
         }
 
-        /* Mobile Responsiveness */
+        .control-btn:hover {
+            background: rgba(255, 215, 0, 0.1);
+            transform: translateY(-3px);
+        }
+
+        .control-btn i {
+            font-size: 20px;
+            color: var(--gold-primary);
+        }
+
+        .control-btn span {
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        /* Selected Cards Display */
+        .selected-cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            justify-content: center;
+            align-items: center;
+            flex-grow: 1; /* Allows it to take up available space */
+        }
+
+        .selected-card {
+            background: linear-gradient(135deg, #ffffff, #f0f0f0);
+            color: #1a1a1a;
+            border: 2px solid var(--gold-primary);
+            border-radius: 8px;
+            padding: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-align: center;
+            min-width: 40px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Notification System */
+        .notification-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .notification {
+            background: var(--accent-black);
+            border-left: 5px solid var(--gold-primary);
+            border-radius: 10px;
+            padding: 15px 20px;
+            color: var(--white);
+            min-width: 250px;
+            max-width: 350px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            transform: translateX(120%);
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+
+        .notification.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .notification-success { border-color: #27ae60; }
+        .notification-error { border-color: #e74c3c; }
+        .notification-warning { border-color: #f39c12; }
+        .notification-info { border-color: var(--gold-primary); }
+        
+        @keyframes winnerPulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+            50% { box-shadow: 0 0 0 20px rgba(255, 215, 0, 0.3); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+        }
+
+        /* Loading indicator */
+        .loading-indicator {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 215, 0, 0.3);
+            border-top: 5px solid var(--gold-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Connection status indicator */
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .connection-status.connected {
+            background: rgba(39, 174, 96, 0.2);
+            color: #27ae60;
+            border: 1px solid #27ae60;
+        }
+
+        .connection-status.disconnected {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+            border: 1px solid #e74c3c;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        /* --- KEY CHANGE: Mobile Responsiveness --- */
         @media (max-width: 768px) {
-            .live-clock {
-                display: none;
-            }
+            .nav-container { padding: 0 15px; }
+            .logo h1 { font-size: 20px; }
+            .nav-menu { display: none; }
+            .hamburger { display: flex; }
+            .live-clock, .language-dropdown { display: none; } /* Hide some controls for simplicity */
+
             .video-section {
-                height: 40vh;
+                height: 35vh; /* Reduce video height on mobile */
             }
 
-            .circular-timer-container {
-                padding: 15px 0;
-            }
+            .circular-timer-container { padding: 15px 0; }
+            .circular-timer { width: 100px; height: 100px; }
+            .timer-value { font-size: 24px; }
+            .round-info { font-size: 10px; }
 
-            .circular-timer {
-                width: 100px;
-                height: 100px;
-            }
-
-            .timer-value {
-                font-size: 24px;
-            }
-
-            .round-info {
-                font-size: 10px;
-            }
-
-            .three-panel-layout {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto auto auto;
-                gap: 0.75rem;
-            }
-
-            .betting-panel {
-                min-height: 140px;
-                padding: 0.75rem;
-            }
-            
-            .coin-image {
-                width: 40px;
-                height: 40px;
-            }
-            
-            .card-image {
-                width: 50px;
-                height: 70px;
-            }
-            
-            .bet-amount {
-                font-size: 1.2rem;
-            }
-            
-            .panel-label {
-                font-size: 12px;
-            }
-            
-            .center-panel {
-                min-height: 140px;
-            }
-            
             .game-interface {
-                padding: 1rem;
+                padding: 1rem 0.5rem;
                 gap: 1rem;
             }
 
-            .chip-image {
-                width: 40px;
-                height: 40px;
+            /* Maintain the 3-column layout on mobile */
+            .main-betting-areas {
+                gap: 0.5rem;
             }
+            
+            .betting-zone, .central-card-area {
+                min-height: 160px; /* Adjust height for mobile */
+                padding: 0.5rem;
+                border-width: 2px;
+            }
+            
+            .zone-label { font-size: 1rem; }
+            .bet-amount { font-size: 1.2rem; padding: 5px; }
+            
+            .card-icon { font-size: 2.5rem; }
+            .card-text { font-size: 0.8rem; }
+            .selected-card { font-size: 0.8rem; padding: 5px; min-width: 30px; }
+            
+            .andar-zone-image, .bahar-zone-image { display: none; }
+            .andar-zone-image-2, .bahar-zone-image-2 { display: none; }
 
             .chip-selection {
                 gap: 8px;
-                padding: 10px;
-                width: 100%;
-                justify-content: space-between;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                scrollbar-width: none; /* Hide scrollbar for Firefox */
-                -ms-overflow-style: none; /* Hide scrollbar for IE/Edge */
-            }
-            
-            .chip-selection::-webkit-scrollbar {
-                display: none; /* Hide scrollbar for Chrome/Safari */
-            }
-            
-            .chip-btn {
-                min-width: 60px;
-                min-height: 60px;
-                flex-shrink: 0;
-            }
-            
-            .chip-image {
-                width: 50px;
-                height: 50px;
+                padding: 0 10px;
+                justify-content: center;
             }
 
-            .control-btn span {
-                font-size: 10px;
+            .chip-image {
+                width: 45px;
+                height: 45px;
             }
-            .control-btn i {
-                font-size: 16px;
+            
+            .selected-chip-display {
+                height: 50px;
+                min-width: 70px;
+                padding: 5px 10px;
             }
+            .chip-value { font-size: 1rem; }
+            .chip-text { font-size: 0.7rem; }
+
             .control-btn {
                 padding: 10px;
                 gap: 5px;
-                min-width: 60px;
+                min-width: 70px;
             }
+            .control-btn span { font-size: 10px; }
+            .control-btn i { font-size: 16px; }
         }
 
     </style>
@@ -486,11 +828,9 @@
                 
                 <div class="nav-menu">
                     <ul class="nav-list">
-                        <li><a href="index.html#home" class="nav-link">Home</a></li>
-                        <li><a href="index.html#game-rules" class="nav-link">Game Rules</a></li>
-                        <li><a href="https://wa.me/918686886632" target="_blank" class="nav-link">Contact</a></li>
-                        <li><a href="login.html" class="nav-link">Login</a></li>
-                        <li><a href="signup.html" class="nav-link">SignUp</a></li>
+                        <li><a href="index.html" class="nav-link">Home</a></li>
+                        <li><a href="game.html" class="nav-link">Games</a></li>
+                        <li><a href="#" class="nav-link">Contact</a></li>
                     </ul>
                 </div>
                 
@@ -507,15 +847,12 @@
                         </div>
                     </div>
                     <div id="liveClock" class="live-clock"></div>
-                    <div class="language-selector">
-                        <select id="languageSelect" class="language-dropdown">
-                            <option value="en">English</option>
-                            <option value="hi">हिंदी</option>
-                            <option value="te">తెలుగు</option>
-                        </select>
-                    </div>
-                    
-                    <div class="hamburger">
+                    <select id="languageSelect" class="language-dropdown">
+                        <option value="en">English</option>
+                        <option value="hi">हिंदी</option>
+                        <option value="te">తెలుగు</option>
+                    </select>
+                    <div class="hamburger" id="hamburger">
                         <span></span>
                         <span></span>
                         <span></span>
@@ -533,10 +870,11 @@
             </video>
         </div>
 
-        <!-- Circular Timer -->
+        <!-- 2. Circular Timer Section -->
         <div class="circular-timer-container">
+            <div id="betLimitsDisplay">Min: ₹1000 | Max: ₹50000</div>
             <div class="circular-timer">
-                <svg width="120" height="120">
+                <svg width="120" height="120" viewbox="0 0 120 120">
                     <circle class="timer-background" cx="60" cy="60" r="54"></circle>
                     <circle class="timer-progress" id="timerProgress" cx="60" cy="60" r="54"></circle>
                 </svg>
@@ -547,56 +885,54 @@
             </div>
         </div>
 
-        <!-- 2. Game Interface Wrapper (scrollable) -->
+        <!-- 3. Game Interface Section -->
         <div class="game-interface">
             <!-- Recent Results -->
-            <div class="recent-results">
-                <div class="result-chip red">2</div>
-                <div class="result-chip blue">9</div>
-                <div class="result-chip blue">3</div>
-                <div class="result-chip red">K</div>
-                <div class="result-chip red">6</div>
-                <div class="result-chip blue">9</div>
-                <div class="result-chip red">6</div>
-                <div class="result-chip blue">10</div>
-                <div class="result-chip red">6</div>
-                <div class="result-chip red">5</div>
+            <div class="recent-results" id="recentResults">
+                <div class="result-chip red">A</div><div class="result-chip blue">B</div><div class="result-chip blue">B</div>
+                <div class="result-chip red">A</div><div class="result-chip red">A</div><div class="result-chip blue">B</div>
+                <div class="result-chip red">A</div><div class="result-chip blue">B</div><div class="result-chip red">A</div>
+                <div class="result-chip red">A</div>
             </div>
 
             <!-- Main Betting Area -->
-            <div class="three-panel-layout">
-                <!-- ANDAR PANEL -->
-                <div class="betting-panel andar-panel" id="andarZone">
-                    <div class="panel-top">
-                        <div class="panel-label">ANDAR 1:1</div>
+            <div class="main-betting-areas">
+                <!-- ANDAR ZONE -->
+                <div class="betting-zone andar-zone" id="andarZone">
+                    <div class="zone-header">
+                        <div class="zone-label">ANDAR</div>
                     </div>
-                    <div class="panel-content">
-                        <img src="coins/Select Coins.png" alt="Andar Chip" class="coin-image andar-coin">
-                        <img src="cards/D7.png" alt="Andar Card" class="card-image andar-card">
+                    <div class="zone-content1">
+                        <div class="zone-label1">ANDAR</div>
                     </div>
-                    <div class="panel-bottom">
+                    <div class="selected-cards" id="andarSelectedCards"></div>
+                    <img src="cards/D7.png" alt="Andar Card" class="andar-zone-image">
+                    <img src="cards/DJ.png" alt="Andar Card" class="andar-zone-image-2">
+                    <div class="zone-footer">
                         <div class="bet-amount" id="andarBet">₹0</div>
                     </div>
                 </div>
 
-                <!-- CENTER PANEL - OPENING CARD -->
-                <div class="betting-panel center-panel">
+                <!-- CENTRAL CARD AREA -->
+                <div class="central-card-area">
                     <div class="central-card-display" id="centralCardDisplay">
-                        <div class="card-icon">🃏</div>
-                        <div class="card-text">Opening Card</div>
+                        <div class="card-icon" id="openingCardIcon">🃏</div>
+                        <div class="card-text" id="openingCardText">Opening Card</div>
                     </div>
                 </div>
 
-                <!-- BAHAR PANEL -->
-                <div class="betting-panel bahar-panel" id="baharZone">
-                    <div class="panel-top">
-                        <div class="panel-label">BAHAR 1:1</div>
+                <!-- BAHAR ZONE -->
+                <div class="betting-zone bahar-zone" id="baharZone">
+                    <div class="zone-header">
+                        <div class="zone-label">BAHAR</div>
                     </div>
-                    <div class="panel-content">
-                        <img src="coins/Select Coins.png" alt="Bahar Chip" class="coin-image bahar-coin">
-                        <img src="cards/DQ.png" alt="Bahar Card" class="card-image bahar-card">
+                    <div class="zone-content1">
+                        <div class="zone-label1">BAHAR</div>
                     </div>
-                    <div class="panel-bottom">
+                    <div class="selected-cards" id="baharSelectedCards"></div>
+                    <img src="cards/DQ.png" alt="Bahar Card" class="bahar-zone-image">
+                    <img src="cards/D7.png" alt="Bahar Card" class="bahar-zone-image-2">
+                    <div class="zone-footer">
                         <div class="bet-amount" id="baharBet">₹0</div>
                     </div>
                 </div>
@@ -604,83 +940,359 @@
 
             <!-- Bottom Controls -->
             <div class="bottom-controls-wrapper">
-                 <div class="chip-selection">
-                    <button class="chip-btn" data-amount="100000" onclick="updateshowcoins(event)">
-                        <img src="coins/100000.png" alt="₹100000" class="chip-image">
-                    </button>
-                    <button class="chip-btn" data-amount="50000" onclick="updateshowcoins(event)">
-                        <img src="coins/50000.png" alt="₹50000" class="chip-image">
-                    </button>
-                    <button class="chip-btn" data-amount="40000" onclick="updateshowcoins(event)">
-                        <img src="coins/40000.png" alt="₹40000" class="chip-image">
-                    </button>
-                    <button class="chip-btn" data-amount="30000" onclick="updateshowcoins(event)">
-                        <img src="coins/30000.png" alt="₹30000" class="chip-image">
-                    </button>
-                    <button class="chip-btn" data-amount="20000" onclick="updateshowcoins(event)">
-                        <img src="coins/20000.png" alt="₹20000" class="chip-image">
-                    </button>
-                    <button class="chip-btn" data-amount="10000" onclick="updateshowcoins(event)">
-                        <img src="coins/10000.png" alt="₹10000" class="chip-image">
-                    </button>
-                    <button class="chip-btn" data-amount="5000" onclick="updateshowcoins(event)">
-                        <img src="coins/5000.png" alt="₹5000" class="chip-image">
-                    </button>
-                    <button class="chip-btn" data-amount="2500" onclick="updateshowcoins(event)">
-                        <img src="coins/2500.png" alt="₹2500" class="chip-image">
-                    </button>
+                 <div class="chip-selection" id="chipSelectionPanel">
+                    <button class="chip-btn" data-amount="100000"><img src="coins/100000.png" alt="₹100k" class="chip-image"></button>
+                    <button class="chip-btn" data-amount="50000"><img src="coins/50000.png" alt="₹50k" class="chip-image"></button>
+                    <button class="chip-btn" data-amount="40000"><img src="coins/40000.png" alt="₹40k" class="chip-image"></button>
+                    <button class="chip-btn" data-amount="30000"><img src="coins/30000.png" alt="₹30k" class="chip-image"></button>
+                    <button class="chip-btn" data-amount="20000"><img src="coins/20000.png" alt="₹20k" class="chip-image"></button>
+                    <button class="chip-btn" data-amount="10000"><img src="coins/10000.png" alt="₹10k" class="chip-image"></button>
+                    <button class="chip-btn" data-amount="5000"><img src="coins/5000.png" alt="₹5k" class="chip-image"></button>
+                    <button class="chip-btn" data-amount="2500"><img src="coins/2500.png" alt="₹2.5k" class="chip-image"></button>
                 </div>
                 <div class="game-controls">
-                    <button class="control-btn" onclick="showHistory()">
-                        <i class="fas fa-history"></i>
-                        <span>History</span>
-                    </button>
-                    <button class="control-btn" onclick="undoBet()">
-                        <i class="fas fa-undo"></i>
-                        <span>Undo</span>
-                    </button>
-                    <button class="control-btn" onclick="rebetAndar()">
-                        <i class="fas fa-redo"></i>
-                        <span>Rebet</span>
-                    </button>
-                    <img src="coins/Select Coins.png" alt="" class="select-coins" onclick="showcoins()">
+                    <button class="control-btn" onclick="showHistory()"><i class="fas fa-history"></i><span>History</span></button>
+                    <button class="control-btn" onclick="undoBet()"><i class="fas fa-undo"></i><span>Undo</span></button>
+                    <div class="selected-chip-display" id="selectedChipDisplay" onclick="toggleChipPanel()">
+                        <span class="chip-value">Select</span>
+                        <span class="chip-text">Chip</span>
+                    </div>
+                    <button class="control-btn" onclick="rebetAndar()"><i class="fas fa-redo"></i><span>Rebet</span></button>
+                    <button class="control-btn" onclick="clearBets()"><i class="fas fa-times"></i><span>Clear</span></button>
                 </div>
             </div>
-
         </div>
     </div>
-
 
     <!-- Notification Container -->
     <div id="notificationContainer" class="notification-container"></div>
 
-    <!-- WhatsApp Float Button -->
-    <div class="whatsapp-float">
-        <a href="https://wa.me/918686886632" target="_blank" class="whatsapp-btn">
-            <i class="fab fa-whatsapp"></i>
-        </a>
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="loading-indicator">
+        <div class="loading-spinner"></div>
     </div>
 
-    <script src="config.js"></script>
-    <script src="script.js"></script>
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status connected">
+        <div class="status-dot"></div>
+        <span id="connectionText">Connected</span>
+    </div>
+
     <script>
-        // Ensure API_BASE_URL is properly set
-        if (!window.API_BASE_URL || window.API_BASE_URL === 'undefined') {
-            window.API_BASE_URL = window.location.hostname === 'localhost'
-                ? 'http://localhost:4000'
-                : 'https://reddy-anna-59l3.onrender.com';
-        }
-        
+        // Global variables
         let selectedChip = 0;
         let andarBet = 0;
         let baharBet = 0;
-        let gameTimer = 0;
+        let gameTimer = 30;
         let timerInterval;
         let playerBalance = 5000423.90;
         let betHistory = [];
-        let bettingOpen = false;
-        let gameState = null;
-        let currentGameId = null;
+        let bettingOpen = true;
+        let gameState = {
+            phase: 'waiting',
+            openingCard: null,
+            currentTimer: 0,
+            round1Bets: { andar: 0, bahar: 0 },
+            round2Bets: { andar: 0, bahar: 0 },
+            selectedCards: { andar: [], bahar: [] },
+            winner: null,
+            gameId: null,
+            bettingOpen: false,
+            currentRound: 0
+        };
+        let gameSettings = {
+            min_bet_amount: 1000,
+            max_bet_amount: 50000,
+            game_timer: 30
+        };
+        let syncInterval;
+        let bettingSyncInterval;
+        let lastGameId = null;
+        
+        // --- CORE FUNCTIONS ---
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial setup calls
+            loadUserId();
+            setupWalletDropdown();
+            setupChipSelection();
+            setupBettingZones();
+            updateClock();
+            setInterval(updateClock, 1000);
+            
+            // Initialize game with backend
+            initializeGame();
+            
+            // Set up periodic synchronization with backend
+            syncInterval = setInterval(syncWithBackend, 5000);
+            bettingSyncInterval = setInterval(syncBettingAmounts, 2000);
+            
+            // Setup mobile menu
+            setupMobileMenu();
+        });
+
+        async function initializeGame() {
+            try {
+                showLoading(true);
+                
+                // Fetch game settings from backend
+                await fetchGameSettings();
+                
+                // Fetch current game state
+                await fetchGameState();
+                
+                // Update UI with fetched data
+                updateUIWithGameState();
+                
+                // Start timer if game is active
+                if (gameState.bettingOpen && gameState.currentTimer > 0) {
+                    startGameTimer(gameState.currentTimer);
+                }
+                
+                showNotification('Game initialized successfully', 'success');
+            } catch (error) {
+                console.error('Error initializing game:', error);
+                showNotification('Failed to initialize game. Using offline mode.', 'warning');
+                updateConnectionStatus(false);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function fetchGameSettings() {
+            try {
+                const response = await fetch(`${window.API_BASE_URL}/api/game/settings`);
+                if (!response.ok) throw new Error('Failed to fetch game settings');
+                
+                const result = await response.json();
+                if (result.success) {
+                    gameSettings = {
+                        min_bet_amount: parseInt(result.data.min_bet_amount.value),
+                        max_bet_amount: parseInt(result.data.max_bet_amount.value),
+                        game_timer: parseInt(result.data.game_timer.value)
+                    };
+                    
+                    // Update bet limits display
+                    document.getElementById('betLimitsDisplay').textContent = 
+                        `Min: ₹${gameSettings.min_bet_amount.toLocaleString('en-IN')} | Max: ₹${gameSettings.max_bet_amount.toLocaleString('en-IN')}`;
+                }
+            } catch (error) {
+                console.error('Error fetching game settings:', error);
+                throw error;
+            }
+        }
+
+        async function fetchGameState() {
+            try {
+                const response = await fetch(`${window.API_BASE_URL}/api/game/game-state`);
+                if (!response.ok) throw new Error('Failed to fetch game state');
+                
+                const result = await response.json();
+                if (result.success) {
+                    gameState = result.data;
+                }
+            } catch (error) {
+                console.error('Error fetching game state:', error);
+                throw error;
+            }
+        }
+
+        async function syncWithBackend() {
+            try {
+                // Only sync if we have an active game
+                if (gameState.gameId) {
+                    await fetchGameState();
+                    updateUIWithGameState();
+                    updateConnectionStatus(true);
+                    
+                    // Check for new game
+                    if (lastGameId && lastGameId !== gameState.gameId) {
+                        handleNewGame();
+                    }
+                    lastGameId = gameState.gameId;
+                }
+            } catch (error) {
+                console.error('Error syncing with backend:', error);
+                updateConnectionStatus(false);
+            }
+        }
+        
+        async function syncBettingAmounts() {
+            try {
+                // Only sync if we have an active game
+                if (gameState.gameId) {
+                    const response = await fetch(`${window.API_BASE_URL}/api/game/betting-amounts`);
+                    if (!response.ok) throw new Error('Failed to fetch betting amounts');
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        // Update only betting amounts without full UI refresh
+                        updateBettingAmountsDisplay(result.data);
+                    }
+                }
+            } catch (error) {
+                console.error('Error syncing betting amounts:', error);
+            }
+        }
+        
+        function handleNewGame() {
+            // Clear UI elements for new game
+            andarBet = 0;
+            baharBet = 0;
+            betHistory = [];
+            updateBetDisplay();
+            
+            // Clear selected cards
+            document.getElementById('andarSelectedCards').innerHTML = '';
+            document.getElementById('baharSelectedCards').innerHTML = '';
+            
+            // Reset opening card display
+            const cardIcon = document.getElementById('openingCardIcon');
+            const cardText = document.getElementById('openingCardText');
+            if (cardIcon) cardIcon.textContent = '🃏';
+            if (cardText) cardText.textContent = 'Opening Card';
+            
+            showNotification('New game started!', 'info');
+        }
+        
+        function updateBettingAmountsDisplay(data) {
+            // Update betting amounts based on current round
+            if (data.currentRound === 1) {
+                andarBet = data.round1Bets.andar;
+                baharBet = data.round1Bets.bahar;
+            } else if (data.currentRound === 2) {
+                andarBet = data.round2Bets.andar;
+                baharBet = data.round2Bets.bahar;
+            }
+            updateBetDisplay();
+        }
+
+        function updateUIWithGameState() {
+            // Update timer
+            if (gameState.currentTimer > 0) {
+                document.getElementById('gameTimer').textContent = gameState.currentTimer;
+                updateCircularTimer(gameSettings.game_timer);
+            }
+            
+            // Update betting status
+            bettingOpen = gameState.bettingOpen;
+            
+            // Update round info
+            document.getElementById('roundInfo').textContent =
+                gameState.currentRound ? `Round ${gameState.currentRound}` : 'Waiting';
+            
+            // Update opening card
+            if (gameState.openingCard) {
+                updateOpeningCard(gameState.openingCard);
+            }
+            
+            // Update selected cards
+            updateSelectedCards();
+            
+            // Update betting amounts
+            if (gameState.currentRound === 1) {
+                andarBet = gameState.round1Bets.andar;
+                baharBet = gameState.round1Bets.bahar;
+            } else if (gameState.currentRound === 2) {
+                andarBet = gameState.round2Bets.andar;
+                baharBet = gameState.round2Bets.bahar;
+            }
+            updateBetDisplay();
+            
+            // Check for game completion
+            if (gameState.phase === 'completed' && gameState.winner) {
+                handleGameCompletion(gameState.winner);
+            }
+            
+            // Check for round completion
+            if (gameState.phase === 'round1_complete' || gameState.phase === 'round2_complete') {
+                showNotification(`${gameState.phase === 'round1_complete' ? 'Round 1' : 'Round 2'} completed!`, 'info');
+            }
+        }
+
+        function updateOpeningCard(card) {
+            const cardIcon = document.getElementById('openingCardIcon');
+            const cardText = document.getElementById('openingCardText');
+            
+            // Map card to appropriate icon
+            const cardIcons = {
+                'A': '🂡', '2': '🂢', '3': '🂣', '4': '🂤', '5': '🂥',
+                '6': '🂦', '7': '🂧', '8': '🂨', '9': '🂩', '10': '🂪',
+                'J': '🂫', 'Q': '🂭', 'K': '🂮'
+            };
+            
+            const rank = card.replace(/[♠♥♦♣]/g, '').trim();
+            cardIcon.textContent = cardIcons[rank] || '🃏';
+            cardText.textContent = `Opening: ${card}`;
+        }
+
+        function updateSelectedCards() {
+            const andarCards = document.getElementById('andarSelectedCards');
+            const baharCards = document.getElementById('baharSelectedCards');
+            
+            andarCards.innerHTML = '';
+            baharCards.innerHTML = '';
+            
+            gameState.selectedCards.andar.forEach(card => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'selected-card';
+                cardEl.textContent = card;
+                andarCards.appendChild(cardEl);
+            });
+            
+            gameState.selectedCards.bahar.forEach(card => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'selected-card';
+                cardEl.textContent = card;
+                baharCards.appendChild(cardEl);
+            });
+        }
+
+        function handleGameCompletion(winner) {
+            const winnerZone = winner === 'andar' ? 'andarZone' : 'baharZone';
+            const zoneElement = document.getElementById(winnerZone);
+            
+            // Add winner animation
+            zoneElement.style.animation = 'winnerPulse 2s ease-in-out';
+            
+            // Show notification
+            showNotification(`${winner.toUpperCase()} wins this round!`, 'success');
+            
+            // Update recent results
+            updateRecentResults(winner);
+        }
+
+        function updateRecentResults(winner) {
+            const recentResults = document.getElementById('recentResults');
+            const resultChip = document.createElement('div');
+            resultChip.className = `result-chip ${winner === 'andar' ? 'red' : 'blue'}`;
+            resultChip.textContent = winner === 'andar' ? 'A' : 'B';
+            
+            recentResults.insertBefore(resultChip, recentResults.firstChild);
+            
+            // Keep only last 10 results
+            while (recentResults.children.length > 10) {
+                recentResults.removeChild(recentResults.lastChild);
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionText');
+            
+            if (connected) {
+                statusElement.className = 'connection-status connected';
+                statusText.textContent = 'Connected';
+            } else {
+                statusElement.className = 'connection-status disconnected';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        function showLoading(show) {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.style.display = show ? 'flex' : 'none';
+        }
 
         function updateClock() {
             const clockElement = document.getElementById('liveClock');
@@ -690,432 +1302,129 @@
                 clockElement.textContent = timeString;
             }
         }
-
-        // Load user ID from localStorage and display in header
+        
         function loadUserId() {
             const userIdDisplay = document.getElementById('userIdDisplay');
             const walletBalance = document.getElementById('walletBalance');
+            let userId = localStorage.getItem('userId') || '1308544430';
+            let balance = localStorage.getItem('userBalance') || '5000423.90';
+            playerBalance = parseFloat(balance);
             
-            // Try to get user ID from localStorage
-            let userId = localStorage.getItem('userId');
-            if (!userId) {
-                // Fallback to a default ID if not found
-                userId = '1308544430';
-                localStorage.setItem('userId', userId);
-            }
-            
-            // Try to get user balance from localStorage
-            let balance = localStorage.getItem('userBalance');
-            if (!balance) {
-                balance = '5000423.90';
-                localStorage.setItem('userBalance', balance);
-            }
-            
-            // Update the display elements
             if (userIdDisplay) userIdDisplay.textContent = userId;
-            if (walletBalance) walletBalance.textContent = `₹${parseFloat(balance).toLocaleString('en-IN')}`;
+            updateBalanceDisplay();
         }
-
-        // Setup wallet dropdown functionality
+        
         function setupWalletDropdown() {
             const walletBtn = document.getElementById('walletBtn');
             const walletContent = document.getElementById('walletContent');
             
             if (walletBtn && walletContent) {
-                walletBtn.addEventListener('click', function(e) {
+                walletBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     walletContent.classList.toggle('show');
                 });
-                
-                // Close dropdown when clicking outside
-                document.addEventListener('click', function() {
-                    walletContent.classList.remove('show');
+                document.addEventListener('click', () => walletContent.classList.remove('show'));
+                walletContent.addEventListener('click', (e) => e.stopPropagation());
+            }
+        }
+
+        function setupMobileMenu() {
+            const hamburger = document.getElementById('hamburger');
+            const navMenu = document.querySelector('.nav-menu');
+            
+            if (hamburger && navMenu) {
+                hamburger.addEventListener('click', () => {
+                    // Toggle mobile menu visibility
+                    if (navMenu.style.display === 'flex') {
+                        navMenu.style.display = 'none';
+                    } else {
+                        navMenu.style.display = 'flex';
+                        navMenu.style.position = 'absolute';
+                        navMenu.style.top = '100%';
+                        navMenu.style.left = '0';
+                        navMenu.style.right = '0';
+                        navMenu.style.background = 'rgba(10, 10, 10, 0.95)';
+                        navMenu.style.flexDirection = 'column';
+                        navMenu.style.padding = '20px';
+                        navMenu.style.borderBottom = '2px solid var(--gold-primary)';
+                    }
                 });
                 
-                walletContent.addEventListener('click', function(e) {
-                    e.stopPropagation();
+                // Close menu when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!hamburger.contains(e.target) && !navMenu.contains(e.target)) {
+                        navMenu.style.display = 'none';
+                    }
                 });
             }
         }
 
-        // Initialize game
-        document.addEventListener('DOMContentLoaded', function() {
-            loadUserId();
-            setupWalletDropdown();
-            loadGameSettings();
-            loadStreamSettings();
-            loadGameState();
-            setupChipSelection();
-            setupBettingZones();
-            updateClock();
-            setInterval(updateClock, 1000);
-            
-            // Periodic refresh of game settings every 10 seconds
-            setInterval(() => {
-                console.log('Periodic refresh of game settings...');
-                loadGameSettings();
-            }, 10000);
-            
-            // Real-time game state polling every 2 seconds
-            setInterval(() => {
-                loadGameState();
-            }, 2000);
-            
-            // Real-time betting amounts polling every 2 seconds
-            setInterval(() => {
-                loadBettingAmounts();
-            }, 2000);
-        });
-
-        // Refresh bet limits when page becomes visible
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden && window.gameSettings) {
-                setTimeout(() => {
-                    displayBetLimits();
-                }, 100);
-            }
-        });
-
-        // Load betting amounts from backend
-        async function loadBettingAmounts() {
-            try {
-                const API_BASE_URL = window.API_BASE_URL;
-                const response = await fetch(`${API_BASE_URL}/api/game/betting-amounts`);
-                const result = await response.json();
-                
-                if (result.success) {
-                    const bettingData = result.data;
-                    
-                    if (bettingData.phase === 'waiting') {
-                        clearBettingAmountsDisplay();
-                        clearRoundInformation();
-                        return;
-                    }
-                    
-                    if (bettingData.phase === 'round1' && bettingData.round1Bets) {
-                        updateBettingDisplay(bettingData.round1Bets, 'Round 1');
-                    } else if (bettingData.phase === 'round2' && bettingData.round2Bets) {
-                        updateBettingDisplay(bettingData.round2Bets, 'Round 2');
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading betting amounts:', error);
-            }
-        }
-
-        function updateBettingDisplay(bettingAmounts, round) {
-            document.getElementById('andarBet').textContent = `₹${bettingAmounts.andar}`;
-            document.getElementById('baharBet').textContent = `₹${bettingAmounts.bahar}`;
-            const roundInfo = document.getElementById('roundInfo');
-            if(roundInfo) roundInfo.textContent = round;
-        }
-
-        async function loadGameState() {
-            try {
-                const API_BASE_URL = window.API_BASE_URL;
-                const response = await fetch(`${API_BASE_URL}/api/game/game-state`);
-                const result = await response.json();
-                
-                if (result.success) {
-                    const newGameState = result.data;
-                    const isNewGame = !gameState || newGameState.gameId !== currentGameId;
-                    const isGameReset = newGameState.phase === 'waiting' && gameState && gameState.phase !== 'waiting';
-                    
-                    if (isNewGame || isGameReset) {
-                        clearAllPlayerGameState();
-                        gameState = newGameState;
-                        currentGameId = newGameState.gameId;
-                        console.log('New game detected - clearing previous state');
-                    }
-                    
-                    updateGameDisplay();
-                    
-                    if (newGameState.currentTimer !== gameTimer) {
-                        gameTimer = newGameState.currentTimer;
-                        document.getElementById('gameTimer').textContent = gameTimer;
-                        updateCircularTimer();
-                        
-                        if ((newGameState.phase === 'round1' || newGameState.phase === 'round2') && newGameState.bettingOpen) {
-                            if (!timerInterval) startGameTimer();
-                        } else if (!newGameState.bettingOpen && timerInterval) {
-                            clearInterval(timerInterval);
-                            timerInterval = null;
-                        }
-                    }
-                    
-                    bettingOpen = newGameState.bettingOpen;
-                    
-                    if (newGameState.winner && newGameState.phase === 'completed') {
-                        showWinnerNotification(newGameState.winner);
-                        if (timerInterval) {
-                            clearInterval(timerInterval);
-                            timerInterval = null;
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading game state:', error);
-            }
-        }
-
-        function updateGameDisplay() {
-            if (!gameState) return;
-            
-            if (gameState.openingCard) {
-                updateCentralCard(gameState.openingCard);
-            } else {
-                clearCentralCardDisplay();
-            }
-            updateSelectedCardsDisplay();
-        }
-
-        function clearCentralCardDisplay() {
-            const centralCardDisplay = document.getElementById('centralCardDisplay');
-            if (centralCardDisplay) {
-                const cardIcon = centralCardDisplay.querySelector('.card-icon');
-                const cardText = centralCardDisplay.querySelector('.card-text');
-                if (cardIcon && cardText) {
-                    cardIcon.textContent = '🃏';
-                    cardText.textContent = 'Opening Card';
-                }
-            }
-        }
-
-        function clearAllPlayerGameState() {
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
-            }
-            gameTimer = 0;
-            document.getElementById('gameTimer').textContent = gameTimer;
-            bettingOpen = false;
-            clearCentralCardDisplay();
-            clearSelectedCardsDisplay();
-            clearBettingAmountsDisplay();
-            clearRoundInformation();
-            clearWinnerNotifications();
-            clearWinnerEffects();
-            andarBet = 0;
-            baharBet = 0;
-            betHistory = [];
-            updateBetDisplay();
-            console.log('All player game state cleared');
-        }
-
-        function clearSelectedCardsDisplay() {
-            const andarZone = document.getElementById('andarZone');
-            if (andarZone) {
-                const existingCards = andarZone.querySelector('.selected-cards');
-                if (existingCards) existingCards.remove();
-            }
-            const baharZone = document.getElementById('baharZone');
-            if (baharZone) {
-                const existingCards = baharZone.querySelector('.selected-cards');
-                if (existingCards) existingCards.remove();
-            }
-        }
-
-        function clearBettingAmountsDisplay() {
-            document.getElementById('andarBet').textContent = '₹0';
-            document.getElementById('baharBet').textContent = '₹0';
-        }
-
-        function clearRoundInformation() {
-            const roundInfo = document.getElementById('roundInfo');
-            if (roundInfo) roundInfo.textContent = '';
-        }
-
-        function clearWinnerNotifications() {
-            const notifications = document.querySelectorAll('.notification');
-            notifications.forEach(notification => {
-                if (notification.textContent.includes('WINS') || notification.textContent.includes('WINNER')) {
-                    notification.remove();
-                }
-            });
-            const popups = document.querySelectorAll('.game-completion-popup');
-            popups.forEach(popup => popup.remove());
-        }
-
-        function updateCentralCard(card) {
-            const centralCardDisplay = document.getElementById('centralCardDisplay');
-            if (centralCardDisplay) {
-                const cardIcon = centralCardDisplay.querySelector('.card-icon');
-                const cardText = centralCardDisplay.querySelector('.card-text');
-                if (cardIcon && cardText) {
-                    const suit = card.slice(-1);
-                    let icon = '🃏';
-                    switch(suit) {
-                        case '♠': icon = '♠️'; break;
-                        case '♥': icon = '♥️'; break;
-                        case '♦': icon = '♦️'; break;
-                        case '♣': icon = '♣️'; break;
-                    }
-                    cardIcon.textContent = icon;
-                    cardText.textContent = card;
-                }
-            }
-        }
-
-        function updateSelectedCardsDisplay() {
-            if (!gameState || !gameState.selectedCards) return;
-
-            function updateZone(zoneId, cards) {
-                const zone = document.getElementById(zoneId);
-                if (zone) {
-                    let existingCards = zone.querySelector('.selected-cards');
-                    if (existingCards) existingCards.remove();
-                    if (cards.length > 0) {
-                        let cardsHtml = '<div class="selected-cards">';
-                        cards.forEach(card => {
-                            cardsHtml += `<div class="selected-card">${card}</div>`;
-                        });
-                        cardsHtml += '</div>';
-                        zone.insertAdjacentHTML('beforeend', cardsHtml);
-                    }
-                }
-            }
-            updateZone('andarZone', gameState.selectedCards.andar || []);
-            updateZone('baharZone', gameState.selectedCards.bahar || []);
-        }
-
-        function showWinnerNotification(winner) {
-            const message = `🎉 ${winner.toUpperCase()} WINS! 🎉`;
-            showNotification(message, 'success');
-            const winnerZone = document.getElementById(winner + 'Zone');
-            if (winnerZone) {
-                winnerZone.style.animation = 'winnerPulse 2s ease-in-out 3';
-            }
-        }
-
-        function clearWinnerEffects() {
-            const andarZone = document.getElementById('andarZone');
-            const baharZone = document.getElementById('baharZone');
-            if (andarZone) andarZone.style.animation = '';
-            if (baharZone) baharZone.style.animation = '';
-        }
-
-        async function loadGameSettings() {
-            try {
-                const API_BASE_URL = window.API_BASE_URL;
-                const response = await fetch(`${API_BASE_URL}/api/game/settings`);
-                const result = await response.json();
-                
-                let settingsData = result.success ? result.data : {};
-                
-                window.gameSettings = {
-                    maxBetAmount: parseInt(settingsData.max_bet_amount?.value || '50000'),
-                    minBetAmount: parseInt(settingsData.min_bet_amount?.value || '1000'),
-                    gameTimer: parseInt(settingsData.game_timer?.value || '30'),
-                    openingCard: settingsData.opening_card?.value || 'A♠'
-                };
-                
-                gameTimer = window.gameSettings.gameTimer;
-                document.getElementById('gameTimer').textContent = gameTimer;
-                updateCircularTimer();
-                updateCentralCard(window.gameSettings.openingCard);
-                displayBetLimits();
-            } catch (error) {
-                console.error('Error loading game settings:', error);
-                window.gameSettings = { maxBetAmount: 50000, minBetAmount: 1000, gameTimer: 30 };
-                displayBetLimits();
-            }
-        }
-
-        async function loadStreamSettings() {
-            try {
-                const API_BASE_URL = window.API_BASE_URL;
-                const response = await fetch(`${API_BASE_URL}/api/game/stream-settings`);
-                const result = await response.json();
-                
-                let settingsData = result.success ? result.data : {};
-
-                window.streamSettings = {
-                    streamUrl: settingsData.stream_url?.value || 'hero images/uhd_30fps.mp4',
-                    streamEmbedCode: settingsData.stream_embed_code?.value || '',
-                    streamStatus: settingsData.stream_status?.value || 'offline',
-                };
-                updateStreamDisplay();
-            } catch (error) {
-                console.error('Error loading stream settings:', error);
-                window.streamSettings = { streamUrl: 'hero images/uhd_30fps.mp4', streamEmbedCode: '', streamStatus: 'offline' };
-                updateStreamDisplay();
-            }
-        }
-
-        function displayBetLimits() {
-            // Since we removed the stream-info element, we'll create a bet limits display
-            // in the circular timer container
-            let betLimitsDiv = document.getElementById('betLimitsDisplay');
-            if (!betLimitsDiv) {
-                betLimitsDiv = document.createElement('div');
-                betLimitsDiv.id = 'betLimitsDisplay';
-                betLimitsDiv.style.cssText = `
-                    background: rgba(0, 0, 0, 0.8); color: white; padding: 5px 12px;
-                    border-radius: 20px; font-size: 12px; border: 1px solid #ffd700;
-                    position: absolute; top: 10px; right: 10px; z-index: 10;`;
-                const timerContainer = document.querySelector('.circular-timer-container');
-                if (timerContainer) {
-                    timerContainer.style.position = 'relative';
-                    timerContainer.appendChild(betLimitsDiv);
-                }
-            }
-            betLimitsDiv.textContent = `Min: ₹${window.gameSettings.minBetAmount} | Max: ₹${window.gameSettings.maxBetAmount}`;
-        }
+        // --- GAME LOGIC AND INTERACTIONS ---
         
-        async function refreshAllSettings() {
-            await loadGameSettings();
-            await loadStreamSettings();
-            showNotification('All settings refreshed!', 'success');
-        }
-
-        async function refreshGameSettings() {
-            await loadGameSettings();
-            showNotification('Game settings refreshed!', 'success');
-        }
-        
-        function updateStreamDisplay() {
-            const videoSection = document.querySelector('.video-section');
-            if (!videoSection) return;
-
-            let streamContent = '';
-            if (window.streamSettings.streamStatus === 'live' && window.streamSettings.streamEmbedCode) {
-                 streamContent = window.streamSettings.streamEmbedCode;
-            } else {
-                let videoSource = window.streamSettings.streamUrl || 'hero images/uhd_30fps.mp4';
-                streamContent = `
-                    <video id="liveStream" autoplay muted loop playsinline>
-                        <source src="${videoSource}" type="video/mp4">
-                    </video>
-                `;
-            }
-            videoSection.innerHTML = streamContent;
-        }
-
-        function updateCircularTimer() {
-            const timerProgress = document.getElementById('timerProgress');
-            if (!timerProgress) return;
-            
-            const maxTime = window.gameSettings ? window.gameSettings.gameTimer : 30;
-            const percentage = gameTimer / maxTime;
-            const circumference = 2 * Math.PI * 54; // radius = 54
-            const offset = circumference * (1 - percentage);
-            
-            timerProgress.style.strokeDashoffset = offset;
-        }
-
-        function startGameTimer() {
+        function startGameTimer(initialTime = null) {
+            const maxTime = initialTime || gameSettings.game_timer;
+            gameTimer = maxTime;
             if (timerInterval) clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
+
+            timerInterval = setInterval(async () => {
                 gameTimer--;
                 document.getElementById('gameTimer').textContent = gameTimer;
-                updateCircularTimer();
+                updateCircularTimer(maxTime);
+                
+                // Update timer on backend
+                try {
+                    await updateTimerOnBackend(gameTimer);
+                } catch (error) {
+                    console.error('Error updating timer on backend:', error);
+                }
+                
                 if (gameTimer <= 0) {
                     bettingOpen = false;
                     clearInterval(timerInterval);
                     timerInterval = null;
-                    showNotification('Betting closed!', 'warning');
+                    showNotification('Betting is now closed!', 'warning');
+                } else {
+                    bettingOpen = true;
                 }
             }, 1000);
+        }
+
+        async function updateTimerOnBackend(timer) {
+            try {
+                const response = await fetch(`${window.API_BASE_URL}/api/game/update-timer`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ timer })
+                });
+                
+                if (!response.ok) throw new Error('Failed to update timer');
+                
+                const result = await response.json();
+                if (result.success) {
+                    gameState.bettingOpen = result.data.bettingOpen;
+                }
+            } catch (error) {
+                console.error('Error updating timer on backend:', error);
+                throw error;
+            }
+        }
+
+        function updateCircularTimer(maxTime) {
+            const timerProgress = document.getElementById('timerProgress');
+            if (!timerProgress) return;
+            
+            const percentage = Math.max(0, gameTimer / maxTime);
+            const circumference = 2 * Math.PI * 54;
+            const offset = circumference * (1 - percentage);
+            timerProgress.style.strokeDashoffset = offset;
+        }
+
+        function toggleChipPanel() {
+            const chipPanel = document.getElementById('chipSelectionPanel');
+            const currentDisplay = window.getComputedStyle(chipPanel).display;
+            chipPanel.style.display = currentDisplay === 'none' ? 'flex' : 'none';
         }
 
         function setupChipSelection() {
@@ -1124,59 +1433,101 @@
                     document.querySelectorAll('.chip-btn').forEach(c => c.classList.remove('active'));
                     chip.classList.add('active');
                     selectedChip = parseInt(chip.dataset.amount);
+                    // Update the selected chip display
+                    updateSelectedChipDisplay();
+                    // Hide the panel after selection for better UX
+                    toggleChipPanel();
                 });
             });
         }
-
+        
+        function updateSelectedChipDisplay() {
+            const chipDisplay = document.getElementById('selectedChipDisplay');
+            if (chipDisplay) {
+                if (selectedChip > 0) {
+                    const chipValue = chipDisplay.querySelector('.chip-value');
+                    const formattedValue = selectedChip >= 1000 ?
+                        `${selectedChip/1000}k` :
+                        selectedChip.toString();
+                    chipValue.textContent = `₹${formattedValue}`;
+                } else {
+                    const chipValue = chipDisplay.querySelector('.chip-value');
+                    chipValue.textContent = 'Select';
+                }
+            }
+        }
+        
         function setupBettingZones() {
             ['andarZone', 'baharZone'].forEach(zoneId => {
                 document.getElementById(zoneId).addEventListener('click', () => {
-                    if (!bettingOpen) {
-                        showNotification('Betting is closed!', 'error');
-                        return;
-                    }
-                    if (selectedChip <= 0) {
-                        showNotification('Please select a chip amount', 'error');
-                        return;
-                    }
-
-                    let currentBet = zoneId === 'andarZone' ? andarBet : baharBet;
-                    if (currentBet + selectedChip > window.gameSettings.maxBetAmount) {
-                         showNotification(`Maximum bet is ₹${window.gameSettings.maxBetAmount}`, 'error');
-                        return;
-                    }
-
-                    if (playerBalance < selectedChip) {
-                        showNotification('Insufficient balance!', 'error');
-                        return;
-                    }
-                    
-                    betHistory.push({ andarBet, baharBet, balance: playerBalance });
-                    playerBalance -= selectedChip;
-                    
-                    if (zoneId === 'andarZone') {
-                        andarBet += selectedChip;
-                    } else {
-                        baharBet += selectedChip;
-                    }
-
-                    updateBetDisplay();
-                    updateBalanceDisplay();
+                    placeBet(zoneId);
                 });
             });
         }
 
+        async function placeBet(zoneId) {
+            if (!bettingOpen) {
+                showNotification('Betting is closed!', 'error');
+                return;
+            }
+            if (selectedChip <= 0) {
+                showNotification('Please select a chip to bet', 'error');
+                return;
+            }
+            if (selectedChip < gameSettings.min_bet_amount) {
+                showNotification(`Minimum bet is ₹${gameSettings.min_bet_amount.toLocaleString('en-IN')}`, 'error');
+                return;
+            }
+            if (selectedChip > gameSettings.max_bet_amount) {
+                showNotification(`Maximum bet is ₹${gameSettings.max_bet_amount.toLocaleString('en-IN')}`, 'error');
+                return;
+            }
+            if (playerBalance < selectedChip) {
+                showNotification('Insufficient balance!', 'error');
+                return;
+            }
+            
+            // Save current state for undo
+            betHistory.push({ andarBet, baharBet, balance: playerBalance });
+            playerBalance -= selectedChip;
+            
+            if (zoneId === 'andarZone') {
+                andarBet += selectedChip;
+            } else {
+                baharBet += selectedChip;
+            }
+
+            // Try to sync with backend
+            try {
+                await submitBetToBackend(zoneId === 'andarZone' ? 'andar' : 'bahar', selectedChip);
+            } catch (error) {
+                console.error('Error submitting bet to backend:', error);
+                showNotification('Bet placed locally. Backend sync failed.', 'warning');
+            }
+
+            updateBetDisplay();
+            updateBalanceDisplay();
+        }
+
+        async function submitBetToBackend(side, amount) {
+            // This would typically be handled by the game admin submitting totals
+            // For individual bets, we might need a different endpoint
+            // For now, we'll just update local state
+            console.log(`Bet ${amount} on ${side}`);
+        }
+
         function updateBetDisplay() {
-            document.getElementById('andarBet').textContent = `₹${andarBet}`;
-            document.getElementById('baharBet').textContent = `₹${baharBet}`;
+            document.getElementById('andarBet').textContent = `₹${andarBet.toLocaleString('en-IN')}`;
+            document.getElementById('baharBet').textContent = `₹${baharBet.toLocaleString('en-IN')}`;
         }
 
         function updateBalanceDisplay() {
-            document.getElementById('walletBalance').textContent = `₹${playerBalance.toLocaleString('en-IN')}`;
+            const balanceEl = document.getElementById('walletBalance');
+            if (balanceEl) {
+                balanceEl.textContent = `₹${playerBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            }
             localStorage.setItem('userBalance', playerBalance.toString());
         }
-
-        function showHistory() { showNotification('Game history will be displayed here', 'info'); }
 
         function undoBet() {
             if (betHistory.length > 0) {
@@ -1186,23 +1537,49 @@
                 playerBalance = lastState.balance;
                 updateBetDisplay();
                 updateBalanceDisplay();
-                showNotification('Last bet undone', 'success');
+                showNotification('Last bet has been undone', 'success');
             } else {
-                showNotification('No bet to undo', 'error');
+                showNotification('There is no bet to undo', 'error');
             }
         }
+        
+        function clearBets() {
+            if (andarBet === 0 && baharBet === 0) {
+                 showNotification('No bets to clear.', 'info');
+                 return;
+            }
+            betHistory.push({ andarBet, baharBet, balance: playerBalance }); // Save state before clearing
+            playerBalance += andarBet + baharBet;
+            andarBet = 0;
+            baharBet = 0;
+            updateBetDisplay();
+            updateBalanceDisplay();
+            showNotification('All bets cleared!', 'success');
+        }
 
-        function rebetAndar() { showNotification('Rebet functionality coming soon!', 'info'); }
+        function rebetAndar() { 
+            // Rebet logic would go here
+            showNotification('Re-bet functionality will be available soon!', 'info'); 
+        }
+        
+        function showHistory() { 
+            // History display logic would go here
+            showNotification('Game history will be shown here', 'info'); 
+        }
 
+        // --- UI UTILITIES ---
 
         function showNotification(message, type = 'info') {
             const container = document.getElementById('notificationContainer');
             if (!container) return;
+
             const notification = document.createElement('div');
             notification.className = `notification notification-${type}`;
             notification.textContent = message;
             container.appendChild(notification);
+            
             setTimeout(() => notification.classList.add('show'), 10);
+            
             setTimeout(() => {
                 notification.classList.remove('show');
                 setTimeout(() => {
@@ -1213,7 +1590,12 @@
             }, 3000);
         }
 
+        // Clean up intervals when page is unloaded
+        window.addEventListener('beforeunload', () => {
+            if (timerInterval) clearInterval(timerInterval);
+            if (syncInterval) clearInterval(syncInterval);
+            if (bettingSyncInterval) clearInterval(bettingSyncInterval);
+        });
     </script>
 </body>
 </html>
-

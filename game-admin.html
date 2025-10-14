@@ -3,3259 +3,1054 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Admin - Reddy Anna Kossu</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Game Admin | Reddy Anna Kossu</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
     <style>
-        .game-admin-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d1b69 50%, #8b0000 100%);
-            min-height: 100vh;
+        /* Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        .game-admin-header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding: 20px 0;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
+        :root {
+            /* Theme Colors */
+            --primary-black: #0a0a0a;
+            --secondary-black: #1a1a1a;
+            --accent-black: #2a2a2a;
+            --gold-primary: #ffd700;
+            --gold-secondary: #ffed4e;
+            --red-primary: #dc143c;
+            --purple-primary: #6a0dad;
+            --white: #ffffff;
+            --gray-light: #f8f9fa;
+            --gray-dark: #6c757d;
+
+            /* Gradients */
+            --gradient-gold: linear-gradient(135deg, var(--gold-primary) 0%, var(--gold-secondary) 100%);
+            --gradient-red: linear-gradient(135deg, var(--red-primary) 0%, #ff4757 100%);
+
+            /* Typography */
+            --font-primary: 'Poppins', sans-serif;
+            --font-secondary: 'Poppins', sans-serif;
         }
 
-        .game-admin-title {
-            font-family: 'Poppins', sans-serif;
-            font-size: 2.5rem;
-            font-weight: normal;
-            color: #ffd700;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: var(--font-secondary);
+            background-color: var(--primary-black);
+            color: var(--white);
         }
 
-        .game-admin-subtitle {
-            font-family: 'Poppins', sans-serif;
-            font-size: 1.1rem;
-            color: #ffffff;
-            opacity: 0.9;
-        }
-
-        .game-section {
-            background: rgba(0, 0, 0, 0.4);
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            backdrop-filter: blur(10px);
-        }
-
-        .section-title {
-            font-family: 'Poppins', sans-serif;
-            font-size: 1.8rem;
-            color: #ffd700;
-            margin-bottom: 25px;
-            text-align: center;
-        }
-
-        .settings-icon-btn {
-            background: linear-gradient(45deg, #ffd700, #ffed4e);
-            border: none;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
+        body {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            color: #1a1a1a;
+            flex-direction: column;
+        }
+        
+        /* Header Styles */
+        .header {
+            background: rgba(10, 10, 10, 0.95);
+            border-bottom: 2px solid var(--gold-primary);
+            padding: 15px 0;
         }
 
-        .settings-icon-btn:hover {
-            transform: rotate(90deg) scale(1.1);
-            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
-        }
-
-
-        .cards-grid {
-            display: grid;
-            grid-template-columns: repeat(13, 1fr);
-            gap: 10px;
-            margin: 30px 0;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 15px;
-        }
-
-        .card-btn {
-            background: linear-gradient(45deg, #ffffff, #f0f0f0);
-            color: #1a1a1a;
-            border: 2px solid #ffd700;
-            border-radius: 8px;
-            padding: 15px 8px;
-            font-family: 'Poppins', sans-serif;
-            font-weight: normal;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-            font-size: 0.9rem;
-        }
-
-        .card-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
-        }
-
-        .card-btn.selected {
-            background: linear-gradient(45deg, #ffd700, #ffed4e);
-            color: #1a1a1a;
-            border-color: #ffed4e;
-        }
-
-        .card-btn.disabled {
-            background: rgba(100, 100, 100, 0.3);
-            color: #666;
-            cursor: not-allowed;
-            opacity: 0.5;
-        }
-
-        .game-controls {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin: 30px 0;
-            flex-wrap: wrap;
-        }
-
-        .control-btn {
-            background: linear-gradient(45deg, #ffd700, #ffed4e);
-            color: #1a1a1a;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 25px;
-            font-family: 'Poppins', sans-serif;
-            font-weight: normal;
-            font-size: 1.1rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .control-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
-        }
-
-        .control-btn.danger {
-            background: linear-gradient(45deg, #8b0000, #ff6b6b);
-            color: white;
-        }
-
-        .control-btn.success {
-            background: linear-gradient(45deg, #28a745, #20c997);
-            color: white;
-        }
-
-        .betting-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
-        }
-
-        .bet-stat-card {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-            border: 2px solid #ffd700;
-        }
-
-        .bet-stat-number {
-            font-family: 'Poppins', sans-serif;
-            font-size: 2.5rem;
-            color: #ffd700;
-            font-weight: normal;
-            margin-bottom: 10px;
-        }
-
-        .bet-stat-label {
-            font-family: 'Poppins', sans-serif;
-            color: #ffffff;
-            font-size: 1.1rem;
-        }
-
-        .detailed-bet-card {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 20px;
-            border-radius: 15px;
-            border: 2px solid #ffd700;
-            margin-bottom: 15px;
-            transition: all 0.3s ease;
-        }
-
-        .detailed-bet-card.updating {
-            border-color: #ffed4e;
-            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
-        }
-
-        .detailed-bet-title {
-            color: #ffd700;
-            font-family: 'Poppins', sans-serif;
-            font-size: 1.3rem;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-
-        .round-bet-row {
+        .nav-container {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
         }
 
-        .round-bet-row:last-child {
-            border-bottom: none;
-            font-weight: bold;
-            color: #ffd700;
+        .logo h1 {
+            font-family: var(--font-primary);
+            font-size: 24px;
+            font-weight: 400;
+            color: var(--gold-primary);
         }
 
-        .round-bet-label {
-            color: #ffffff;
-            font-family: 'Poppins', sans-serif;
-            font-size: 1rem;
-        }
-
-        .round-bet-amount {
-            color: #ffd700;
-            font-family: 'Poppins', sans-serif;
-            font-size: 1rem;
-            font-weight: normal;
-        }
-
-        .highest-bet-card {
-            background: rgba(255, 215, 0, 0.1);
-            border: 2px solid #ffd700;
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .highest-bet-title {
-            color: #ffd700;
-            font-family: 'Poppins', sans-serif;
-            font-size: 1.2rem;
-            margin-bottom: 10px;
-        }
-
-        .highest-bet-value {
-            color: #ffffff;
-            font-family: 'Poppins', sans-serif;
-            font-size: 1.5rem;
-            margin-bottom: 5px;
-        }
-
-        .variation-amount {
-            color: #28a745;
-            font-family: 'Poppins', sans-serif;
-            font-size: 1rem;
-        }
-
-        .countdown-display {
-            background: linear-gradient(45deg, #ffd700, #ffed4e);
-            color: #1a1a1a;
-            font-family: 'Poppins', sans-serif;
-            font-size: 2rem;
-            font-weight: normal;
-            text-align: center;
-            padding: 15px;
-            border-radius: 10px;
-            border: 2px solid #ffd700;
-            min-height: 60px;
+        .nav-controls {
             display: flex;
             align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
-        }
-
-        .countdown-display.warning {
-            background: linear-gradient(45deg, #ff6b35, #ff8c42);
-            color: #ffffff;
-            animation: pulse 1s infinite;
-        }
-
-        .countdown-display.danger {
-            background: linear-gradient(45deg, #dc3545, #fd7e14);
-            color: #ffffff;
-            animation: pulse 0.5s infinite;
-        }
-
-        .live-viewers-display {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: #002011 !important;
-            text-align: center;
-            padding: 8px;
-            background: rgba(0, 255, 136, 0.15);
-            border-radius: 6px;
-            border: 1px solid rgba(0, 255, 136, 0.5);
-            transition: all 0.3s ease;
-            width: 120px;
-            margin: 0 auto;
-        }
-
-        .live-viewers-range {
-            display: flex;
-            justify-content: center;
-            margin-top: 8px;
             gap: 15px;
         }
 
-        .range-input-group {
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            background: var(--accent-black);
+            border: 1px solid var(--gold-primary);
+            border-radius: 8px;
+            color: var(--white);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: var(--secondary-black);
+            transform: translateY(-2px);
+        }
+
+        /* Main Content */
+        .admin-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .section-title {
+            font-family: var(--font-primary);
+            font-size: 1.8rem;
+            color: var(--gold-primary);
+            margin-bottom: 20px;
+            font-weight: 400;
+        }
+
+        .admin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .admin-card {
+            background: var(--accent-black);
+            border-radius: 15px;
+            border: 1px solid var(--gold-primary);
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .admin-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(255, 215, 0, 0.2);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .card-header i {
+            font-size: 1.5rem;
+            color: var(--gold-primary);
+        }
+
+        .card-title {
+            font-family: var(--font-primary);
+            font-size: 1.2rem;
+            color: var(--gold-primary);
+            font-weight: 400;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--gray-light);
+            font-size: 14px;
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 10px;
+            background: var(--primary-black);
+            border: 1px solid var(--gold-primary);
+            border-radius: 8px;
+            color: var(--white);
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--gold-secondary);
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+        }
+
+        .btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--gradient-gold);
+            color: var(--primary-black);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--accent-black);
+            color: var(--white);
+            border: 1px solid var(--gold-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--secondary-black);
+        }
+
+        .btn-danger {
+            background: var(--gradient-red);
+            color: var(--white);
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 20, 60, 0.3);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .status-display {
+            background: var(--primary-black);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .status-label {
+            color: var(--gray-light);
+            font-size: 14px;
+        }
+
+        .status-value {
+            color: var(--white);
+            font-weight: 500;
+        }
+
+        .status-value.active {
+            color: #27ae60;
+        }
+
+        .status-value.inactive {
+            color: #e74c3c;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .card-option {
+            background: var(--primary-black);
+            border: 1px solid var(--gold-primary);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .card-option:hover {
+            background: var(--secondary-black);
+        }
+
+        .card-option.selected {
+            background: var(--gradient-gold);
+            color: var(--primary-black);
+        }
+
+        .timer-display {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--gold-primary);
+            text-align: center;
+            margin: 15px 0;
+        }
+
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1000;
             display: flex;
             align-items: center;
             gap: 5px;
         }
 
-        .range-input-group label {
-            font-size: 0.8rem;
-            color: #000000 !important;
-            font-weight: 500;
-            min-width: 25px;
+        .connection-status.connected {
+            background: rgba(39, 174, 96, 0.2);
+            color: #27ae60;
+            border: 1px solid #27ae60;
         }
 
-        .range-input {
-            width: 60px;
-            padding: 3px 6px;
-            border: 1px solid rgba(255, 215, 0, 0.5);
-            border-radius: 4px;
-            background: rgba(0, 0, 0, 0.5);
-            color: #000000 !important;
-            font-family: 'Poppins', sans-serif;
-            font-size: 0.8rem;
-            text-align: center;
+        .connection-status.disconnected {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+            border: 1px solid #e74c3c;
         }
 
-        .range-input:focus {
-            outline: none;
-            border-color: #ffd700;
-            box-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
-            background: rgba(0, 0, 0, 0.7);
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
         }
 
-        .live-stream-boxes-container {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .live-stream-box {
-            flex: 1;
-            min-width: 200px;
-            max-width: 300px;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-
-        .selected-cards {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin: 30px 0;
-            flex-wrap: wrap;
-        }
-
-        .selected-card {
-            background: linear-gradient(45deg, #ffd700, #ffed4e);
-            color: #1a1a1a;
-            padding: 20px;
-            width: fit-content;
-            border-radius: 15px;
-            text-align: center;
-            min-width: 120px;
-        }
-
-        .selected-card-label {
-            font-family: 'Poppins', sans-serif;
-            font-size: 1rem;
-            margin-bottom: 10px;
-        }
-
-        .selected-card-value {
-            font-family: 'Poppins', sans-serif;
-            font-size: 1.5rem;
-            font-weight: normal;
-        }
-
-        .baba-info {
-            background: rgba(255, 215, 0, 0.1);
-            border: 2px solid #ffd700;
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px 0;
-        }
-
-        .baba-info h3 {
-            color: #ffd700;
-            font-family: 'Poppins', sans-serif;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-
-        .baba-info p {
-            color: #ffffff;
-            font-family: 'Poppins', sans-serif;
-            margin-bottom: 10px;
-            line-height: 1.6;
-        }
-
-
-        .notification {
+        .notification-container {
             position: fixed;
             top: 20px;
             right: 20px;
-            padding: 15px 25px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .notification {
+            background: var(--accent-black);
+            border-left: 5px solid var(--gold-primary);
             border-radius: 10px;
-            color: white;
-            font-family: 'Poppins', sans-serif;
-            z-index: 1000;
-            transform: translateX(400px);
-            transition: transform 0.3s ease;
+            padding: 15px 20px;
+            color: var(--white);
+            min-width: 250px;
+            max-width: 350px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            transform: translateX(120%);
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
         }
 
         .notification.show {
             transform: translateX(0);
+            opacity: 1;
         }
 
-        .notification.success {
-            background: linear-gradient(45deg, #28a745, #20c997);
-        }
-
-        .notification.error {
-            background: linear-gradient(45deg, #dc3545, #fd7e14);
-        }
-
-        .notification.info {
-            background: linear-gradient(45deg, #17a2b8, #20c997);
-        }
-
-        .round-popup {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 2000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .round-popup-content {
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d1b69 50%, #8b0000 100%);
-            border-radius: 15px;
-            padding: 30px;
-            max-width: 400px;
-            width: 90%;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            border: 2px solid #ffd700;
-        }
-
-        .round-popup h3 {
-            color: #ffd700;
-            font-family: 'Poppins', sans-serif;
-            font-size: 1.8rem;
-            margin-bottom: 20px;
-        }
-
-        .round-popup p {
-            color: #ffffff;
-            font-family: 'Poppins', sans-serif;
-            margin-bottom: 25px;
-            font-size: 1.1rem;
-        }
-
-        .round-popup-input {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #ffd700;
-            border-radius: 8px;
-            background: rgba(0, 0, 0, 0.3);
-            color: #ffffff;
-            font-family: 'Poppins', sans-serif;
-            font-size: 1.2rem;
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
-        .round-popup-input:focus {
-            outline: none;
-            border-color: #ffed4e;
-            box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
-        }
-
-        .round-popup-btn {
-            background: linear-gradient(45deg, #ffd700, #ffed4e);
-            color: #1a1a1a;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 25px;
-            font-family: 'Poppins', sans-serif;
-            font-weight: normal;
-            font-size: 1.1rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            width: 100%;
-        }
-
-        .round-popup-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
-        }
-
-        .start-game-popup {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 2000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .start-game-popup-content {
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d1b69 50%, #8b0000 100%);
-            border-radius: 15px;
-            padding: 40px;
-            max-width: 500px;
-            width: 90%;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            border: 2px solid #ffd700;
-        }
-
-        .start-game-popup h3 {
-            color: #ffd700;
-            font-family: 'Poppins', sans-serif;
-            font-size: 2rem;
-            margin-bottom: 20px;
-        }
-
-        .start-game-popup p {
-            color: #ffffff;
-            font-family: 'Poppins', sans-serif;
-            margin-bottom: 30px;
-            font-size: 1.2rem;
-        }
-
-        .start-game-buttons {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .start-game-btn {
-            background: linear-gradient(45deg, #ffd700, #ffed4e);
-            color: #1a1a1a;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 25px;
-            font-family: 'Poppins', sans-serif;
-            font-weight: normal;
-            font-size: 1.1rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            min-width: 200px;
-        }
-
-        .start-game-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
-        }
-
-        .start-game-btn.secondary {
-            background: linear-gradient(45deg, #6c757d, #adb5bd);
-            color: #ffffff;
-        }
-
-        .start-game-btn.secondary:hover {
-            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.4);
-        }
-
+        .notification-success { border-color: #27ae60; }
+        .notification-error { border-color: #e74c3c; }
+        .notification-warning { border-color: #f39c12; }
+        .notification-info { border-color: var(--gold-primary); }
 
         @media (max-width: 768px) {
-            .game-admin-container {
-                padding: 10px;
-            }
-
-            .game-admin-title {
-                font-size: 2rem;
-            }
-
-            .cards-grid {
-                grid-template-columns: repeat(7, 1fr);
-                gap: 8px;
-                padding: 15px;
-            }
-
-            .card-btn {
-                padding: 10px 5px;
-                font-size: 0.8rem;
-            }
-
-            .game-controls {
-                flex-direction: column;
-                align-items: center;
-            }
-
-            .control-btn {
-                width: 100%;
-                max-width: 300px;
-            }
-
-            .betting-stats {
+            .admin-grid {
                 grid-template-columns: 1fr;
             }
-
-            .selected-cards {
+            
+            .btn-group {
                 flex-direction: column;
-                align-items: center;
             }
         }
     </style>
 </head>
 <body>
-    <div class="game-admin-container">
-        <div class="game-admin-header">
-            <h1 class="game-admin-title">Game Admin</h1>
-            <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
-                <p class="game-admin-subtitle">Manual Andar Bahar Game Control</p>
-                <button class="settings-icon-btn" onclick="openSettingsModal()" title="Game Settings">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12A3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1 0 .33.03.65.07.97L2.46 14.6c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.31.61.22l2.49-1c.52.39 1.06.73 1.69.98l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.25 1.17-.59 1.69-.98l2.49 1c.22.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.66Z" fill="currentColor"/>
-                    </svg>
+    <header class="header">
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="logo">
+                    <h1>Game Admin</h1>
+                </div>
+                
+                <div class="nav-controls">
+                    <a href="index.html" class="back-btn">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>Back to Home</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <div class="admin-container">
+        <h2 class="section-title">Andar Bahar Game Control Panel</h2>
+        
+        <div class="admin-grid">
+            <!-- Game Status Card -->
+            <div class="admin-card">
+                <div class="card-header">
+                    <i class="fas fa-gamepad"></i>
+                    <h3 class="card-title">Game Status</h3>
+                </div>
+                
+                <div class="status-display">
+                    <div class="status-item">
+                        <span class="status-label">Game Phase:</span>
+                        <span class="status-value" id="gamePhase">Waiting</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Current Round:</span>
+                        <span class="status-value" id="currentRound">None</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Betting Status:</span>
+                        <span class="status-value" id="bettingStatus">Closed</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Game ID:</span>
+                        <span class="status-value" id="gameId">None</span>
+                    </div>
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="refreshGameStatus()">
+                        <i class="fas fa-sync"></i>
+                        Refresh
+                    </button>
+                    <button class="btn btn-danger" onclick="resetGame()">
+                        <i class="fas fa-redo"></i>
+                        Reset Game
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Opening Card Card -->
+            <div class="admin-card">
+                <div class="card-header">
+                    <i class="fas fa-play-circle"></i>
+                    <h3 class="card-title">Opening Card</h3>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Select Opening Card:</label>
+                    <div class="card-grid" id="cardGrid">
+                        <!-- Cards will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Or Enter Custom Card:</label>
+                    <input type="text" class="form-input" id="customCard" placeholder="e.g., A♠, K♥, 10♦">
+                </div>
+                
+                <button class="btn btn-primary" onclick="setOpeningCard()">
+                    <i class="fas fa-check"></i>
+                    Set Opening Card
+                </button>
+            </div>
+            
+            <!-- Timer Control Card -->
+            <div class="admin-card">
+                <div class="card-header">
+                    <i class="fas fa-clock"></i>
+                    <h3 class="card-title">Timer Control</h3>
+                </div>
+                
+                <div class="timer-display" id="timerDisplay">00:00</div>
+                
+                <div class="form-group">
+                    <label class="form-label">Timer Duration (seconds):</label>
+                    <input type="number" class="form-input" id="timerDuration" value="30" min="10" max="300">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Round:</label>
+                    <select class="form-select" id="roundSelect">
+                        <option value="round1">Round 1</option>
+                        <option value="round2">Round 2</option>
+                    </select>
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="startTimer()">
+                        <i class="fas fa-play"></i>
+                        Start Timer
+                    </button>
+                    <button class="btn btn-secondary" onclick="stopTimer()">
+                        <i class="fas fa-stop"></i>
+                        Stop Timer
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="admin-grid">
+            <!-- Betting Totals Card -->
+            <div class="admin-card">
+                <div class="card-header">
+                    <i class="fas fa-coins"></i>
+                    <h3 class="card-title">Betting Totals</h3>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Round:</label>
+                    <select class="form-select" id="betRoundSelect">
+                        <option value="round1">Round 1</option>
+                        <option value="round2">Round 2</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Andar Total:</label>
+                    <input type="number" class="form-input" id="andarTotal" placeholder="0">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Bahar Total:</label>
+                    <input type="number" class="form-input" id="baharTotal" placeholder="0">
+                </div>
+                
+                <button class="btn btn-primary" onclick="submitBettingTotals()">
+                    <i class="fas fa-check"></i>
+                    Submit Totals
+                </button>
+            </div>
+            
+            <!-- Card Selection Card -->
+            <div class="admin-card">
+                <div class="card-header">
+                    <i class="fas fa-layer-group"></i>
+                    <h3 class="card-title">Card Selection</h3>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Round:</label>
+                    <select class="form-select" id="cardRoundSelect">
+                        <option value="round1">Round 1</option>
+                        <option value="round2">Round 2</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Side:</label>
+                    <select class="form-select" id="sideSelect">
+                        <option value="andar">Andar</option>
+                        <option value="bahar">Bahar</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Cards (comma-separated):</label>
+                    <input type="text" class="form-input" id="cardsInput" placeholder="e.g., A♠, K♥, Q♦">
+                </div>
+                
+                <button class="btn btn-primary" onclick="submitCardSelection()">
+                    <i class="fas fa-check"></i>
+                    Submit Cards
+                </button>
+            </div>
+            
+            <!-- Game Settings Card -->
+            <div class="admin-card">
+                <div class="card-header">
+                    <i class="fas fa-cog"></i>
+                    <h3 class="card-title">Game Settings</h3>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Min Bet Amount:</label>
+                    <input type="number" class="form-input" id="minBetAmount" value="1000">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Max Bet Amount:</label>
+                    <input type="number" class="form-input" id="maxBetAmount" value="50000">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Default Timer (seconds):</label>
+                    <input type="number" class="form-input" id="defaultTimer" value="30" min="10" max="300">
+                </div>
+                
+                <button class="btn btn-primary" onclick="updateGameSettings()">
+                    <i class="fas fa-save"></i>
+                    Save Settings
                 </button>
             </div>
         </div>
-
-
-        <!-- Opening Card Selection -->
-        <div id="openingCardSection" class="game-section">
-            <h2 class="section-title">Select Opening Card</h2>
-            <div class="cards-grid" id="openingCardsGrid">
-                <!-- Cards will be generated by JavaScript -->
-            </div>
-            <div class="selected-cards">
-                <div class="selected-card">
-                    <div class="selected-card-label">Selected Card</div>
-                    <div class="selected-card-value" id="selectedOpeningCard">None</div>
-                </div>
-            </div>
-            <div class="game-controls">
-                <button class="control-btn" onclick="startGame()">Start Game</button>
-                <button class="control-btn danger" onclick="resetGame()">Reset Game</button>
-            </div>
-        </div>
-
-        <!-- Andar Bahar Card Selection -->
-        <div id="andarBaharSection" class="game-section" style="display: none;">
-            <h2 class="section-title">Andar Bahar Card Selection</h2>
-
-            <div class="cards-grid" id="andarBaharCardsGrid">
-                <!-- Cards will be generated by JavaScript -->
-            </div>
-            
-            <div class="selected-cards">
-                <div class="selected-card">
-                    <div class="selected-card-label">Opening Card</div>
-                    <div class="selected-card-value" id="displayOpeningCard">None</div>
-                </div>
-                <div class="selected-card">
-                    <div class="selected-card-label">Bahar Cards</div>
-                    <div class="selected-card-value" id="selectedBaharCards" style="min-height: 40px; text-align: left;">None</div>
-                </div>
-                <div class="selected-card">
-                    <div class="selected-card-label">Andar Cards</div>
-                    <div class="selected-card-value" id="selectedAndarCards" style="min-height: 40px; text-align: left;">None</div>
-                </div>
-                <div class="selected-card" id="countdownTimerSection">
-                    <div class="selected-card-label">1st Round Timer</div>
-                    <div class="countdown-display" id="andarBaharCountdown">30</div>
-                </div>
-            </div>
-
-            <div class="betting-stats" id="bettingStatsContainer">
-                <!-- Betting stats will be dynamically generated -->
-            </div>
-
-            <div class="live-stream-boxes-container">
-                <div class="selected-card live-stream-box">
-                    <div class="selected-card-label">Live Stream Watching</div>
-                    <div class="live-viewers-display" id="liveViewers">1,270</div>
-                    <div class="live-viewers-range">
-                        <div class="range-input-group">
-                            <label>Min:</label>
-                            <input type="number" id="minViewers" class="range-input" value="1270" min="1" max="9999" onchange="updateViewerRange()">
-                        </div>
-                        <div class="range-input-group">
-                            <label>Max:</label>
-                            <input type="number" id="maxViewers" class="range-input" value="2540" min="1" max="9999" onchange="updateViewerRange()">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="selected-card live-stream-box">
-                    <div class="selected-card-label">Bet Amount</div>
-                    <div class="live-viewers-display" id="betAmount">?5,000</div>
-                    <div class="live-viewers-range">
-                        <div class="range-input-group">
-                            <label>Min:</label>
-                            <input type="number" id="minBetAmount" class="range-input" value="1000" min="1" max="999999" onchange="updateBetAmountRange()">
-                        </div>
-                        <div class="range-input-group">
-                            <label>Max:</label>
-                            <input type="number" id="maxBetAmount" class="range-input" value="50000" min="1" max="999999" onchange="updateBetAmountRange()">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="selected-card live-stream-box">
-                    <div class="selected-card-label">Win Amount</div>
-                    <div class="live-viewers-display" id="winAmount">?7,500</div>
-                    <div class="live-viewers-range">
-                        <div class="range-input-group">
-                            <label>Min:</label>
-                            <input type="number" id="minWinAmount" class="range-input" value="1500" min="1" max="999999" onchange="updateWinAmountRange()">
-                        </div>
-                        <div class="range-input-group">
-                            <label>Max:</label>
-                            <input type="number" id="maxWinAmount" class="range-input" value="75000" min="1" max="999999" onchange="updateWinAmountRange()">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
     </div>
 
-    <div id="notification" class="notification"></div>
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status connected">
+        <div class="status-dot"></div>
+        <span id="connectionText">Connected</span>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer" class="notification-container"></div>
 
     <script>
-        // Game state
+        // Global variables
         let gameState = {
-            phase: 'opening', // 'opening', 'andar-bahar'
-            selectedOpeningCard: null,
-            andarCards: [], // Array to store all Andar cards
-            baharCards: [], // Array to store all Bahar cards
-            currentRound: 1,
-            timer: 30,
-            timerInterval: null,
-            andarTotalBet: 0,
-            baharTotalBet: 0,
-            // Countdown timer
-            countdownTimer: 30,
-            countdownInterval: null,
-            // Round betting control
-            round1Paused: false,
-            round2Paused: false,
-            round3Paused: false,
-            // Round-based betting data
-            roundBets: {
-                round1: { andar: 0, bahar: 0 },
-                round2: { andar: 0, bahar: 0 },
-                round3: { andar: 0, bahar: 0 }
-            }
+            phase: 'waiting',
+            openingCard: null,
+            currentTimer: 0,
+            round1Bets: { andar: 0, bahar: 0 },
+            round2Bets: { andar: 0, bahar: 0 },
+            selectedCards: { andar: [], bahar: [] },
+            winner: null,
+            gameId: null,
+            bettingOpen: false,
+            currentRound: 0
         };
-
-        // Card suits and values
-        const cardSuits = ['?', '?', '?', '?'];
-        const cardValues = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-        const allCards = [];
-
-        // Generate all cards
-        cardSuits.forEach(suit => {
-            cardValues.forEach(value => {
-                allCards.push({ suit, value, display: `${value}${suit}` });
-            });
+        let timerInterval;
+        let selectedCard = null;
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCardGrid();
+            refreshGameStatus();
+            
+            // Set up periodic refresh
+            setInterval(refreshGameStatus, 5000);
+            setInterval(refreshBettingAmounts, 2000);
         });
-
-        // Show notification
-        function showNotification(message, type = 'success') {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.className = `notification ${type} show`;
+        
+        function initializeCardGrid() {
+            const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+            const suits = ['♠', '♥', '♦', '♣'];
+            const cardGrid = document.getElementById('cardGrid');
             
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 3000);
-        }
-
-        // Initialize game
-        function initializeGame() {
-            generateOpeningCards();
-        }
-
-        // Generate opening cards grid
-        function generateOpeningCards() {
-            const grid = document.getElementById('openingCardsGrid');
-            grid.innerHTML = '';
+            // Create a few sample cards for quick selection
+            const sampleCards = [
+                'A♠', 'A♥', 'A♦', 'A♣',
+                'K♠', 'K♥', 'K♦', 'K♣',
+                'Q♠', 'Q♥', 'Q♦', 'Q♣',
+                'J♠', 'J♥', 'J♦', 'J♣'
+            ];
             
-            allCards.forEach((card, index) => {
-                const cardBtn = document.createElement('button');
-                cardBtn.className = 'card-btn';
-                cardBtn.textContent = card.display;
-                cardBtn.onclick = () => selectOpeningCard(card, index);
-                grid.appendChild(cardBtn);
+            sampleCards.forEach(card => {
+                const cardOption = document.createElement('div');
+                cardOption.className = 'card-option';
+                cardOption.textContent = card;
+                cardOption.onclick = function() {
+                    document.querySelectorAll('.card-option').forEach(el => el.classList.remove('selected'));
+                    this.classList.add('selected');
+                    selectedCard = card;
+                    document.getElementById('customCard').value = card;
+                };
+                cardGrid.appendChild(cardOption);
             });
         }
-
-        // Generate Andar Bahar cards grid
-        function generateAndarBaharCards() {
-            const grid = document.getElementById('andarBaharCardsGrid');
-            grid.innerHTML = '';
-            
-            allCards.forEach((card, index) => {
-                const cardBtn = document.createElement('button');
-                cardBtn.className = 'card-btn';
-                cardBtn.textContent = card.display;
-                cardBtn.onclick = () => selectAndarBaharCard(card, index);
-                grid.appendChild(cardBtn);
-            });
-        }
-
-        // Select opening card
-        function selectOpeningCard(card, index) {
-            // Remove previous selection
-            document.querySelectorAll('#openingCardsGrid .card-btn').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            
-            // Select new card
-            document.querySelectorAll('#openingCardsGrid .card-btn')[index].classList.add('selected');
-            gameState.selectedOpeningCard = card;
-            document.getElementById('selectedOpeningCard').textContent = card.display;
-            
-            // Update the dropdown in settings modal
-            const openingCardSelect = document.getElementById('openingCard');
-            if (openingCardSelect) {
-                openingCardSelect.value = card.display;
-            }
-            
-            // Update global settings
-            if (window.gameSettings) {
-                window.gameSettings.openingCard = card.display;
-            }
-            
-            // Save to database
-            saveGameSettings();
-            
-            showNotification(`Opening card selected: ${card.display}`, 'info');
-        }
-
-        // Select Andar Bahar card
-        async function selectAndarBaharCard(card, index) {
-            // Remove previous selection
-            document.querySelectorAll('#andarBaharCardsGrid .card-btn').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            
-            // Select new card
-            document.querySelectorAll('#andarBaharCardsGrid .card-btn')[index].classList.add('selected');
-            
-            // Determine if it's Andar or Bahar based on continuous alternating pattern
-            // 1st card ? Bahar, 2nd card ? Andar, 3rd card ? Bahar, 4th card ? Andar, etc.
-            const totalCardsSelected = gameState.andarCards.length + gameState.baharCards.length;
-            const nextCardNumber = totalCardsSelected + 1;
-            const isOddSelection = nextCardNumber % 2 === 1;
-            
-            let side, cards;
-            if (isOddSelection) {
-                // Odd selections (1st, 3rd, 5th, 7th, etc.) go to Bahar
-                gameState.baharCards.push(card);
-                side = 'bahar';
-                cards = gameState.baharCards.map(c => c.display);
-                showNotification(`Bahar card selected: ${card.display} (${nextCardNumber}${nextCardNumber === 1 ? 'st' : nextCardNumber === 2 ? 'nd' : nextCardNumber === 3 ? 'rd' : 'th'} card)`, 'info');
-            } else {
-                // Even selections (2nd, 4th, 6th, 8th, etc.) go to Andar
-                gameState.andarCards.push(card);
-                side = 'andar';
-                cards = gameState.andarCards.map(c => c.display);
-                showNotification(`Andar card selected: ${card.display} (${nextCardNumber}${nextCardNumber === 1 ? 'st' : nextCardNumber === 2 ? 'nd' : nextCardNumber === 3 ? 'rd' : 'th'} card)`, 'info');
-            }
-            
-            // Update cards display
-            updateCardsDisplay();
-            
-            // Submit card selection to backend
+        
+        async function refreshGameStatus() {
             try {
-                const response = await fetch('https://reddy-anna-59l3.onrender.com/api/game/select-cards', {
+                const response = await fetch(`${window.API_BASE_URL}/api/game/state`);
+                if (!response.ok) throw new Error('Failed to fetch game state');
+                
+                const result = await response.json();
+                if (result.success) {
+                    const newState = result.data;
+                    
+                    // Check for new game
+                    if (gameState.gameId && gameState.gameId !== newState.gameId) {
+                        handleNewGame();
+                    }
+                    
+                    gameState = {
+                        ...gameState,
+                        ...newState,
+                        round1Bets: gameState.round1Bets || { andar: 0, bahar: 0 },
+                        round2Bets: gameState.round2Bets || { andar: 0, bahar: 0 }
+                    };
+                    
+                    updateGameStatusDisplay();
+                    updateConnectionStatus(true);
+                }
+            } catch (error) {
+                console.error('Error refreshing game status:', error);
+                updateConnectionStatus(false);
+            }
+        }
+        
+        async function refreshBettingAmounts() {
+            try {
+                const response = await fetch(`${window.API_BASE_URL}/api/game/betting-amounts`);
+                if (!response.ok) throw new Error('Failed to fetch betting amounts');
+                
+                const result = await response.json();
+                if (result.success) {
+                    const data = result.data;
+                    
+                    if (data.currentRound === 1) {
+                        gameState.round1Bets = data.round1Bets;
+                    } else if (data.currentRound === 2) {
+                        gameState.round2Bets = data.round2Bets;
+                    }
+                    
+                    gameState.currentRound = data.currentRound;
+                    gameState.phase = data.phase;
+                    
+                    updateGameStatusDisplay();
+                }
+            } catch (error) {
+                console.error('Error refreshing betting amounts:', error);
+            }
+        }
+        
+        function handleNewGame() {
+            // Clear previous game data
+            gameState.round1Bets = { andar: 0, bahar: 0 };
+            gameState.round2Bets = { andar: 0, bahar: 0 };
+            gameState.selectedCards = { andar: [], bahar: [] };
+            
+            showNotification('New game detected!', 'success');
+            updateGameStatusDisplay();
+        }
+        
+        function updateGameStatusDisplay() {
+            document.getElementById('gamePhase').textContent =
+                gameState.phase.charAt(0).toUpperCase() + gameState.phase.slice(1);
+            
+            document.getElementById('currentRound').textContent =
+                gameState.currentRound ? `Round ${gameState.currentRound}` : 'None';
+            
+            const bettingStatus = document.getElementById('bettingStatus');
+            bettingStatus.textContent = gameState.bettingOpen ? 'Open' : 'Closed';
+            bettingStatus.className = `status-value ${gameState.bettingOpen ? 'active' : 'inactive'}`;
+            
+            document.getElementById('gameId').textContent =
+                gameState.gameId || 'None';
+            
+            document.getElementById('timerDisplay').textContent =
+                formatTime(gameState.currentTimer);
+            
+            // Update betting totals
+            if (gameState.currentRound === 1) {
+                document.getElementById('andarTotal').value = gameState.round1Bets.andar;
+                document.getElementById('baharTotal').value = gameState.round1Bets.bahar;
+            } else if (gameState.currentRound === 2) {
+                document.getElementById('andarTotal').value = gameState.round2Bets.andar;
+                document.getElementById('baharTotal').value = gameState.round2Bets.bahar;
+            }
+            
+            // Update selected cards display
+            updateSelectedCardsDisplay();
+        }
+        
+        function updateSelectedCardsDisplay() {
+            // This would update any visual representation of selected cards
+            // For now, we'll just log it to the console
+            console.log('Selected cards updated:', gameState.selectedCards);
+        }
+        
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        async function setOpeningCard() {
+            const card = selectedCard || document.getElementById('customCard').value.trim();
+            
+            if (!card) {
+                showNotification('Please select or enter an opening card', 'error');
+                return;
+            }
+            
+            try {
+                showLoading(true);
+                
+                const response = await fetch(`${window.API_BASE_URL}/api/game/set-opening-card`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        round: gameState.phase,
-                        side: side,
-                        cards: cards
-                    })
+                    body: JSON.stringify({ card })
                 });
                 
-                const result = await response.json();
+                if (!response.ok) throw new Error('Failed to set opening card');
                 
+                const result = await response.json();
                 if (result.success) {
-                    // Check if there's a winner
+                    gameState = result.data.gameState;
+                    updateGameStatusDisplay();
+                    showNotification('Opening card set successfully', 'success');
+                }
+            } catch (error) {
+                console.error('Error setting opening card:', error);
+                showNotification('Failed to set opening card', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        async function startTimer() {
+            const duration = parseInt(document.getElementById('timerDuration').value);
+            const round = document.getElementById('roundSelect').value;
+            
+            if (!duration || duration < 10 || duration > 300) {
+                showNotification('Timer duration must be between 10 and 300 seconds', 'error');
+                return;
+            }
+            
+            try {
+                showLoading(true);
+                
+                const response = await fetch(`${window.API_BASE_URL}/api/game/start-timer`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ round, duration })
+                });
+                
+                if (!response.ok) throw new Error('Failed to start timer');
+                
+                const result = await response.json();
+                if (result.success) {
+                    gameState = result.data.gameState;
+                    updateGameStatusDisplay();
+                    showNotification(`Timer started for ${round}`, 'success');
+                    
+                    // Start local timer countdown
+                    startLocalTimer(duration);
+                }
+            } catch (error) {
+                console.error('Error starting timer:', error);
+                showNotification('Failed to start timer', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        function startLocalTimer(duration) {
+            if (timerInterval) clearInterval(timerInterval);
+            
+            let timeLeft = duration;
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timerDisplay').textContent = formatTime(timeLeft);
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    refreshGameStatus();
+                }
+            }, 1000);
+        }
+        
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+                showNotification('Timer stopped', 'info');
+            }
+        }
+        
+        async function submitBettingTotals() {
+            const round = document.getElementById('betRoundSelect').value;
+            const andarTotal = parseInt(document.getElementById('andarTotal').value) || 0;
+            const baharTotal = parseInt(document.getElementById('baharTotal').value) || 0;
+            
+            try {
+                showLoading(true);
+                
+                const response = await fetch(`${window.API_BASE_URL}/api/game/submit-bets`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ round, andarTotal, baharTotal })
+                });
+                
+                if (!response.ok) throw new Error('Failed to submit betting totals');
+                
+                const result = await response.json();
+                if (result.success) {
+                    refreshGameStatus();
+                    showNotification(`Betting totals submitted for ${round}`, 'success');
+                }
+            } catch (error) {
+                console.error('Error submitting betting totals:', error);
+                showNotification('Failed to submit betting totals', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        async function submitCardSelection() {
+            const round = document.getElementById('cardRoundSelect').value;
+            const side = document.getElementById('sideSelect').value;
+            const cardsInput = document.getElementById('cardsInput').value.trim();
+            
+            if (!cardsInput) {
+                showNotification('Please enter at least one card', 'error');
+                return;
+            }
+            
+            const cards = cardsInput.split(',').map(card => card.trim());
+            
+            try {
+                showLoading(true);
+                
+                const response = await fetch(`${window.API_BASE_URL}/api/game/select-cards`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ round, side, cards })
+                });
+                
+                if (!response.ok) throw new Error('Failed to submit card selection');
+                
+                const result = await response.json();
+                if (result.success) {
+                    refreshGameStatus();
+                    showNotification(`Cards selected for ${side}`, 'success');
+                    
                     if (result.data.winner) {
-                        showWinnerNotification(result.data.winner);
-                        gameState.phase = 'completed';
-                        return;
+                        showNotification(`Winner: ${result.data.winner.toUpperCase()}`, 'success');
                     }
                 }
             } catch (error) {
                 console.error('Error submitting card selection:', error);
-            }
-            
-            // Check if round is completed (every 2 cards)
-            if (nextCardNumber % 2 === 0) {
-                const roundNumber = nextCardNumber / 2;
-                if (roundNumber === 1) {
-                    // Round 1 completed, check for winner
-                    checkForCardMatches();
-                } else if (roundNumber === 2) {
-                    // Round 2 completed, check for winner
-                    checkForCardMatchesAfter4th();
-                }
-            }
-            
-            // Check for card matches after 6th card is selected
-            if (nextCardNumber === 6) {
-                checkForCardMatchesAfter6th();
-            }
-            
-            // Check for card matches every 2 cards starting from 7th card
-            if (nextCardNumber >= 7 && nextCardNumber % 2 === 1) {
-                checkForCardMatchesAfter7thPlus();
+                showNotification('Failed to submit card selection', 'error');
+            } finally {
+                showLoading(false);
             }
         }
-
-        // Update cards display
-        function updateCardsDisplay() {
-            // Display Bahar cards
-            const baharDisplay = document.getElementById('selectedBaharCards');
-            if (gameState.baharCards.length > 0) {
-                baharDisplay.textContent = gameState.baharCards.map(card => card.display).join(', ');
-            } else {
-                baharDisplay.textContent = 'None';
-            }
-            
-            // Display Andar cards
-            const andarDisplay = document.getElementById('selectedAndarCards');
-            if (gameState.andarCards.length > 0) {
-                andarDisplay.textContent = gameState.andarCards.map(card => card.display).join(', ');
-            } else {
-                andarDisplay.textContent = 'None';
-            }
-            
-        }
-
-        // Show winner notification
-        function showWinnerNotification(winner) {
-            const message = `?? ${winner.toUpperCase()} WINS! ??`;
-            showNotification(message, 'success');
-            
-            // Add visual effect
-            const winnerZone = document.getElementById(winner + 'Zone');
-            if (winnerZone) {
-                winnerZone.style.animation = 'winnerPulse 2s ease-in-out 3';
-            }
-            
-            // Show game completion popup
-            showGameCompletionPopup(winner);
-        }
-
-        // Show game completion popup
-        function showGameCompletionPopup(winner) {
-            const popup = document.createElement('div');
-            popup.className = 'game-completion-popup';
-            popup.innerHTML = `
-                <div class="game-completion-content">
-                    <h2>?? Game Completed! ??</h2>
-                    <h3>Winner: ${winner.toUpperCase()}</h3>
-                    <div class="game-totals">
-                        <div class="total-section">
-                            <h4>Round 1 Totals</h4>
-                            <p>Andar: ?${gameState.roundBets.round1?.andar || 0}</p>
-                            <p>Bahar: ?${gameState.roundBets.round1?.bahar || 0}</p>
-                        </div>
-                        <div class="total-section">
-                            <h4>Round 2 Totals</h4>
-                            <p>Andar: ?${gameState.roundBets.round2?.andar || 0}</p>
-                            <p>Bahar: ?${gameState.roundBets.round2?.bahar || 0}</p>
-                        </div>
-                    </div>
-                    <button class="reset-game-btn" onclick="resetGame()">Start New Game</button>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-        }
-
-        // Start Round 2
-        async function startRound2() {
-            // Show popup for Round 2 timer
-            showRound2TimerPopup();
-        }
-
-        // Show Round 2 timer popup
-        function showRound2TimerPopup() {
-            const popup = document.createElement('div');
-            popup.className = 'start-game-popup';
-            popup.innerHTML = `
-                <div class="start-game-popup-content">
-                    <h3>Start Round 2</h3>
-                    <p>Round 1 completed. No winner found.</p>
-                    <div style="margin: 20px 0;">
-                        <label style="color: #ffd700; font-family: 'Poppins', sans-serif; font-size: 1.1rem; display: block; margin-bottom: 10px;">Round 2 Timer (seconds)</label>
-                        <input type="number" id="round2Timer" class="form-input" value="30" min="10" max="300" style="text-align: center; font-size: 1.2rem; padding: 10px; width: 100%; max-width: 200px;">
-                    </div>
-                    <div class="start-game-buttons">
-                        <button class="start-game-btn" onclick="startRound2WithTimer()">Start Round 2</button>
-                        <button class="start-game-btn secondary" onclick="closeRound2Popup()">Cancel</button>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-            
-            // Focus on input
-            setTimeout(() => {
-                document.getElementById('round2Timer').focus();
-            }, 100);
-        }
-
-        // Close Round 2 popup
-        function closeRound2Popup() {
-            const popup = document.querySelector('.start-game-popup');
-            if (popup) {
-                popup.remove();
-            }
-        }
-
-        // Start Round 2 with custom timer
-        async function startRound2WithTimer() {
-            const timerElement = document.getElementById('round2Timer');
-            const duration = parseInt(timerElement.value) || 30;
-            
-            // Validate time
-            if (duration < 10 || duration > 300) {
-                showNotification('Please enter a valid time (10-300 seconds)!', 'error');
+        
+        async function resetGame() {
+            if (!confirm('Are you sure you want to reset the game? This will clear all current game data.')) {
                 return;
             }
             
-            // Close popup
-            closeRound2Popup();
-            
             try {
-                // Clear Round 2 specific state
-                clearRound2State();
+                showLoading(true);
                 
-                // Start timer for Round 2
-                const response = await fetch('https://reddy-anna-59l3.onrender.com/api/game/start-timer', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        round: 'round2',
-                        duration: duration
-                    })
+                const response = await fetch(`${window.API_BASE_URL}/api/game/reset-game`, {
+                    method: 'POST'
                 });
+                
+                if (!response.ok) throw new Error('Failed to reset game');
                 
                 const result = await response.json();
-                
                 if (result.success) {
-                    gameState.phase = 'round2';
-                    gameState.countdownTimer = duration;
-                    
-                    showCountdownTimer();
-                    updateCountdownDisplay();
-                    updateBettingStats();
-                    startCountdown();
-                    
-                    showNotification(`Round 2 started with ${duration} seconds! Previous Round 2 data cleared.`, 'success');
+                    gameState = result.data;
+                    updateGameStatusDisplay();
+                    showNotification('Game reset successfully', 'success');
                 }
-            } catch (error) {
-                console.error('Error starting Round 2:', error);
-                showNotification('Failed to start Round 2. Please try again.', 'error');
-            }
-        }
-
-        // Clear Round 2 specific state
-        function clearRound2State() {
-            // Clear Round 2 betting amounts
-            gameState.roundBets.round2 = { andar: 0, bahar: 0 };
-            
-            // Clear any existing countdown
-            if (gameState.countdownInterval) {
-                clearInterval(gameState.countdownInterval);
-                gameState.countdownInterval = null;
-            }
-            
-            // Hide countdown timer
-            hideCountdownTimer();
-            
-            console.log('Round 2 state cleared');
-        }
-
-        // Reset game
-        async function resetGame() {
-            try {
-                await fetch('https://reddy-anna-59l3.onrender.com/api/game/reset-game', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                // Clear all previous game state and UI elements
-                clearAllGameState();
-                
-                // Reset local game state
-                gameState = {
-                    phase: 'opening-card',
-                    selectedOpeningCard: null,
-                    andarCards: [],
-                    baharCards: [],
-                    countdownTimer: 0,
-                    countdownInterval: null,
-                    roundBets: {
-                        round1: { andar: 0, bahar: 0 },
-                        round2: { andar: 0, bahar: 0 }
-                    }
-                };
-                
-                // Reset UI to initial state
-                resetUIToInitialState();
-                
-                showNotification('Game reset successfully! All previous data cleared.', 'success');
             } catch (error) {
                 console.error('Error resetting game:', error);
-                showNotification('Failed to reset game. Please try again.', 'error');
+                showNotification('Failed to reset game', 'error');
+            } finally {
+                showLoading(false);
             }
         }
-
-        // Clear all game state and UI elements
-        function clearAllGameState() {
-            // Clear any existing countdown
-            if (gameState.countdownInterval) {
-                clearInterval(gameState.countdownInterval);
-                gameState.countdownInterval = null;
-            }
+        
+        async function updateGameSettings() {
+            const minBetAmount = parseInt(document.getElementById('minBetAmount').value);
+            const maxBetAmount = parseInt(document.getElementById('maxBetAmount').value);
+            const gameTimer = parseInt(document.getElementById('defaultTimer').value);
             
-            // Hide countdown timer
-            hideCountdownTimer();
-            
-            // Clear selected cards display
-            clearSelectedCardsDisplay();
-            
-            // Clear opening card selection
-            document.querySelectorAll('#openingCardsGrid .card-btn').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            
-            // Clear andar bahar card selections
-            document.querySelectorAll('#andarBaharCardsGrid .card-btn').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            
-            console.log('All game state cleared');
-        }
-
-        // Reset UI to initial state
-        function resetUIToInitialState() {
-            // Show opening card section, hide andar bahar section
-            document.getElementById('openingCardSection').style.display = 'block';
-            document.getElementById('andarBaharSection').style.display = 'none';
-            
-            // Remove any popups
-            const popup = document.querySelector('.game-completion-popup');
-            if (popup) {
-                popup.remove();
-            }
-            
-            // Reset betting stats display
-            updateBettingStats();
-            
-            // Clear opening card display
-            document.getElementById('displayOpeningCard').textContent = 'Select Opening Card';
-        }
-
-        // Check for card matches with opening card
-        function checkForCardMatches() {
-            if (!gameState.selectedOpeningCard) return;
-            
-            const openingCard = gameState.selectedOpeningCard;
-            const andarCards = gameState.andarCards;
-            const baharCards = gameState.baharCards;
-            
-            // Check if any Andar card matches opening card (rank only, ignore suit)
-            const andarMatch = andarCards.some(card => 
-                card.rank === openingCard.rank
-            );
-            
-            // Check if any Bahar card matches opening card (rank only, ignore suit)
-            const baharMatch = baharCards.some(card => 
-                card.rank === openingCard.rank
-            );
-            
-            if (andarMatch && baharMatch) {
-                showNotification('Both Andar and Bahar match! This is a tie.', 'warning');
-            } else if (andarMatch) {
-                showWinnerNotification('andar');
-            } else if (baharMatch) {
-                showWinnerNotification('bahar');
-            } else {
-                showNotification('No matches in Round 1. Proceeding to Round 2.', 'info');
-                // Start Round 2
-                startRound2();
-            }
-        }
-
-        // Check for card matches after 4th card is selected
-        function checkForCardMatchesAfter4th() {
-            if (!gameState.selectedOpeningCard) return;
-            
-            const openingCard = gameState.selectedOpeningCard;
-            const andarCards = gameState.andarCards;
-            const baharCards = gameState.baharCards;
-            
-            // Check if any Andar card matches opening card
-            const andarMatch = andarCards.some(card => 
-                card.value === openingCard.value && card.suit === openingCard.suit
-            );
-            
-            // Check if any Bahar card matches opening card
-            const baharMatch = baharCards.some(card => 
-                card.value === openingCard.value && card.suit === openingCard.suit
-            );
-            
-            if (andarMatch) {
-                showAndarWinPopup();
-            } else if (baharMatch) {
-                show2ndRoundBabaWinPopup();
-            }
-        }
-
-        // Check for card matches after 6th card is selected
-        function checkForCardMatchesAfter6th() {
-            if (!gameState.selectedOpeningCard) return;
-            
-            const openingCard = gameState.selectedOpeningCard;
-            const andarCards = gameState.andarCards;
-            const baharCards = gameState.baharCards;
-            
-            // Check if any Andar card matches opening card
-            const andarMatch = andarCards.some(card => 
-                card.value === openingCard.value && card.suit === openingCard.suit
-            );
-            
-            // Check if any Bahar card matches opening card
-            const baharMatch = baharCards.some(card => 
-                card.value === openingCard.value && card.suit === openingCard.suit
-            );
-            
-            if (andarMatch) {
-                showAndarWinPopup();
-            } else if (baharMatch) {
-                show3rdRoundBabaWinPopup();
-            }
-        }
-
-        // Check for card matches every 2 cards starting from 7th card
-        function checkForCardMatchesAfter7thPlus() {
-            if (!gameState.selectedOpeningCard) return;
-            
-            const openingCard = gameState.selectedOpeningCard;
-            const andarCards = gameState.andarCards;
-            const baharCards = gameState.baharCards;
-            
-            // Check if any Andar card matches opening card
-            const andarMatch = andarCards.some(card => 
-                card.value === openingCard.value && card.suit === openingCard.suit
-            );
-            
-            // Check if any Bahar card matches opening card
-            const baharMatch = baharCards.some(card => 
-                card.value === openingCard.value && card.suit === openingCard.suit
-            );
-            
-            if (andarMatch) {
-                showAndarWinPopup();
-            } else if (baharMatch) {
-                showBaharWinPopup();
-            }
-        }
-
-        // Show Andar Win popup
-        function showAndarWinPopup() {
-            const totalAndar = gameState.roundBets.round1.andar + gameState.roundBets.round2.andar + gameState.roundBets.round3.andar;
-            const totalBahar = gameState.roundBets.round1.bahar + gameState.roundBets.round2.bahar + gameState.roundBets.round3.bahar;
-            
-            const popup = document.createElement('div');
-            popup.className = 'round-popup';
-            popup.innerHTML = `
-                <div class="round-popup-content">
-                    <h3>Andar WIN</h3>
-                    <div style="text-align: left; margin: 20px 0;">
-                        <p><strong>Andar Total Amount + Andar Total Amount =</strong></p>
-                        <p>Earned Amount: ?${(totalAndar * 2).toLocaleString()}</p>
-                        <br>
-                        <p><strong>Bahar Total Amount - Bahar Total Amount =</strong></p>
-                        <p>Earned Amount: ?0</p>
-                    </div>
-                    <button class="round-popup-btn" onclick="closeWinPopup()">OK</button>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-        }
-
-        // Show BABA Win popup
-        function showBabaWinPopup() {
-            const totalAndar = gameState.roundBets.round1.andar + gameState.roundBets.round2.andar + gameState.roundBets.round3.andar;
-            const totalBahar = gameState.roundBets.round1.bahar + gameState.roundBets.round2.bahar + gameState.roundBets.round3.bahar;
-            
-            const popup = document.createElement('div');
-            popup.className = 'round-popup';
-            popup.innerHTML = `
-                <div class="round-popup-content">
-                    <h3>1st Round BABA WIN</h3>
-                    <div style="text-align: left; margin: 20px 0;">
-                        <p><strong>Andar Total Amount - Andar Total Amount =</strong></p>
-                        <p>Earned Amount: ?0</p>
-                        <br>
-                        <p><strong>Bahar Total Amount =</strong></p>
-                        <p>Earned Amount: ?${totalBahar.toLocaleString()}</p>
-                    </div>
-                    <button class="round-popup-btn" onclick="closeWinPopup()">OK</button>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-        }
-
-        // Show 2nd Round BABA Win popup
-        function show2ndRoundBabaWinPopup() {
-            const round1Bahar = gameState.roundBets.round1.bahar;
-            const round2Bahar = gameState.roundBets.round2.bahar;
-            const round1Total = round1Bahar * 2;
-            const earnedAmount = round2Bahar + round1Total;
-            
-            const popup = document.createElement('div');
-            popup.className = 'round-popup';
-            popup.innerHTML = `
-                <div class="round-popup-content">
-                    <h3>2nd Round BABA WIN</h3>
-                    <div style="text-align: left; margin: 20px 0;">
-                        <p><strong>Andar Total Amount - Andar Total Amount =</strong></p>
-                        <p>Earned Amount: ?0</p>
-                        <br>
-                        <p><strong>1st Round Bahar Bet Amount + 1st Round Bahar Bet Amount = 1st round Total</strong></p>
-                        <p>?${round1Bahar.toLocaleString()} + ?${round1Bahar.toLocaleString()} = ?${round1Total.toLocaleString()}</p>
-                        <br>
-                        <p><strong>2nd Round Bahar Bet Amount + 1st round Total</strong></p>
-                        <p>Earned Amount: ?${earnedAmount.toLocaleString()}</p>
-                    </div>
-                    <button class="round-popup-btn" onclick="closeWinPopup()">OK</button>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-        }
-
-        // Show 3rd Round BABA Win popup
-        function show3rdRoundBabaWinPopup() {
-            const round1Bahar = gameState.roundBets.round1.bahar;
-            const round2Bahar = gameState.roundBets.round2.bahar;
-            const round3Bahar = gameState.roundBets.round3.bahar;
-            const firstAndSecondRoundTotal = (round1Bahar * 2) + (round2Bahar * 2);
-            const earnedAmount = round3Bahar + firstAndSecondRoundTotal;
-            
-            const popup = document.createElement('div');
-            popup.className = 'round-popup';
-            popup.innerHTML = `
-                <div class="round-popup-content">
-                    <h3>3rd Round BABA WIN</h3>
-                    <div style="text-align: left; margin: 20px 0;">
-                        <p><strong>Andar Total Amount - Andar Total Amount =</strong></p>
-                        <p>Earned Amount: ?0</p>
-                        <br>
-                        <p><strong>1st Round Bahar Bet Amount + 1st Round Bahar Bet Amount + 2nd Round Bahar Bet Amount + 2nd Round Bahar Bet Amount = 1st and 2nd round Total</strong></p>
-                        <p>?${round1Bahar.toLocaleString()} + ?${round1Bahar.toLocaleString()} + ?${round2Bahar.toLocaleString()} + ?${round2Bahar.toLocaleString()} = ?${firstAndSecondRoundTotal.toLocaleString()}</p>
-                        <br>
-                        <p><strong>3rd Round Bahar Bet Amount + 1st and 2nd round Total</strong></p>
-                        <p>Earned Amount: ?${earnedAmount.toLocaleString()}</p>
-                    </div>
-                    <button class="round-popup-btn" onclick="closeWinPopup()">OK</button>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-        }
-
-        // Show Bahar Win popup (for 7th card onwards)
-        function showBaharWinPopup() {
-            const totalAndar = gameState.roundBets.round1.andar + gameState.roundBets.round2.andar + gameState.roundBets.round3.andar;
-            const totalBahar = gameState.roundBets.round1.bahar + gameState.roundBets.round2.bahar + gameState.roundBets.round3.bahar;
-            
-            const popup = document.createElement('div');
-            popup.className = 'round-popup';
-            popup.innerHTML = `
-                <div class="round-popup-content">
-                    <h3>Bahar WIN</h3>
-                    <div style="text-align: left; margin: 20px 0;">
-                        <p><strong>Andar Total Amount - Andar Total Amount =</strong></p>
-                        <p>Earned Amount: ?0</p>
-                        <br>
-                        <p><strong>Bahar Total Amount + Bahar Total Amount =</strong></p>
-                        <p>Earned Amount: ?${(totalBahar * 2).toLocaleString()}</p>
-                    </div>
-                    <button class="round-popup-btn" onclick="closeWinPopup()">OK</button>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-        }
-
-        // Close win popup
-        function closeWinPopup() {
-            const popup = document.querySelector('.round-popup');
-            if (popup) {
-                popup.remove();
-            }
-            
-            // Start new game automatically
-            resetGame();
-        }
-
-        // Update betting statistics based on cards selected
-        function updateBettingStats() {
-            const totalCards = gameState.andarCards.length + gameState.baharCards.length;
-            const container = document.getElementById('bettingStatsContainer');
-            
-            // Use actual betting amounts from gameState (updated by real-time polling)
-            // No need to generate random amounts - they come from backend
-            
-            // Calculate totals
-            let andarTotal = 0;
-            let baharTotal = 0;
-            
-            Object.values(gameState.roundBets).forEach(round => {
-                andarTotal += round.andar;
-                baharTotal += round.bahar;
-            });
-            
-            gameState.andarTotalBet = andarTotal;
-            gameState.baharTotalBet = baharTotal;
-            
-            // Generate HTML based on cards selected
-            let html = '';
-            
-            if (totalCards === 0 && gameState.phase === 'andar-bahar') {
-                // Show initial betting stats when 1st round starts
-                html = `
-                    <div class="detailed-bet-card">
-                        <div class="detailed-bet-title">Andar Betting</div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">1st Round Andar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round1.andar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">2nd Round Andar Bet Amount</span>
-                            <span class="round-bet-amount">?0</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">Total Andar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round1.andar.toLocaleString()}</span>
-                        </div>
-                    </div>
-                    <div class="detailed-bet-card">
-                        <div class="detailed-bet-title">Bahar Betting</div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">1st Round Bahar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round1.bahar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">2nd Round Bahar Bet Amount</span>
-                            <span class="round-bet-amount">?0</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">Total Bahar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round1.bahar.toLocaleString()}</span>
-                        </div>
-                    </div>
-                <div class="highest-bet-card">
-                    <div class="highest-bet-title">Lowest Bet</div>
-                    <div class="highest-bet-value">${gameState.roundBets.round1.andar < gameState.roundBets.round1.bahar ? 'Andar' : 'Bahar'}</div>
-                    <div class="variation-amount">Variation Amount - ?${Math.abs(gameState.roundBets.round1.andar - gameState.roundBets.round1.bahar).toLocaleString()}</div>
-                </div>
-                `;
-            } else if (totalCards === 2) {
-                // Show 1st and 2nd round betting
-                const totalAndar2 = gameState.roundBets.round1.andar + gameState.roundBets.round2.andar;
-                const totalBahar2 = gameState.roundBets.round1.bahar + gameState.roundBets.round2.bahar;
-                
-                html = `
-                    <div class="detailed-bet-card">
-                        <div class="detailed-bet-title">Andar Betting</div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">1st Round Andar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round1.andar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">2nd Round Andar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round2.andar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">Total Andar Bet Amount</span>
-                            <span class="round-bet-amount">?${totalAndar2.toLocaleString()}</span>
-                        </div>
-                    </div>
-                    <div class="detailed-bet-card">
-                        <div class="detailed-bet-title">Bahar Betting</div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">1st Round Bahar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round1.bahar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">2nd Round Bahar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round2.bahar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">Total Bahar Bet Amount</span>
-                            <span class="round-bet-amount">?${totalBahar2.toLocaleString()}</span>
-                        </div>
-                    </div>
-                    <div class="highest-bet-card">
-                        <div class="highest-bet-title">Lowest Bet</div>
-                        <div class="highest-bet-value">${totalAndar2 < totalBahar2 ? 'Andar' : 'Bahar'}</div>
-                        <div class="variation-amount">Variation Amount - ?${Math.abs(totalAndar2 - totalBahar2).toLocaleString()}</div>
-                    </div>
-                `;
-            } else if (totalCards >= 4) {
-                // Show all 3 rounds of betting
-                html = `
-                    <div class="detailed-bet-card">
-                        <div class="detailed-bet-title">Andar Betting</div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">1st Round Andar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round1.andar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">2nd Round Andar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round2.andar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">3rd Round Andar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round3.andar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">Total Andar Bet Amount</span>
-                            <span class="round-bet-amount">?${andarTotal.toLocaleString()}</span>
-                        </div>
-                    </div>
-                    <div class="detailed-bet-card">
-                        <div class="detailed-bet-title">Bahar Betting</div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">1st Round Bahar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round1.bahar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">2nd Round Bahar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round2.bahar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">3rd Round Bahar Bet Amount</span>
-                            <span class="round-bet-amount">?${gameState.roundBets.round3.bahar.toLocaleString()}</span>
-                        </div>
-                        <div class="round-bet-row">
-                            <span class="round-bet-label">Total Bahar Bet Amount</span>
-                            <span class="round-bet-amount">?${baharTotal.toLocaleString()}</span>
-                        </div>
-                    </div>
-                    <div class="highest-bet-card">
-                        <div class="highest-bet-title">Lowest Bet</div>
-                        <div class="highest-bet-value">${andarTotal < baharTotal ? 'Andar' : 'Bahar'}</div>
-                        <div class="variation-amount">Variation Amount - ?${Math.abs(andarTotal - baharTotal).toLocaleString()}</div>
-                    </div>
-                `;
-            }
-            
-            container.innerHTML = html;
-            
-            // Add visual update effect
-            const betCards = container.querySelectorAll('.detailed-bet-card');
-            betCards.forEach(card => {
-                card.classList.add('updating');
-                setTimeout(() => {
-                    card.classList.remove('updating');
-                }, 300);
-            });
-        }
-
-        // Update betting stats for round 2
-        function updateBettingStatsForRound2() {
-            const container = document.getElementById('bettingStatsContainer');
-            
-            const totalAndar = gameState.roundBets.round1.andar + gameState.roundBets.round2.andar;
-            const totalBahar = gameState.roundBets.round1.bahar + gameState.roundBets.round2.bahar;
-            
-            const html = `
-                <div class="detailed-bet-card">
-                    <div class="detailed-bet-title">Andar Betting</div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">1st Round Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round1.andar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">2nd Round Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round2.andar.toLocaleString()}</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">Total Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${totalAndar.toLocaleString()}</span>
-                    </div>
-                </div>
-                <div class="detailed-bet-card">
-                    <div class="detailed-bet-title">Bahar Betting</div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">1st Round Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round1.bahar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">2nd Round Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round2.bahar.toLocaleString()}</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">Total Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${totalBahar.toLocaleString()}</span>
-                    </div>
-                </div>
-                <div class="highest-bet-card">
-                    <div class="highest-bet-title">Lowest Bet</div>
-                    <div class="highest-bet-value">${totalAndar < totalBahar ? 'Andar' : 'Bahar'}</div>
-                    <div class="variation-amount">Variation Amount - ?${Math.abs(totalAndar - totalBahar).toLocaleString()}</div>
-                </div>
-            `;
-            
-            container.innerHTML = html;
-            
-            // Add visual update effect
-            const betCards = container.querySelectorAll('.detailed-bet-card');
-            betCards.forEach(card => {
-                card.classList.add('updating');
-                setTimeout(() => {
-                    card.classList.remove('updating');
-                }, 300);
-            });
-        }
-
-        // Update betting stats for round 3
-        function updateBettingStatsForRound3() {
-            const container = document.getElementById('bettingStatsContainer');
-            
-            const totalAndar = gameState.roundBets.round1.andar + gameState.roundBets.round2.andar + gameState.roundBets.round3.andar;
-            const totalBahar = gameState.roundBets.round1.bahar + gameState.roundBets.round2.bahar + gameState.roundBets.round3.bahar;
-            
-            const html = `
-                <div class="detailed-bet-card">
-                    <div class="detailed-bet-title">Andar Betting</div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">1st Round Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round1.andar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">2nd Round Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round2.andar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">3rd Round Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round3.andar.toLocaleString()}</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">Total Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${totalAndar.toLocaleString()}</span>
-                    </div>
-                </div>
-                <div class="detailed-bet-card">
-                    <div class="detailed-bet-title">Bahar Betting</div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">1st Round Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round1.bahar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">2nd Round Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round2.bahar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">3rd Round Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round3.bahar.toLocaleString()}</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">Total Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${totalBahar.toLocaleString()}</span>
-                    </div>
-                </div>
-                <div class="highest-bet-card">
-                    <div class="highest-bet-title">Lowest Bet</div>
-                    <div class="highest-bet-value">${totalAndar < totalBahar ? 'Andar' : 'Bahar'}</div>
-                    <div class="variation-amount">Variation Amount - ?${Math.abs(totalAndar - totalBahar).toLocaleString()}</div>
-                </div>
-            `;
-            
-            container.innerHTML = html;
-            
-            // Add visual update effect
-            const betCards = container.querySelectorAll('.detailed-bet-card');
-            betCards.forEach(card => {
-                card.classList.add('updating');
-                setTimeout(() => {
-                    card.classList.remove('updating');
-                }, 300);
-            });
-        }
-
-        // Increase betting amounts during countdown
-        function increaseBettingAmounts() {
-            // If all rounds are paused, don't increase any amounts
-            if (gameState.round1Paused && gameState.round2Paused && gameState.round3Paused) {
+            if (!minBetAmount || !maxBetAmount || !gameTimer) {
+                showNotification('All settings are required', 'error');
                 return;
             }
             
-            // Generate random increases
-            const andarIncrease = Math.floor(Math.random() * 500) + 100;
-            const baharIncrease = Math.floor(Math.random() * 500) + 100;
-            
-            if (gameState.round1Paused && gameState.round2Paused) {
-                // If both round 1 and 2 are paused, increase round 3 amounts
-                gameState.roundBets.round3.andar += andarIncrease;
-                gameState.roundBets.round3.bahar += baharIncrease;
-                
-                console.log('Round 3 betting amounts updated:', {
-                    andar: gameState.roundBets.round3.andar,
-                    bahar: gameState.roundBets.round3.bahar,
-                    timer: gameState.countdownTimer
-                });
-                
-                // Update display for round 3
-                updateBettingStatsForRound3();
-            } else if (gameState.round1Paused) {
-                // If round 1 is paused, increase round 2 amounts
-                gameState.roundBets.round2.andar += andarIncrease;
-                gameState.roundBets.round2.bahar += baharIncrease;
-                
-                console.log('Round 2 betting amounts updated:', {
-                    andar: gameState.roundBets.round2.andar,
-                    bahar: gameState.roundBets.round2.bahar,
-                    timer: gameState.countdownTimer
-                });
-                
-                // Update display for round 2
-                updateBettingStatsForRound2();
-            } else {
-                // If round 1 is not paused, increase round 1 amounts
-                gameState.roundBets.round1.andar += andarIncrease;
-                gameState.roundBets.round1.bahar += baharIncrease;
-                
-                console.log('Round 1 betting amounts updated:', {
-                    andar: gameState.roundBets.round1.andar,
-                    bahar: gameState.roundBets.round1.bahar,
-                    timer: gameState.countdownTimer
-                });
-                
-                // Update display for round 1
-                updateBettingStats();
-            }
-        }
-
-        // Show round completion popup
-        function showRoundPopup(roundNumber) {
-            const popup = document.createElement('div');
-            popup.className = 'round-popup';
-            popup.innerHTML = `
-                <div class="round-popup-content">
-                    <h3>Round ${roundNumber} Completed!</h3>
-                    <p>You have selected ${roundNumber * 2} cards. Set custom time for the next phase.</p>
-                    <input type="number" id="roundCustomTime" class="round-popup-input" value="${window.gameSettings?.gameTimer || 30}" min="10" max="300" placeholder="Enter time in seconds">
-                    <button class="round-popup-btn" onclick="closeRoundPopup(${roundNumber})">OK</button>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-            
-            // Focus on input
-            setTimeout(() => {
-                document.getElementById('roundCustomTime').focus();
-            }, 100);
-        }
-
-        // Show Round 3 Completed popup
-        function showRound3CompletedPopup() {
-            const popup = document.createElement('div');
-            popup.className = 'round-popup';
-            popup.innerHTML = `
-                <div class="round-popup-content">
-                    <h3>Round 3 Completed!</h3>
-                    <p>All rounds completed! All betting amounts will be paused.</p>
-                    <button class="round-popup-btn" onclick="closeRound3CompletedPopup()">OK</button>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-        }
-
-        // Close Round 3 Completed popup
-        function closeRound3CompletedPopup() {
-            // Remove popup
-            document.querySelector('.round-popup').remove();
-            
-            // Pause all rounds (stop all betting increases)
-            gameState.round1Paused = true;
-            gameState.round2Paused = true;
-            gameState.round3Paused = true;
-            
-            // Stop any ongoing countdown
-            if (gameState.countdownInterval) {
-                clearInterval(gameState.countdownInterval);
-            }
-            
-            // Hide countdown timer
-            hideCountdownTimer();
-            
-            // Update display to show all rounds as paused
-            updateBettingStatsForAllPaused();
-            
-            showNotification('All rounds completed! All betting amounts are now paused.', 'success');
-        }
-
-        // Update betting stats when all rounds are paused
-        function updateBettingStatsForAllPaused() {
-            const container = document.getElementById('bettingStatsContainer');
-            
-            const totalAndar = gameState.roundBets.round1.andar + gameState.roundBets.round2.andar + gameState.roundBets.round3.andar;
-            const totalBahar = gameState.roundBets.round1.bahar + gameState.roundBets.round2.bahar + gameState.roundBets.round3.bahar;
-            
-            const html = `
-                <div class="detailed-bet-card">
-                    <div class="detailed-bet-title">Andar Betting</div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">1st Round Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round1.andar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">2nd Round Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round2.andar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">3rd Round Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round3.andar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">Total Andar Bet Amount</span>
-                        <span class="round-bet-amount">?${totalAndar.toLocaleString()}</span>
-                    </div>
-                </div>
-                <div class="detailed-bet-card">
-                    <div class="detailed-bet-title">Bahar Betting</div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">1st Round Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round1.bahar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">2nd Round Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round2.bahar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">3rd Round Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${gameState.roundBets.round3.bahar.toLocaleString()} (PAUSED)</span>
-                    </div>
-                    <div class="round-bet-row">
-                        <span class="round-bet-label">Total Bahar Bet Amount</span>
-                        <span class="round-bet-amount">?${totalBahar.toLocaleString()}</span>
-                    </div>
-                </div>
-                <div class="highest-bet-card">
-                    <div class="highest-bet-title">Lowest Bet</div>
-                    <div class="highest-bet-value">${totalAndar < totalBahar ? 'Andar' : 'Bahar'}</div>
-                    <div class="variation-amount">Variation Amount - ?${Math.abs(totalAndar - totalBahar).toLocaleString()}</div>
-                </div>
-            `;
-            
-            container.innerHTML = html;
-        }
-
-        // Close round popup
-        function closeRoundPopup(roundNumber) {
-            const customTime = document.getElementById('roundCustomTime').value;
-            
-            if (!customTime || customTime < 10 || customTime > 300) {
-                showNotification('Please enter a valid time (10-300 seconds)!', 'error');
-                return;
-            }
-            
-            // Remove popup
-            document.querySelector('.round-popup').remove();
-            
-            showNotification(`Round ${roundNumber} completed! Custom time set to ${customTime} seconds.`, 'success');
-            
-            // If it's round 1, pause 1st round betting and start 2nd round betting
-            if (roundNumber === 1) {
-                // Pause 1st round betting (stop increasing)
-                gameState.round1Paused = true;
-                
-                // Initialize 2nd round betting amounts
-                gameState.roundBets.round2.andar = Math.floor(Math.random() * 2000) + 1000;
-                gameState.roundBets.round2.bahar = Math.floor(Math.random() * 2000) + 1000;
-                
-                // Update display to show both rounds
-                updateBettingStatsForRound2();
-            }
-            
-            // If it's round 2, pause 1st and 2nd round betting and start 3rd round betting
-            if (roundNumber === 2) {
-                // Pause 1st and 2nd round betting (stop increasing)
-                gameState.round1Paused = true;
-                gameState.round2Paused = true;
-                
-                // Initialize 3rd round betting amounts
-                gameState.roundBets.round3.andar = Math.floor(Math.random() * 2000) + 1000;
-                gameState.roundBets.round3.bahar = Math.floor(Math.random() * 2000) + 1000;
-                
-                // Update display to show all three rounds
-                updateBettingStatsForRound3();
-            }
-            
-            // Restart countdown with new time
-            gameState.countdownTimer = parseInt(customTime);
-            
-            // Show countdown timer for the new round
-            showCountdownTimer();
-            startCountdown();
-        }
-
-        // Start game
-        function startGame() {
-            console.log('Start game clicked');
-            console.log('Selected opening card:', gameState.selectedOpeningCard);
-            
-            if (!gameState.selectedOpeningCard) {
-                showNotification('Please select an opening card first!', 'error');
-                return;
-            }
-            
-            // Show start game popup
-            showStartGamePopup();
-        }
-
-        // Show start game popup
-        function showStartGamePopup() {
-            const popup = document.createElement('div');
-            popup.className = 'start-game-popup';
-            popup.innerHTML = `
-                <div class="start-game-popup-content">
-                    <h3>Continue Andar Bahar Cards</h3>
-                    <p>Opening card selected: ${gameState.selectedOpeningCard.display}</p>
-                    <div style="margin: 20px 0;">
-                        <label style="color: #ffd700; font-family: 'Poppins', sans-serif; font-size: 1.1rem; display: block; margin-bottom: 10px;">Custom Time (seconds)</label>
-                        <input type="number" id="popupCustomTime" class="form-input" value="${window.gameSettings?.gameTimer || 30}" min="10" max="300" style="text-align: center; font-size: 1.2rem; padding: 10px; width: 100%; max-width: 200px;">
-                    </div>
-                    <div class="start-game-buttons">
-                        <button class="start-game-btn" onclick="start1stRound()">Start 1st Round</button>
-                        <button class="start-game-btn secondary" onclick="closeStartGamePopup()">Cancel</button>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(popup);
-            
-            // Focus on input
-            setTimeout(() => {
-                document.getElementById('popupCustomTime').focus();
-            }, 100);
-        }
-
-        // Close start game popup
-        function closeStartGamePopup() {
-            const popup = document.querySelector('.start-game-popup');
-            if (popup) {
-                popup.remove();
-            }
-        }
-
-
-        // Start 1st round
-        async function start1stRound() {
-            // Get custom time from popup
-            const customTimeElement = document.getElementById('popupCustomTime');
-            const customTime = parseInt(customTimeElement.value) || 30;
-            
-            // Validate time
-            if (customTime < 10 || customTime > 300) {
-                showNotification('Please enter a valid time (10-300 seconds)!', 'error');
-                return;
-            }
-            
-            // Close popup
-            closeStartGamePopup();
-            
-            try {
-                // Clear previous game state and UI elements
-                clearPreviousGameState();
-                
-                // Set opening card in backend (this will clear previous game state)
-                await fetch('https://reddy-anna-59l3.onrender.com/api/game/set-opening-card', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        card: gameState.selectedOpeningCard.display
-                    })
-                });
-                
-                // Start timer in backend
-                const response = await fetch('https://reddy-anna-59l3.onrender.com/api/game/start-timer', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        round: 'round1',
-                        duration: customTime
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    // Update local game state with backend response
-                    gameState.phase = 'round1';
-                    gameState.currentRound = 1;
-                    gameState.countdownTimer = customTime;
-                    gameState.andarCards = [];
-                    gameState.baharCards = [];
-                    
-                    // Display the opening card in the Andar Bahar section
-                    document.getElementById('displayOpeningCard').textContent = gameState.selectedOpeningCard.display;
-                    
-                    // Clear any existing selected cards display
-                    clearSelectedCardsDisplay();
-                    
-                    document.getElementById('openingCardSection').style.display = 'none';
-                    document.getElementById('andarBaharSection').style.display = 'block';
-                    
-                    generateAndarBaharCards();
-                    updateBettingStats();
-                    startCountdown();
-                    
-                    showNotification(`1st Round started with ${customTime} seconds! Previous game state cleared.`, 'success');
-                } else {
-                    showNotification('Failed to start round: ' + result.message, 'error');
-                }
-            } catch (error) {
-                console.error('Error starting round:', error);
-                showNotification('Failed to start round. Please try again.', 'error');
-            }
-        }
-
-        // Clear previous game state and UI elements
-        function clearPreviousGameState() {
-            // Clear local game state
-            gameState.andarCards = [];
-            gameState.baharCards = [];
-            gameState.roundBets = {
-                round1: { andar: 0, bahar: 0 },
-                round2: { andar: 0, bahar: 0 }
-            };
-            
-            // Clear any existing countdown
-            if (gameState.countdownInterval) {
-                clearInterval(gameState.countdownInterval);
-                gameState.countdownInterval = null;
-            }
-            
-            // Hide countdown timer
-            hideCountdownTimer();
-            
-            // Clear selected cards display
-            clearSelectedCardsDisplay();
-            
-            // Reset betting stats display
-            updateBettingStats();
-            
-            console.log('Previous game state cleared');
-        }
-
-        // Clear selected cards display
-        function clearSelectedCardsDisplay() {
-            // Clear Andar cards display
-            const andarDisplay = document.getElementById('selectedAndarCards');
-            if (andarDisplay) {
-                andarDisplay.textContent = 'None';
-            }
-            
-            // Clear Bahar cards display
-            const baharDisplay = document.getElementById('selectedBaharCards');
-            if (baharDisplay) {
-                baharDisplay.textContent = 'None';
-            }
-            
-            // Clear any selected card buttons
-            document.querySelectorAll('#andarBaharCardsGrid .card-btn').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-        }
-
-        // Start countdown timer
-        function startCountdown() {
-            // Clear any existing countdown
-            if (gameState.countdownInterval) {
-                clearInterval(gameState.countdownInterval);
-            }
-            
-            // Show countdown timer
-            showCountdownTimer();
-            
-            // Initialize betting amounts to 0
-            if (gameState.phase === 'round1') {
-                gameState.roundBets.round1.andar = 0;
-                gameState.roundBets.round1.bahar = 0;
-            } else if (gameState.phase === 'round2') {
-                gameState.roundBets.round2.andar = 0;
-                gameState.roundBets.round2.bahar = 0;
-            }
-            
-            // Update display immediately
-            updateCountdownDisplay();
-            updateBettingStats();
-            
-            // Start countdown
-            gameState.countdownInterval = setInterval(() => {
-                gameState.countdownTimer--;
-                updateCountdownDisplay();
-                
-                // Update timer in backend
-                updateTimerInBackend(gameState.countdownTimer);
-                
-                // Simulate betting amounts increasing (this would come from real user bets)
-                simulateBettingAmounts();
-                
-                if (gameState.countdownTimer <= 0) {
-                    clearInterval(gameState.countdownInterval);
-                    hideCountdownTimer();
-                    
-                    // Submit betting totals to backend
-                    submitBettingTotals();
-                    
-                    // Show appropriate notification based on current round
-                    if (gameState.phase === 'round1') {
-                        showNotification('1st Round betting time is up!', 'warning');
-                    } else if (gameState.phase === 'round2') {
-                        showNotification('2nd Round betting time is up!', 'warning');
-                    }
-                }
-            }, 1000);
-        }
-
-        // Update timer in backend
-        async function updateTimerInBackend(timer) {
-            try {
-                await fetch('https://reddy-anna-59l3.onrender.com/api/game/update-timer', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        timer: timer
-                    })
-                });
-            } catch (error) {
-                console.error('Error updating timer in backend:', error);
-            }
-        }
-
-        // Simulate betting amounts (in real implementation, this would come from user bets)
-        function simulateBettingAmounts() {
-            if (gameState.phase === 'round1') {
-                gameState.roundBets.round1.andar += Math.floor(Math.random() * 100) + 50;
-                gameState.roundBets.round1.bahar += Math.floor(Math.random() * 100) + 50;
-            } else if (gameState.phase === 'round2') {
-                gameState.roundBets.round2.andar += Math.floor(Math.random() * 100) + 50;
-                gameState.roundBets.round2.bahar += Math.floor(Math.random() * 100) + 50;
-            }
-            updateBettingStats();
-            
-            // Update betting amounts in backend
-            updateBettingAmountsInBackend();
-        }
-
-        // Update betting amounts in backend
-        async function updateBettingAmountsInBackend() {
-            try {
-                const round = gameState.phase;
-                const andarTotal = gameState.roundBets[round]?.andar || 0;
-                const baharTotal = gameState.roundBets[round]?.bahar || 0;
-                
-                await fetch('https://reddy-anna-59l3.onrender.com/api/game/submit-bets', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        round: round,
-                        andarTotal: andarTotal,
-                        baharTotal: baharTotal
-                    })
-                });
-            } catch (error) {
-                console.error('Error updating betting amounts in backend:', error);
-            }
-        }
-
-        // Submit betting totals to backend
-        async function submitBettingTotals() {
-            try {
-                const round = gameState.phase;
-                const andarTotal = gameState.roundBets[round]?.andar || 0;
-                const baharTotal = gameState.roundBets[round]?.bahar || 0;
-                
-                await fetch('https://reddy-anna-59l3.onrender.com/api/game/submit-bets', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        round: round,
-                        andarTotal: andarTotal,
-                        baharTotal: baharTotal
-                    })
-                });
-                
-                console.log(`Betting totals submitted for ${round}: Andar: ${andarTotal}, Bahar: ${baharTotal}`);
-            } catch (error) {
-                console.error('Error submitting betting totals:', error);
-            }
-        }
-
-
-        // Hide countdown timer
-        function hideCountdownTimer() {
-            const countdownSection = document.getElementById('countdownTimerSection');
-            if (countdownSection) {
-                countdownSection.style.display = 'none';
-            }
-        }
-
-        // Show countdown timer
-        function showCountdownTimer() {
-            const countdownSection = document.getElementById('countdownTimerSection');
-            if (countdownSection) {
-                countdownSection.style.display = 'block';
-            }
-        }
-
-        // Update countdown display
-        function updateCountdownDisplay() {
-            const countdownElement = document.getElementById('andarBaharCountdown');
-            const countdownLabel = document.querySelector('#countdownTimerSection .selected-card-label');
-            
-            countdownElement.textContent = gameState.countdownTimer;
-            
-            // Update timer label based on current round
-            if (gameState.round1Paused && gameState.round2Paused) {
-                countdownLabel.textContent = '3rd Round Timer';
-            } else if (gameState.round1Paused) {
-                countdownLabel.textContent = '2nd Round Timer';
-            } else {
-                countdownLabel.textContent = '1st Round Timer';
-            }
-            
-            // Change color based on time remaining
-            countdownElement.className = 'countdown-display';
-            if (gameState.countdownTimer <= 5) {
-                countdownElement.classList.add('danger');
-            } else if (gameState.countdownTimer <= 10) {
-                countdownElement.classList.add('warning');
-            }
-        }
-
-        // Stop countdown timer
-        function stopCountdown() {
-            if (gameState.countdownInterval) {
-                clearInterval(gameState.countdownInterval);
-                gameState.countdownInterval = null;
-            }
-        }
-
-
-
-        // Declare winner
-        function declareWinner(winner) {
-            if (gameState.phase === 'opening') {
-                showNotification('Please start the game first!', 'error');
-                return;
-            }
-            
-            let message = '';
-            let babaResult = '';
-            
-            if (winner === 'baba') {
-                // Check if current card matches opening card
-                const currentCard = gameState.currentRound === 1 ? gameState.selectedBaharCard : gameState.selectedAndarCard;
-                if (currentCard && currentCard.value === gameState.selectedOpeningCard.value) {
-                    babaResult = 'Baba matched! Andar loses, Bahar wins with special odds.';
-                } else {
-                    babaResult = 'No Baba match. Both Andar and Bahar continue with 1:1 odds.';
-                }
-            }
-            
-            switch (winner) {
-                case 'andar':
-                    message = `Andar won! Round ${gameState.currentRound} completed.`;
-                    break;
-                case 'bahar':
-                    message = `Bahar won! Round ${gameState.currentRound} completed.`;
-                    break;
-                case 'baba':
-                    message = `Baba result: ${babaResult}`;
-                    break;
-            }
-            
-            showNotification(message, 'success');
-            
-            // Move to next round or end game
-            if (gameState.currentRound < 3) {
-                gameState.currentRound++;
-                // Clear card arrays for next round
-                gameState.andarCards = [];
-                gameState.baharCards = [];
-                updateCardsDisplay();
-                
-                // Regenerate cards grid
-                generateAndarBaharCards();
-                showNotification(`Round ${gameState.currentRound} started! Select next card.`, 'info');
-            } else {
-                showNotification('All rounds completed! Game finished.', 'info');
-            }
-        }
-
-        // Reset game
-        function resetGame() {
-            if (confirm('Are you sure you want to reset the game?')) {
-                // Stop countdown timer
-                stopCountdown();
-                
-                gameState = {
-                    phase: 'opening',
-                    selectedOpeningCard: null,
-                    andarCards: [],
-                    baharCards: [],
-                    currentRound: 1,
-                    timer: 30,
-                    timerInterval: null,
-                    andarTotalBet: 0,
-                    baharTotalBet: 0,
-                    // Reset countdown timer
-                    countdownTimer: 30,
-                    countdownInterval: null,
-                    // Reset round betting control
-                    round1Paused: false,
-                    round2Paused: false,
-                    round3Paused: false,
-                    // Reset round betting data
-                    roundBets: {
-                        round1: { andar: 0, bahar: 0 },
-                        round2: { andar: 0, bahar: 0 },
-                        round3: { andar: 0, bahar: 0 }
-                    }
-                };
-                
-                document.getElementById('openingCardSection').style.display = 'block';
-                document.getElementById('andarBaharSection').style.display = 'none';
-                
-                document.getElementById('selectedOpeningCard').textContent = 'None';
-                document.getElementById('displayOpeningCard').textContent = 'None';
-                document.getElementById('andarBaharCountdown').textContent = '30';
-                document.getElementById('andarBaharCountdown').className = 'countdown-display';
-                
-                // Show countdown timer section again
-                const countdownSection = document.getElementById('countdownTimerSection');
-                if (countdownSection) {
-                    countdownSection.style.display = 'block';
-                }
-                
-                updateCardsDisplay();
-                
-                generateOpeningCards();
-                showNotification('Game reset successfully!', 'success');
-            }
-        }
-
-        // Next game
-        function nextGame() {
-            if (confirm('Start a new game?')) {
-                resetGame();
-            }
-        }
-
-        // Live viewers counter
-        let liveViewersInterval;
-        let betAmountInterval;
-        let winAmountInterval;
-        
-        function startLiveViewersCounter() {
-            liveViewersInterval = setInterval(() => {
-                const minViewers = parseInt(document.getElementById('minViewers').value) || 1270;
-                const maxViewers = parseInt(document.getElementById('maxViewers').value) || 2540;
-                
-                // Ensure min is not greater than max
-                const actualMin = Math.min(minViewers, maxViewers);
-                const actualMax = Math.max(minViewers, maxViewers);
-                
-                const currentViewers = Math.floor(Math.random() * (actualMax - actualMin + 1)) + actualMin;
-                const viewersElement = document.getElementById('liveViewers');
-                if (viewersElement) {
-                    viewersElement.textContent = currentViewers.toLocaleString();
-                }
-            }, 2000); // Update every 2 seconds
-        }
-        
-        function startBetAmountCounter() {
-            betAmountInterval = setInterval(() => {
-                const minBetAmount = parseInt(document.getElementById('minBetAmount').value) || 1000;
-                const maxBetAmount = parseInt(document.getElementById('maxBetAmount').value) || 50000;
-                
-                // Ensure min is not greater than max
-                const actualMin = Math.min(minBetAmount, maxBetAmount);
-                const actualMax = Math.max(minBetAmount, maxBetAmount);
-                
-                const currentBetAmount = Math.floor(Math.random() * (actualMax - actualMin + 1)) + actualMin;
-                const betAmountElement = document.getElementById('betAmount');
-                if (betAmountElement) {
-                    betAmountElement.textContent = '?' + currentBetAmount.toLocaleString();
-                }
-            }, 2000); // Update every 2 seconds
-        }
-        
-        function startWinAmountCounter() {
-            winAmountInterval = setInterval(() => {
-                const minWinAmount = parseInt(document.getElementById('minWinAmount').value) || 1500;
-                const maxWinAmount = parseInt(document.getElementById('maxWinAmount').value) || 75000;
-                
-                // Ensure min is not greater than max
-                const actualMin = Math.min(minWinAmount, maxWinAmount);
-                const actualMax = Math.max(minWinAmount, maxWinAmount);
-                
-                const currentWinAmount = Math.floor(Math.random() * (actualMax - actualMin + 1)) + actualMin;
-                const winAmountElement = document.getElementById('winAmount');
-                if (winAmountElement) {
-                    winAmountElement.textContent = '?' + currentWinAmount.toLocaleString();
-                }
-            }, 2000); // Update every 2 seconds
-        }
-        
-        function stopLiveViewersCounter() {
-            if (liveViewersInterval) {
-                clearInterval(liveViewersInterval);
-            }
-        }
-        
-        function stopBetAmountCounter() {
-            if (betAmountInterval) {
-                clearInterval(betAmountInterval);
-            }
-        }
-        
-        function stopWinAmountCounter() {
-            if (winAmountInterval) {
-                clearInterval(winAmountInterval);
-            }
-        }
-        
-        function updateViewerRange() {
-            const minInput = document.getElementById('minViewers');
-            const maxInput = document.getElementById('maxViewers');
-            const minValue = parseInt(minInput.value) || 1;
-            const maxValue = parseInt(maxInput.value) || 9999;
-            
-            // Ensure min is not greater than max
-            if (minValue > maxValue) {
-                minInput.value = maxValue;
-            }
-            if (maxValue < minValue) {
-                maxInput.value = minValue;
-            }
-            
-            // Restart the counter with new range
-            stopLiveViewersCounter();
-            startLiveViewersCounter();
-        }
-        
-        function updateBetAmountRange() {
-            const minInput = document.getElementById('minBetAmount');
-            const maxInput = document.getElementById('maxBetAmount');
-            const minValue = parseInt(minInput.value) || 1;
-            const maxValue = parseInt(maxInput.value) || 999999;
-            
-            // Ensure min is not greater than max
-            if (minValue > maxValue) {
-                minInput.value = maxValue;
-            }
-            if (maxValue < minValue) {
-                maxInput.value = minValue;
-            }
-            
-            // Restart the counter with new range
-            stopBetAmountCounter();
-            startBetAmountCounter();
-        }
-        
-        function updateWinAmountRange() {
-            const minInput = document.getElementById('minWinAmount');
-            const maxInput = document.getElementById('maxWinAmount');
-            const minValue = parseInt(minInput.value) || 1;
-            const maxValue = parseInt(maxInput.value) || 999999;
-            
-            // Ensure min is not greater than max
-            if (minValue > maxValue) {
-                minInput.value = maxValue;
-            }
-            if (maxValue < minValue) {
-                maxInput.value = minValue;
-            }
-            
-            // Restart the counter with new range
-            stopWinAmountCounter();
-            startWinAmountCounter();
-        }
-
-        // Update Stream Previews Function
-        function updateStreamPreviews() {
-            if (!window.streamSettings) return;
-            
-            // Update URL preview - show the main stream URL (not backup)
-            if (window.streamSettings.streamUrl) {
-                const preview = document.getElementById('streamPreview');
-                if (preview) {
-                    let videoSource = window.streamSettings.streamUrl;
-                    let isYouTubeEmbed = false;
-                    
-                    // Check if it's a YouTube URL that needs to be converted
-                    if (videoSource.includes('youtu.be/') || videoSource.includes('youtube.com/watch')) {
-                        // Convert YouTube URL to embed format
-                        let videoId = '';
-                        if (videoSource.includes('youtu.be/')) {
-                            videoId = videoSource.split('youtu.be/')[1].split('?')[0];
-                        } else if (videoSource.includes('youtube.com/watch')) {
-                            videoId = videoSource.split('v=')[1].split('&')[0];
-                        }
-                        
-                        if (videoId) {
-                            videoSource = `https://www.youtube.com/embed/${videoId}`;
-                            isYouTubeEmbed = true;
-                        }
-                    }
-                    
-                    // Check if it's a video file or embed URL
-                    if (window.streamSettings.streamUrl.includes('.mp4') || window.streamSettings.streamUrl.includes('.webm') || window.streamSettings.streamUrl.includes('.ogg')) {
-                        // It's a video file, show as video element
-                        preview.outerHTML = `
-                            <video width="100%" height="300" controls style="border-radius: 10px;">
-                                <source src="${window.streamSettings.streamUrl}" type="video/mp4">
-                                Your browser does not support the video tag.
-                            </video>
-                        `;
-                    } else if (isYouTubeEmbed || videoSource.includes('embed') || videoSource.includes('player')) {
-                        // It's an embed URL, show as iframe
-                        preview.src = videoSource;
-                    } else {
-                        // Default to iframe for other URLs
-                        preview.src = videoSource;
-                    }
-                }
-            }
-            
-            // Update embed code preview if embed code is provided
-            if (window.streamSettings.streamEmbedCode) {
-                const embedPreview = document.getElementById('embedCodePreview');
-                if (embedPreview) {
-                    embedPreview.innerHTML = window.streamSettings.streamEmbedCode;
-                }
-            }
-        }
-
-        // Load betting amounts from backend
-        async function loadBettingAmounts() {
-            try {
-                const response = await fetch('https://reddy-anna-59l3.onrender.com/api/game/betting-amounts');
-                const result = await response.json();
-                
-                if (result.success) {
-                    const bettingData = result.data;
-                    
-                    // Update local betting amounts if they're different
-                    if (bettingData.round1Bets) {
-                        if (gameState.roundBets.round1.andar !== bettingData.round1Bets.andar ||
-                            gameState.roundBets.round1.bahar !== bettingData.round1Bets.bahar) {
-                            gameState.roundBets.round1 = bettingData.round1Bets;
-                            updateBettingStats();
-                        }
-                    }
-                    
-                    if (bettingData.round2Bets) {
-                        if (gameState.roundBets.round2.andar !== bettingData.round2Bets.andar ||
-                            gameState.roundBets.round2.bahar !== bettingData.round2Bets.bahar) {
-                            gameState.roundBets.round2 = bettingData.round2Bets;
-                            updateBettingStats();
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading betting amounts:', error);
-            }
-        }
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            generateOpeningCards();
-            startLiveViewersCounter();
-            startBetAmountCounter();
-            startWinAmountCounter();
-            loadGameSettings(); // Load game settings from API
-            loadStreamSettings(); // Load stream settings from API
-            
-            // Real-time betting amounts polling every 2 seconds
-            setInterval(() => {
-                loadBettingAmounts();
-            }, 2000);
-            
-            showNotification('Game Admin Panel loaded!', 'info');
-        });
-    </script>
-
-    <!-- Settings Modal -->
-    <div id="settingsModal" class="modal-overlay" style="display: none;">
-        <div class="modal-content" style="max-width: 1600px; max-height: 90vh; overflow-y: auto;">
-            <div class="modal-header">
-                <h3>Game Settings</h3>
-                <button class="close-modal" onclick="closeSettingsModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <!-- Game Settings Section -->
-                <div class="form-group">
-                    <h3 style="color: #ffd700; font-family: 'Poppins', sans-serif; margin-bottom: 20px;">Game Settings</h3>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="settingsMaxBetAmount">Max Bet Amount (?)</label>
-                            <input type="number" id="settingsMaxBetAmount" class="form-input" value="10000" placeholder="Enter max bet amount">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="settingsMinBetAmount">Min Bet Amount (?)</label>
-                            <input type="number" id="settingsMinBetAmount" class="form-input" value="10" placeholder="Enter min bet amount">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="gameTimer">Game Timer (seconds)</label>
-                        <input type="number" id="gameTimer" class="form-input" value="30" placeholder="Enter game timer">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="openingCard">Opening Card</label>
-                        <select id="openingCard" class="form-input">
-                            <option value="A?">A?</option>
-                            <option value="2?">2?</option>
-                            <option value="3?">3?</option>
-                            <option value="4?">4?</option>
-                            <option value="5?">5?</option>
-                            <option value="6?">6?</option>
-                            <option value="7?">7?</option>
-                            <option value="8?">8?</option>
-                            <option value="9?">9?</option>
-                            <option value="10?">10?</option>
-                            <option value="J?">J?</option>
-                            <option value="Q?">Q?</option>
-                            <option value="K?">K?</option>
-                            <option value="A?">A?</option>
-                            <option value="2?">2?</option>
-                            <option value="3?">3?</option>
-                            <option value="4?">4?</option>
-                            <option value="5?">5?</option>
-                            <option value="6?">6?</option>
-                            <option value="7?">7?</option>
-                            <option value="8?">8?</option>
-                            <option value="9?">9?</option>
-                            <option value="10?">10?</option>
-                            <option value="J?">J?</option>
-                            <option value="Q?">Q?</option>
-                            <option value="K?">K?</option>
-                            <option value="A?">A?</option>
-                            <option value="2?">2?</option>
-                            <option value="3?">3?</option>
-                            <option value="4?">4?</option>
-                            <option value="5?">5?</option>
-                            <option value="6?">6?</option>
-                            <option value="7?">7?</option>
-                            <option value="8?">8?</option>
-                            <option value="9?">9?</option>
-                            <option value="10?">10?</option>
-                            <option value="J?">J?</option>
-                            <option value="Q?">Q?</option>
-                            <option value="K?">K?</option>
-                            <option value="A?">A?</option>
-                            <option value="2?">2?</option>
-                            <option value="3?">3?</option>
-                            <option value="4?">4?</option>
-                            <option value="5?">5?</option>
-                            <option value="6?">6?</option>
-                            <option value="7?">7?</option>
-                            <option value="8?">8?</option>
-                            <option value="9?">9?</option>
-                            <option value="10?">10?</option>
-                            <option value="J?">J?</option>
-                            <option value="Q?">Q?</option>
-                            <option value="K?">K?</option>
-                        </select>
-                    </div>
-                    
-                    <button type="button" class="save-btn" onclick="saveGameSettings()">Save Game Settings</button>
-                </div>
-
-                <!-- Live Stream Section -->
-                <div class="form-group">
-                    <h3 style="color: #ffd700; font-family: 'Poppins', sans-serif; margin-bottom: 20px;">Live Stream Management</h3>
-                    <form id="streamForm">
-                        <div class="form-group">
-                            <label class="form-label" for="streamUrl">Live Stream URL (Used for Offline/Maintenance Status)</label>
-                            <input type="url" id="streamUrl" class="form-input" placeholder="https://www.youtube.com/embed/VIDEO_ID or local video path" value="hero images/uhd_30fps.mp4">
-                            <small style="color: #ffd700; font-size: 12px; margin-top: 5px; display: block;">
-                                ?? This URL will be shown when stream status is "offline" or "maintenance"<br>
-                                ?? Supports: Local videos (hero images/video.mp4), YouTube URLs (youtu.be/VIDEO_ID), or embed URLs
-                            </small>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label" for="streamTitle">Stream Title</label>
-                                <input type="text" id="streamTitle" class="form-input" placeholder="Enter stream title" value="Andar Bahar Live Game">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="streamStatus">Stream Status</label>
-                                <select id="streamStatus" class="form-input">
-                                    <option value="live">Live</option>
-                                    <option value="offline">Offline</option>
-                                    <option value="maintenance">Maintenance</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="streamDescription">Stream Description</label>
-                            <textarea id="streamDescription" class="form-input form-textarea" placeholder="Enter stream description">Watch live Andar Bahar games with real-time betting and instant results. Join thousands of players in the most exciting card game experience.</textarea>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label" for="streamQuality">Stream Quality</label>
-                                <select id="streamQuality" class="form-input">
-                                    <option value="720p">720p HD</option>
-                                    <option value="1080p">1080p Full HD</option>
-                                    <option value="480p">480p SD</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="streamDelay">Stream Delay (seconds)</label>
-                                <input type="number" id="streamDelay" class="form-input" value="5" placeholder="Enter delay in seconds">
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="backupStreamUrl">Backup Stream URL (Optional)</label>
-                            <input type="url" id="backupStreamUrl" class="form-input" placeholder="https://backup.example.com/live/stream">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="streamEmbedCode">Embed Code (HTML/PHP) - Used for Live Status</label>
-                            <textarea id="streamEmbedCode" class="form-input form-textarea" placeholder="Paste your embed code here (HTML iframe, PHP code, etc.)" rows="4"></textarea>
-                            <small style="color: #ffd700; font-size: 12px; margin-top: 5px; display: block;">
-                                ?? This embed code will be shown when stream status is "live"<br>
-                                ?? For YouTube: Use https://www.youtube.com/embed/VIDEO_ID format<br>
-                                ?? For Twitch: Use https://player.twitch.tv/?channel=CHANNEL_NAME<br>
-                                ?? For local videos: Use relative paths like "hero images/video.mp4"
-                            </small>
-                        </div>
-                        
-                        <button type="button" class="save-btn" onclick="saveStreamSettings()">Save Stream Settings</button>
-                    </form>
-                </div>
-
-                <div class="form-group">
-                    <h3 style="color: #ffd700; font-family: 'Poppins', sans-serif; margin-bottom: 20px;">Stream Preview</h3>
-                    <div style="background: rgba(0, 0, 0, 0.3); border-radius: 10px; padding: 20px; text-align: center;">
-                        <iframe id="streamPreview" width="100%" height="300" src="hero images/uhd_30fps.mp4" frameborder="0" allowfullscreen style="border-radius: 10px;"></iframe>
-                        <p style="color: #ffffff; font-family: 'Poppins', sans-serif; margin-top: 10px;">Live Stream Preview (URL)</p>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <h3 style="color: #ffd700; font-family: 'Poppins', sans-serif; margin-bottom: 20px;">Embed Code Preview</h3>
-                    <div style="background: rgba(0, 0, 0, 0.3); border-radius: 10px; padding: 20px;">
-                        <div id="embedCodePreview" style="min-height: 200px; background: rgba(255, 255, 255, 0.1); border-radius: 5px; padding: 15px; color: #ffffff; font-family: 'Poppins', sans-serif;">
-                            <p style="text-align: center; opacity: 0.7;">Embed code preview will appear here</p>
-                        </div>
-                        <p style="color: #ffffff; font-family: 'Poppins', sans-serif; margin-top: 10px; text-align: center;">Custom Embed Code Preview</p>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <h3 style="color: #ffd700; font-family: 'Poppins', sans-serif; margin-bottom: 20px;">Stream Statistics</h3>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-number">1,247</div>
-                            <div class="stat-label">Current Viewers</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number">5,678</div>
-                            <div class="stat-label">Total Views Today</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number">98.5%</div>
-                            <div class="stat-label">Stream Uptime</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number">2.3s</div>
-                            <div class="stat-label">Average Latency</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <style>
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            backdrop-filter: blur(5px);
-        }
-
-        .modal-content {
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d1b69 50%, #8b0000 100%);
-            border-radius: 15px;
-            padding: 0;
-            max-width: 90%;
-            max-height: 90%;
-            overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 30px;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.3);
-            background: rgba(0, 0, 0, 0.3);
-        }
-
-        .modal-header h3 {
-            font-family: 'Poppins', sans-serif;
-            color: #ffd700;
-            margin: 0;
-            font-size: 1.5rem;
-        }
-
-        .close-modal {
-            background: none;
-            border: none;
-            font-size: 2rem;
-            color: #ffd700;
-            cursor: pointer;
-            padding: 0;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            transition: all 0.3s ease;
-        }
-
-        .close-modal:hover {
-            background: rgba(255, 215, 0, 0.2);
-            transform: scale(1.1);
-        }
-
-        .modal-body {
-            padding: 30px;
-            max-height: calc(90vh - 100px);
-            overflow-y: auto;
-        }
-
-        .form-group {
-            margin-bottom: 25px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            color: #ffffff;
-            font-family: 'Poppins', sans-serif;
-            font-weight: 500;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid rgba(255, 215, 0, 0.3);
-            border-radius: 8px;
-            background: rgba(0, 0, 0, 0.3);
-            color: #ffffff;
-            font-family: 'Poppins', sans-serif;
-            transition: all 0.3s ease;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: #ffd700;
-            box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
-        }
-
-        .form-textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        .save-btn {
-            background: linear-gradient(45deg, #ffd700, #ffed4e);
-            color: #1a1a1a;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 8px;
-            font-family: 'Poppins', sans-serif;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1rem;
-        }
-
-        .save-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .stat-card {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-            border: 1px solid rgba(255, 215, 0, 0.2);
-        }
-
-        .stat-number {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #ffd700;
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .stat-label {
-            color: #ffffff;
-            font-family: 'Poppins', sans-serif;
-            margin-top: 5px;
-            opacity: 0.8;
-        }
-    </style>
-
-    <script>
-        // Settings Modal Functions
-        function openSettingsModal() {
-            document.getElementById('settingsModal').style.display = 'flex';
-        }
-
-        function closeSettingsModal() {
-            document.getElementById('settingsModal').style.display = 'none';
-        }
-
-        // Load Game Settings Function
-        async function loadGameSettings() {
-            try {
-                const response = await fetch('https://reddy-anna-59l3.onrender.com/api/game/settings');
-                const result = await response.json();
-                
-                if (result.success) {
-                    const settings = result.data;
-                    
-                    // Update settings modal form fields with loaded values
-                    document.getElementById('settingsMaxBetAmount').value = settings.max_bet_amount?.value || '50000';
-                    document.getElementById('settingsMinBetAmount').value = settings.min_bet_amount?.value || '1000';
-                    document.getElementById('gameTimer').value = settings.game_timer?.value || '30';
-                    document.getElementById('openingCard').value = settings.opening_card?.value || 'A?';
-                    
-                    // Update the live betting range inputs as well
-                    document.getElementById('minBetAmount').value = settings.min_bet_amount?.value || '1000';
-                    document.getElementById('maxBetAmount').value = settings.max_bet_amount?.value || '50000';
-                    
-                    // Store settings globally for use in popups
-                    window.gameSettings = {
-                        maxBetAmount: parseInt(settings.max_bet_amount?.value || '50000'),
-                        minBetAmount: parseInt(settings.min_bet_amount?.value || '1000'),
-                        gameTimer: parseInt(settings.game_timer?.value || '30'),
-                        openingCard: settings.opening_card?.value || 'A?'
-                    };
-                    
-                    console.log('Game settings loaded successfully:', settings);
-                } else {
-                    console.error('Failed to load game settings:', result.message);
-                    showNotification('Failed to load game settings', 'error');
-                }
-            } catch (error) {
-                console.error('Error loading game settings:', error);
-                showNotification('Error loading game settings', 'error');
-            }
-        }
-
-        // Load Stream Settings Function
-        async function loadStreamSettings() {
-            try {
-                const response = await fetch('https://reddy-anna-59l3.onrender.com/api/game/stream-settings');
-                const result = await response.json();
-                
-                if (result.success) {
-                    const settings = result.data;
-                    
-                    // Update stream settings form fields with loaded values
-                    document.getElementById('streamUrl').value = settings.stream_url?.value || 'hero images/uhd_30fps.mp4';
-                    document.getElementById('streamTitle').value = settings.stream_title?.value || 'Andar Bahar Live Game';
-                    document.getElementById('streamStatus').value = settings.stream_status?.value || 'offline';
-                    document.getElementById('streamDescription').value = settings.stream_description?.value || '';
-                    document.getElementById('streamQuality').value = settings.stream_quality?.value || '720p';
-                    document.getElementById('streamDelay').value = settings.stream_delay?.value || '0';
-                    document.getElementById('backupStreamUrl').value = settings.backup_stream_url?.value || '';
-                    document.getElementById('streamEmbedCode').value = settings.stream_embed_code?.value || '';
-                    
-                    // Store stream settings globally
-                    window.streamSettings = {
-                        streamUrl: settings.stream_url?.value || 'hero images/uhd_30fps.mp4',
-                        streamTitle: settings.stream_title?.value || 'Andar Bahar Live Game',
-                        streamStatus: settings.stream_status?.value || 'offline',
-                        streamDescription: settings.stream_description?.value || '',
-                        streamQuality: settings.stream_quality?.value || '720p',
-                        streamDelay: settings.stream_delay?.value || '0',
-                        backupStreamUrl: settings.backup_stream_url?.value || '',
-                        streamEmbedCode: settings.stream_embed_code?.value || ''
-                    };
-                    
-                    // Update previews
-                    updateStreamPreviews();
-                    
-                    console.log('Stream settings loaded successfully:', settings);
-                } else {
-                    console.error('Failed to load stream settings:', result.message);
-                    showNotification('Failed to load stream settings', 'error');
-                }
-            } catch (error) {
-                console.error('Error loading stream settings:', error);
-                showNotification('Error loading stream settings', 'error');
-            }
-        }
-
-        // Save Game Settings Function
-        async function saveGameSettings() {
-            const maxBetAmount = document.getElementById('settingsMaxBetAmount').value;
-            const minBetAmount = document.getElementById('settingsMinBetAmount').value;
-            const gameTimer = document.getElementById('gameTimer').value;
-            const openingCard = document.getElementById('openingCard').value;
-            
-            console.log('Saving game settings with values:', {
-                maxBetAmount,
-                minBetAmount,
-                gameTimer,
-                openingCard
-            });
-            
-            // Validate inputs
-            if (!maxBetAmount || !minBetAmount || !gameTimer) {
-                showNotification('Please fill in all fields', 'error');
-                return;
-            }
-            
-            const maxBet = parseInt(maxBetAmount);
-            const minBet = parseInt(minBetAmount);
-            const timer = parseInt(gameTimer);
-            
-            if (isNaN(maxBet) || isNaN(minBet) || isNaN(timer)) {
-                showNotification('Please enter valid numbers', 'error');
-                return;
-            }
-            
-            if (minBet >= maxBet) {
+            if (minBetAmount >= maxBetAmount) {
                 showNotification('Minimum bet must be less than maximum bet', 'error');
                 return;
             }
             
-            if (timer < 10 || timer > 300) {
+            if (gameTimer < 10 || gameTimer > 300) {
                 showNotification('Game timer must be between 10 and 300 seconds', 'error');
                 return;
             }
             
             try {
-                const response = await fetch('https://reddy-anna-59l3.onrender.com/api/game/settings', {
+                showLoading(true);
+                
+                const response = await fetch(`${window.API_BASE_URL}/api/game/settings`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        max_bet_amount: maxBet,
-                        min_bet_amount: minBet,
-                        game_timer: timer,
-                        opening_card: openingCard
+                        min_bet_amount: minBetAmount,
+                        max_bet_amount: maxBetAmount,
+                        game_timer: gameTimer
                     })
                 });
                 
-                const result = await response.json();
-                
-                if (result.success) {
-                    showNotification('Game settings saved successfully!', 'success');
-                    console.log('Game settings saved:', result.data);
-                    
-                    // Update global settings
-                    window.gameSettings = {
-                        maxBetAmount: maxBet,
-                        minBetAmount: minBet,
-                        gameTimer: timer
-                    };
-                    
-                    // Update the live betting range inputs to match the saved settings
-                    document.getElementById('minBetAmount').value = minBet;
-                    document.getElementById('maxBetAmount').value = maxBet;
-                } else {
-                    showNotification(result.message || 'Failed to save game settings', 'error');
-                }
-            } catch (error) {
-                console.error('Error saving game settings:', error);
-                showNotification('Error saving game settings', 'error');
-            }
-        }
-
-        // Save Stream Settings Function
-        async function saveStreamSettings() {
-            const streamUrl = document.getElementById('streamUrl').value;
-            const streamTitle = document.getElementById('streamTitle').value;
-            const streamStatus = document.getElementById('streamStatus').value;
-            const streamDescription = document.getElementById('streamDescription').value;
-            const streamQuality = document.getElementById('streamQuality').value;
-            const streamDelay = document.getElementById('streamDelay').value;
-            const backupStreamUrl = document.getElementById('backupStreamUrl').value;
-            const streamEmbedCode = document.getElementById('streamEmbedCode').value;
-            
-            // Validate inputs
-            if (!streamUrl || !streamTitle || !streamStatus) {
-                showNotification('Please fill in all required fields (URL, Title, Status)', 'error');
-                return;
-            }
-            
-            console.log('Saving stream settings:', {
-                streamUrl,
-                streamTitle,
-                streamStatus,
-                streamDescription,
-                streamQuality,
-                streamDelay,
-                backupStreamUrl,
-                streamEmbedCode
-            });
-            
-            try {
-                const response = await fetch('https://reddy-anna-59l3.onrender.com/api/game/stream-settings', {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        stream_url: streamUrl,
-                        stream_title: streamTitle,
-                        stream_status: streamStatus,
-                        stream_description: streamDescription,
-                        stream_quality: streamQuality,
-                        stream_delay: streamDelay,
-                        backup_stream_url: backupStreamUrl,
-                        stream_embed_code: streamEmbedCode
-                    })
-                });
+                if (!response.ok) throw new Error('Failed to update game settings');
                 
                 const result = await response.json();
-                
                 if (result.success) {
-                    showNotification('Stream settings saved successfully!', 'success');
-                    console.log('Stream settings saved:', result.data);
-                    
-                    // Update global stream settings
-                    window.streamSettings = {
-                        streamUrl: streamUrl,
-                        streamTitle: streamTitle,
-                        streamStatus: streamStatus,
-                        streamDescription: streamDescription,
-                        streamQuality: streamQuality,
-                        streamDelay: streamDelay,
-                        backupStreamUrl: backupStreamUrl,
-                        streamEmbedCode: streamEmbedCode
-                    };
-                    
-                    // Update previews
-                    updateStreamPreviews();
-                } else {
-                    showNotification(result.message || 'Failed to save stream settings', 'error');
+                    showNotification('Game settings updated successfully', 'success');
                 }
             } catch (error) {
-                console.error('Error saving stream settings:', error);
-                showNotification('Error saving stream settings', 'error');
+                console.error('Error updating game settings:', error);
+                showNotification('Failed to update game settings', 'error');
+            } finally {
+                showLoading(false);
             }
         }
-
-        // Close modal when clicking outside
-        document.getElementById('settingsModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeSettingsModal();
+        
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionText');
+            
+            if (connected) {
+                statusElement.className = 'connection-status connected';
+                statusText.textContent = 'Connected';
+            } else {
+                statusElement.className = 'connection-status disconnected';
+                statusText.textContent = 'Disconnected';
             }
+        }
+        
+        function showLoading(show) {
+            // This is a simple implementation - you could add a loading overlay if needed
+            console.log(show ? 'Loading...' : 'Loading complete');
+        }
+        
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notificationContainer');
+            if (!container) return;
+
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.textContent = message;
+            container.appendChild(notification);
+            
+            setTimeout(() => notification.classList.add('show'), 10);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    if (container.contains(notification)) {
+                       container.removeChild(notification);
+                    }
+                }, 500);
+            }, 3000);
+        }
+        
+        // Clean up timer when page is unloaded
+        window.addEventListener('beforeunload', () => {
+            if (timerInterval) clearInterval(timerInterval);
         });
     </script>
 </body>
