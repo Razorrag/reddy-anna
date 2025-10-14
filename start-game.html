@@ -238,7 +238,7 @@
         /* Video Stream Section */
         .video-section {
             width: 100%;
-            height: 60vh; /* Increased from 50vh to 60vh */
+            height: 70vh; /* Balanced size for good visibility */
             background-color: #000;
             position: relative;
         }
@@ -448,7 +448,7 @@
             flex-direction: column;
             justify-content: space-between;
             align-items: stretch;
-            min-height: 220px;
+            min-height: 140px;
             padding: 1rem;
             text-align: center;
         }
@@ -813,40 +813,6 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Connection status indicator */
-        .connection-status {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .connection-status.connected {
-            background: rgba(39, 174, 96, 0.2);
-            color: #27ae60;
-            border: 1px solid #27ae60;
-        }
-
-        .connection-status.disconnected {
-            background: rgba(231, 76, 60, 0.2);
-            color: #e74c3c;
-            border: 1px solid #e74c3c;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: currentColor;
-            animation: pulse 2s infinite;
-        }
 
         /* --- KEY CHANGE: Mobile Responsiveness --- */
         @media (max-width: 768px) {
@@ -857,7 +823,7 @@
             .live-clock, .language-dropdown { display: none; } /* Hide some controls for simplicity */
 
             .video-section {
-                height: 45vh; /* Increased proportionally with desktop */
+                height: 50vh; /* Proportional to desktop 70vh */
             }
 
             .timer-overlay {
@@ -891,7 +857,7 @@
             }
             
             .betting-zone, .central-card-area {
-                min-height: 200px; /* Increased from 180px to 200px */
+                min-height: 160px; /* Proportional to desktop 140px */
                 padding: 1rem; /* Increased padding */
                 border-width: 2px;
                 gap: 0.8rem; /* Increased gap */
@@ -899,7 +865,7 @@
 
             /* Andar and Bahar zones can be slightly taller to use extra space */
             .betting-zone {
-                min-height: 210px; /* Slightly taller than center */
+                min-height: 170px; /* Slightly taller than center, proportional */
             }
 
             .selected-cards {
@@ -916,7 +882,7 @@
             /* Make central card area more compact */
             .central-card-area {
                 padding: 0.6rem; /* Reduced padding */
-                min-height: 160px; /* Reduced height to make it more compact */
+                min-height: 140px; /* Proportional to desktop height */
             }
             .selected-card { font-size: 0.8rem; padding: 5px; min-width: 30px; }
             
@@ -1123,7 +1089,6 @@
                         <span class="chip-text">Chip</span>
                     </div>
                     <button class="control-btn" onclick="rebetAndar()"><i class="fas fa-redo"></i><span>Rebet</span></button>
-                    <button class="control-btn" onclick="clearBets()"><i class="fas fa-times"></i><span>Clear</span></button>
                 </div>
             </div>
 
@@ -1145,11 +1110,6 @@
         <div class="loading-spinner"></div>
     </div>
 
-    <!-- Connection Status -->
-    <div id="connectionStatus" class="connection-status connected">
-        <div class="status-dot"></div>
-        <span id="connectionText">Connected</span>
-    </div>
 
     <script>
         // Global variables
@@ -1226,7 +1186,6 @@
             } catch (error) {
                 console.error('Error initializing game:', error);
                 showNotification('Failed to initialize game. Using offline mode.', 'warning');
-                updateConnectionStatus(false);
             } finally {
                 showLoading(false);
             }
@@ -1286,7 +1245,6 @@
                 }
             } catch (error) {
                 console.error('Error syncing with backend:', error);
-                updateConnectionStatus(false);
             }
         }
         
@@ -1449,18 +1407,6 @@
             }
         }
 
-        function updateConnectionStatus(connected) {
-            const statusElement = document.getElementById('connectionStatus');
-            const statusText = document.getElementById('connectionText');
-            
-            if (connected) {
-                statusElement.className = 'connection-status connected';
-                statusText.textContent = 'Connected';
-            } else {
-                statusElement.className = 'connection-status disconnected';
-                statusText.textContent = 'Disconnected';
-            }
-        }
 
         function showLoading(show) {
             const loadingIndicator = document.getElementById('loadingIndicator');
