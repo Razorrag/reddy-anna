@@ -185,24 +185,145 @@
             background: var(--secondary-black);
         }
 
-        .main-betting-areas {
+        .three-panel-layout {
             display: grid;
-            grid-template-columns: 1fr 200px 1fr;
+            grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
             width: 100%;
             max-width: 1100px;
-            align-items: center;
         }
 
-        .betting-zone {
+        .betting-panel {
             padding: 1rem;
             min-height: 220px;
+            border-radius: 15px;
+            border: 2px solid rgba(255, 215, 0, 0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: stretch;
         }
         
-        .central-card-area {
-            width: 100%;
-            height: 100%;
-            min-height: 220px;
+        .panel-top {
+            text-align: center;
+            padding-bottom: 0.5rem;
+        }
+        
+        .andar-panel {
+            background: linear-gradient(135deg, #8B0000, #A52A2A);
+        }
+        
+        .bahar-panel {
+            background: linear-gradient(135deg, #000080, #4169E1);
+        }
+        
+        .center-panel {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 3px solid var(--gold-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .betting-panel:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(255, 215, 0, 0.3);
+        }
+        
+        .panel-label {
+            font-family: var(--font-primary);
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--white);
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
+            letter-spacing: 2px;
+        }
+        
+        .panel-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            flex-grow: 1;
+        }
+        
+        .panel-bottom {
+            margin-top: auto;
+        }
+        
+        .bet-amount {
+            font-size: 1.8rem;
+            color: var(--gold-primary);
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .coin-image {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+        }
+        
+        .andar-coin {
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .bahar-coin {
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .card-image {
+            position: absolute;
+            width: 70px;
+            height: 100px;
+            object-fit: contain;
+        }
+        
+        .andar-card {
+            right: 20%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .bahar-card {
+            left: 20%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .central-card-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(255, 215, 0, 0.3);
+        }
+        
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 5px;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+        }
+        
+        .card-text {
+            font-family: 'Poppins', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #ffd700;
+            text-align: center;
         }
 
         .central-card-display {
@@ -270,21 +391,23 @@
                 font-size: 10px;
             }
 
-            .main-betting-areas {
-                grid-template-columns: 1fr 200px 1fr;
-                gap: 0.5rem;
+            .three-panel-layout {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+                gap: 0.75rem;
             }
 
-            .betting-zone {
+            .betting-panel {
                 min-height: 140px;
-                padding: 0.5rem;
+                padding: 0.75rem;
             }
             
-            .andar-zone-image, .bahar-zone-image {
+            .coin-image {
                 width: 40px;
                 height: 40px;
             }
-            .andar-zone-image-2, .bahar-zone-image-2 {
+            
+            .card-image {
                 width: 50px;
                 height: 70px;
             }
@@ -292,9 +415,13 @@
             .bet-amount {
                 font-size: 1.2rem;
             }
-
-            .central-card-area {
-                 min-height: 140px;
+            
+            .panel-label {
+                font-size: 12px;
+            }
+            
+            .center-panel {
+                min-height: 140px;
             }
             
             .game-interface {
@@ -308,10 +435,29 @@
             }
 
             .chip-selection {
-                gap: 5px;
-                padding: 0 10px;
+                gap: 8px;
+                padding: 10px;
                 width: 100%;
                 justify-content: space-between;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none; /* Hide scrollbar for Firefox */
+                -ms-overflow-style: none; /* Hide scrollbar for IE/Edge */
+            }
+            
+            .chip-selection::-webkit-scrollbar {
+                display: none; /* Hide scrollbar for Chrome/Safari */
+            }
+            
+            .chip-btn {
+                min-width: 60px;
+                min-height: 60px;
+                flex-shrink: 0;
+            }
+            
+            .chip-image {
+                width: 50px;
+                height: 50px;
             }
 
             .control-btn span {
@@ -418,39 +564,39 @@
             </div>
 
             <!-- Main Betting Area -->
-            <div class="main-betting-areas">
-                <!-- ANDAR ZONE -->
-                <div class="betting-zone andar-zone" id="andarZone">
-                    <div class="zone-content1">
-                        <div class="zone-text1">
-                            <div class="zone-label1">ANDAR 1:1</div>
-                        </div>
+            <div class="three-panel-layout">
+                <!-- ANDAR PANEL -->
+                <div class="betting-panel andar-panel" id="andarZone">
+                    <div class="panel-top">
+                        <div class="panel-label">ANDAR 1:1</div>
                     </div>
-                    <img src="coins/Select Coins.png" alt="Andar Chip" class="andar-zone-image">
-                    <img src="cards/D7.png" alt="Andar Card" class="andar-zone-image-2">
-                    <div class="zone-bottom">
+                    <div class="panel-content">
+                        <img src="coins/Select Coins.png" alt="Andar Chip" class="coin-image andar-coin">
+                        <img src="cards/D7.png" alt="Andar Card" class="card-image andar-card">
+                    </div>
+                    <div class="panel-bottom">
                         <div class="bet-amount" id="andarBet">₹0</div>
                     </div>
                 </div>
 
-                <!-- CENTRAL CARD AREA -->
-                <div class="central-card-area">
+                <!-- CENTER PANEL - OPENING CARD -->
+                <div class="betting-panel center-panel">
                     <div class="central-card-display" id="centralCardDisplay">
                         <div class="card-icon">🃏</div>
                         <div class="card-text">Opening Card</div>
                     </div>
                 </div>
 
-                <!-- BAHAR ZONE -->
-                <div class="betting-zone bahar-zone" id="baharZone">
-                    <div class="zone-content2">
-                        <div class="zone-text2">
-                            <div class="zone-label2">BAHAR 1:1</div>
-                        </div>
+                <!-- BAHAR PANEL -->
+                <div class="betting-panel bahar-panel" id="baharZone">
+                    <div class="panel-top">
+                        <div class="panel-label">BAHAR 1:1</div>
                     </div>
-                    <img src="coins/Select Coins.png" alt="Bahar Chip" class="bahar-zone-image">
-                    <img src="cards/DQ.png" alt="Bahar Card" class="bahar-zone-image-2">
-                    <div class="zone-bottom">
+                    <div class="panel-content">
+                        <img src="coins/Select Coins.png" alt="Bahar Chip" class="coin-image bahar-coin">
+                        <img src="cards/DQ.png" alt="Bahar Card" class="card-image bahar-card">
+                    </div>
+                    <div class="panel-bottom">
                         <div class="bet-amount" id="baharBet">₹0</div>
                     </div>
                 </div>
