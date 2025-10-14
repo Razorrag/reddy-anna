@@ -1588,7 +1588,6 @@ html {
 .stage-cta { display:flex; gap:12px; margin-top:14px; }
 
 @media (max-width: 900px){
-  .game-stage{ grid-template-columns: 1fr; }
   .stage-video video{ height: 300px; }
 }
 
