@@ -12,7 +12,6 @@
         html, body {
             height: 100%;
             margin: 0;
-            overflow: hidden; /* Prevent body scroll */
             background-color: var(--primary-black);
         }
 
@@ -41,20 +40,7 @@
             flex-grow: 1;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
             position: relative;
-        }
-        
-        .timer-bar {
-            background-color: var(--primary-black);
-            padding: 0.5rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-shrink: 0;
-            border-bottom: 2px solid var(--gold-primary);
-            position: relative;
-            z-index: 50;
         }
 
         /* Video Stream Section */
@@ -71,7 +57,40 @@
             object-fit: cover;
         }
 
-        .video-overlay {
+        /* Circular Timer */
+        .circular-timer-container {
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
+            background-color: var(--primary-black);
+            border-bottom: 2px solid var(--gold-primary);
+        }
+
+        .circular-timer {
+            position: relative;
+            width: 120px;
+            height: 120px;
+        }
+
+        .timer-background {
+            fill: none;
+            stroke: var(--accent-black);
+            stroke-width: 8;
+        }
+
+        .timer-progress {
+            fill: none;
+            stroke: var(--gold-primary);
+            stroke-width: 8;
+            stroke-linecap: round;
+            transform: rotate(-90deg);
+            transform-origin: 60px 60px;
+            stroke-dasharray: 339.292;
+            stroke-dashoffset: 0;
+            transition: stroke-dashoffset 1s linear;
+        }
+
+        .timer-content {
             position: absolute;
             top: 0;
             left: 0;
@@ -79,30 +98,86 @@
             height: 100%;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            padding: 1rem;
-            background: linear-gradient(to top, rgba(0,0,0,0.5), transparent 50%, rgba(0,0,0,0.3));
+            justify-content: center;
+            align-items: center;
         }
 
-        .game-header-ingame {
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .timer-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--gold-primary);
+            line-height: 1;
         }
-        
-        .stream-controls {
-            width: 100%;
+
+        .round-info {
+            font-size: 12px;
+            color: var(--white);
+            margin-top: 5px;
+        }
+
+        /* Wallet Dropdown */
+        .wallet-dropdown {
+            position: relative;
+        }
+
+        .wallet-btn {
+            background: var(--accent-black);
+            border: 1px solid var(--gold-primary);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--gold-primary);
+            cursor: pointer;
+            transition: all 0.3s ease;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .wallet-btn:hover {
+            background: var(--secondary-black);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+        }
+
+        .wallet-content {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 10px;
+            background: var(--accent-black);
+            border: 1px solid var(--gold-primary);
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 180px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: none;
+        }
+
+        .wallet-content.show {
+            display: block;
+        }
+
+        .wallet-info {
+            text-align: center;
+        }
+
+        .wallet-label {
+            font-size: 14px;
+            color: var(--gray-light);
+            margin-bottom: 5px;
+        }
+
+        .wallet-amount {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--gold-primary);
         }
 
         /* Game Content Section */
         .game-interface {
             flex-grow: 1;
             padding: 1.5rem 1rem;
-            overflow-y: auto;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -178,6 +253,23 @@
                 height: 40vh;
             }
 
+            .circular-timer-container {
+                padding: 15px 0;
+            }
+
+            .circular-timer {
+                width: 100px;
+                height: 100px;
+            }
+
+            .timer-value {
+                font-size: 24px;
+            }
+
+            .round-info {
+                font-size: 10px;
+            }
+
             .main-betting-areas {
                 grid-template-columns: 1fr 100px 1fr;
                 gap: 0.5rem;
@@ -208,11 +300,6 @@
             .game-interface {
                 padding: 1rem;
                 gap: 1rem;
-            }
-
-            .game-timer {
-                font-size: 1.2rem;
-                padding: 0.5rem 1rem;
             }
 
             .chip-image {
@@ -248,7 +335,7 @@
         <nav class="navbar">
             <div class="nav-container">
                 <div class="logo">
-                    <h1>Reddy Anna Kossu</h1>
+                    <h1 id="userIdDisplay">1308544430</h1>
                 </div>
                 
                 <div class="nav-menu">
@@ -262,6 +349,17 @@
                 </div>
                 
                 <div class="nav-controls">
+                    <div class="wallet-dropdown" id="walletDropdown">
+                        <button class="wallet-btn" id="walletBtn">
+                            <i class="fas fa-wallet"></i>
+                        </button>
+                        <div class="wallet-content" id="walletContent">
+                            <div class="wallet-info">
+                                <div class="wallet-label">Balance</div>
+                                <div class="wallet-amount" id="walletBalance">₹50,00,423.90</div>
+                            </div>
+                        </div>
+                    </div>
                     <div id="liveClock" class="live-clock"></div>
                     <div class="language-selector">
                         <select id="languageSelect" class="language-dropdown">
@@ -287,37 +385,19 @@
             <video id="liveStream" autoplay muted loop playsinline>
                 <source src="hero images/uhd_30fps.mp4" type="video/mp4">
             </video>
-            <div class="video-overlay">
-                <div class="game-header-ingame">
-                    <button class="back-btn" onclick="window.location.href='game.html'">
-                        <i class="fas fa-arrow-left"></i>
-                        <span>Back</span>
-                    </button>
-                    <div class="game-status">
-                        <div class="live-indicator">
-                            <div class="live-dot"></div>
-                            <span>LIVE</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="stream-controls">
-                    <button class="play-pause-btn" id="playPauseBtn">
-                        <i class="fas fa-play"></i>
-                    </button>
-                    <div class="stream-info">
-                        <span class="live-badge">LIVE</span>
-                        <span class="viewer-count">1,234 viewers</span>
-                    </div>
-                </div>
-            </div>
         </div>
 
-        <!-- Timer Bar -->
-        <div class="timer-bar">
-            <div class="game-timer">
-                <i class="fas fa-clock"></i>
-                <span id="gameTimer">30</span>s
-                <div class="round-info" id="roundInfo">Round 1</div>
+        <!-- Circular Timer -->
+        <div class="circular-timer-container">
+            <div class="circular-timer">
+                <svg width="120" height="120">
+                    <circle class="timer-background" cx="60" cy="60" r="54"></circle>
+                    <circle class="timer-progress" id="timerProgress" cx="60" cy="60" r="54"></circle>
+                </svg>
+                <div class="timer-content">
+                    <div class="timer-value" id="gameTimer">30</div>
+                    <div class="round-info" id="roundInfo">Round 1</div>
+                </div>
             </div>
         </div>
 
@@ -417,41 +497,10 @@
                         <i class="fas fa-redo"></i>
                         <span>Rebet</span>
                     </button>
-                    <button class="control-btn" onclick="refreshAllSettings()" title="Refresh All Settings">
-                        <i class="fas fa-sync-alt"></i>
-                        <span>Refresh</span>
-                    </button>
-                    <button class="control-btn" onclick="refreshGameSettings()" title="Refresh Game Settings">
-                        <i class="fas fa-cog"></i>
-                        <span>Settings</span>
-                    </button>
                     <img src="coins/Select Coins.png" alt="" class="select-coins" onclick="showcoins()">
                 </div>
             </div>
 
-            <!-- Player Info -->
-            <div class="player-info">
-                <div class="info-left">
-                    <div class="info-item">
-                        <span class="label">ID</span>
-                        <span class="value">1308544430</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Balance</span>
-                        <span class="value balance">₹50,00,423.90</span>
-                    </div>
-                </div>
-                <div class="info-right">
-                    <div class="info-item">
-                        <span class="label">Total Bet</span>
-                        <span class="value">₹ 0</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Last Win</span>
-                        <span class="value">₹ 0</span>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -496,14 +545,62 @@
             }
         }
 
+        // Load user ID from localStorage and display in header
+        function loadUserId() {
+            const userIdDisplay = document.getElementById('userIdDisplay');
+            const walletBalance = document.getElementById('walletBalance');
+            
+            // Try to get user ID from localStorage
+            let userId = localStorage.getItem('userId');
+            if (!userId) {
+                // Fallback to a default ID if not found
+                userId = '1308544430';
+                localStorage.setItem('userId', userId);
+            }
+            
+            // Try to get user balance from localStorage
+            let balance = localStorage.getItem('userBalance');
+            if (!balance) {
+                balance = '5000423.90';
+                localStorage.setItem('userBalance', balance);
+            }
+            
+            // Update the display elements
+            if (userIdDisplay) userIdDisplay.textContent = userId;
+            if (walletBalance) walletBalance.textContent = `₹${parseFloat(balance).toLocaleString('en-IN')}`;
+        }
+
+        // Setup wallet dropdown functionality
+        function setupWalletDropdown() {
+            const walletBtn = document.getElementById('walletBtn');
+            const walletContent = document.getElementById('walletContent');
+            
+            if (walletBtn && walletContent) {
+                walletBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    walletContent.classList.toggle('show');
+                });
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function() {
+                    walletContent.classList.remove('show');
+                });
+                
+                walletContent.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+        }
+
         // Initialize game
         document.addEventListener('DOMContentLoaded', function() {
+            loadUserId();
+            setupWalletDropdown();
             loadGameSettings();
             loadStreamSettings();
             loadGameState();
             setupChipSelection();
             setupBettingZones();
-            setupLiveStream();
             updateClock();
             setInterval(updateClock, 1000);
             
@@ -590,6 +687,7 @@
                     if (newGameState.currentTimer !== gameTimer) {
                         gameTimer = newGameState.currentTimer;
                         document.getElementById('gameTimer').textContent = gameTimer;
+                        updateCircularTimer();
                         
                         if ((newGameState.phase === 'round1' || newGameState.phase === 'round2') && newGameState.bettingOpen) {
                             if (!timerInterval) startGameTimer();
@@ -767,6 +865,7 @@
                 
                 gameTimer = window.gameSettings.gameTimer;
                 document.getElementById('gameTimer').textContent = gameTimer;
+                updateCircularTimer();
                 updateCentralCard(window.gameSettings.openingCard);
                 displayBetLimits();
             } catch (error) {
@@ -798,16 +897,20 @@
         }
 
         function displayBetLimits() {
+            // Since we removed the stream-info element, we'll create a bet limits display
+            // in the circular timer container
             let betLimitsDiv = document.getElementById('betLimitsDisplay');
             if (!betLimitsDiv) {
                 betLimitsDiv = document.createElement('div');
                 betLimitsDiv.id = 'betLimitsDisplay';
                 betLimitsDiv.style.cssText = `
                     background: rgba(0, 0, 0, 0.8); color: white; padding: 5px 12px;
-                    border-radius: 20px; font-size: 12px; border: 1px solid #ffd700;`;
-                const streamInfo = document.querySelector('.stream-info');
-                if (streamInfo) {
-                    streamInfo.appendChild(betLimitsDiv);
+                    border-radius: 20px; font-size: 12px; border: 1px solid #ffd700;
+                    position: absolute; top: 10px; right: 10px; z-index: 10;`;
+                const timerContainer = document.querySelector('.circular-timer-container');
+                if (timerContainer) {
+                    timerContainer.style.position = 'relative';
+                    timerContainer.appendChild(betLimitsDiv);
                 }
             }
             betLimitsDiv.textContent = `Min: ₹${window.gameSettings.minBetAmount} | Max: ₹${window.gameSettings.maxBetAmount}`;
@@ -839,10 +942,19 @@
                     </video>
                 `;
             }
-            const overlayContent = videoSection.querySelector('.video-overlay').outerHTML;
-            videoSection.innerHTML = streamContent + overlayContent;
+            videoSection.innerHTML = streamContent;
+        }
 
-            setupLiveStream();
+        function updateCircularTimer() {
+            const timerProgress = document.getElementById('timerProgress');
+            if (!timerProgress) return;
+            
+            const maxTime = window.gameSettings ? window.gameSettings.gameTimer : 30;
+            const percentage = gameTimer / maxTime;
+            const circumference = 2 * Math.PI * 54; // radius = 54
+            const offset = circumference * (1 - percentage);
+            
+            timerProgress.style.strokeDashoffset = offset;
         }
 
         function startGameTimer() {
@@ -850,6 +962,7 @@
             timerInterval = setInterval(() => {
                 gameTimer--;
                 document.getElementById('gameTimer').textContent = gameTimer;
+                updateCircularTimer();
                 if (gameTimer <= 0) {
                     bettingOpen = false;
                     clearInterval(timerInterval);
@@ -910,11 +1023,11 @@
         function updateBetDisplay() {
             document.getElementById('andarBet').textContent = `₹${andarBet}`;
             document.getElementById('baharBet').textContent = `₹${baharBet}`;
-            document.querySelector('.info-right .value').textContent = `₹ ${andarBet + baharBet}`;
         }
 
         function updateBalanceDisplay() {
-            document.querySelector('.balance').textContent = `₹${playerBalance.toFixed(2)}`;
+            document.getElementById('walletBalance').textContent = `₹${playerBalance.toLocaleString('en-IN')}`;
+            localStorage.setItem('userBalance', playerBalance.toString());
         }
 
         function showHistory() { showNotification('Game history will be displayed here', 'info'); }
@@ -935,20 +1048,6 @@
 
         function rebetAndar() { showNotification('Rebet functionality coming soon!', 'info'); }
 
-        function setupLiveStream() {
-            const video = document.getElementById('liveStream');
-            if (!video) return;
-
-            const playPauseBtn = document.getElementById('playPauseBtn');
-            const playIcon = playPauseBtn.querySelector('i');
-            
-            const setPlayIcon = () => { playIcon.className = video.paused ? 'fas fa-play' : 'fas fa-pause'; };
-            
-            playPauseBtn.addEventListener('click', () => video.paused ? video.play() : video.pause());
-            video.addEventListener('play', setPlayIcon);
-            video.addEventListener('pause', setPlayIcon);
-            setPlayIcon();
-        }
 
         function showNotification(message, type = 'info') {
             const container = document.getElementById('notificationContainer');
