@@ -71,12 +71,17 @@ export const query = async (table, actionOrOptions, options = {}) => {
     }
     
     if (result.error) {
+      // Check if it's a table doesn't exist error
+      if (result.error.code === 'PGRST116' || result.error.message.includes('relation') && result.error.message.includes('does not exist')) {
+        console.error(`Table ${table} does not exist. Please run database initialization.`);
+        throw new Error(`Table ${table} does not exist`);
+      }
       throw new Error(result.error.message);
     }
     
     return result.data || [];
   } catch (error) {
-    console.error(`Database query error:`, error);
+    console.error(`Database query error for table ${table}:`, error.message);
     throw error;
   }
 };

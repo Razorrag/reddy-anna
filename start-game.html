@@ -7,6 +7,240 @@
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* Page specific styles for the game page */
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden; /* Prevent body scroll */
+            background-color: var(--primary-black);
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            flex-shrink: 0;
+            position: relative; /* Let it be part of the flow */
+            z-index: 100;
+        }
+        
+        .live-clock {
+            color: var(--gold-primary);
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: var(--accent-black);
+            border: 1px solid var(--gold-primary);
+        }
+
+        .game-body {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .timer-bar {
+            background-color: var(--primary-black);
+            padding: 0.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-shrink: 0;
+            border-bottom: 2px solid var(--gold-primary);
+            position: relative;
+            z-index: 50;
+        }
+
+        /* Video Stream Section */
+        .video-section {
+            width: 100%;
+            height: 50vh; /* 50% of the viewport height */
+            background-color: #000;
+            position: relative;
+        }
+
+        .video-section video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1rem;
+            background: linear-gradient(to top, rgba(0,0,0,0.5), transparent 50%, rgba(0,0,0,0.3));
+        }
+
+        .game-header-ingame {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .stream-controls {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Game Content Section */
+        .game-interface {
+            flex-grow: 1;
+            padding: 1.5rem 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            background: var(--secondary-black);
+        }
+
+        .main-betting-areas {
+            display: grid;
+            grid-template-columns: 1fr 200px 1fr;
+            gap: 1rem;
+            width: 100%;
+            max-width: 1100px;
+            align-items: center;
+        }
+
+        .betting-zone {
+            padding: 1rem;
+            min-height: 220px;
+        }
+        
+        .central-card-area {
+            width: 100%;
+            height: 100%;
+            min-height: 220px;
+        }
+
+        .central-card-display {
+            position: relative;
+            transform: none;
+            left: auto;
+            top: auto;
+            width: 100%;
+            height: 100%;
+        }
+
+        .bottom-controls-wrapper {
+            width: 100%;
+            max-width: 1100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        
+        .chip-selection {
+            display: flex; /* Now controlled by a button */
+        }
+        
+        .game-controls {
+            position: relative;
+            bottom: auto; left: auto; right: auto;
+        }
+
+        .player-info {
+            width: 100%;
+            max-width: 1100px;
+            position: relative;
+            bottom: auto; left: auto; right: auto;
+        }
+        
+        .recent-results {
+            position: relative;
+            top: auto; left: auto; right: auto;
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .live-clock {
+                display: none;
+            }
+            .video-section {
+                height: 40vh;
+            }
+
+            .main-betting-areas {
+                grid-template-columns: 1fr 100px 1fr;
+                gap: 0.5rem;
+            }
+
+            .betting-zone {
+                min-height: 140px;
+                padding: 0.5rem;
+            }
+            
+            .andar-zone-image, .bahar-zone-image {
+                width: 40px;
+                height: 40px;
+            }
+            .andar-zone-image-2, .bahar-zone-image-2 {
+                width: 50px;
+                height: 70px;
+            }
+            
+            .bet-amount {
+                font-size: 1.2rem;
+            }
+
+            .central-card-area {
+                 min-height: 140px;
+            }
+            
+            .game-interface {
+                padding: 1rem;
+                gap: 1rem;
+            }
+
+            .game-timer {
+                font-size: 1.2rem;
+                padding: 0.5rem 1rem;
+            }
+
+            .chip-image {
+                width: 40px;
+                height: 40px;
+            }
+
+            .chip-selection {
+                gap: 5px;
+                padding: 0 10px;
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .control-btn span {
+                font-size: 10px;
+            }
+            .control-btn i {
+                font-size: 16px;
+            }
+            .control-btn {
+                padding: 10px;
+                gap: 5px;
+                min-width: 60px;
+            }
+        }
+
+    </style>
 </head>
 <body>
     <!-- Header -->
@@ -28,6 +262,7 @@
                 </div>
                 
                 <div class="nav-controls">
+                    <div id="liveClock" class="live-clock"></div>
                     <div class="language-selector">
                         <select id="languageSelect" class="language-dropdown">
                             <option value="en">English</option>
@@ -46,17 +281,18 @@
         </nav>
     </header>
 
-    <!-- Start Game Section -->
-    <section class="start-game-section">
-        <div class="container">
-            <div class="start-game-container">
-                <!-- 1. Header (Back button, title, live indicator) -->
-                <div class="game-header">
+    <div class="game-body">
+        <!-- 1. Video Stream Section -->
+        <div class="video-section">
+            <video id="liveStream" autoplay muted loop playsinline>
+                <source src="hero images/uhd_30fps.mp4" type="video/mp4">
+            </video>
+            <div class="video-overlay">
+                <div class="game-header-ingame">
                     <button class="back-btn" onclick="window.location.href='game.html'">
                         <i class="fas fa-arrow-left"></i>
-                        <span>Back to Room</span>
+                        <span>Back</span>
                     </button>
-                    <h2>Andar Bahar - Live Game</h2>
                     <div class="game-status">
                         <div class="live-indicator">
                             <div class="live-dot"></div>
@@ -64,119 +300,110 @@
                         </div>
                     </div>
                 </div>
+                <div class="stream-controls">
+                    <button class="play-pause-btn" id="playPauseBtn">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <div class="stream-info">
+                        <span class="live-badge">LIVE</span>
+                        <span class="viewer-count">1,234 viewers</span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                <!-- Live Stream Box -->
-                <div class="live-stream-box">
-                    <div class="stream-container">
-                        <div class="stream-video">
-                            <video id="liveStream" autoplay muted loop playsinline>
-                                <source src="hero images/uhd_30fps.mp4" type="video/mp4">
-                            </video>
-                            <div class="stream-overlay"></div>
-                            <div class="stream-controls">
-                                <button class="play-pause-btn" id="playPauseBtn">
-                                    <i class="fas fa-play"></i>
-                                </button>
-                                <div class="stream-info">
-                                    <span class="live-badge">LIVE</span>
-                                    <span class="viewer-count">1,234 viewers</span>
-                                </div>
-                            </div>
+        <!-- Timer Bar -->
+        <div class="timer-bar">
+            <div class="game-timer">
+                <i class="fas fa-clock"></i>
+                <span id="gameTimer">30</span>s
+                <div class="round-info" id="roundInfo">Round 1</div>
+            </div>
+        </div>
+
+        <!-- 2. Game Interface Wrapper (scrollable) -->
+        <div class="game-interface">
+            <!-- Recent Results -->
+            <div class="recent-results">
+                <div class="result-chip red">2</div>
+                <div class="result-chip blue">9</div>
+                <div class="result-chip blue">3</div>
+                <div class="result-chip red">K</div>
+                <div class="result-chip red">6</div>
+                <div class="result-chip blue">9</div>
+                <div class="result-chip red">6</div>
+                <div class="result-chip blue">10</div>
+                <div class="result-chip red">6</div>
+                <div class="result-chip red">5</div>
+            </div>
+
+            <!-- Main Betting Area -->
+            <div class="main-betting-areas">
+                <!-- ANDAR ZONE -->
+                <div class="betting-zone andar-zone" id="andarZone">
+                    <div class="zone-content1">
+                        <div class="zone-text1">
+                            <div class="zone-label1">ANDAR 1:1</div>
                         </div>
+                    </div>
+                    <img src="coins/Select Coins.png" alt="Andar Chip" class="andar-zone-image">
+                    <img src="cards/D7.png" alt="Andar Card" class="andar-zone-image-2">
+                    <div class="zone-bottom">
+                        <div class="bet-amount" id="andarBet">₹0</div>
                     </div>
                 </div>
 
-                <!-- 3. Circular Timer with Round Number -->
-                <div class="circular-timer-container">
-                    <div class="game-timer">
-                        <i class="fas fa-clock"></i>
-                        <span id="gameTimer">30</span>s
-                        <div class="round-info" id="roundInfo">Round 1</div>
+                <!-- CENTRAL CARD AREA -->
+                <div class="central-card-area">
+                    <div class="central-card-display" id="centralCardDisplay">
+                        <div class="card-icon">🃏</div>
+                        <div class="card-text">Opening Card</div>
                     </div>
                 </div>
 
-                <!-- 4. Main betting area container -->
-                <div class="betting-interface">
-                    <div class="main-betting-areas">
-                        <!-- ANDAR ZONE -->
-                        <div class="betting-zone andar-zone" id="andarZone">
-                            <div class="zone-content1">
-                                <div class="zone-text1">
-                                    <div class="zone-label1">ANDAR 1:1</div>
-                                </div>
-                            </div>
-                            <img src="coins/Select Coins.png" alt="Andar Image" class="andar-zone-image">
-                            <img src="cards/D7.png" alt="Andar Image 2" class="andar-zone-image-2">
-                            <div class="zone-bottom">
-                                <div class="bet-amount" id="andarBet">₹0</div>
-                            </div>
-                        </div>
-
-                        <!-- CENTRAL CARD AREA -->
-                        <div class="central-card-area">
-                            <div class="central-card-display" id="centralCardDisplay">
-                                <div class="card-icon">🃏</div>
-                                <div class="card-text">Select Opening Card</div>
-                            </div>
-                        </div>
-
-                        <!-- BAHAR ZONE -->
-                        <div class="betting-zone bahar-zone" id="baharZone">
-                            <div class="zone-content2">
-                                <div class="zone-text2">
-                                    <div class="zone-label2">BAHAR 1:1</div>
-                                </div>
-                            </div>
-                            <img src="coins/Select Coins.png" alt="Bahar Image" class="bahar-zone-image">
-                            <img src="cards/DQ.png" alt="Bahar Image 2" class="bahar-zone-image-2">
-                            <div class="zone-bottom">
-                                <div class="bet-amount" id="baharBet">₹0</div>
-                            </div>
+                <!-- BAHAR ZONE -->
+                <div class="betting-zone bahar-zone" id="baharZone">
+                    <div class="zone-content2">
+                        <div class="zone-text2">
+                            <div class="zone-label2">BAHAR 1:1</div>
                         </div>
                     </div>
-                </div>
-
-                <!-- 5. Chip Selection (Scrollable horizontal list) -->
-                <div class="coins-container">
-                    <div class="chip-selection-section">
-                        <div class="chip-selection">
-                            <button class="chip-btn" data-amount="100000" onclick="updateshowcoins(event)">
-                                <img src="coins/100000.png" alt="₹100000" class="chip-image">
-                                <span class="chip-amount">₹100000</span>
-                            </button>
-                            <button class="chip-btn" data-amount="50000" onclick="updateshowcoins(event)">
-                                <img src="coins/50000.png" alt="₹50000" class="chip-image">
-                                <span class="chip-amount">₹50000</span>
-                            </button>
-                            <button class="chip-btn" data-amount="40000" onclick="updateshowcoins(event)">
-                                <img src="coins/40000.png" alt="₹40000" class="chip-image">
-                                <span class="chip-amount">₹40000</span>
-                            </button>
-                            <button class="chip-btn" data-amount="30000" onclick="updateshowcoins(event)">
-                                <img src="coins/30000.png" alt="₹30000" class="chip-image">
-                                <span class="chip-amount">₹30000</span>
-                            </button>
-                            <button class="chip-btn" data-amount="20000" onclick="updateshowcoins(event)">
-                                <img src="coins/20000.png" alt="₹20000" class="chip-image">
-                                <span class="chip-amount">₹20000</span>
-                            </button>
-                            <button class="chip-btn" data-amount="10000" onclick="updateshowcoins(event)">
-                                <img src="coins/10000.png" alt="₹10000" class="chip-image">
-                                <span class="chip-amount">₹10000</span>
-                            </button>
-                            <button class="chip-btn" data-amount="5000" onclick="updateshowcoins(event)">
-                                <img src="coins/5000.png" alt="₹5000" class="chip-image">
-                                <span class="chip-amount">₹5000</span>
-                            </button>
-                            <button class="chip-btn" data-amount="2500" onclick="updateshowcoins(event)">
-                                <img src="coins/2500.png" alt="₹2500" class="chip-image">
-                                <span class="chip-amount">₹2500</span>
-                            </button>
-                        </div>
+                    <img src="coins/Select Coins.png" alt="Bahar Chip" class="bahar-zone-image">
+                    <img src="cards/DQ.png" alt="Bahar Card" class="bahar-zone-image-2">
+                    <div class="zone-bottom">
+                        <div class="bet-amount" id="baharBet">₹0</div>
                     </div>
                 </div>
+            </div>
 
-                <!-- 6. Game Controls (Below everything) -->
+            <!-- Bottom Controls -->
+            <div class="bottom-controls-wrapper">
+                 <div class="chip-selection">
+                    <button class="chip-btn" data-amount="100000" onclick="updateshowcoins(event)">
+                        <img src="coins/100000.png" alt="₹100000" class="chip-image">
+                    </button>
+                    <button class="chip-btn" data-amount="50000" onclick="updateshowcoins(event)">
+                        <img src="coins/50000.png" alt="₹50000" class="chip-image">
+                    </button>
+                    <button class="chip-btn" data-amount="40000" onclick="updateshowcoins(event)">
+                        <img src="coins/40000.png" alt="₹40000" class="chip-image">
+                    </button>
+                    <button class="chip-btn" data-amount="30000" onclick="updateshowcoins(event)">
+                        <img src="coins/30000.png" alt="₹30000" class="chip-image">
+                    </button>
+                    <button class="chip-btn" data-amount="20000" onclick="updateshowcoins(event)">
+                        <img src="coins/20000.png" alt="₹20000" class="chip-image">
+                    </button>
+                    <button class="chip-btn" data-amount="10000" onclick="updateshowcoins(event)">
+                        <img src="coins/10000.png" alt="₹10000" class="chip-image">
+                    </button>
+                    <button class="chip-btn" data-amount="5000" onclick="updateshowcoins(event)">
+                        <img src="coins/5000.png" alt="₹5000" class="chip-image">
+                    </button>
+                    <button class="chip-btn" data-amount="2500" onclick="updateshowcoins(event)">
+                        <img src="coins/2500.png" alt="₹2500" class="chip-image">
+                    </button>
+                </div>
                 <div class="game-controls">
                     <button class="control-btn" onclick="showHistory()">
                         <i class="fas fa-history"></i>
@@ -190,60 +417,43 @@
                         <i class="fas fa-redo"></i>
                         <span>Rebet</span>
                     </button>
-                    
                     <button class="control-btn" onclick="refreshAllSettings()" title="Refresh All Settings">
                         <i class="fas fa-sync-alt"></i>
                         <span>Refresh</span>
                     </button>
-                    
                     <button class="control-btn" onclick="refreshGameSettings()" title="Refresh Game Settings">
                         <i class="fas fa-cog"></i>
                         <span>Settings</span>
                     </button>
-                    
                     <img src="coins/Select Coins.png" alt="" class="select-coins" onclick="showcoins()">
                 </div>
+            </div>
 
-                <!-- Recent Results -->
-                <div class="recent-results">
-                    <div class="result-chip red">2</div>
-                    <div class="result-chip blue">9</div>
-                    <div class="result-chip blue">3</div>
-                    <div class="result-chip red">K</div>
-                    <div class="result-chip red">6</div>
-                    <div class="result-chip blue">9</div>
-                    <div class="result-chip red">6</div>
-                    <div class="result-chip blue">10</div>
-                    <div class="result-chip red">6</div>
-                    <div class="result-chip red">5</div>
-                </div>
-
-                <!-- 7. Player Info (Bottom) -->
-                <div class="player-info">
-                    <div class="info-left">
-                        <div class="info-item">
-                            <span class="label">ID</span>
-                            <span class="value">1308544430</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Balance</span>
-                            <span class="value balance">₹50,00,423.90</span>
-                        </div>
+            <!-- Player Info -->
+            <div class="player-info">
+                <div class="info-left">
+                    <div class="info-item">
+                        <span class="label">ID</span>
+                        <span class="value">1308544430</span>
                     </div>
-                    <div class="info-right">
-                        <div class="info-item">
-                            <span class="label">Total Bet</span>
-                            <span class="value">₹ 0 USD</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Last Win</span>
-                            <span class="value">₹ 0 USD</span>
-                        </div>
+                    <div class="info-item">
+                        <span class="label">Balance</span>
+                        <span class="value balance">₹50,00,423.90</span>
+                    </div>
+                </div>
+                <div class="info-right">
+                    <div class="info-item">
+                        <span class="label">Total Bet</span>
+                        <span class="value">₹ 0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Last Win</span>
+                        <span class="value">₹ 0</span>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
 
 
     <!-- Notification Container -->
@@ -277,6 +487,15 @@
         let gameState = null;
         let currentGameId = null;
 
+        function updateClock() {
+            const clockElement = document.getElementById('liveClock');
+            if (clockElement) {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+                clockElement.textContent = timeString;
+            }
+        }
+
         // Initialize game
         document.addEventListener('DOMContentLoaded', function() {
             loadGameSettings();
@@ -285,6 +504,8 @@
             setupChipSelection();
             setupBettingZones();
             setupLiveStream();
+            updateClock();
+            setInterval(updateClock, 1000);
             
             // Periodic refresh of game settings every 10 seconds
             setInterval(() => {
@@ -301,33 +522,6 @@
             setInterval(() => {
                 loadBettingAmounts();
             }, 2000);
-            
-            // Fallback: if stream settings don't load within 3 seconds, show default video
-            setTimeout(() => {
-                if (!window.streamSettings) {
-                    console.log('Stream settings not loaded, using default video');
-                    const streamContainer = document.querySelector('.stream-video');
-                    if (streamContainer && !streamContainer.innerHTML.trim()) {
-                        streamContainer.innerHTML = `
-                            <video id="liveStream" autoplay muted loop playsinline>
-                                <source src="hero images/uhd_30fps.mp4" type="video/mp4">
-                                Your browser does not support the video tag.
-                            </video>
-                            <div class="stream-overlay"></div>
-                            <div class="stream-controls" style="opacity: 0;">
-                                <button class="play-pause-btn" id="playPauseBtn">
-                                    <i class="fas fa-pause"></i>
-                                </button>
-                                <div class="stream-info">
-                                    <span class="live-badge">OFFLINE</span>
-                                    <span class="viewer-count">1,234 viewers</span>
-                                </div>
-                            </div>
-                        `;
-                        setupLiveStream();
-                    }
-                }
-            }, 3000);
         });
 
         // Refresh bet limits when page becomes visible
@@ -339,16 +533,6 @@
             }
         });
 
-        // Periodic refresh of bet limits (every 5 seconds)
-        setInterval(() => {
-            if (window.gameSettings) {
-                const existingDisplay = document.getElementById('betLimitsDisplay');
-                if (!existingDisplay) {
-                    displayBetLimits();
-                }
-            }
-        }, 5000);
-
         // Load betting amounts from backend
         async function loadBettingAmounts() {
             try {
@@ -359,15 +543,12 @@
                 if (result.success) {
                     const bettingData = result.data;
                     
-                    // Check if game is in waiting phase (new game or reset)
                     if (bettingData.phase === 'waiting') {
-                        // Clear betting display for new game
                         clearBettingAmountsDisplay();
                         clearRoundInformation();
                         return;
                     }
                     
-                    // Update betting display based on current round
                     if (bettingData.phase === 'round1' && bettingData.round1Bets) {
                         updateBettingDisplay(bettingData.round1Bets, 'Round 1');
                     } else if (bettingData.phase === 'round2' && bettingData.round2Bets) {
@@ -379,42 +560,13 @@
             }
         }
 
-        // Update betting display on player page
         function updateBettingDisplay(bettingAmounts, round) {
-            // Update Andar bet display
-            const andarBetElement = document.getElementById('andarBet');
-            if (andarBetElement) {
-                andarBetElement.textContent = `₹${bettingAmounts.andar}`;
-            }
-            
-            // Update Bahar bet display
-            const baharBetElement = document.getElementById('baharBet');
-            if (baharBetElement) {
-                baharBetElement.textContent = `₹${bettingAmounts.bahar}`;
-            }
-            
-            // Show round information
-            const timerElement = document.getElementById('gameTimer');
-            if (timerElement && timerElement.parentElement) {
-                const roundInfo = timerElement.parentElement.querySelector('.round-info');
-                if (!roundInfo) {
-                    const roundInfoDiv = document.createElement('div');
-                    roundInfoDiv.className = 'round-info';
-                    roundInfoDiv.style.cssText = `
-                        color: #ffd700;
-                        font-size: 0.9rem;
-                        margin-top: 5px;
-                        font-family: 'Poppins', sans-serif;
-                    `;
-                    roundInfoDiv.textContent = round;
-                    timerElement.parentElement.appendChild(roundInfoDiv);
-                } else {
-                    roundInfo.textContent = round;
-                }
-            }
+            document.getElementById('andarBet').textContent = `₹${bettingAmounts.andar}`;
+            document.getElementById('baharBet').textContent = `₹${bettingAmounts.bahar}`;
+            const roundInfo = document.getElementById('roundInfo');
+            if(roundInfo) roundInfo.textContent = round;
         }
 
-        // Load game state from API
         async function loadGameState() {
             try {
                 const API_BASE_URL = window.API_BASE_URL;
@@ -423,49 +575,34 @@
                 
                 if (result.success) {
                     const newGameState = result.data;
-                    
-                    // Check if this is a completely new game (different gameId or reset)
                     const isNewGame = !gameState || newGameState.gameId !== currentGameId;
                     const isGameReset = newGameState.phase === 'waiting' && gameState && gameState.phase !== 'waiting';
                     
                     if (isNewGame || isGameReset) {
-                        // Clear all previous game state and UI
                         clearAllPlayerGameState();
-                        
-                        // Update to new game state
                         gameState = newGameState;
                         currentGameId = newGameState.gameId;
-                        
                         console.log('New game detected - clearing previous state');
                     }
                     
-                    // Update game display
                     updateGameDisplay();
                     
-                    // Update timer if it's different
                     if (newGameState.currentTimer !== gameTimer) {
                         gameTimer = newGameState.currentTimer;
                         document.getElementById('gameTimer').textContent = gameTimer;
                         
-                        // Start timer if game is active and betting is open
                         if ((newGameState.phase === 'round1' || newGameState.phase === 'round2') && newGameState.bettingOpen) {
-                            if (!timerInterval) {
-                                startGameTimer();
-                            }
+                            if (!timerInterval) startGameTimer();
                         } else if (!newGameState.bettingOpen && timerInterval) {
-                            // Stop timer if betting is closed
                             clearInterval(timerInterval);
                             timerInterval = null;
                         }
                     }
                     
-                    // Update betting status from backend
                     bettingOpen = newGameState.bettingOpen;
                     
-                    // Check for winner
                     if (newGameState.winner && newGameState.phase === 'completed') {
                         showWinnerNotification(newGameState.winner);
-                        // Stop timer when game is completed
                         if (timerInterval) {
                             clearInterval(timerInterval);
                             timerInterval = null;
@@ -477,649 +614,255 @@
             }
         }
 
-        // Update game display based on current state
         function updateGameDisplay() {
             if (!gameState) return;
             
-            // Update opening card display
             if (gameState.openingCard) {
                 updateCentralCard(gameState.openingCard);
             } else {
-                // Clear opening card display if no card is set
                 clearCentralCardDisplay();
             }
-            
-            // Update selected cards display
             updateSelectedCardsDisplay();
         }
 
-        // Clear central card display
         function clearCentralCardDisplay() {
             const centralCardDisplay = document.getElementById('centralCardDisplay');
             if (centralCardDisplay) {
                 const cardIcon = centralCardDisplay.querySelector('.card-icon');
                 const cardText = centralCardDisplay.querySelector('.card-text');
-                
                 if (cardIcon && cardText) {
                     cardIcon.textContent = '🃏';
-                    cardText.textContent = 'Select Opening Card';
+                    cardText.textContent = 'Opening Card';
                 }
             }
         }
 
-        // Clear all player game state and UI elements
         function clearAllPlayerGameState() {
-            // Stop any running timer
             if (timerInterval) {
                 clearInterval(timerInterval);
                 timerInterval = null;
             }
-            
-            // Reset timer display
             gameTimer = 0;
             document.getElementById('gameTimer').textContent = gameTimer;
-            
-            // Reset betting status
             bettingOpen = false;
-            
-            // Clear central card display
             clearCentralCardDisplay();
-            
-            // Clear selected cards display
             clearSelectedCardsDisplay();
-            
-            // Clear betting amounts display
             clearBettingAmountsDisplay();
-            
-            // Clear round information
             clearRoundInformation();
-            
-            // Clear any winner notifications
             clearWinnerNotifications();
-            
-            // Clear winner effects and animations
             clearWinnerEffects();
-            
-            // Reset local betting variables
             andarBet = 0;
             baharBet = 0;
             betHistory = [];
             updateBetDisplay();
-            
             console.log('All player game state cleared');
         }
 
-        // Clear selected cards display
         function clearSelectedCardsDisplay() {
-            // Clear Andar cards display
             const andarZone = document.getElementById('andarZone');
             if (andarZone) {
                 const existingCards = andarZone.querySelector('.selected-cards');
-                if (existingCards) {
-                    existingCards.remove();
-                }
+                if (existingCards) existingCards.remove();
             }
-            
-            // Clear Bahar cards display
             const baharZone = document.getElementById('baharZone');
             if (baharZone) {
                 const existingCards = baharZone.querySelector('.selected-cards');
-                if (existingCards) {
-                    existingCards.remove();
-                }
+                if (existingCards) existingCards.remove();
             }
         }
 
-        // Clear betting amounts display
         function clearBettingAmountsDisplay() {
-            // Reset betting amounts to 0
-            const andarBetElement = document.getElementById('andarBet');
-            if (andarBetElement) {
-                andarBetElement.textContent = '₹0';
-            }
-            
-            const baharBetElement = document.getElementById('baharBet');
-            if (baharBetElement) {
-                baharBetElement.textContent = '₹0';
-            }
+            document.getElementById('andarBet').textContent = '₹0';
+            document.getElementById('baharBet').textContent = '₹0';
         }
 
-        // Clear round information
         function clearRoundInformation() {
-            const timerElement = document.getElementById('gameTimer');
-            if (timerElement && timerElement.parentElement) {
-                const roundInfo = timerElement.parentElement.querySelector('.round-info');
-                if (roundInfo) {
-                    roundInfo.remove();
-                }
-            }
+            const roundInfo = document.getElementById('roundInfo');
+            if (roundInfo) roundInfo.textContent = '';
         }
 
-        // Clear winner notifications
         function clearWinnerNotifications() {
-            // Remove any existing winner notifications
             const notifications = document.querySelectorAll('.notification');
             notifications.forEach(notification => {
                 if (notification.textContent.includes('WINS') || notification.textContent.includes('WINNER')) {
                     notification.remove();
                 }
             });
-            
-            // Remove any game completion popups
-            const gameCompletionPopups = document.querySelectorAll('.game-completion-popup');
-            gameCompletionPopups.forEach(popup => {
-                popup.remove();
-            });
+            const popups = document.querySelectorAll('.game-completion-popup');
+            popups.forEach(popup => popup.remove());
         }
 
-        // Update central card display
         function updateCentralCard(card) {
             const centralCardDisplay = document.getElementById('centralCardDisplay');
             if (centralCardDisplay) {
                 const cardIcon = centralCardDisplay.querySelector('.card-icon');
                 const cardText = centralCardDisplay.querySelector('.card-text');
-                
                 if (cardIcon && cardText) {
-                    // Set the card icon based on suit
                     const suit = card.slice(-1);
                     let icon = '🃏';
-                    
                     switch(suit) {
                         case '♠': icon = '♠️'; break;
                         case '♥': icon = '♥️'; break;
                         case '♦': icon = '♦️'; break;
                         case '♣': icon = '♣️'; break;
                     }
-                    
                     cardIcon.textContent = icon;
                     cardText.textContent = card;
                 }
             }
         }
 
-        // Update selected cards display
         function updateSelectedCardsDisplay() {
             if (!gameState || !gameState.selectedCards) return;
-            
-            // Update Andar cards
-            const andarCards = gameState.selectedCards.andar || [];
-            const andarZone = document.getElementById('andarZone');
-            if (andarZone) {
-                // Remove existing cards display
-                const existingCards = andarZone.querySelector('.selected-cards');
-                if (existingCards) {
-                    existingCards.remove();
-                }
-                
-                // Add new cards display if there are cards
-                if (andarCards.length > 0) {
-                    let cardsHtml = '<div class="selected-cards">';
-                    andarCards.forEach(card => {
-                        cardsHtml += `<div class="selected-card">${card}</div>`;
-                    });
-                    cardsHtml += '</div>';
-                    andarZone.insertAdjacentHTML('beforeend', cardsHtml);
+
+            function updateZone(zoneId, cards) {
+                const zone = document.getElementById(zoneId);
+                if (zone) {
+                    let existingCards = zone.querySelector('.selected-cards');
+                    if (existingCards) existingCards.remove();
+                    if (cards.length > 0) {
+                        let cardsHtml = '<div class="selected-cards">';
+                        cards.forEach(card => {
+                            cardsHtml += `<div class="selected-card">${card}</div>`;
+                        });
+                        cardsHtml += '</div>';
+                        zone.insertAdjacentHTML('beforeend', cardsHtml);
+                    }
                 }
             }
-            
-            // Update Bahar cards
-            const baharCards = gameState.selectedCards.bahar || [];
-            const baharZone = document.getElementById('baharZone');
-            if (baharZone) {
-                // Remove existing cards display
-                const existingCards = baharZone.querySelector('.selected-cards');
-                if (existingCards) {
-                    existingCards.remove();
-                }
-                
-                // Add new cards display if there are cards
-                if (baharCards.length > 0) {
-                    let cardsHtml = '<div class="selected-cards">';
-                    baharCards.forEach(card => {
-                        cardsHtml += `<div class="selected-card">${card}</div>`;
-                    });
-                    cardsHtml += '</div>';
-                    baharZone.insertAdjacentHTML('beforeend', cardsHtml);
-                }
-            }
+            updateZone('andarZone', gameState.selectedCards.andar || []);
+            updateZone('baharZone', gameState.selectedCards.bahar || []);
         }
 
-        // Show winner notification
         function showWinnerNotification(winner) {
             const message = `🎉 ${winner.toUpperCase()} WINS! 🎉`;
             showNotification(message, 'success');
-            
-            // Add visual effect
             const winnerZone = document.getElementById(winner + 'Zone');
             if (winnerZone) {
                 winnerZone.style.animation = 'winnerPulse 2s ease-in-out 3';
             }
         }
 
-        // Clear winner animations and effects
         function clearWinnerEffects() {
-            // Remove winner pulse animations
             const andarZone = document.getElementById('andarZone');
             const baharZone = document.getElementById('baharZone');
-            
-            if (andarZone) {
-                andarZone.style.animation = '';
-            }
-            if (baharZone) {
-                baharZone.style.animation = '';
-            }
+            if (andarZone) andarZone.style.animation = '';
+            if (baharZone) baharZone.style.animation = '';
         }
 
-        // Load game settings from API
         async function loadGameSettings() {
             try {
                 const API_BASE_URL = window.API_BASE_URL;
                 const response = await fetch(`${API_BASE_URL}/api/game/settings`);
                 const result = await response.json();
                 
-                if (result.success) {
-                    const settings = result.data;
-                    console.log('Raw settings from API:', settings);
-                    
-                    // Update global variables with loaded settings
-                    window.gameSettings = {
-                        maxBetAmount: parseInt(settings.max_bet_amount?.value || '50000'),
-                        minBetAmount: parseInt(settings.min_bet_amount?.value || '1000'),
-                        gameTimer: parseInt(settings.game_timer?.value || '30'),
-                        openingCard: settings.opening_card?.value || 'A♠'
-                    };
-                    
-                    console.log('Processed game settings:', window.gameSettings);
-                    
-                    // Update the timer display
-                    gameTimer = window.gameSettings.gameTimer;
-                    document.getElementById('gameTimer').textContent = gameTimer;
-                    
-                    // Update the central card display
-                    updateCentralCard();
-                    
-                    // Display min/max bet amounts below the stream video
-                    setTimeout(() => {
-                        displayBetLimits();
-                    }, 500);
-                    
-                    console.log('Game settings loaded:', window.gameSettings);
-                } else {
-                    console.error('Failed to load game settings:', result.message);
-                    // Use default values
-                    window.gameSettings = {
-                        maxBetAmount: 50000,
-                        minBetAmount: 1000,
-                        gameTimer: 30
-                    };
-                    setTimeout(() => {
-                        displayBetLimits();
-                    }, 500);
-                }
+                let settingsData = result.success ? result.data : {};
+                
+                window.gameSettings = {
+                    maxBetAmount: parseInt(settingsData.max_bet_amount?.value || '50000'),
+                    minBetAmount: parseInt(settingsData.min_bet_amount?.value || '1000'),
+                    gameTimer: parseInt(settingsData.game_timer?.value || '30'),
+                    openingCard: settingsData.opening_card?.value || 'A♠'
+                };
+                
+                gameTimer = window.gameSettings.gameTimer;
+                document.getElementById('gameTimer').textContent = gameTimer;
+                updateCentralCard(window.gameSettings.openingCard);
+                displayBetLimits();
             } catch (error) {
                 console.error('Error loading game settings:', error);
-                // Use default values
-                window.gameSettings = {
-                    maxBetAmount: 50000,
-                    minBetAmount: 1000,
-                    gameTimer: 30
-                };
-                setTimeout(() => {
-                    displayBetLimits();
-                }, 500);
-            }
-        }
-
-        // Load stream settings from API
-        async function loadStreamSettings() {
-            try {
-                console.log('Loading stream settings from API...');
-                const API_BASE_URL = window.API_BASE_URL;
-                const response = await fetch(`${API_BASE_URL}/api/game/stream-settings`);
-                const result = await response.json();
-                
-                if (result.success) {
-                    const settings = result.data;
-                    console.log('Raw stream settings from API:', settings);
-                    
-                    // Update global stream settings
-                    window.streamSettings = {
-                        streamUrl: settings.stream_url?.value || 'hero images/uhd_30fps.mp4',
-                        streamTitle: settings.stream_title?.value || 'Andar Bahar Live Game',
-                        streamStatus: settings.stream_status?.value || 'offline',
-                        streamDescription: settings.stream_description?.value || '',
-                        streamQuality: settings.stream_quality?.value || '720p',
-                        streamDelay: settings.stream_delay?.value || '0',
-                        backupStreamUrl: settings.backup_stream_url?.value || '',
-                        streamEmbedCode: settings.stream_embed_code?.value || ''
-                    };
-                    
-                    console.log('Processed stream settings:', window.streamSettings);
-                    
-                    // Update the stream display based on settings
-                    setTimeout(() => {
-                        updateStreamDisplay();
-                    }, 500);
-                    
-                    console.log('Stream settings loaded successfully');
-                } else {
-                    console.error('Failed to load stream settings:', result.message);
-                    // Use default values
-                    window.streamSettings = {
-                        streamUrl: 'hero images/uhd_30fps.mp4',
-                        streamTitle: 'Andar Bahar Live Game',
-                        streamStatus: 'offline',
-                        streamDescription: '',
-                        streamQuality: '720p',
-                        streamDelay: '0',
-                        backupStreamUrl: '',
-                        streamEmbedCode: ''
-                    };
-                    setTimeout(() => {
-                        updateStreamDisplay();
-                    }, 500);
-                }
-            } catch (error) {
-                console.error('Error loading stream settings:', error);
-                // Use default values
-                window.streamSettings = {
-                    streamUrl: 'hero images/uhd_30fps.mp4',
-                    streamTitle: 'Andar Bahar Live Game',
-                    streamStatus: 'offline',
-                    streamDescription: '',
-                    streamQuality: '720p',
-                    streamDelay: '0',
-                    backupStreamUrl: '',
-                    streamEmbedCode: ''
-                };
-                setTimeout(() => {
-                    updateStreamDisplay();
-                }, 500);
-            }
-        }
-
-        // Display bet limits below stream video
-        function displayBetLimits() {
-            console.log('Displaying bet limits:', window.gameSettings);
-            
-            // Remove existing bet limits display if any
-            const existingDisplay = document.getElementById('betLimitsDisplay');
-            if (existingDisplay) {
-                existingDisplay.remove();
-            }
-            
-            // Create bet limits display
-            const betLimitsDiv = document.createElement('div');
-            betLimitsDiv.id = 'betLimitsDisplay';
-            betLimitsDiv.style.cssText = `
-                position: absolute;
-                bottom: 10px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: rgba(0, 0, 0, 0.8);
-                color: white;
-                padding: 8px 16px;
-                border-radius: 20px;
-                font-family: 'Poppins', sans-serif;
-                font-size: 12px;
-                z-index: 1000;
-                border: 1px solid #ffd700;
-            `;
-            betLimitsDiv.textContent = `Min: ₹${window.gameSettings.minBetAmount} | Max: ₹${window.gameSettings.maxBetAmount}`;
-            
-            // Add to live stream box
-            const liveStreamBox = document.querySelector('.live-stream-box');
-            console.log('Live stream box found:', liveStreamBox);
-            
-            if (liveStreamBox) {
-                liveStreamBox.style.position = 'relative';
-                liveStreamBox.appendChild(betLimitsDiv);
-                console.log('Bet limits display added successfully');
-            } else {
-                console.error('Live stream box not found');
-                // Fallback: add to body
-                document.body.appendChild(betLimitsDiv);
-                betLimitsDiv.style.position = 'fixed';
-                betLimitsDiv.style.top = '100px';
-                betLimitsDiv.style.left = '50%';
-                betLimitsDiv.style.transform = 'translateX(-50%)';
-            }
-        }
-
-        // Function to refresh bet limits display (can be called externally)
-        function refreshBetLimits() {
-            if (window.gameSettings) {
+                window.gameSettings = { maxBetAmount: 50000, minBetAmount: 1000, gameTimer: 30 };
                 displayBetLimits();
             }
         }
 
-        // Function to refresh all settings (game and stream)
+        async function loadStreamSettings() {
+            try {
+                const API_BASE_URL = window.API_BASE_URL;
+                const response = await fetch(`${API_BASE_URL}/api/game/stream-settings`);
+                const result = await response.json();
+                
+                let settingsData = result.success ? result.data : {};
+
+                window.streamSettings = {
+                    streamUrl: settingsData.stream_url?.value || 'hero images/uhd_30fps.mp4',
+                    streamEmbedCode: settingsData.stream_embed_code?.value || '',
+                    streamStatus: settingsData.stream_status?.value || 'offline',
+                };
+                updateStreamDisplay();
+            } catch (error) {
+                console.error('Error loading stream settings:', error);
+                window.streamSettings = { streamUrl: 'hero images/uhd_30fps.mp4', streamEmbedCode: '', streamStatus: 'offline' };
+                updateStreamDisplay();
+            }
+        }
+
+        function displayBetLimits() {
+            let betLimitsDiv = document.getElementById('betLimitsDisplay');
+            if (!betLimitsDiv) {
+                betLimitsDiv = document.createElement('div');
+                betLimitsDiv.id = 'betLimitsDisplay';
+                betLimitsDiv.style.cssText = `
+                    background: rgba(0, 0, 0, 0.8); color: white; padding: 5px 12px;
+                    border-radius: 20px; font-size: 12px; border: 1px solid #ffd700;`;
+                const streamInfo = document.querySelector('.stream-info');
+                if (streamInfo) {
+                    streamInfo.appendChild(betLimitsDiv);
+                }
+            }
+            betLimitsDiv.textContent = `Min: ₹${window.gameSettings.minBetAmount} | Max: ₹${window.gameSettings.maxBetAmount}`;
+        }
+        
         async function refreshAllSettings() {
-            console.log('Refreshing all settings...');
             await loadGameSettings();
             await loadStreamSettings();
             showNotification('All settings refreshed!', 'success');
         }
 
-        // Function to refresh only game settings
         async function refreshGameSettings() {
-            console.log('Refreshing game settings...');
             await loadGameSettings();
             showNotification('Game settings refreshed!', 'success');
         }
-
-
-        // Update central card display
-        function updateCentralCard() {
-            console.log('updateCentralCard called with:', window.gameSettings);
-            
-            if (!window.gameSettings || !window.gameSettings.openingCard) {
-                console.log('No game settings or opening card available');
-                return;
-            }
-            
-            const centralCardDisplay = document.getElementById('centralCardDisplay');
-            console.log('Central card display element:', centralCardDisplay);
-            
-            if (centralCardDisplay) {
-                const cardIcon = centralCardDisplay.querySelector('.card-icon');
-                const cardText = centralCardDisplay.querySelector('.card-text');
-                
-                console.log('Card icon element:', cardIcon);
-                console.log('Card text element:', cardText);
-                
-                if (cardIcon && cardText) {
-                    // Set the card icon based on suit
-                    const suit = window.gameSettings.openingCard.slice(-1);
-                    let icon = '🃏';
-                    
-                    switch(suit) {
-                        case '♠': icon = '♠️'; break;
-                        case '♥': icon = '♥️'; break;
-                        case '♦': icon = '♦️'; break;
-                        case '♣': icon = '♣️'; break;
-                    }
-                    
-                    cardIcon.textContent = icon;
-                    cardText.textContent = window.gameSettings.openingCard;
-                    
-                    console.log('Updated central card to:', window.gameSettings.openingCard, 'with icon:', icon);
-                } else {
-                    console.log('Card icon or text elements not found');
-                }
-            } else {
-                console.log('Central card display element not found');
-            }
-        }
-
-        // Update stream display based on settings
+        
         function updateStreamDisplay() {
-            console.log('Updating stream display:', window.streamSettings);
-            
-            if (!window.streamSettings) {
-                console.log('No stream settings available yet');
-                return;
-            }
-            
-            const streamContainer = document.querySelector('.stream-video');
-            
-            if (!streamContainer) {
-                console.error('Stream container not found, retrying in 1 second...');
-                setTimeout(updateStreamDisplay, 1000);
-                return;
-            }
-            
-            console.log('Stream container found, updating content...');
-            
-            // Clear existing content
-            streamContainer.innerHTML = '';
-            
+            const videoSection = document.querySelector('.video-section');
+            if (!videoSection) return;
+
+            let streamContent = '';
             if (window.streamSettings.streamStatus === 'live' && window.streamSettings.streamEmbedCode) {
-                // Show embed code for live status
-                console.log('Displaying live embed code');
-                streamContainer.innerHTML = `
-                    <div style="position: relative; width: 100%; height: 100%;">
-                        ${window.streamSettings.streamEmbedCode}
-                        <div class="stream-overlay"></div>
-                        <div class="stream-controls" style="opacity: 0;">
-                            <div class="stream-info">
-                                <span class="live-badge">LIVE</span>
-                                <span class="viewer-count">1,234 viewers</span>
-                            </div>
-                        </div>
-                        <div id="iframe-error" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; text-align: center;">
-                            <h3>Stream Unavailable</h3>
-                            <p>Unable to load live stream. Please check the embed code or try again later.</p>
-                            <button onclick="updateStreamDisplay()" style="background: #ffd700; color: black; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Retry</button>
-                        </div>
-                    </div>
-                `;
-                
-                // Add error handling for iframe
-                setTimeout(() => {
-                    const iframe = streamContainer.querySelector('iframe');
-                    if (iframe) {
-                        iframe.onerror = () => {
-                            const errorDiv = document.getElementById('iframe-error');
-                            if (errorDiv) errorDiv.style.display = 'block';
-                        };
-                    }
-                }, 1000);
+                 streamContent = window.streamSettings.streamEmbedCode;
             } else {
-                // Show video from Live Stream URL for offline/maintenance status
-                console.log('Displaying offline video from Live Stream URL:', window.streamSettings.streamUrl);
-                
-                // Check if it's a YouTube URL that needs to be converted to embed format
-                let videoSource = window.streamSettings.streamUrl;
-                let isYouTubeEmbed = false;
-                
-                if (videoSource.includes('youtu.be/') || videoSource.includes('youtube.com/watch')) {
-                    // Convert YouTube URL to embed format
-                    let videoId = '';
-                    if (videoSource.includes('youtu.be/')) {
-                        videoId = videoSource.split('youtu.be/')[1].split('?')[0];
-                    } else if (videoSource.includes('youtube.com/watch')) {
-                        videoId = videoSource.split('v=')[1].split('&')[0];
-                    }
-                    
-                    if (videoId) {
-                        videoSource = `https://www.youtube.com/embed/${videoId}`;
-                        isYouTubeEmbed = true;
-                        console.log('Converted YouTube URL to embed format:', videoSource);
-                    }
-                }
-                
-                if (isYouTubeEmbed) {
-                    // Show as iframe for YouTube URLs
-                    streamContainer.innerHTML = `
-                        <div style="position: relative; width: 100%; height: 100%;">
-                            <iframe width="100%" height="100%" src="${videoSource}" frameborder="0" allowfullscreen></iframe>
-                            <div class="stream-overlay"></div>
-                            <div class="stream-controls" style="opacity: 0;">
-                                <div class="stream-info">
-                                    <span class="live-badge">${window.streamSettings.streamStatus.toUpperCase()}</span>
-                                    <span class="viewer-count">1,234 viewers</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    // Show as video element for local files or other video URLs
-                    streamContainer.innerHTML = `
-                        <video id="liveStream" autoplay muted loop playsinline>
-                            <source src="${videoSource}" type="video/mp4">
-                            Your browser does not support the video tag.
-                        </video>
-                        <div class="stream-overlay"></div>
-                        <div class="stream-controls" style="opacity: 0;">
-                            <button class="play-pause-btn" id="playPauseBtn">
-                                <i class="fas fa-pause"></i>
-                            </button>
-                            <div class="stream-info">
-                                <span class="live-badge">${window.streamSettings.streamStatus.toUpperCase()}</span>
-                                <span class="viewer-count">1,234 viewers</span>
-                            </div>
-                        </div>
-                    `;
-                    
-                    // Re-setup the live stream controls after a short delay
-                    setTimeout(() => {
-                        setupLiveStream();
-                    }, 100);
-                }
+                let videoSource = window.streamSettings.streamUrl || 'hero images/uhd_30fps.mp4';
+                streamContent = `
+                    <video id="liveStream" autoplay muted loop playsinline>
+                        <source src="${videoSource}" type="video/mp4">
+                    </video>
+                `;
             }
+            const overlayContent = videoSection.querySelector('.video-overlay').outerHTML;
+            videoSection.innerHTML = streamContent + overlayContent;
+
+            setupLiveStream();
         }
 
         function startGameTimer() {
-            // Make cards grid inactive during timer
-            setCardsGridActive(false);
-            
+            if (timerInterval) clearInterval(timerInterval);
             timerInterval = setInterval(() => {
                 gameTimer--;
                 document.getElementById('gameTimer').textContent = gameTimer;
-                
                 if (gameTimer <= 0) {
                     bettingOpen = false;
                     clearInterval(timerInterval);
                     timerInterval = null;
-                    // Make cards grid active when timer ends
-                    setCardsGridActive(true);
-                    showNotification('Betting closed! Game round starting...', 'warning');
+                    showNotification('Betting closed!', 'warning');
                 }
             }, 1000);
         }
 
-        // Function to control cards grid active/inactive state
-        function setCardsGridActive(isActive) {
-            const cardsGrid = document.getElementById('openingCardsGrid');
-            if (cardsGrid) {
-                const cardButtons = cardsGrid.querySelectorAll('.card-btn');
-                
-                cardButtons.forEach(button => {
-                    if (isActive) {
-                        button.disabled = false;
-                        button.style.opacity = '1';
-                        button.style.cursor = 'pointer';
-                        button.style.pointerEvents = 'auto';
-                    } else {
-                        button.disabled = true;
-                        button.style.opacity = '0.5';
-                        button.style.cursor = 'not-allowed';
-                        button.style.pointerEvents = 'none';
-                    }
-                });
-                
-                console.log('Cards grid set to:', isActive ? 'active' : 'inactive');
-            }
-        }
-
         function setupChipSelection() {
-            const chipButtons = document.querySelectorAll('.chip-btn');
-            chipButtons.forEach(chip => {
+            document.querySelectorAll('.chip-btn').forEach(chip => {
                 chip.addEventListener('click', () => {
-                    // Remove active class from all chips
-                    chipButtons.forEach(c => c.classList.remove('active'));
-                    // Add active class to selected chip
+                    document.querySelectorAll('.chip-btn').forEach(c => c.classList.remove('active'));
                     chip.classList.add('active');
                     selectedChip = parseInt(chip.dataset.amount);
                 });
@@ -1127,105 +870,54 @@
         }
 
         function setupBettingZones() {
-            const andarZone = document.getElementById('andarZone');
-            const baharZone = document.getElementById('baharZone');
+            ['andarZone', 'baharZone'].forEach(zoneId => {
+                document.getElementById(zoneId).addEventListener('click', () => {
+                    if (!bettingOpen) {
+                        showNotification('Betting is closed!', 'error');
+                        return;
+                    }
+                    if (selectedChip <= 0) {
+                        showNotification('Please select a chip amount', 'error');
+                        return;
+                    }
 
-            andarZone.addEventListener('click', () => {
-                if (!bettingOpen) {
-                    showNotification('Betting is closed! Wait for next round.', 'error');
-                    return;
-                }
-                
-                if (selectedChip > 0) {
-                    // Validate bet amount against min/max limits
-                    const totalBet = andarBet + selectedChip;
-                    if (totalBet > window.gameSettings.maxBetAmount) {
-                        showNotification(`Maximum bet amount is ₹${window.gameSettings.maxBetAmount}`, 'error');
+                    let currentBet = zoneId === 'andarZone' ? andarBet : baharBet;
+                    if (currentBet + selectedChip > window.gameSettings.maxBetAmount) {
+                         showNotification(`Maximum bet is ₹${window.gameSettings.maxBetAmount}`, 'error');
+                        return;
+                    }
+
+                    if (playerBalance < selectedChip) {
+                        showNotification('Insufficient balance!', 'error');
                         return;
                     }
                     
-                    if (selectedChip < window.gameSettings.minBetAmount) {
-                        showNotification(`Minimum bet amount is ₹${window.gameSettings.minBetAmount}`, 'error');
-                        return;
-                    }
+                    betHistory.push({ andarBet, baharBet, balance: playerBalance });
+                    playerBalance -= selectedChip;
                     
-                    if (playerBalance >= selectedChip) {
-                        // Save previous state for undo
-                        betHistory.push({
-                            andarBet: andarBet,
-                            baharBet: baharBet,
-                            balance: playerBalance
-                        });
-                        
+                    if (zoneId === 'andarZone') {
                         andarBet += selectedChip;
-                        playerBalance -= selectedChip;
-                        updateBetDisplay();
-                        updateBalanceDisplay();
-                        showNotification(`Added ₹${selectedChip} to Andar`, 'success');
                     } else {
-                        showNotification('Insufficient balance!', 'error');
-                    }
-                } else {
-                    showNotification('Please select a chip amount first', 'error');
-                }
-            });
-
-            baharZone.addEventListener('click', () => {
-                if (!bettingOpen) {
-                    showNotification('Betting is closed! Wait for next round.', 'error');
-                    return;
-                }
-                
-                if (selectedChip > 0) {
-                    // Validate bet amount against min/max limits
-                    const totalBet = baharBet + selectedChip;
-                    if (totalBet > window.gameSettings.maxBetAmount) {
-                        showNotification(`Maximum bet amount is ₹${window.gameSettings.maxBetAmount}`, 'error');
-                        return;
-                    }
-                    
-                    if (selectedChip < window.gameSettings.minBetAmount) {
-                        showNotification(`Minimum bet amount is ₹${window.gameSettings.minBetAmount}`, 'error');
-                        return;
-                    }
-                    
-                    if (playerBalance >= selectedChip) {
-                        // Save previous state for undo
-                        betHistory.push({
-                            andarBet: andarBet,
-                            baharBet: baharBet,
-                            balance: playerBalance
-                        });
-                        
                         baharBet += selectedChip;
-                        playerBalance -= selectedChip;
-                        updateBetDisplay();
-                        updateBalanceDisplay();
-                        showNotification(`Added ₹${selectedChip} to Bahar`, 'success');
-                    } else {
-                        showNotification('Insufficient balance!', 'error');
                     }
-                } else {
-                    showNotification('Please select a chip amount first', 'error');
-                }
+
+                    updateBetDisplay();
+                    updateBalanceDisplay();
+                });
             });
         }
 
         function updateBetDisplay() {
             document.getElementById('andarBet').textContent = `₹${andarBet}`;
             document.getElementById('baharBet').textContent = `₹${baharBet}`;
+            document.querySelector('.info-right .value').textContent = `₹ ${andarBet + baharBet}`;
         }
 
         function updateBalanceDisplay() {
             document.querySelector('.balance').textContent = `₹${playerBalance.toFixed(2)}`;
         }
 
-        // This function is no longer needed as game state is managed by backend
-        // The game flow is now completely controlled by the backend API
-
-        function showHistory() {
-            showNotification('Game history will be displayed here', 'info');
-        }
+        function showHistory() { showNotification('Game history will be displayed here', 'info'); }
 
         function undoBet() {
             if (betHistory.length > 0) {
@@ -1241,96 +933,42 @@
             }
         }
 
-        function rebetAndar() {
-            if (andarBet > 0) {
-                showNotification('Rebetting Andar amount', 'info');
-            } else {
-                showNotification('No previous Andar bet to rebet', 'error');
-            }
-        }
-
-        function rebetBahar() {
-            if (baharBet > 0) {
-                showNotification('Rebetting Bahar amount', 'info');
-            } else {
-                showNotification('No previous Bahar bet to rebet', 'error');
-            }
-        }
+        function rebetAndar() { showNotification('Rebet functionality coming soon!', 'info'); }
 
         function setupLiveStream() {
             const video = document.getElementById('liveStream');
+            if (!video) return;
+
             const playPauseBtn = document.getElementById('playPauseBtn');
             const playIcon = playPauseBtn.querySelector('i');
-            let isPlaying = true;
-
-            // Play/Pause functionality
-            playPauseBtn.addEventListener('click', () => {
-                if (isPlaying) {
-                    video.pause();
-                    playIcon.className = 'fas fa-play';
-                    isPlaying = false;
-                } else {
-                    video.play();
-                    playIcon.className = 'fas fa-pause';
-                    isPlaying = true;
-                }
-            });
-
-            // Video event listeners
-            video.addEventListener('play', () => {
-                playIcon.className = 'fas fa-pause';
-                isPlaying = true;
-            });
-
-            video.addEventListener('pause', () => {
-                playIcon.className = 'fas fa-play';
-                isPlaying = false;
-            });
-
-            // Auto-hide controls after 3 seconds
-            let controlsTimeout;
-            const streamControls = document.querySelector('.stream-controls');
             
-            function hideControls() {
-                streamControls.style.opacity = '0';
-            }
-
-            function showControls() {
-                streamControls.style.opacity = '1';
-                clearTimeout(controlsTimeout);
-                controlsTimeout = setTimeout(hideControls, 3000);
-            }
-
-            // Show controls on mouse move
-            document.querySelector('.stream-video').addEventListener('mousemove', showControls);
-            document.querySelector('.stream-video').addEventListener('mouseleave', hideControls);
+            const setPlayIcon = () => { playIcon.className = video.paused ? 'fas fa-play' : 'fas fa-pause'; };
             
-            // Initial hide after 3 seconds
-            controlsTimeout = setTimeout(hideControls, 3000);
+            playPauseBtn.addEventListener('click', () => video.paused ? video.play() : video.pause());
+            video.addEventListener('play', setPlayIcon);
+            video.addEventListener('pause', setPlayIcon);
+            setPlayIcon();
         }
 
         function showNotification(message, type = 'info') {
             const container = document.getElementById('notificationContainer');
+            if (!container) return;
             const notification = document.createElement('div');
             notification.className = `notification notification-${type}`;
             notification.textContent = message;
-            
             container.appendChild(notification);
-            
-            // Show notification
-            setTimeout(() => {
-                notification.classList.add('show');
-            }, 100);
-            
-            // Hide notification after 3 seconds
+            setTimeout(() => notification.classList.add('show'), 10);
             setTimeout(() => {
                 notification.classList.remove('show');
                 setTimeout(() => {
-                    container.removeChild(notification);
-                }, 300);
+                    if (container.contains(notification)) {
+                       container.removeChild(notification);
+                    }
+                }, 500);
             }, 3000);
         }
 
     </script>
 </body>
 </html>
+

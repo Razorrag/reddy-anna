@@ -14,6 +14,7 @@ const MOCK_GAME_SETTINGS = {
 // Get all game settings
 router.get('/settings', async (req, res) => {
   try {
+    console.log('Attempting to fetch game settings...');
     const settings = await query('game_settings', 'select');
     
     // Convert array to object for easier access
@@ -25,14 +26,16 @@ router.get('/settings', async (req, res) => {
       };
     });
     
+    console.log('Game settings fetched successfully:', settingsObj);
     res.json({
       success: true,
       data: settingsObj
     });
   } catch (error) {
     console.error('Error fetching game settings:', error);
+    console.log('Using mock data as fallback');
     // Return mock data as fallback
-    res.status(200).json({
+    res.json({
       success: true,
       data: MOCK_GAME_SETTINGS
     });
@@ -195,6 +198,7 @@ const MOCK_STREAM_SETTINGS = {
 // Get all stream settings
 router.get('/stream-settings', async (req, res) => {
   try {
+    console.log('Attempting to fetch stream settings...');
     const settings = await query('stream_settings', 'select');
     
     // Convert array to object for easier access
@@ -206,14 +210,16 @@ router.get('/stream-settings', async (req, res) => {
       };
     });
     
+    console.log('Stream settings fetched successfully:', settingsObj);
     res.json({
       success: true,
       data: settingsObj
     });
   } catch (error) {
     console.error('Error fetching stream settings:', error);
+    console.log('Using mock stream data as fallback');
     // Return mock data as fallback
-    res.status(200).json({
+    res.json({
       success: true,
       data: MOCK_STREAM_SETTINGS
     });
