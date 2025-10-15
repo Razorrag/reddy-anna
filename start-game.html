@@ -208,9 +208,14 @@
 
         .wallet-amount-display {
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
             color: var(--gold-primary);
             white-space: nowrap;
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 215, 0, 0.3);
         }
 
         .wallet-content {
@@ -244,8 +249,13 @@
 
         .wallet-amount {
             font-size: 18px;
-            font-weight: 700;
+            font-weight: 800;
             color: var(--gold-primary);
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.6);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 215, 0, 0.4);
         }
 
         /* Main Game Body */
@@ -260,7 +270,7 @@
         /* Video Stream Section */
         .video-section {
             width: 100%;
-            height: 70vh; /* Balanced size for good visibility */
+            height: 80vh; /* Increased height for better visibility */
             background-color: #000;
             position: relative;
         }
@@ -279,14 +289,22 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            background: rgba(231, 76, 60, 0.9);
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
             color: white;
             padding: 8px 12px;
             border-radius: 20px;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
             z-index: 10;
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.5);
+            animation: pulse-live 2s infinite;
+        }
+        
+        @keyframes pulse-live {
+            0% { box-shadow: 0 4px 15px rgba(231, 76, 60, 0.5); }
+            50% { box-shadow: 0 4px 25px rgba(231, 76, 60, 0.8); }
+            100% { box-shadow: 0 4px 15px rgba(231, 76, 60, 0.5); }
         }
 
         .live-dot {
@@ -323,7 +341,7 @@
         .game-type-indicator-visible {
             position: absolute;
             top: 15px;
-            left: 15px;
+            left: 100px; /* Moved right to avoid overlap with live indicator */
             z-index: 10;
             background: rgba(0, 0, 0, 0.7);
             border: 1px solid var(--gold-primary);
@@ -395,15 +413,26 @@
 
         .timer-value {
             font-size: 28px;
-            font-weight: 700;
+            font-weight: 800;
             color: var(--gold-primary);
             line-height: 1;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.8);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 16px;
+            border-radius: 10px;
+            border: 2px solid var(--gold-primary);
         }
 
         .round-info {
-            font-size: 12px;
+            font-size: 14px;
             color: var(--white);
             margin-top: 5px;
+            font-weight: 600;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 4px 12px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
         /* Bet Limits Display */
@@ -423,11 +452,11 @@
         /* Game Content Section */
         .game-interface {
             flex-grow: 1;
-            padding: 1rem 1rem; /* Reduced padding from 1.5rem to 1rem */
+            padding: 0.8rem 0.8rem; /* Further reduced padding */
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 1rem; /* Reduced gap from 1.5rem to 1rem */
+            gap: 0.8rem; /* Further reduced gap */
             background: var(--secondary-black);
         }
         
@@ -506,7 +535,7 @@
         .main-betting-areas {
             display: grid;
             grid-template-columns: 1.1fr 0.8fr 1.1fr; /* More balanced proportions */
-            gap: 0.8rem; /* Reduced gap for better space utilization */
+            gap: 0.5rem; /* Further reduced gap for better space utilization */
             width: 100%;
             max-width: 1100px;
             align-items: stretch; /* Ensure all columns have the same height */
@@ -516,23 +545,21 @@
         @media (max-width: 768px) {
             .main-betting-areas {
                 grid-template-columns: 1.2fr 0.6fr 1.2fr; /* Center column smaller on mobile */
-                gap: 0.5rem; /* Smaller gap on mobile */
+                gap: 0.3rem; /* Further reduced gap on mobile */
             }
         }
 
         .betting-zone, .central-card-area {
-            border-radius: 12px; /* Slightly smaller radius */
+            border-radius: 12px;
             border: 2px solid rgba(255, 215, 0, 0.3);
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            align-items: stretch;
-            min-height: 130px; /* Reduced from 140px */
-            padding: 0.8rem; /* Reduced padding */
-            text-align: left;
+            min-height: 120px;
+            padding: 0.8rem;
+            text-align: center;
         }
 
         .betting-zone:hover, .central-card-area:hover {
@@ -541,20 +568,55 @@
             box-shadow: 0 10px 25px rgba(255, 215, 0, 0.3);
         }
         
-        .andar-zone { background: linear-gradient(135deg, #8B0000, #A52A2A); }
-        .bahar-zone { background: linear-gradient(135deg, #000080, #4169E1); }
-        .central-card-area { background: #2C2C2C; border: 3px solid var(--gold-primary); cursor: default; text-align: center; }
-        
-        .zone-header {
+        .andar-zone {
+            background: linear-gradient(135deg, #8B0000, #A52A2A);
+            border: 2px solid rgba(255, 255, 255, 0.2); /* Added white border for better contrast */
+            position: relative;
+        }
+        .andar-zone::before {
+            content: '';
             position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 5;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+            border-radius: inherit;
+            pointer-events: none;
         }
         
-        .zone-footer {
-            padding: 5px;
-            margin-top: auto;
+        .bahar-zone {
+            background: linear-gradient(135deg, #000080, #4169E1);
+            border: 2px solid rgba(255, 255, 255, 0.2); /* Added white border for better contrast */
+            position: relative;
+        }
+        .bahar-zone::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+            border-radius: inherit;
+            pointer-events: none;
+        }
+        
+        .central-card-area {
+            background: #2C2C2C;
+            border: 3px solid var(--gold-primary);
+            cursor: default;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); /* Added glow for better visibility */
+        }
+        
+        /* Zone header with proper positioning */
+        .zone-header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 0.5rem;
         }
 
         .zone-label {
@@ -563,75 +625,77 @@
             font-weight: 600;
             color: var(--white);
             text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
             background: rgba(0, 0, 0, 0.4);
-            padding: 3px 6px;
+            padding: 4px 8px;
             border-radius: 6px;
             border: 1px solid rgba(255, 215, 0, 0.3);
         }
         
-        .zone-content1 {
+        /* Main content area for cards */
+        .zone-content {
+            flex-grow: 1;
             display: flex;
-            align-items: flex-start;
+            justify-content: center;
+            align-items: center;
+            position: relative;
         }
         
-        .zone-content2 {
+        /* Selected cards area */
+        .selected-cards {
             display: flex;
-            align-items: flex-end;
-        }
-
-        .zone-label1, .zone-label2 {
-            font-family: var(--font-primary);
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--white);
-            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
-            letter-spacing: 2px;
-        }
-
-        .zone-bottom {
-            margin-top: auto;
+            flex-wrap: wrap;
+            gap: 5px;
+            justify-content: center;
+            align-items: center;
+            margin: 0.5rem 0;
+            min-height: 30px;
         }
         
-        /* Card boxes instead of images */
+        /* Card display with better positioning */
         .andar-zone-image, .bahar-zone-image {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 65px;
-            height: 90px;
+            width: 50px;
+            height: 70px;
             background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
             border: 2px solid var(--gold-primary);
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2rem;
+            font-size: 1.5rem;
             color: var(--gold-primary);
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
         }
-
-        .andar-zone-image {
-            left: 15px;
-        }
-
-        .bahar-zone-image {
-            right: 15px;
+        
+        .andar-zone-image:hover, .bahar-zone-image:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
         }
 
         .andar-zone-image-2, .bahar-zone-image-2 {
-            display: none; /* Hide secondary card images */
+            display: none;
+        }
+        
+        /* Bet amount with better positioning */
+        .zone-footer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 0.5rem;
         }
         
         .bet-amount {
-            font-size: 1.8rem;
+            font-size: 1.4rem;
             color: var(--gold-primary);
-            font-weight: 700;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-            background: rgba(0, 0, 0, 0.4);
+            font-weight: 800;
+            text-shadow: 0 0 12px rgba(255, 215, 0, 0.7);
+            background: rgba(0, 0, 0, 0.7);
             border-radius: 8px;
-            padding: 8px;
+            padding: 8px 16px;
             display: inline-block;
+            border: 2px solid rgba(255, 215, 0, 0.5);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
         }
 
         .central-card-display {
@@ -639,7 +703,73 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+        
+        .card-icon {
+            font-size: 4rem;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+            background: rgba(0, 0, 0, 0.5);
+            width: 100px;
+            height: 100px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid var(--gold-primary);
+            box-shadow: 0 0 25px rgba(255, 215, 0, 0.4);
+            transition: all 0.3s ease;
+        }
+        
+        .card-icon:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 35px rgba(255, 215, 0, 0.6);
+            border-color: var(--gold-secondary);
+        }
+
+        .card-text {
+            font-family: var(--font-primary);
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--gold-primary);
+            margin-top: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+        }
+        
+        /* Selected cards enhancement */
+        .selected-card {
+            background: linear-gradient(135deg, #ffffff, #f0f0f0);
+            color: #1a1a1a;
+            border: 2px solid var(--gold-primary);
+            border-radius: 8px;
+            padding: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-align: center;
+            min-width: 40px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .selected-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
             height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .selected-card:hover::before {
+            left: 100%;
         }
 
         /* Mobile: Make central area more compact */
@@ -669,23 +799,25 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 0.5rem; /* Further reduced gap for more compact layout */
+            gap: 1rem; /* Increased gap for better separation */
+            padding: 1rem 0; /* Added padding for better spacing */
         }
         
         .chip-selection {
             display: none; /* Hidden by default */
-            justify-content: flex-start;
-            gap: 15px; /* Optimized gap */
+            justify-content: center;
+            gap: 20px; /* Increased gap for better spacing */
             overflow-x: auto;
             overflow-y: hidden;
-            padding: 12px 15px; /* Reduced padding */
+            padding: 15px 20px; /* Increased padding */
             width: 100%;
             flex-wrap: nowrap; /* Prevent wrapping */
             scrollbar-width: thin;
             scrollbar-color: var(--gold-primary) var(--accent-black);
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            border: 1px solid rgba(255, 215, 0, 0.2);
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 12px;
+            border: 2px solid rgba(255, 215, 0, 0.3);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
         }
 
         .chip-selection::-webkit-scrollbar {
@@ -749,13 +881,16 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 12px; /* Optimized gap */
+            gap: 20px; /* Increased gap for better spacing */
             flex-wrap: wrap;
-            padding: 10px;
+            padding: 15px 20px; /* Increased padding */
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 215, 0, 0.2);
         }
         
         .selected-chip-display {
-            height: 68px;
+            height: 75px;
             cursor: pointer;
             transition: all 0.3s ease;
             display: flex;
@@ -765,54 +900,83 @@
             background: var(--gradient-gold);
             color: var(--primary-black);
             border-radius: 15px;
-            padding: 8px 15px;
-            min-width: 80px;
-            font-weight: 600;
+            padding: 12px 20px;
+            min-width: 100px;
+            font-weight: 700;
             text-align: center;
-            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.3);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.4);
+            border: 3px solid var(--gold-primary);
+            position: relative;
+            z-index: 10; /* Ensure it stands out */
         }
         .selected-chip-display:hover {
             transform: scale(1.05);
-            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.5);
+            box-shadow: 0 12px 35px rgba(255, 215, 0, 0.6);
         }
         .chip-value {
-            font-size: 1.2rem;
-            font-weight: 700;
+            font-size: 1.3rem;
+            font-weight: 800;
         }
         .chip-text {
-            font-size: 0.8rem;
+            font-size: 0.9rem;
+            font-weight: 600;
         }
         
         .control-btn {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 6px;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid var(--gold-primary);
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 2px solid rgba(255, 215, 0, 0.3);
             border-radius: 12px;
-            padding: 12px 15px; /* Reduced padding */
+            padding: 15px 18px; /* Increased padding */
             color: var(--white);
             cursor: pointer;
             transition: all 0.3s ease;
-            min-width: 70px; /* Slightly smaller */
+            min-width: 80px;
+            position: relative;
         }
 
         .control-btn:hover {
-            background: rgba(255, 215, 0, 0.1);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.2);
+            background: rgba(255, 215, 0, 0.15);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(255, 215, 0, 0.3);
+            border-color: var(--gold-primary);
         }
 
         .control-btn i {
-            font-size: 18px; /* Slightly smaller */
+            font-size: 20px;
             color: var(--gold-primary);
         }
 
         .control-btn span {
-            font-size: 11px; /* Slightly smaller */
+            font-size: 12px;
             text-align: center;
-            font-weight: 500;
+            font-weight: 600;
+        }
+        
+        /* Add tooltip for control buttons */
+        .control-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: var(--white);
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .control-btn:hover::after {
+            opacity: 1;
         }
         
         /* Selected Cards Display */
@@ -919,6 +1083,11 @@
             .hamburger { display: flex; }
             .live-clock, .language-dropdown { display: none; } /* Hide some controls for simplicity */
             
+            /* Simplified mobile navigation */
+            .nav-controls {
+                gap: 8px; /* Reduced gap for cleaner look */
+            }
+            
             /* Wallet balance adjustments for mobile */
             .wallet-dropdown {
                 padding: 4px 6px;
@@ -930,10 +1099,16 @@
             }
             .wallet-amount-display {
                 font-size: 12px;
+                font-weight: 700;
+                text-shadow: 0 0 6px rgba(255, 215, 0, 0.4);
+                background: rgba(0, 0, 0, 0.6);
+                padding: 2px 6px;
+                border-radius: 4px;
+                border: 1px solid rgba(255, 215, 0, 0.3);
             }
 
             .video-section {
-                height: 50vh; /* Optimized for mobile */
+                height: 60vh; /* Increased height for mobile */
             }
 
             .timer-overlay {
@@ -956,7 +1131,7 @@
             
             .game-type-indicator-visible {
                 top: 10px;
-                left: 10px;
+                left: 80px; /* Adjusted for mobile to avoid overlap */
                 padding: 6px 12px;
             }
             
@@ -966,66 +1141,93 @@
             }
 
             .game-interface {
-                padding: 1rem 0.5rem;
-                gap: 1rem;
+                padding: 0.5rem 0.3rem;  /* Reduced padding */
+                gap: 0.5rem;             /* Reduced gap - THE KEY FIX FOR SPACING ISSUE */
             }
 
             /* Maintain the 3-column layout on mobile */
             .main-betting-areas {
-                gap: 0.5rem;
+                grid-template-columns: 1fr 0.5fr 1fr; /* More balanced proportions */
+                gap: 0.2rem; /* Reduced gap further */
             }
             
             .betting-zone, .central-card-area {
-                min-height: 130px; /* More compact mobile panels */
-                padding: 0.8rem; /* Reduced padding for mobile */
+                min-height: 110px; /* More compact mobile panels */
+                padding: 0.6rem;   /* Reduced padding */
                 border-width: 2px;
-                gap: 0.6rem; /* Reduced gap for mobile */
             }
 
             /* Andar and Bahar zones can be slightly taller to use extra space */
             .betting-zone {
-                min-height: 140px; /* Slightly taller than center, more compact */
+                min-height: 120px; /* Slightly taller than center */
             }
 
             .selected-cards {
-                min-height: 40px;
-                padding: 5px;
+                min-height: 30px;
+                padding: 3px;
+                margin: 0.3rem 0;
             }
             
             .zone-label {
-                font-size: 1rem; /* Further reduced for mobile */
-                padding: 3px 6px;
-                letter-spacing: 0.5px;
+                font-size: 0.8rem; /* Slightly smaller for mobile */
+                padding: 3px 6px;  /* Better spacing */
+                letter-spacing: 0.8px; /* More readable */
             }
             .bet-amount {
-                font-size: 1.2rem; /* Optimized for mobile */
-                padding: 6px; /* Optimized padding */
+                font-size: 1.1rem; /* More readable */
+                padding: 6px 12px;       /* Better spacing */
+                font-weight: 800;
+                text-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+                background: rgba(0, 0, 0, 0.7);
+                border: 2px solid rgba(255, 215, 0, 0.5);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
             }
             
-            .card-icon { font-size: 1.8rem; /* Optimized for mobile */ }
-            .card-text { font-size: 0.8rem; }
+            .card-icon {
+                font-size: 2.2rem; /* Better visibility on mobile */
+                width: 70px;
+                height: 70px;
+            }
+            .card-text {
+                font-size: 0.9rem;
+                padding: 4px 8px;
+            }
+            
+            .selected-card {
+                font-size: 0.8rem;
+                min-width: 35px;
+                padding: 6px;
+            }
 
             /* Make central card area more compact */
             .central-card-area {
-                padding: 0.5rem; /* Further reduced padding for mobile */
+                padding: 0.5rem; /* Reduced padding for mobile */
                 min-height: 110px; /* More compact height for mobile */
             }
-            .selected-card { font-size: 0.8rem; padding: 5px; min-width: 30px; }
+            .selected-card { font-size: 0.8rem; padding: 3px; min-width: 25px; }
             
             .andar-zone-image, .bahar-zone-image {
-                width: 35px; /* More compact for mobile */
-                height: 50px; /* More compact for mobile */
-                font-size: 1.2rem;
+                width: 35px; /* Better size for mobile visibility */
+                height: 50px; /* Better size for mobile visibility */
+                font-size: 1.1rem; /* More readable font */
+            }
+            
+            .zone-content {
+                margin: 0.3rem 0;
+            }
+            
+            .zone-footer {
+                margin-top: 0.3rem;
             }
 
             .chip-selection {
-                gap: 8px;
-                padding: 8px 10px;
+                gap: 12px;
+                padding: 12px 15px;
             }
 
             .chip-image {
-                width: 50px; /* Optimized for mobile */
-                height: 50px; /* Optimized for mobile */
+                width: 55px; /* Optimized for mobile */
+                height: 55px; /* Optimized for mobile */
             }
 
             .chip-btn:active .chip-image,
@@ -1035,24 +1237,29 @@
             }
             
             .chip-amount {
-                font-size: 10px;
+                font-size: 11px;
             }
             
             .selected-chip-display {
-                height: 45px;
-                min-width: 65px;
-                padding: 5px 8px;
+                height: 60px;
+                min-width: 80px;
+                padding: 8px 12px;
             }
-            .chip-value { font-size: 0.9rem; }
-            .chip-text { font-size: 0.7rem; }
+            .chip-value { font-size: 1.1rem; }
+            .chip-text { font-size: 0.8rem; }
 
             .control-btn {
-                padding: 8px 10px;
-                gap: 3px;
-                min-width: 55px;
+                padding: 12px 15px;
+                gap: 5px;
+                min-width: 65px;
             }
-            .control-btn span { font-size: 9px; }
-            .control-btn i { font-size: 14px; }
+            .control-btn span { font-size: 11px; }
+            .control-btn i { font-size: 16px; }
+            
+            /* Disable tooltips on mobile to avoid clutter */
+            .control-btn::after {
+                display: none;
+            }
 
             .recent-results-bottom {
                 padding: 10px;
@@ -1111,18 +1318,6 @@
                     <h1 id="userIdDisplay">1308544430</h1>
                 </div>
                 
-                <div class="game-type-indicator">
-                    <span class="game-type-text">Andar Bahar</span>
-                </div>
-                
-                <div class="nav-menu">
-                    <ul class="nav-list">
-                        <li><a href="index.html" class="nav-link">Home</a></li>
-                        <li><a href="game.html" class="nav-link">Games</a></li>
-                        <li><a href="#" class="nav-link">Contact</a></li>
-                    </ul>
-                </div>
-                
                 <div class="nav-controls">
                     <div class="wallet-dropdown" id="walletDropdown">
                         <button class="wallet-btn" id="walletBtn">
@@ -1138,17 +1333,28 @@
                             </div>
                         </div>
                     </div>
-                    <div id="liveClock" class="live-clock"></div>
-                    <select id="languageSelect" class="language-dropdown">
-                        <option value="en">English</option>
-                        <option value="hi">हिंदी</option>
-                        <option value="te">తెలుగు</option>
-                    </select>
                     <div class="hamburger" id="hamburger">
                         <span></span>
                         <span></span>
                         <span></span>
                     </div>
+                </div>
+                
+                <!-- Simplified mobile menu -->
+                <div class="nav-menu" id="mobileMenu">
+                    <ul class="nav-list">
+                        <li><a href="index.html" class="nav-link">Home</a></li>
+                        <li><a href="game.html" class="nav-link">Games</a></li>
+                        <li><a href="#" class="nav-link">Contact</a></li>
+                        <li><div id="liveClock" class="live-clock"></div></li>
+                        <li>
+                            <select id="languageSelect" class="language-dropdown">
+                                <option value="en">English</option>
+                                <option value="hi">हिंदी</option>
+                                <option value="te">తెలుగు</option>
+                            </select>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </nav>
@@ -1202,8 +1408,10 @@
                     <div class="zone-header">
                         <div class="zone-label">ANDAR</div>
                     </div>
-                    <div class="selected-cards" id="andarSelectedCards"></div>
-                    <div class="andar-zone-image">🃏</div>
+                    <div class="zone-content">
+                        <div class="selected-cards" id="andarSelectedCards"></div>
+                        <div class="andar-zone-image">🃏</div>
+                    </div>
                     <div class="zone-footer">
                         <div class="bet-amount" id="andarBet">₹0</div>
                     </div>
@@ -1222,8 +1430,10 @@
                     <div class="zone-header">
                         <div class="zone-label">BAHAR</div>
                     </div>
-                    <div class="selected-cards" id="baharSelectedCards"></div>
-                    <div class="bahar-zone-image">🃏</div>
+                    <div class="zone-content">
+                        <div class="selected-cards" id="baharSelectedCards"></div>
+                        <div class="bahar-zone-image">🃏</div>
+                    </div>
                     <div class="zone-footer">
                         <div class="bet-amount" id="baharBet">₹0</div>
                     </div>
@@ -1243,13 +1453,13 @@
                     <button class="chip-btn" data-amount="2500"><img src="coins/2500.png" alt="₹2.5k" class="chip-image"></button>
                 </div>
                 <div class="game-controls">
-                    <button class="control-btn" onclick="showHistory()"><i class="fas fa-history"></i><span>History</span></button>
-                    <button class="control-btn" onclick="undoBet()"><i class="fas fa-undo"></i><span>Undo</span></button>
+                    <button class="control-btn" onclick="showHistory()" data-tooltip="View game history"><i class="fas fa-history"></i><span>History</span></button>
+                    <button class="control-btn" onclick="undoBet()" data-tooltip="Undo last bet"><i class="fas fa-undo"></i><span>Undo</span></button>
                     <div class="selected-chip-display" id="selectedChipDisplay" onclick="toggleChipPanel()">
                         <span class="chip-value">Select</span>
                         <span class="chip-text">Chip</span>
                     </div>
-                    <button class="control-btn" onclick="rebetAndar()"><i class="fas fa-redo"></i><span>Rebet</span></button>
+                    <button class="control-btn" onclick="rebetAndar()" data-tooltip="Repeat last bet"><i class="fas fa-redo"></i><span>Rebet</span></button>
                 </div>
             </div>
 
@@ -1614,30 +1824,44 @@
 
         function setupMobileMenu() {
             const hamburger = document.getElementById('hamburger');
-            const navMenu = document.querySelector('.nav-menu');
+            const mobileMenu = document.getElementById('mobileMenu');
             
-            if (hamburger && navMenu) {
+            if (hamburger && mobileMenu) {
                 hamburger.addEventListener('click', () => {
                     // Toggle mobile menu visibility
-                    if (navMenu.style.display === 'flex') {
-                        navMenu.style.display = 'none';
+                    if (mobileMenu.style.display === 'flex') {
+                        mobileMenu.style.display = 'none';
                     } else {
-                        navMenu.style.display = 'flex';
-                        navMenu.style.position = 'absolute';
-                        navMenu.style.top = '100%';
-                        navMenu.style.left = '0';
-                        navMenu.style.right = '0';
-                        navMenu.style.background = 'rgba(10, 10, 10, 0.95)';
-                        navMenu.style.flexDirection = 'column';
-                        navMenu.style.padding = '20px';
-                        navMenu.style.borderBottom = '2px solid var(--gold-primary)';
+                        mobileMenu.style.display = 'flex';
+                        mobileMenu.style.position = 'absolute';
+                        mobileMenu.style.top = '100%';
+                        mobileMenu.style.left = '0';
+                        mobileMenu.style.right = '0';
+                        mobileMenu.style.background = 'rgba(10, 10, 10, 0.95)';
+                        mobileMenu.style.flexDirection = 'column';
+                        mobileMenu.style.padding = '20px';
+                        mobileMenu.style.borderBottom = '2px solid var(--gold-primary)';
+                        mobileMenu.style.boxShadow = '0 10px 25px rgba(0, 0, 0, 0.5)';
+                        mobileMenu.style.zIndex = '1000';
+                        
+                        // Style the nav-list items for mobile menu
+                        const navList = mobileMenu.querySelector('.nav-list');
+                        navList.style.flexDirection = 'column';
+                        navList.style.gap = '15px';
+                        
+                        // Style the language dropdown in mobile menu
+                        const languageSelect = mobileMenu.querySelector('.language-dropdown');
+                        if (languageSelect) {
+                            languageSelect.style.width = '100%';
+                            languageSelect.style.padding = '10px';
+                        }
                     }
                 });
                 
                 // Close menu when clicking outside
                 document.addEventListener('click', (e) => {
-                    if (!hamburger.contains(e.target) && !navMenu.contains(e.target)) {
-                        navMenu.style.display = 'none';
+                    if (!hamburger.contains(e.target) && !mobileMenu.contains(e.target)) {
+                        mobileMenu.style.display = 'none';
                     }
                 });
             }
