@@ -1,12 +1,12 @@
-# Reddy Anna Kossu - Netlify Deployment Guide
+# Reddy Anna Kossu - Vercel Deployment Guide
 
-This guide will help you deploy the Reddy Anna Kossu gaming website to Netlify.
+This guide will help you deploy the Reddy Anna Kossu gaming website to Vercel.
 
 ## Prerequisites
 
-1. A Netlify account (sign up at [netlify.com](https://netlify.com))
+1. A Vercel account (sign up at [vercel.com](https://vercel.com))
 2. A Git repository (GitHub, GitLab, or Bitbucket)
-3. Backend server deployed on a platform like Heroku, Vercel, or any cloud provider
+3. Backend server deployed on a platform like Heroku, Render, or any cloud provider
 
 ## Step 1: Prepare Your Repository
 
@@ -15,7 +15,7 @@ This guide will help you deploy the Reddy Anna Kossu gaming website to Netlify.
    - All HTML files (index.html, login.html, signup.html, etc.)
    - CSS and JavaScript files
    - Assets folder (images, videos, etc.)
-   - `netlify.toml` configuration file
+   - `vercel.json` configuration file
    - `config.js` for environment-specific API URLs
 
 ## Step 2: Configure Backend URL
@@ -29,45 +29,52 @@ production: {
 }
 ```
 
-## Step 3: Deploy to Netlify
+## Step 3: Deploy to Vercel
 
 ### Option A: Using Git Integration (Recommended)
 
-1. Log in to your Netlify account
-2. Click "New site from Git"
-3. Choose your Git provider (GitHub, GitLab, or Bitbucket)
-4. Select the repository containing your project
-5. Configure build settings:
-   - Build command: Leave blank (static site)
-   - Publish directory: Leave blank (root directory)
-6. Click "Deploy site"
+1. Log in to your Vercel account
+2. Click "New Project"
+3. Import your Git repository
+4. Configure project settings:
+   - Framework Preset: Other
+   - Root Directory: ./ (leave as is)
+   - Build Command: (leave blank for static sites)
+   - Output Directory: (leave blank for static sites)
+5. Click "Deploy"
 
-### Option B: Using Drag and Drop
+### Option B: Using Vercel CLI
 
-1. Log in to your Netlify account
-2. Drag and drop your entire project folder onto the deployment area
-3. Wait for the deployment to complete
+1. Install Vercel CLI: `npm i -g vercel`
+2. Run `vercel` in your project directory
+3. Follow the prompts to deploy
 
-## Step 4: Configure API Redirects
+## Step 4: Configure API Routing
 
-After deployment, you need to set up API redirects:
+The `vercel.json` file handles API routing automatically:
 
-1. Go to Site settings > Build & deploy > Redirects
-2. Add a redirect rule:
-   - From: `/api/*`
-   - To: `https://reddy-anna-59l3.onrender.com/api/:splat`
-   - Status code: 200
-   - Force: Yes
+1. API calls to `/api/*` are automatically forwarded to your backend
+2. Update the backend URL in `vercel.json` if needed:
+   ```json
+   {
+     "routes": [
+       {
+         "src": "/api/(.*)",
+         "dest": "https://your-backend-url.com/api/$1"
+       }
+     ]
+   }
+   ```
 
-## Step 5: Update Environment Variables
+## Step 5: Update Environment Variables (Optional)
 
-1. Go to Site settings > Build & deploy > Environment
+1. Go to Project settings > Environment Variables
 2. Add environment variables if needed:
-   - `API_BASE_URL`: `https://reddy-anna-59l3.onrender.com`
+   - `API_BASE_URL`: `https://your-backend-url.com`
 
 ## Step 6: Test Your Deployment
 
-1. Visit your Netlify URL
+1. Visit your Vercel URL
 2. Test all functionality:
    - Navigation between pages
    - Login and signup forms
@@ -82,7 +89,7 @@ If you're having trouble connecting to the backend:
 
 1. Check that your backend URL is correctly set in `config.js`
 2. Ensure CORS is properly configured on your backend
-3. Verify the API redirects are set up correctly in Netlify
+3. Verify the API routes are set up correctly in `vercel.json`
 
 ### Asset Loading Issues
 
@@ -104,18 +111,18 @@ If forms aren't submitting:
 
 To use a custom domain:
 
-1. Go to Site settings > Domain management
+1. Go to Project settings > Domains
 2. Add your custom domain
-3. Update DNS records as instructed by Netlify
+3. Update DNS records as instructed by Vercel
 4. Update any hardcoded URLs in your project
 
 ## Continuous Deployment
 
-Netlify automatically updates your site when you push changes to your Git repository. This means:
+Vercel automatically updates your site when you push changes to your Git repository. This means:
 
 1. Make changes to your code
 2. Commit and push to Git
-3. Netlify will automatically rebuild and deploy your site
+3. Vercel will automatically rebuild and deploy your site
 
 ## Security Considerations
 
@@ -127,15 +134,15 @@ Netlify automatically updates your site when you push changes to your Git reposi
 ## Performance Optimization
 
 1. Optimize images before uploading
-2. Enable Gzip compression in Netlify settings
-3. Consider using Netlify's Edge Functions for dynamic content
-4. Monitor site performance with Netlify Analytics
+2. Vercel automatically handles Gzip compression
+3. Consider using Vercel's Edge Functions for dynamic content
+4. Monitor site performance with Vercel Analytics
 
 ## Support
 
 If you encounter any issues:
 
-1. Check Netlify's deployment logs
+1. Check Vercel's deployment logs
 2. Review browser console for JavaScript errors
 3. Verify backend API endpoints are working
-4. Consult Netlify's documentation at [docs.netlify.com](https://docs.netlify.com)
+4. Consult Vercel's documentation at [vercel.com/docs](https://vercel.com/docs)

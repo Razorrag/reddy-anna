@@ -5,7 +5,7 @@ const CONFIG = {
     API_BASE_URL: 'http://localhost:4000'
   },
   
-  // Production environment (Netlify)
+  // Production environment (Vercel)
   production: {
     API_BASE_URL: 'https://reddy-anna-59l3.onrender.com'
   }

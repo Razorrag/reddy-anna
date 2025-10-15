@@ -1,7 +1,7 @@
 # Reddy Anna Kossu - Free Deployment Guide
 
 This guide will walk you through deploying the complete Reddy Anna Kossu gaming platform using only free services:
-- **Frontend**: Netlify (free tier)
+- **Frontend**: Vercel (free tier)
 - **Backend**: Render (free tier)
 - **Database**: Supabase (free tier)
 
@@ -10,7 +10,7 @@ This guide will walk you through deploying the complete Reddy Anna Kossu gaming 
 ```
 ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
 │   Frontend      │       │    Backend      │       │    Database     │
-│   (Netlify)     │◀──────▶│   (Render)      │◀──────▶│  (Supabase)     │
+│   (Vercel)       │◀──────▶│   (Render)      │◀──────▶│  (Supabase)     │
 │                 │       │                 │       │                 │
 │ - Static Files  │       │ - API Server    │       │ - PostgreSQL    │
 │ - React/HTML    │       │ - Authentication │       │ - User Data     │
@@ -22,7 +22,7 @@ This guide will walk you through deploying the complete Reddy Anna Kossu gaming 
 
 1. Node.js (v14 or higher)
 2. Git account and Git installed
-3. Netlify account
+3. Vercel account
 4. Render account
 5. Supabase account
 
@@ -268,7 +268,7 @@ Replace `[YOUR-PASSWORD]` and `[YOUR-PROJECT-REF]` with your actual Supabase cre
    - `https://your-app.onrender.com/api/auth/login`
    - You should see a JSON response
 
-## Part 4: Frontend Deployment (Netlify)
+## Part 4: Frontend Deployment (Vercel)
 
 ### Step 1: Configure Backend URL
 
@@ -280,34 +280,45 @@ Replace `[YOUR-PASSWORD]` and `[YOUR-PROJECT-REF]` with your actual Supabase cre
    }
    ```
 
-### Step 2: Update Netlify Configuration
+### Step 2: Update Vercel Configuration
 
-1. Open `netlify.toml`
-2. Update the API redirect URL:
-   ```toml
-   [[redirects]]
-   from = "/api/*"
-   to = "https://your-app.onrender.com/api/:splat"  // Replace with your Render URL
-   status = 200
-   force = true
+1. The `vercel.json` file is already configured with:
+   - API redirects to your backend
+   - SPA routing support
+   - Security headers
+   - Static asset caching
+
+2. Update the API redirect URL in `vercel.json`:
+   ```json
+   {
+     "routes": [
+       {
+         "src": "/api/(.*)",
+         "dest": "https://your-app.onrender.com/api/$1"
+       }
+     ]
+   }
    ```
 
-### Step 3: Deploy to Netlify
+### Step 3: Deploy to Vercel
 
 1. Push your code to GitHub
-2. Log in to Netlify
-3. Click "New site from Git"
-4. Select your repository
-5. Configure build settings:
-   - Build command: Leave blank
-   - Publish directory: Leave blank (root)
-6. Click "Deploy site"
+2. Log in to Vercel
+3. Click "New Project"
+4. Import your GitHub repository
+5. Configure project settings:
+   - Framework Preset: Other
+   - Root Directory: ./ (leave as is)
+   - Build Command: (leave blank for static sites)
+   - Output Directory: (leave blank for static sites)
+6. Add environment variables if needed
+7. Click "Deploy"
 
 ## Part 5: Testing and Verification
 
 ### Test API Connection
 
-1. Open your Netlify site
+1. Open your Vercel site
 2. Try to login with default admin credentials:
    - Username: `admin`
    - Password: `admin123`
@@ -322,11 +333,12 @@ Replace `[YOUR-PASSWORD]` and `[YOUR-PROJECT-REF]` with your actual Supabase cre
 
 ## Part 6: Free Tier Limitations
 
-### Netlify (Free)
+### Vercel (Free)
 - 100GB bandwidth/month
-- 300 build minutes/month
-- 1 site per account
+- Unlimited static sites
+- 6000 minutes of serverless function execution/month
 - Custom domains supported
+- Auto-deployment on git push
 
 ### Render (Free)
 - 750 hours/month of runtime
@@ -386,7 +398,7 @@ Replace `[YOUR-PASSWORD]` and `[YOUR-PROJECT-REF]` with your actual Supabase cre
 
 1. Check service dashboards for logs
 2. Review documentation:
-   - [Netlify Docs](https://docs.netlify.com)
+   - [Vercel Docs](https://vercel.com/docs)
    - [Render Docs](https://render.com/docs)
    - [Supabase Docs](https://supabase.com/docs)
 3. Search error messages online

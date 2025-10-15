@@ -147,6 +147,10 @@
             gap: 15px;
         }
         
+        .game-type-indicator {
+            display: none; /* Hidden in header, shown in game area */
+        }
+        
         .live-clock {
             color: var(--gold-primary);
             font-size: 14px;
@@ -167,28 +171,46 @@
             cursor: pointer;
         }
         
-        /* Wallet Dropdown */
+        /* Wallet Dropdown - Unified Component */
         .wallet-dropdown {
             position: relative;
-        }
-
-        .wallet-btn {
+            display: flex;
+            align-items: center;
             background: var(--accent-black);
             border: 1px solid var(--gold-primary);
             border-radius: 8px;
-            padding: 8px 12px;
+            padding: 6px 10px;
+            transition: all 0.3s ease;
+        }
+
+        .wallet-dropdown:hover {
+            background: var(--secondary-black);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+        }
+
+        .wallet-btn {
+            background: transparent;
+            border: none;
             color: var(--gold-primary);
             cursor: pointer;
-            transition: all 0.3s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            font-size: 16px;
+            padding: 4px;
+            margin-right: 8px;
         }
 
-        .wallet-btn:hover {
-            background: var(--secondary-black);
-            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+        .wallet-balance-visible {
+            display: flex;
+            align-items: center;
+        }
+
+        .wallet-amount-display {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--gold-primary);
+            white-space: nowrap;
         }
 
         .wallet-content {
@@ -296,6 +318,28 @@
         .view-count i {
             color: var(--gold-primary);
         }
+        
+        /* Game Type Indicator - Top Left of Game Area */
+        .game-type-indicator-visible {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--gold-primary);
+            border-radius: 20px;
+            padding: 8px 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .game-type-text {
+            color: var(--gold-primary);
+            font-family: var(--font-primary);
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
 
         /* Timer Overlay - centered on video */
         .timer-overlay {
@@ -379,11 +423,11 @@
         /* Game Content Section */
         .game-interface {
             flex-grow: 1;
-            padding: 1.5rem 1rem;
+            padding: 1rem 1rem; /* Reduced padding from 1.5rem to 1rem */
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 1.5rem;
+            gap: 1rem; /* Reduced gap from 1.5rem to 1rem */
             background: var(--secondary-black);
         }
         
@@ -396,35 +440,73 @@
 
         .recent-results-bottom {
             display: flex;
-            justify-content: center;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: auto;
+            justify-content: flex-start;
+            gap: 8px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            white-space: nowrap;
             padding: 15px;
             background: rgba(0, 0, 0, 0.5);
             border-top: 1px solid var(--gold-primary);
+            scrollbar-width: thin;
+            scrollbar-color: var(--gold-primary) var(--accent-black);
+            -webkit-overflow-scrolling: touch; /* Enable smooth scrolling on iOS */
+            /* Prevent wrapping on all screen sizes */
+            flex-wrap: nowrap;
+            min-width: 100%;
+        }
+
+        .recent-results-bottom::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .recent-results-bottom::-webkit-scrollbar-track {
+            background: var(--accent-black);
+            border-radius: 3px;
+        }
+
+        .recent-results-bottom::-webkit-scrollbar-thumb {
+            background: var(--gold-primary);
+            border-radius: 3px;
+        }
+
+        .recent-results-bottom::-webkit-scrollbar-thumb:hover {
+            background: var(--gold-secondary);
         }
 
         .result-chip {
-            width: 25px;
-            height: 25px;
+            flex-shrink: 0; /* Prevent shrinking */
+            width: 35px;
+            height: 35px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 16px;
             color: var(--white);
+            transition: transform 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
-        .result-chip.red { background: linear-gradient(135deg, #e74c3c, #c0392b); }
-        .result-chip.blue { background: linear-gradient(135deg, #3498db, #2980b9); }
+        .result-chip:hover {
+            transform: scale(1.1);
+        }
+
+        .result-chip.red {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .result-chip.blue {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
 
         /* --- KEY CHANGE: Main Betting Area Layout --- */
         .main-betting-areas {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr; /* Three EQUAL columns */
-            gap: 1rem;
+            grid-template-columns: 1.1fr 0.8fr 1.1fr; /* More balanced proportions */
+            gap: 0.8rem; /* Reduced gap for better space utilization */
             width: 100%;
             max-width: 1100px;
             align-items: stretch; /* Ensure all columns have the same height */
@@ -433,13 +515,13 @@
         /* Mobile: Adjust grid proportions - smaller center, larger Andar/Bahar */
         @media (max-width: 768px) {
             .main-betting-areas {
-                grid-template-columns: 1.2fr 0.8fr 1.2fr; /* Center column smaller (0.8) */
-                gap: 0.8rem; /* Slightly smaller gap on mobile */
+                grid-template-columns: 1.2fr 0.6fr 1.2fr; /* Center column smaller on mobile */
+                gap: 0.5rem; /* Smaller gap on mobile */
             }
         }
 
         .betting-zone, .central-card-area {
-            border-radius: 15px;
+            border-radius: 12px; /* Slightly smaller radius */
             border: 2px solid rgba(255, 215, 0, 0.3);
             cursor: pointer;
             transition: all 0.3s ease;
@@ -448,9 +530,9 @@
             flex-direction: column;
             justify-content: space-between;
             align-items: stretch;
-            min-height: 140px;
-            padding: 1rem;
-            text-align: center;
+            min-height: 130px; /* Reduced from 140px */
+            padding: 0.8rem; /* Reduced padding */
+            text-align: left;
         }
 
         .betting-zone:hover, .central-card-area:hover {
@@ -461,19 +543,31 @@
         
         .andar-zone { background: linear-gradient(135deg, #8B0000, #A52A2A); }
         .bahar-zone { background: linear-gradient(135deg, #000080, #4169E1); }
-        .central-card-area { background: #2C2C2C; border: 3px solid var(--gold-primary); cursor: default; }
+        .central-card-area { background: #2C2C2C; border: 3px solid var(--gold-primary); cursor: default; text-align: center; }
         
-        .zone-header, .zone-footer {
+        .zone-header {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 5;
+        }
+        
+        .zone-footer {
             padding: 5px;
+            margin-top: auto;
         }
 
         .zone-label {
             font-family: var(--font-primary);
-            font-size: 1.5rem;
-            font-weight: 700;
+            font-size: 1.2rem;
+            font-weight: 600;
             color: var(--white);
             text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
-            letter-spacing: 2px;
+            letter-spacing: 1px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 215, 0, 0.3);
         }
         
         .zone-content1 {
@@ -499,44 +593,34 @@
             margin-top: auto;
         }
         
-        .andar-zone-image {
+        /* Card boxes instead of images */
+        .andar-zone-image, .bahar-zone-image {
             position: absolute;
-            left: 20px;
             top: 50%;
             transform: translateY(-50%);
-            width: 60px;
-            height: 60px;
-            object-fit: contain;
+            width: 50px;
+            height: 70px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            border: 2px solid var(--gold-primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: var(--gold-primary);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .andar-zone-image {
+            left: 15px;
         }
 
         .bahar-zone-image {
-            position: absolute;
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 60px;
-            height: 60px;
-            object-fit: contain;
+            right: 15px;
         }
 
-        .andar-zone-image-2 {
-            position: absolute;
-            right: 20%;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 70px;
-            height: 100px;
-            object-fit: contain;
-        }
-
-        .bahar-zone-image-2 {
-            position: absolute;
-            left: 20%;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 70px;
-            height: 100px;
-            object-fit: contain;
+        .andar-zone-image-2, .bahar-zone-image-2 {
+            display: none; /* Hide secondary card images */
         }
         
         .bet-amount {
@@ -585,24 +669,23 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 1rem;
+            gap: 0.5rem; /* Further reduced gap for more compact layout */
         }
         
         .chip-selection {
             display: none; /* Hidden by default */
-            justify-content: flex-start; /* Changed from center to flex-start */
-            gap: 20px; /* Increased gap */
+            justify-content: flex-start;
+            gap: 15px; /* Optimized gap */
             overflow-x: auto;
             overflow-y: hidden;
-            padding: 15px;
+            padding: 12px 15px; /* Reduced padding */
             width: 100%;
             flex-wrap: nowrap; /* Prevent wrapping */
             scrollbar-width: thin;
             scrollbar-color: var(--gold-primary) var(--accent-black);
-
-            /* Custom scrollbar for webkit browsers */
-            scrollbar-width: thin;
-            scrollbar-color: var(--gold-primary) var(--accent-black);
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 215, 0, 0.2);
         }
 
         .chip-selection::-webkit-scrollbar {
@@ -631,35 +714,44 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
+            padding: 5px;
+            border-radius: 8px;
+        }
+
+        .chip-btn:hover {
+            background: rgba(255, 215, 0, 0.1);
         }
 
         .chip-image {
-            width: 85px; /* Increased from 70px */
-            height: 85px; /* Increased from 70px */
+            width: 70px; /* Optimized size */
+            height: 70px; /* Optimized size */
             object-fit: contain;
             transition: all 0.3s ease;
         }
 
         .chip-amount {
             color: var(--white);
-            font-size: 12px;
+            font-size: 11px;
+            font-weight: 500;
         }
 
         .chip-btn:hover .chip-image {
-            transform: scale(1.1);
+            transform: scale(1.05);
         }
 
         .chip-btn.active .chip-image {
-            transform: scale(1.2);
+            transform: scale(1.1);
             filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
         }
         
         .game-controls {
             display: flex;
             justify-content: center;
-            gap: 15px;
+            align-items: center;
+            gap: 12px; /* Optimized gap */
             flex-wrap: wrap;
+            padding: 10px;
         }
         
         .selected-chip-display {
@@ -695,30 +787,32 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid var(--gold-primary);
-            border-radius: 15px;
-            padding: 15px 20px;
+            border-radius: 12px;
+            padding: 12px 15px; /* Reduced padding */
             color: var(--white);
             cursor: pointer;
             transition: all 0.3s ease;
-            min-width: 80px;
+            min-width: 70px; /* Slightly smaller */
         }
 
         .control-btn:hover {
             background: rgba(255, 215, 0, 0.1);
-            transform: translateY(-3px);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.2);
         }
 
         .control-btn i {
-            font-size: 20px;
+            font-size: 18px; /* Slightly smaller */
             color: var(--gold-primary);
         }
 
         .control-btn span {
-            font-size: 12px;
+            font-size: 11px; /* Slightly smaller */
             text-align: center;
+            font-weight: 500;
         }
         
         /* Selected Cards Display */
@@ -816,14 +910,30 @@
 
         /* --- KEY CHANGE: Mobile Responsiveness --- */
         @media (max-width: 768px) {
-            .nav-container { padding: 0 15px; }
-            .logo h1 { font-size: 20px; }
+            .nav-container {
+                padding: 0 15px;
+                flex-wrap: wrap; /* Allow wrapping on small screens */
+            }
+            .logo h1 { font-size: 18px; }
             .nav-menu { display: none; }
             .hamburger { display: flex; }
             .live-clock, .language-dropdown { display: none; } /* Hide some controls for simplicity */
+            
+            /* Wallet balance adjustments for mobile */
+            .wallet-dropdown {
+                padding: 4px 6px;
+            }
+            .wallet-btn {
+                font-size: 14px;
+                padding: 2px;
+                margin-right: 6px;
+            }
+            .wallet-amount-display {
+                font-size: 12px;
+            }
 
             .video-section {
-                height: 50vh; /* Proportional to desktop 70vh */
+                height: 50vh; /* Optimized for mobile */
             }
 
             .timer-overlay {
@@ -843,8 +953,17 @@
                 padding: 6px 10px;
                 font-size: 11px;
             }
-
-
+            
+            .game-type-indicator-visible {
+                top: 10px;
+                left: 10px;
+                padding: 6px 12px;
+            }
+            
+            .game-type-text {
+                font-size: 12px;
+                letter-spacing: 0.5px;
+            }
 
             .game-interface {
                 padding: 1rem 0.5rem;
@@ -857,15 +976,15 @@
             }
             
             .betting-zone, .central-card-area {
-                min-height: 160px; /* Proportional to desktop 140px */
-                padding: 1rem; /* Increased padding */
+                min-height: 130px; /* More compact mobile panels */
+                padding: 0.8rem; /* Reduced padding for mobile */
                 border-width: 2px;
-                gap: 0.8rem; /* Increased gap */
+                gap: 0.6rem; /* Reduced gap for mobile */
             }
 
             /* Andar and Bahar zones can be slightly taller to use extra space */
             .betting-zone {
-                min-height: 170px; /* Slightly taller than center, proportional */
+                min-height: 140px; /* Slightly taller than center, more compact */
             }
 
             .selected-cards {
@@ -873,79 +992,111 @@
                 padding: 5px;
             }
             
-            .zone-label { font-size: 1.1rem; /* Slightly increased */ }
-            .bet-amount { font-size: 1.4rem; /* Increased from 1.2rem */ padding: 8px; /* Increased padding */ }
+            .zone-label {
+                font-size: 1rem; /* Further reduced for mobile */
+                padding: 3px 6px;
+                letter-spacing: 0.5px;
+            }
+            .bet-amount {
+                font-size: 1.2rem; /* Optimized for mobile */
+                padding: 6px; /* Optimized padding */
+            }
             
-            .card-icon { font-size: 2rem; /* Reduced from 2.5rem */ }
+            .card-icon { font-size: 1.8rem; /* Optimized for mobile */ }
             .card-text { font-size: 0.8rem; }
 
             /* Make central card area more compact */
             .central-card-area {
-                padding: 0.6rem; /* Reduced padding */
-                min-height: 140px; /* Proportional to desktop height */
+                padding: 0.5rem; /* Further reduced padding for mobile */
+                min-height: 110px; /* More compact height for mobile */
             }
             .selected-card { font-size: 0.8rem; padding: 5px; min-width: 30px; }
             
             .andar-zone-image, .bahar-zone-image {
-                display: block;
-                width: 60px; /* Increased from 50px */
-                height: 60px; /* Increased from 50px */
-            }
-            .andar-zone-image-2, .bahar-zone-image-2 {
-                display: block;
-                width: 70px; /* Increased from 60px */
-                height: 90px; /* Increased from 80px */
+                width: 35px; /* More compact for mobile */
+                height: 50px; /* More compact for mobile */
+                font-size: 1.2rem;
             }
 
             .chip-selection {
                 gap: 8px;
-                padding: 0 10px;
-                justify-content: center;
+                padding: 8px 10px;
             }
 
             .chip-image {
-                width: 60px; /* Increased from 45px */
-                height: 60px; /* Increased from 45px */
-                transition: all 0.3s ease;
+                width: 50px; /* Optimized for mobile */
+                height: 50px; /* Optimized for mobile */
             }
 
             .chip-btn:active .chip-image,
             .chip-btn.active .chip-image {
-                transform: scale(1.4);
-                filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.8));
+                transform: scale(1.15);
+                filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
             }
-
-            .chip-selection {
-                gap: 15px; /* Increased gap for mobile */
-                padding: 12px; /* Increased padding */
-                justify-content: flex-start;
+            
+            .chip-amount {
+                font-size: 10px;
             }
             
             .selected-chip-display {
-                height: 50px;
-                min-width: 70px;
-                padding: 5px 10px;
+                height: 45px;
+                min-width: 65px;
+                padding: 5px 8px;
             }
-            .chip-value { font-size: 1rem; }
+            .chip-value { font-size: 0.9rem; }
             .chip-text { font-size: 0.7rem; }
 
             .control-btn {
-                padding: 10px;
-                gap: 5px;
-                min-width: 70px;
+                padding: 8px 10px;
+                gap: 3px;
+                min-width: 55px;
             }
-            .control-btn span { font-size: 10px; }
-            .control-btn i { font-size: 16px; }
+            .control-btn span { font-size: 9px; }
+            .control-btn i { font-size: 14px; }
 
             .recent-results-bottom {
                 padding: 10px;
-                gap: 8px;
+                gap: 6px;
             }
 
             .recent-results-bottom .result-chip {
-                width: 20px;
-                height: 20px;
+                width: 30px;
+                height: 30px;
+                font-size: 14px;
+            }
+        }
+        
+        /* Extra small screens */
+        @media (max-width: 480px) {
+            .nav-container {
+                padding: 0 10px;
+            }
+            
+            .wallet-dropdown {
+                padding: 3px 5px;
+            }
+            .wallet-btn {
                 font-size: 12px;
+                padding: 2px;
+                margin-right: 4px;
+            }
+            .wallet-amount-display {
+                font-size: 11px;
+            }
+            
+            .zone-label {
+                font-size: 0.9rem;
+                padding: 2px 5px;
+                letter-spacing: 0.5px;
+            }
+            
+            .main-betting-areas {
+                gap: 0.3rem;
+            }
+            
+            .betting-zone, .central-card-area {
+                min-height: 120px;
+                padding: 0.5rem;
             }
         }
 
@@ -958,6 +1109,10 @@
             <div class="nav-container">
                 <div class="logo">
                     <h1 id="userIdDisplay">1308544430</h1>
+                </div>
+                
+                <div class="game-type-indicator">
+                    <span class="game-type-text">Andar Bahar</span>
                 </div>
                 
                 <div class="nav-menu">
@@ -973,10 +1128,13 @@
                         <button class="wallet-btn" id="walletBtn">
                             <i class="fas fa-wallet"></i>
                         </button>
+                        <div class="wallet-balance-visible" id="walletBalanceVisible">
+                            <div class="wallet-amount-display" id="walletBalance">₹50,00,423.90</div>
+                        </div>
                         <div class="wallet-content" id="walletContent">
                             <div class="wallet-info">
-                                <div class="wallet-label">Balance</div>
-                                <div class="wallet-amount" id="walletBalance">₹50,00,423.90</div>
+                                <div class="wallet-label">Account</div>
+                                <div class="wallet-amount" id="walletBalanceDropdown">₹50,00,423.90</div>
                             </div>
                         </div>
                     </div>
@@ -997,6 +1155,11 @@
     </header>
 
     <div class="game-body">
+        <!-- Game Type Indicator - Top Left of Game Area -->
+        <div class="game-type-indicator-visible">
+            <span class="game-type-text">Andar Bahar</span>
+        </div>
+        
         <!-- Video Stream Section with Centered Timer Overlay -->
         <div class="video-section">
             <video id="liveStream" autoplay muted loop playsinline>
@@ -1040,8 +1203,7 @@
                         <div class="zone-label">ANDAR</div>
                     </div>
                     <div class="selected-cards" id="andarSelectedCards"></div>
-                    <img src="cards/D7.png" alt="Andar Card" class="andar-zone-image">
-                    <img src="cards/DJ.png" alt="Andar Card" class="andar-zone-image-2">
+                    <div class="andar-zone-image">🃏</div>
                     <div class="zone-footer">
                         <div class="bet-amount" id="andarBet">₹0</div>
                     </div>
@@ -1061,8 +1223,7 @@
                         <div class="zone-label">BAHAR</div>
                     </div>
                     <div class="selected-cards" id="baharSelectedCards"></div>
-                    <img src="cards/DQ.png" alt="Bahar Card" class="bahar-zone-image">
-                    <img src="cards/D7.png" alt="Bahar Card" class="bahar-zone-image-2">
+                    <div class="bahar-zone-image">🃏</div>
                     <div class="zone-footer">
                         <div class="bet-amount" id="baharBet">₹0</div>
                     </div>
@@ -1162,6 +1323,9 @@
             
             // Setup mobile menu
             setupMobileMenu();
+            
+            // Setup history scrolling
+            setupHistoryScrolling();
         });
 
         async function initializeGame() {
@@ -1425,6 +1589,7 @@
         function loadUserId() {
             const userIdDisplay = document.getElementById('userIdDisplay');
             const walletBalance = document.getElementById('walletBalance');
+            const walletBalanceDropdown = document.getElementById('walletBalanceDropdown');
             let userId = localStorage.getItem('userId') || '1308544430';
             let balance = localStorage.getItem('userBalance') || '5000423.90';
             playerBalance = parseFloat(balance);
@@ -1642,8 +1807,14 @@
 
         function updateBalanceDisplay() {
             const balanceEl = document.getElementById('walletBalance');
+            const balanceDropdownEl = document.getElementById('walletBalanceDropdown');
+            const formattedBalance = `₹${playerBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            
             if (balanceEl) {
-                balanceEl.textContent = `₹${playerBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                balanceEl.textContent = formattedBalance;
+            }
+            if (balanceDropdownEl) {
+                balanceDropdownEl.textContent = formattedBalance;
             }
             localStorage.setItem('userBalance', playerBalance.toString());
         }
@@ -1731,6 +1902,23 @@
             const deltaY = touchEndY - touchStartY;
             const minSwipeDistance = 50;
 
+            // Check if swipe is on history section
+            const historySection = document.getElementById('recentResults');
+            const historyRect = historySection ? historySection.getBoundingClientRect() : null;
+            
+            if (historyRect &&
+                touchStartY >= historyRect.top &&
+                touchStartY <= historyRect.bottom &&
+                touchStartX >= historyRect.left &&
+                touchStartX <= historyRect.right) {
+                
+                // Handle horizontal swipe on history section
+                if (Math.abs(deltaX) > minSwipeDistance && Math.abs(deltaY) < minSwipeDistance) {
+                    // History section already scrolls horizontally with native behavior
+                    return;
+                }
+            }
+
             if (Math.abs(deltaX) > Math.abs(deltaY)) {
                 // Horizontal swipe
                 if (Math.abs(deltaX) > minSwipeDistance) {
@@ -1763,6 +1951,44 @@
                         }
                     }
                 }
+            }
+        }
+        
+        // Add smooth scrolling for history section on desktop
+        function setupHistoryScrolling() {
+            const historySection = document.getElementById('recentResults');
+            if (historySection) {
+                let isDown = false;
+                let startX;
+                let scrollLeft;
+
+                historySection.addEventListener('mousedown', (e) => {
+                    isDown = true;
+                    startX = e.pageX - historySection.offsetLeft;
+                    scrollLeft = historySection.scrollLeft;
+                    historySection.style.cursor = 'grabbing';
+                });
+
+                historySection.addEventListener('mouseleave', () => {
+                    isDown = false;
+                    historySection.style.cursor = 'grab';
+                });
+
+                historySection.addEventListener('mouseup', () => {
+                    isDown = false;
+                    historySection.style.cursor = 'grab';
+                });
+
+                historySection.addEventListener('mousemove', (e) => {
+                    if (!isDown) return;
+                    e.preventDefault();
+                    const x = e.pageX - historySection.offsetLeft;
+                    const walk = (x - startX) * 2;
+                    historySection.scrollLeft = scrollLeft - walk;
+                });
+                
+                // Set initial cursor style
+                historySection.style.cursor = 'grab';
             }
         }
 
