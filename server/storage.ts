@@ -10,6 +10,7 @@ import {
   type GameHistoryEntry,
   type InsertGameHistory,
   type GamePhase,
+  type StreamSettings,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -38,6 +39,7 @@ export interface IStorage {
   dealCard(card: InsertDealtCard): Promise<DealtCard>;
   getDealtCards(gameId: string): Promise<DealtCard[]>;
   updateDealtCard(cardId: string, updates: Partial<DealtCard>): Promise<void>;
+  updateDealtCardForGame(gameId: string, cardId: string, updates: Partial<DealtCard>): Promise<void>;
   
   // Game history operations
   addGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry>;
@@ -328,6 +330,15 @@ export class MemStorage implements IStorage {
         Object.assign(cards[cardIndex], updates);
         break;
       }
+    }
+  }
+  
+  // More efficient method that directly updates a card in a specific game
+  async updateDealtCardForGame(gameId: string, cardId: string, updates: Partial<DealtCard>): Promise<void> {
+    const cards = this.dealtCards.get(gameId) || [];
+    const cardIndex = cards.findIndex((c: any) => c.id === cardId);
+    if (cardIndex !== -1) {
+      Object.assign(cards[cardIndex], updates);
     }
   }
 }
