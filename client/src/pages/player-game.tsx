@@ -313,7 +313,7 @@ export default function PlayerGame() {
   const baharCards = gameState.dealtCards.filter(card => card.side === 'bahar');
   
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
       {/* Circular Timer */}
       <CircularTimer
         seconds={gameState.currentTimer}
@@ -322,11 +322,11 @@ export default function PlayerGame() {
         isVisible={gameState.phase === 'betting'}
       />
       
-      {/* Header */}
+      {/* Header - Matches Legacy Format */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-black/50 backdrop-blur-md border-b border-gold/30">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="text-gold font-bold text-lg" data-testid="text-user-id">
-            ID: {userId.substring(0, 12)}...
+            {userId.substring(0, 12)}...
           </div>
           
           <div className="flex items-center gap-2 bg-gold/10 px-4 py-2 rounded-full border border-gold/30">
@@ -341,7 +341,7 @@ export default function PlayerGame() {
       {/* Main Content */}
       <main className="pt-20 pb-32 px-2 md:px-4">
         <div className="container mx-auto max-w-7xl">
-          {/* Video Stream */}
+          {/* Video Stream - Matches Legacy */}
           <div className="mb-6">
             <VideoStream 
               title="Andar Bahar Live Game"
@@ -387,14 +387,14 @@ export default function PlayerGame() {
             </div>
           )}
           
-          {/* Betting Areas - Three Column Layout */}
+          {/* Betting Areas - Three Column Layout - Matches Legacy */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-4 mb-6">
-            {/* Andar Side */}
+            {/* Andar Side - Matches Legacy Design */}
             <button
               onClick={() => placeBet('andar')}
               disabled={gameState.phase !== 'betting'}
               className={cn(
-                "relative p-6 rounded-xl bg-andar/90 border-2 border-andar",
+                "relative p-6 rounded-xl bg-[#A52A2A]/90 border-2 border-[#A52A2A]",
                 "transition-all duration-200 overflow-hidden",
                 "disabled:opacity-50 disabled:cursor-not-allowed",
                 "hover:scale-[1.02] hover:shadow-2xl hover:shadow-gold/30",
@@ -404,9 +404,9 @@ export default function PlayerGame() {
             >
               {/* Bet Info */}
               <div className="relative z-10 text-left mb-4">
-                <h3 className="text-2xl font-bold text-gold mb-2">ANDAR 1:1</h3>
+                <h3 className="text-xl md:text-2xl font-bold text-gold mb-2">ANDAR 1:1</h3>
                 <div className="flex items-center gap-2">
-                  {/* Chip indicator */}
+                  {/* Chip indicator - Matches Legacy */}
                   <div className="w-8 h-8 rounded-full bg-gold/30 border-2 border-gold flex items-center justify-center">
                     <span className="text-gold text-xs font-bold">₹</span>
                   </div>
@@ -425,7 +425,7 @@ export default function PlayerGame() {
                 )}
               </div>
               
-              {/* Cards Display */}
+              {/* Cards Display - Matches Legacy Card Display */}
               {andarCards.length > 0 && (
                 <ScrollArea className="w-full">
                   <div className="flex gap-2 pb-2">
@@ -442,32 +442,35 @@ export default function PlayerGame() {
               )}
             </button>
             
-            {/* Center - Opening Card */}
+            {/* Center - Opening Card - Matches Legacy */}
             <div className="flex items-center justify-center">
               <div className="text-center">
                 {gameState.openingCard ? (
                   <div className="mb-2">
-                    <div className="text-sm text-gold-muted mb-2">Opening Card</div>
-                    <PlayingCard 
-                      card={gameState.openingCard as Card}
-                      size="lg"
-                      className="ring-4 ring-gold"
-                    />
+                    <div className="text-sm text-gold mb-2">Opening Card</div>
+                    <div className="w-16 h-24 md:w-20 md:h-32 bg-white border-4 border-gold rounded-lg flex items-center justify-center shadow-lg">
+                      <div className="text-4xl md:text-5xl font-bold text-gray-900">
+                        {gameState.openingCard.slice(0, -1)}
+                      </div>
+                      <div className="text-2xl md:text-3xl font-bold text-red-600 ml-1">
+                        {gameState.openingCard.slice(-1)}
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <div className="w-20 h-32 rounded-lg bg-card border-2 border-dashed border-gold/30 flex items-center justify-center">
-                    <span className="text-sm text-muted-foreground">Waiting...</span>
+                  <div className="w-16 h-24 md:w-20 md:h-32 bg-white border-2 border-dashed border-gold/30 flex items-center justify-center rounded-lg">
+                    <span className="text-sm text-gray-500">Waiting...</span>
                   </div>
                 )}
               </div>
             </div>
             
-            {/* Bahar Side */}
+            {/* Bahar Side - Matches Legacy Design */}
             <button
               onClick={() => placeBet('bahar')}
               disabled={gameState.phase !== 'betting'}
               className={cn(
-                "relative p-6 rounded-xl bg-bahar/90 border-2 border-bahar",
+                "relative p-6 rounded-xl bg-[#01073b]/90 border-2 border-[#01073b]",
                 "transition-all duration-200 overflow-hidden",
                 "disabled:opacity-50 disabled:cursor-not-allowed",
                 "hover:scale-[1.02] hover:shadow-2xl hover:shadow-gold/30",
@@ -477,7 +480,7 @@ export default function PlayerGame() {
             >
               {/* Bet Info */}
               <div className="relative z-10 text-right mb-4">
-                <h3 className="text-2xl font-bold text-gold mb-2">BAHAR 1:1</h3>
+                <h3 className="text-xl md:text-2xl font-bold text-gold mb-2">BAHAR 1:1</h3>
                 <div className="flex items-center justify-end gap-2">
                   <div className="text-right">
                     <div className="text-sm text-white/80">Total Bets</div>
@@ -485,6 +488,7 @@ export default function PlayerGame() {
                       {formatCurrency(gameState.baharBets)}
                     </div>
                   </div>
+                  {/* Chip indicator - Matches Legacy */}
                   <div className="w-8 h-8 rounded-full bg-gold/30 border-2 border-gold flex items-center justify-center">
                     <span className="text-gold text-xs font-bold">₹</span>
                   </div>
@@ -497,7 +501,7 @@ export default function PlayerGame() {
                 )}
               </div>
               
-              {/* Cards Display */}
+              {/* Cards Display - Matches Legacy Card Display */}
               {baharCards.length > 0 && (
                 <ScrollArea className="w-full">
                   <div className="flex gap-2 pb-2 justify-end">
@@ -515,29 +519,29 @@ export default function PlayerGame() {
             </button>
           </div>
           
-          {/* Recent Results */}
+          {/* Recent Results - Matches Legacy */}
           <button
             onClick={() => setShowHistory(true)}
-            className="w-full p-4 bg-card rounded-xl border border-border hover-elevate mb-6"
+            className="w-full p-4 bg-[#0a0a0a] rounded-xl border border-gold/30 hover-elevate mb-6"
             data-testid="button-show-history"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-gold" />
-                <span className="font-semibold text-foreground">Card History</span>
+                <span className="font-semibold text-white">Card History</span>
               </div>
-              <span className="text-sm text-muted-foreground">Click for more →</span>
+              <span className="text-sm text-white/60">Click for more →</span>
             </div>
             
-            {/* Recent results row */}
+            {/* Recent results row - Matches Legacy */}
             <div className="flex gap-2 overflow-x-auto pb-2">
-              {gameHistory.slice(-10).map((game, index) => (
+              {gameHistory.slice(-12).map((game, index) => (
                 <div
                   key={game.id}
                   className={cn(
                     "w-7 h-7 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0",
                     "transition-transform hover:scale-110",
-                    game.winner === 'andar' ? 'bg-andar' : 'bg-bahar'
+                    game.winner === 'andar' ? 'bg-[#A52A2A]' : 'bg-[#01073b]'
                   )}
                   data-testid={`result-${index}`}
                 >
@@ -545,22 +549,20 @@ export default function PlayerGame() {
                 </div>
               ))}
               {gameHistory.length === 0 && (
-                <div className="text-sm text-muted-foreground">No games yet</div>
+                <div className="text-sm text-white/60">No games yet</div>
               )}
             </div>
             
-            {/* Progress bar */}
-            <div className="mt-2 h-1 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-gold w-1/2 rounded-full" />
-            </div>
+            {/* Progress bar - Matches Legacy */}
+            <div className="mt-2 h-1 bg-gold rounded-full overflow-hidden" />
           </button>
         </div>
       </main>
       
-      {/* Bottom Controls */}
+      {/* Bottom Controls - Matches Legacy Layout */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-black/90 backdrop-blur-md border-t border-gold/30 p-4">
         <div className="container mx-auto max-w-7xl">
-          {/* Chip Selector */}
+          {/* Chip Selector - Matches Legacy */}
           {showChipSelector && (
             <div className="mb-4 pb-4 border-b border-gold/30">
               <ScrollArea className="w-full">
@@ -578,7 +580,7 @@ export default function PlayerGame() {
             </div>
           )}
           
-          {/* Control Buttons */}
+          {/* Control Buttons - Matches Legacy Layout */}
           <div className="grid grid-cols-4 gap-2">
             <Button
               variant="outline"

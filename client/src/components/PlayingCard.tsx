@@ -37,14 +37,14 @@ export function PlayingCard({ card, size = "md", isWinning, className }: Playing
     lg: 'text-2xl',
     xl: 'text-3xl',
   };
-  
+
   return (
     <div
       className={cn(
         "relative rounded-lg bg-white border-2 flex flex-col items-center justify-center shadow-lg transition-all duration-300",
+        "border-gray-300", // Default border
         sizeClasses[size],
-        isWinning && "ring-4 ring-gold animate-pulse shadow-2xl shadow-gold/50",
-        !isWinning && "border-gray-300",
+        isWinning && "ring-4 ring-gold animate-pulse shadow-2xl shadow-gold/50", // Legacy winning effect
         className
       )}
       data-testid={`card-${card}`}

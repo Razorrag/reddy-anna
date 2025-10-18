@@ -23,6 +23,7 @@ export interface IStorage {
   // Game session operations
   createGameSession(session: InsertGameSession): Promise<GameSession>;
   getCurrentGameSession(): Promise<GameSession | undefined>;
+  getGameSession(gameId: string): Promise<GameSession | undefined>;
   updateGameSession(gameId: string, updates: Partial<GameSession>): Promise<void>;
   completeGameSession(gameId: string, winner: string, winningCard: string): Promise<void>;
   
@@ -36,6 +37,7 @@ export interface IStorage {
   // Card operations
   dealCard(card: InsertDealtCard): Promise<DealtCard>;
   getDealtCards(gameId: string): Promise<DealtCard[]>;
+  updateDealtCard(cardId: string, updates: Partial<DealtCard>): Promise<void>;
   
   // Game history operations
   addGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry>;
@@ -139,6 +141,10 @@ export class MemStorage implements IStorage {
   async getCurrentGameSession(): Promise<GameSession | undefined> {
     if (!this.currentGameId) return undefined;
     return this.gameSessions.get(this.currentGameId);
+  }
+
+  async getGameSession(gameId: string): Promise<GameSession | undefined> {
+    return this.gameSessions.get(gameId);
   }
 
   async updateGameSession(gameId: string, updates: Partial<GameSession>): Promise<void> {
@@ -294,7 +300,10 @@ export class MemStorage implements IStorage {
   // Stream settings operations
   async getStreamSettings(): Promise<any[]> {
     const settings: any[] = [];
-    for (const [key, value] of this.streamSettingMap.entries()) {
+    const keys = Array.from(this.streamSettingMap.keys());
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const value = this.streamSettingMap.get(key);
       settings.push({
         settingKey: key,
         settingValue: value
@@ -310,8 +319,11 @@ export class MemStorage implements IStorage {
   // Card operations (adding missing update method)
   async updateDealtCard(cardId: string, updates: Partial<DealtCard>): Promise<void> {
     // Find and update the card in any game's dealt cards
-    for (const [gameId, cards] of this.dealtCards.entries()) {
-      const cardIndex = cards.findIndex(c => c.id === cardId);
+    const gameIds = Array.from(this.dealtCards.keys());
+    for (let i = 0; i < gameIds.length; i++) {
+      const gameId = gameIds[i];
+      const cards = this.dealtCards.get(gameId) || [];
+      const cardIndex = cards.findIndex((c: any) => c.id === cardId);
       if (cardIndex !== -1) {
         Object.assign(cards[cardIndex], updates);
         break;

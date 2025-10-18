@@ -29,29 +29,29 @@ export function Notification({ type, message, onClose, duration = 3000 }: Notifi
   const Icon = icons[type];
   
   const colors = {
-    success: 'border-l-casino-success bg-casino-success/10 text-casino-success',
-    error: 'border-l-casino-error bg-casino-error/10 text-casino-error',
+    success: 'border-l-green-600 bg-green-900/90 text-green-100',
+    error: 'border-l-red-600 bg-red-900/90 text-red-100',
     info: 'border-l-gold bg-gold/10 text-gold',
-    warning: 'border-l-casino-warning bg-casino-warning/10 text-casino-warning',
+    warning: 'border-l-yellow-600 bg-yellow-900/90 text-yellow-100',
   };
   
   return (
     <div 
       className={cn(
         "flex items-center gap-3 p-4 rounded-lg border-l-4 shadow-lg backdrop-blur-sm",
-        "animate-in slide-in-from-right duration-300",
+        "animate-slide-in-right duration-300",
         "min-w-[300px] max-w-md",
         colors[type]
       )}
       data-testid={`notification-${type}`}
     >
       <Icon className="w-5 h-5 shrink-0" />
-      <p className="flex-1 text-sm font-medium text-foreground">
+      <p className="flex-1 text-sm font-medium text-white">
         {message}
       </p>
       <button
         onClick={onClose}
-        className="text-muted-foreground hover:text-foreground transition-colors"
+        className="text-white/70 hover:text-white transition-colors"
         data-testid="button-close-notification"
       >
         <X className="w-4 h-4" />
@@ -67,7 +67,7 @@ interface NotificationContainerProps {
 
 export function NotificationContainer({ notifications, onRemove }: NotificationContainerProps) {
   return (
-    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2">
+    <div className="fixed top-20 right-4 z-[100] flex flex-col gap-2">
       {notifications.map((notification) => (
         <Notification
           key={notification.id}

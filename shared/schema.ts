@@ -63,6 +63,13 @@ export const streamSettings = pgTable("stream_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Stream settings type for storage interface
+export interface StreamSettings {
+  settingKey: string;
+  settingValue: string;
+  description?: string;
+}
+
 // Game history table
 export const gameHistory = pgTable("game_history", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

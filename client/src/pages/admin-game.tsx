@@ -74,7 +74,7 @@ export default function AdminGame() {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
   
-  // Generate all 52 cards
+  // Generate all 52 cards - Matches Legacy Layout
   const allCards: Card[] = [];
   for (const rank of RANKS) {
     for (const suit of SUITS) {
@@ -155,6 +155,19 @@ export default function AdminGame() {
     setSelectedOpeningCard(card);
     setGameSettings(prev => ({ ...prev, openingCard: card }));
     addNotification('success', `Opening card set to ${card}`);
+    
+    // Broadcast opening card to players
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'sync_game_state',
+        data: {
+          openingCard: card,
+          phase: 'betting',
+          currentTimer: timerDuration,
+          round
+        }
+      }));
+    }
   };
   
   // Start game
@@ -348,7 +361,7 @@ export default function AdminGame() {
             </p>
           </div>
           
-          {/* Settings Button */}
+          {/* Settings Button - Matches Legacy */}
           <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
             <DialogTrigger asChild>
               <Button
