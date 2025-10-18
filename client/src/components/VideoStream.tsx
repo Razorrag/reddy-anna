@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Hls from "hls.js";
 
 interface VideoStreamProps {
   streamUrl?: string;
@@ -18,39 +19,133 @@ export function VideoStream({
   title = "Andar Bahar Live Game"
 }: VideoStreamProps) {
   const [streamError, setStreamError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Initialize HLS.js for RTMP streams
+  useEffect(() => {
+    if (streamType === 'rtmp' && streamUrl && videoRef.current) {
+      const video = videoRef.current;
+      
+      // Convert RTMP URL to HLS URL
+      // RTMP: rtmp://localhost:1935/live/streamKey
+      // HLS: http://localhost:8000/live/streamKey.m3u8
+      let hlsUrl = streamUrl;
+      if (streamUrl.startsWith('rtmp://')) {
+        hlsUrl = streamUrl
+          .replace('rtmp://', 'http://')
+          .replace(':1935', ':8000') + '.m3u8';
+      }
+      
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 90
+        });
+        
+        hls.loadSource(hlsUrl);
+        hls.attachMedia(video);
+        
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.play().catch(err => {
+            console.error('Error playing video:', err);
+            setStreamError(true);
+          });
+        });
+        
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          console.error('HLS error:', event, data);
+          if (data.fatal) {
+            setStreamError(true);
+          }
+        });
+        
+        // Store HLS instance for cleanup
+        (window as any).hlsInstance = hls;
+        
+        return () => {
+          hls.destroy();
+        };
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        video.src = hlsUrl;
+        video.play().catch(err => {
+          console.error('Error playing video:', err);
+          setStreamError(true);
+        });
+      }
+    }
+  }, [streamType, streamUrl]);
+
+  // Cleanup HLS instance on unmount
+  useEffect(() => {
+    return () => {
+      if ((window as any).hlsInstance) {
+        (window as any).hlsInstance.destroy();
+        (window as any).hlsInstance = null;
+      }
+    };
+  }, []);
+
+  const renderStreamContent = () => {
+    switch (streamType) {
+      case 'video':
+        return (
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            autoPlay
+            muted
+            loop
+            playsInline
+            onError={() => setStreamError(true)}
+            data-testid="video-stream"
+          >
+            <source src={streamUrl} type="video/mp4" />
+          </video>
+        );
+      case 'rtmp':
+        return (
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            autoPlay
+            muted
+            playsInline
+            onError={() => setStreamError(true)}
+            data-testid="rtmp-stream"
+          />
+        );
+      case 'embed':
+        if (streamUrl) {
+          return (
+            <iframe
+              className="w-full h-full"
+              src={streamUrl}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              data-testid="embed-stream"
+            />
+          );
+        }
+        // Fall through to default if no embed URL
+      default:
+        return (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 to-black">
+            <div className="text-center">
+              <div className="text-6xl font-bold text-gold mb-4">A | B</div>
+              <div className="text-xl text-gold">Andar Bahar</div>
+              <div className="text-sm text-white/60 mt-2">Stream Starting Soon...</div>
+            </div>
+          </div>
+        );
+    }
+  };
 
   return (
     <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
       {/* Video/Stream Content */}
-      {streamType === 'video' && streamUrl ? (
-        <video
-          className="w-full h-full object-cover"
-          autoPlay
-          muted
-          loop
-          playsInline
-          onError={() => setStreamError(true)}
-          data-testid="video-stream"
-        >
-          <source src={streamUrl} type="video/mp4" />
-        </video>
-      ) : streamType === 'embed' && streamUrl ? (
-        <iframe
-          className="w-full h-full"
-          src={streamUrl}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          data-testid="embed-stream"
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 to-black">
-          <div className="text-center">
-            <div className="text-6xl font-bold text-gold mb-4">A | B</div>
-            <div className="text-xl text-gold">Andar Bahar</div>
-            <div className="text-sm text-white/60 mt-2">Stream Starting Soon...</div>
-          </div>
-        </div>
-      )}
+      {renderStreamContent()}
 
       {/* Overlay Information - Matches Legacy Layout */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none">
