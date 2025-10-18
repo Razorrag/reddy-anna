@@ -16,24 +16,24 @@ export function PlayingCard({ card, size = "md", isWinning, className }: Playing
   // Determine suit color
   const suitColor = (suit === '♥' || suit === '♦') ? 'text-red-600' : 'text-gray-900';
   
-  // Size variants
+  // Size variants - Matches Legacy Sizing
   const sizeClasses = {
     sm: 'w-10 h-14',
-    md: 'w-16 h-24',
+    md: 'w-14 h-20', // Legacy size
     lg: 'w-20 h-32',
     xl: 'w-24 h-36',
   };
   
   const rankSizes = {
-    sm: 'text-xl',
-    md: 'text-3xl',
+    sm: 'text-lg',
+    md: 'text-2xl', // Legacy size
     lg: 'text-4xl',
     xl: 'text-5xl',
   };
   
   const suitSizes = {
-    sm: 'text-base',
-    md: 'text-xl',
+    sm: 'text-sm',
+    md: 'text-lg', // Legacy size
     lg: 'text-2xl',
     xl: 'text-3xl',
   };

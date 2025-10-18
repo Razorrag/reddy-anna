@@ -44,6 +44,12 @@ export interface IStorage {
   // Settings operations
   getGameSettings(): Promise<{ minBet: number; maxBet: number; timerDuration: number }>;
   updateGameSettings(settings: { minBet?: number; maxBet?: number; timerDuration?: number }): Promise<void>;
+  getGameSetting(key: string): Promise<string | undefined>;
+  updateGameSetting(key: string, value: string): Promise<void>;
+  
+  // Stream settings operations
+  getStreamSettings(): Promise<StreamSettings[]>;
+  updateStreamSetting(key: string, value: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -54,6 +60,8 @@ export class MemStorage implements IStorage {
   private gameHistory: GameHistoryEntry[];
   private currentGameId: string | null;
   private gameSettings: { minBet: number; maxBet: number; timerDuration: number };
+  private gameSettingMap: Map<string, string>;
+  private streamSettingMap: Map<string, string>;
 
   constructor() {
     this.users = new Map();
@@ -67,6 +75,18 @@ export class MemStorage implements IStorage {
       maxBet: 50000,
       timerDuration: 30,
     };
+    this.gameSettingMap = new Map([
+      ['minBet', '1000'],
+      ['maxBet', '50000'],
+      ['timerDuration', '30'],
+      ['openingCard', 'A♠'],
+    ]);
+    this.streamSettingMap = new Map([
+      ['stream_url', '/hero images/uhd_30fps.mp4'],
+      ['stream_title', 'Andar Bahar Live Game'],
+      ['stream_status', 'live'],
+      ['stream_type', 'video'],
+    ]);
   }
 
   // User operations
@@ -243,6 +263,60 @@ export class MemStorage implements IStorage {
     if (settings.minBet !== undefined) this.gameSettings.minBet = settings.minBet;
     if (settings.maxBet !== undefined) this.gameSettings.maxBet = settings.maxBet;
     if (settings.timerDuration !== undefined) this.gameSettings.timerDuration = settings.timerDuration;
+  }
+
+  async getGameSetting(key: string): Promise<string | undefined> {
+    // Map legacy keys to internal keys
+    const legacyToInternalMap: Record<string, string> = {
+      'opening_card': 'openingCard',
+      'max_bet_amount': 'maxBet',
+      'min_bet_amount': 'minBet',
+      'game_timer': 'timerDuration'
+    };
+    
+    const internalKey = legacyToInternalMap[key] || key;
+    return this.gameSettingMap.get(internalKey);
+  }
+
+  async updateGameSetting(key: string, value: string): Promise<void> {
+    // Map legacy keys to internal keys
+    const legacyToInternalMap: Record<string, string> = {
+      'opening_card': 'openingCard',
+      'max_bet_amount': 'maxBet',
+      'min_bet_amount': 'minBet',
+      'game_timer': 'timerDuration'
+    };
+    
+    const internalKey = legacyToInternalMap[key] || key;
+    this.gameSettingMap.set(internalKey, value);
+  }
+
+  // Stream settings operations
+  async getStreamSettings(): Promise<any[]> {
+    const settings: any[] = [];
+    for (const [key, value] of this.streamSettingMap.entries()) {
+      settings.push({
+        settingKey: key,
+        settingValue: value
+      });
+    }
+    return settings;
+  }
+
+  async updateStreamSetting(key: string, value: string): Promise<void> {
+    this.streamSettingMap.set(key, value);
+  }
+  
+  // Card operations (adding missing update method)
+  async updateDealtCard(cardId: string, updates: Partial<DealtCard>): Promise<void> {
+    // Find and update the card in any game's dealt cards
+    for (const [gameId, cards] of this.dealtCards.entries()) {
+      const cardIndex = cards.findIndex(c => c.id === cardId);
+      if (cardIndex !== -1) {
+        Object.assign(cards[cardIndex], updates);
+        break;
+      }
+    }
   }
 }
 

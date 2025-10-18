@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Reddy Anna Kossu</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Video Background -->
+    <div class="video-background">
+        <video autoplay muted loop playsinline>
+            <source src="hero images/uhd_30fps.mp4" type="video/mp4">
+        </video>
+    </div>
+    <div class="video-overlay"></div>
+    
+    <!-- Header -->
+    <header class="header">
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="logo">
+                    <h1>Reddy Anna Kossu</h1>
+                </div>
+                
+                <div class="nav-menu">
+                    <ul class="nav-list">
+                        <li><a href="index.html" class="nav-link">Home</a></li>
+                        <li><a href="index.html#about" class="nav-link">About</a></li>
+                        <li><a href="index.html#game-rules" class="nav-link">Game Rules</a></li>
+                        <li><a href="https://wa.me/918686886632" target="_blank" class="nav-link">Contact</a></li>
+                        <li><a href="login.html" class="nav-link active">Login</a></li>
+                        <li><a href="signup.html" class="nav-link">SignUp</a></li>
+                    </ul>
+                </div>
+                
+                <div class="nav-controls">
+                    <div class="language-selector">
+                        <select id="languageSelect" class="language-dropdown">
+                            <option value="en">English</option>
+                            <option value="hi">हिंदी</option>
+                            <option value="te">తెలుగు</option>
+                        </select>
+                    </div>
+                    
+                    <div class="hamburger">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Login Section -->
+    <section class="auth-section">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h2 class="auth-title" data-en="Welcome Back" data-hi="वापस स्वागत है" data-te="మళ్లీ స్వాగతం">Welcome Back</h2>
+                    <p class="auth-subtitle" data-en="Sign in to your account to continue playing" data-hi="खेलना जारी रखने के लिए अपने खाते में साइन इन करें" data-te="ఆడటం కొనసాగించడానికి మీ ఖాతాలోకి సైన్ ఇన్ చేయండి">
+                        Sign in to your account to continue playing
+                    </p>
+                </div>
+
+                <form class="auth-form" id="loginForm">
+                    <div class="form-group">
+                        <label for="mobile" class="form-label" data-en="Mobile Number" data-hi="मोबाइल नंबर" data-te="మొబైల్ నంబర్">Mobile Number</label>
+                        <div class="input-group">
+                            <i class="fas fa-phone input-icon"></i>
+                            <input type="tel" id="mobile" name="mobile" class="form-input" placeholder="Enter your mobile number" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password" class="form-label" data-en="Password" data-hi="पासवर्ड" data-te="పాస్‌వర్డ్">Password</label>
+                        <div class="input-group">
+                            <i class="fas fa-lock input-icon"></i>
+                            <input type="password" id="password" name="password" class="form-input" placeholder="Enter your password" required>
+                            <button type="button" class="password-toggle" onclick="togglePassword()">
+                                <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-options">
+                        <div class="remember-me">
+                            <input type="checkbox" id="remember" name="remember">
+                            <label for="remember" data-en="Remember me" data-hi="मुझे याद रखें" data-te="నన్ను గుర్తుంచుకోండి">Remember me</label>
+                        </div>
+                        <a href="https://wa.me/918686886632" target="_blank" class="forgot-password" data-en="Forgot Password?" data-hi="पासवर्ड भूल गए?" data-te="పాస్‌వర్డ్ మర్చిపోయారా?">Forgot Password?</a>
+                    </div>
+
+                    <button type="submit" class="auth-btn" data-en="Sign In" data-hi="साइन इन करें" data-te="సైన్ ఇన్ చేయండి">
+                        Sign In
+                    </button>
+
+                    <div class="auth-divider">
+                        <span data-en="or" data-hi="या" data-te="లేదా">or</span>
+                    </div>
+
+                    <div class="auth-footer">
+                        <p data-en="Don't have an account?" data-hi="खाता नहीं है?" data-te="ఖాతా లేదా?">Don't have an account?</p>
+                        <a href="signup.html" class="auth-link" data-en="Sign Up" data-hi="साइन अप करें" data-te="సైన్ అప్ చేయండి">Sign Up</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- WhatsApp Float Button -->
+    <div class="whatsapp-float">
+        <a href="https://wa.me/918686886632" target="_blank" class="whatsapp-btn">
+            <i class="fab fa-whatsapp"></i>
+        </a>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+    <script>
+        // Notification helper for pages without direct access to class instance
+        function showNotification(message, type) {
+            if (typeof reddyAnnaKossu !== 'undefined' && reddyAnnaKossu && typeof reddyAnnaKossu.showNotification === 'function') {
+                reddyAnnaKossu.showNotification(message, type);
+            } else {
+                alert(message);
+            }
+        }
+
+        // Initialize navigation for login page
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize language support
+            if (typeof reddyAnnaKossu !== 'undefined') {
+                reddyAnnaKossu.initializeLanguageSupport();
+            }
+            
+            // Handle navigation links
+            const navLinks = document.querySelectorAll('.nav-link');
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    const href = link.getAttribute('href');
+                    if (href.startsWith('http') || href.includes('.html')) {
+                        // Let browser handle external and page links
+                        return;
+                    }
+                    if (href.startsWith('#')) {
+                        e.preventDefault();
+                        // For anchor links, go to homepage first
+                        window.location.href = 'index.html' + href;
+                    }
+                });
+            });
+        });
+
+        // Login form functionality
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const mobile = document.getElementById('mobile').value.trim();
+            const password = document.getElementById('password').value;
+            
+            if (!mobile || !password) {
+                showNotification('Please fill in all fields', 'error');
+                return;
+            }
+
+            try {
+                const API_BASE_URL = window.API_BASE_URL;
+                const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mobile, password })
+                });
+
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    const msg = data?.message || (data?.errors && data.errors[0]?.msg) || 'Login failed';
+                    showNotification(msg, 'error');
+                    return;
+                }
+
+                // Persist user for nav display
+                try {
+                    if (data && data.user) {
+                        localStorage.setItem('rk_user', JSON.stringify({
+                            id: data.user.id,
+                            name: data.user.name,
+                            mobile: data.user.mobile,
+                            email: data.user.email || ''
+                        }));
+                    }
+                } catch (_) {}
+
+                showNotification('Login successful! Redirecting...', 'success');
+                setTimeout(() => {
+                    window.location.href = 'user-admin.html';
+                }, 1500);
+            } catch (err) {
+                showNotification('Network error. Please try again.', 'error');
+            }
+        });
+
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const toggleIcon = document.getElementById('passwordToggleIcon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        }
+    </script>
+</body>
+</html>

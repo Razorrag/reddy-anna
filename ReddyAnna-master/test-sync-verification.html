@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sync Verification Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .message {
+            background-color: #e2e3e5;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px 0;
+            font-family: monospace;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .game-state {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-Time Synchronization Verification</h1>
+    
+    <div class="container">
+        <h2>WebSocket Connection Status</h2>
+        <div id="connectionStatus" class="status disconnected">Disconnected</div>
+        <button onclick="connectWebSocket()">Connect WebSocket</button>
+        <button onclick="disconnectWebSocket()">Disconnect WebSocket</button>
+    </div>
+    
+    <div class="container">
+        <h2>Game State</h2>
+        <div class="game-state">
+            <p><strong>Timer:</strong> <span id="timerValue">--</span></p>
+            <p><strong>Phase:</strong> <span id="phaseValue">--</span></p>
+            <p><strong>Opening Card:</strong> <span id="openingCardValue">--</span></p>
+            <p><strong>Andar Bets:</strong> <span id="andarBetsValue">--</span></p>
+            <p><strong>Bahar Bets:</strong> <span id="baharBetsValue">--</span></p>
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>Test Controls</h2>
+        <button onclick="testTimerUpdate()">Test Timer Update</button>
+        <button onclick="testBettingUpdate()">Test Betting Update</button>
+        <button onclick="testCardDeal()">Test Card Deal</button>
+        <button onclick="requestSync()">Request Sync</button>
+    </div>
+    
+    <div class="container">
+        <h2>Messages</h2>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let websocketConnection = null;
+        const currentGameId = 'default-game';
+        
+        // Connect WebSocket
+        function connectWebSocket() {
+            if (websocketConnection && websocketConnection.readyState === WebSocket.OPEN) {
+                addMessage('WebSocket already connected');
+                return;
+            }
+            
+            const wsUrl = `ws://localhost:4000`;
+            addMessage(`Connecting to WebSocket at: ${wsUrl}`);
+            
+            try {
+                websocketConnection = new WebSocket(wsUrl);
+                
+                websocketConnection.onopen = function(event) {
+                    addMessage('WebSocket connection established');
+                    updateConnectionStatus(true);
+                    
+                    // Authenticate
+                    websocketConnection.send(JSON.stringify({
+                        type: 'authenticate',
+                        data: { userId: 'test-user' }
+                    }));
+                    
+                    // Subscribe to game
+                    websocketConnection.send(JSON.stringify({
+                        type: 'subscribe_game',
+                        data: { gameId: currentGameId }
+                    }));
+                    
+                    // Request sync
+                    setTimeout(() => {
+                        requestSync();
+                    }, 1000);
+                };
+                
+                websocketConnection.onmessage = function(event) {
+                    try {
+                        const message = JSON.parse(event.data);
+                        handleWebSocketMessage(message);
+                    } catch (error) {
+                        addMessage('Error parsing message: ' + error.message);
+                    }
+                };
+                
+                websocketConnection.onclose = function(event) {
+                    addMessage(`WebSocket connection closed: ${event.code} ${event.reason}`);
+                    updateConnectionStatus(false);
+                };
+                
+                websocketConnection.onerror = function(error) {
+                    addMessage('WebSocket error: ' + error);
+                    updateConnectionStatus(false);
+                };
+            } catch (error) {
+                addMessage('Failed to connect WebSocket: ' + error.message);
+                updateConnectionStatus(false);
+            }
+        }
+        
+        // Disconnect WebSocket
+        function disconnectWebSocket() {
+            if (websocketConnection) {
+                websocketConnection.close();
+                websocketConnection = null;
+                updateConnectionStatus(false);
+                addMessage('WebSocket disconnected');
+            }
+        }
+        
+        // Handle WebSocket messages
+        function handleWebSocketMessage(message) {
+            addMessage(`Received: ${message.type}`);
+            
+            switch (message.type) {
+                case 'authenticated':
+                    addMessage('Authenticated successfully');
+                    break;
+                    
+                case 'subscribed':
+                    addMessage(`Subscribed to game: ${message.data.gameId}`);
+                    break;
+                    
+                case 'sync_game_state':
+                    updateGameState(message.data.gameState);
+                    break;
+                    
+                case 'timer_update':
+                    document.getElementById('timerValue').textContent = message.data.timer;
+                    document.getElementById('phaseValue').textContent = message.data.phase;
+                    addMessage(`Timer updated: ${message.data.timer}s, Phase: ${message.data.phase}`);
+                    break;
+                    
+                case 'betting_stats':
+                    document.getElementById('andarBetsValue').textContent = message.data.andarBets;
+                    document.getElementById('baharBetsValue').textContent = message.data.baharBets;
+                    addMessage(`Betting stats: Andar: ${message.data.andarBets}, Bahar: ${message.data.baharBets}`);
+                    break;
+                    
+                case 'card_dealt':
+                    addMessage(`Card dealt: ${message.data.card.rank}${message.data.card.suit} on ${message.data.side}`);
+                    break;
+                    
+                default:
+                    addMessage(`Unknown message type: ${message.type}`);
+            }
+        }
+        
+        // Update game state display
+        function updateGameState(gameState) {
+            if (gameState.timer !== undefined) {
+                document.getElementById('timerValue').textContent = gameState.timer;
+            }
+            if (gameState.phase) {
+                document.getElementById('phaseValue').textContent = gameState.phase;
+            }
+            if (gameState.openingCard) {
+                document.getElementById('openingCardValue').textContent = 
+                    `${gameState.openingCard.rank}${gameState.openingCard.suit}`;
+            }
+            if (gameState.bettingStats) {
+                document.getElementById('andarBetsValue').textContent = gameState.bettingStats.andarBets;
+                document.getElementById('baharBetsValue').textContent = gameState.bettingStats.baharBets;
+            }
+            addMessage('Game state synchronized');
+        }
+        
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            if (connected) {
+                statusElement.className = 'status connected';
+                statusElement.textContent = 'Connected';
+            } else {
+                statusElement.className = 'status disconnected';
+                statusElement.textContent = 'Disconnected';
+            }
+        }
+        
+        // Add message to messages div
+        function addMessage(message) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'message';
+            messageElement.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        // Test timer update
+        async function testTimerUpdate() {
+            try {
+                const response = await fetch('http://localhost:4000/api/game/update-timer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        time: 25,
+                        phase: 'betting',
+                        game_id: currentGameId
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    addMessage('Timer update test successful');
+                } else {
+                    addMessage('Timer update test failed: ' + result.message);
+                }
+            } catch (error) {
+                addMessage('Timer update test error: ' + error.message);
+            }
+        }
+        
+        // Test betting update
+        async function testBettingUpdate() {
+            try {
+                const response = await fetch('http://localhost:4000/api/game/submit-bets', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        andarBets: 5000,
+                        baharBets: 3000,
+                        game_id: currentGameId
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    addMessage('Betting update test successful');
+                } else {
+                    addMessage('Betting update test failed: ' + result.message);
+                }
+            } catch (error) {
+                addMessage('Betting update test error: ' + error.message);
+            }
+        }
+        
+        // Test card deal
+        async function testCardDeal() {
+            try {
+                const response = await fetch('http://localhost:4000/api/game/deal-card', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        card: 'A♠',
+                        side: 'andar',
+                        position: 1,
+                        game_id: currentGameId
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    addMessage('Card deal test successful');
+                } else {
+                    addMessage('Card deal test failed: ' + result.message);
+                }
+            } catch (error) {
+                addMessage('Card deal test error: ' + error.message);
+            }
+        }
+        
+        // Request sync
+        function requestSync() {
+            if (websocketConnection && websocketConnection.readyState === WebSocket.OPEN) {
+                websocketConnection.send(JSON.stringify({
+                    type: 'sync_request',
+                    data: { gameId: currentGameId }
+                }));
+                addMessage('Sync request sent');
+            } else {
+                addMessage('Cannot request sync - WebSocket not connected');
+            }
+        }
+        
+        // Auto-connect on page load
+        window.onload = function() {
+            addMessage('Page loaded. Click "Connect WebSocket" to start testing.');
+        };
+    </script>
+</body>
+</html>

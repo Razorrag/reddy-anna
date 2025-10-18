@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);
@@ -13,6 +15,16 @@
   /* Backgrounds applied on top of other backgrounds when hovered/active */
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
+
+  /* Legacy color scheme */
+  --gold-primary: #ffd700;
+  --gold-light: #ffed4e;
+  --gold-secondary: #ffed4e;
+  --red-primary: #dc143c;
+  --andar: #A52A2A; /* Dark red */
+  --bahar: #01073b; /* Dark blue */
+  --primary-black: #0a0a0a;
+  --white: #ffffff;
 
   --background: 0 0% 98%;
 
@@ -240,6 +252,60 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .bg-andar {
+    @apply bg-[#A52A2A];
+  }
+  
+  .bg-bahar {
+    @apply bg-[#01073b];
+  }
+  
+  .bg-gold {
+    @apply bg-[#ffd700];
+  }
+  
+  .bg-gold-light {
+    @apply bg-[#ffed4e];
+  }
+  
+  .text-andar {
+    @apply text-[#A52A2A];
+  }
+  
+  .text-bahar {
+    @apply text-[#01073b];
+  }
+  
+  .text-gold {
+    @apply text-[#ffd700];
+  }
+  
+  .text-gold-light {
+    @apply text-[#ffed4e];
+  }
+  
+  .border-andar {
+    @apply border-[#A52A2A];
+  }
+  
+  .border-bahar {
+    @apply border-[#01073b];
+  }
+  
+  .border-gold {
+    @apply border-[#ffd700];
+  }
+  
+  .aspect-card {
+    aspect-ratio: 2/3;
+  }
+  
+  .hover-elevate {
+    @apply hover:scale-105 transition-transform duration-200;
   }
 }
 

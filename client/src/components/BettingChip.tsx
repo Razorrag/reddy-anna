@@ -13,17 +13,22 @@ export function BettingChip({ amount, isSelected, onClick }: BettingChipProps) {
     if (amt >= 1000) return `₹${amt / 1000}k`;
     return `₹${amt}`;
   };
-  
-  // Color scheme based on amount
-  const getChipColor = () => {
-    if (amount >= 100000) return 'from-purple-600 to-purple-800';
-    if (amount >= 50000) return 'from-red-600 to-red-800';
-    if (amount >= 25000) return 'from-green-600 to-green-800';
-    if (amount >= 10000) return 'from-blue-600 to-blue-800';
-    if (amount >= 5000) return 'from-yellow-600 to-yellow-800';
-    return 'from-gray-600 to-gray-800';
+
+  // Map amount to image path - Matches Legacy Coins
+  const getChipImage = (amount: number) => {
+    switch (amount) {
+      case 100000: return "/coins/100000.png";
+      case 50000: return "/coins/50000.png";
+      case 40000: return "/coins/40000.png";
+      case 30000: return "/coins/30000.png";
+      case 20000: return "/coins/20000.png";
+      case 10000: return "/coins/10000.png";
+      case 5000: return "/coins/5000.png";
+      case 2500: return "/coins/2500.png";
+      default: return "/coins/2500.png"; // Default to smallest chip
+    }
   };
-  
+
   return (
     <button
       onClick={onClick}
@@ -35,30 +40,40 @@ export function BettingChip({ amount, isSelected, onClick }: BettingChipProps) {
       )}
       data-testid={`chip-${amount}`}
     >
-      {/* Chip Circle */}
+      {/* Chip Image */}
       <div className={cn(
         "w-16 h-16 md:w-20 md:h-20 rounded-full",
-        "bg-gradient-to-br shadow-lg",
         "flex items-center justify-center",
         "border-4 border-white/30",
         "relative overflow-hidden",
-        getChipColor(),
-        isSelected && "ring-4 ring-gold shadow-gold/50 shadow-2xl"
+        isSelected && "ring-4 ring-gold shadow-gold/50 shadow-2xl",
+        "bg-white" // Ensure background for image
       )}>
-        {/* Inner circle design */}
-        <div className="absolute inset-2 rounded-full border-2 border-white/20" />
-        <div className="absolute inset-4 rounded-full border border-white/10" />
-        
-        {/* Amount text */}
-        <span className="relative z-10 text-white font-bold text-sm md:text-base">
-          {formatAmount(amount)}
-        </span>
-        
-        {/* Shine effect */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-50" />
+        <img 
+          src={getChipImage(amount)} 
+          alt={`₹${formatAmount(amount)}`}
+          className="w-full h-full object-contain p-1"
+          onError={(e) => {
+            // Fallback to a simple circle with text if image fails to load
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            const fallback = target.parentElement?.querySelector('.chip-fallback');
+            if (fallback) {
+              fallback.classList.remove('hidden');
+            }
+          }}
+        />
+        <div className={cn(
+          "w-full h-full rounded-full flex items-center justify-center",
+          "chip-fallback hidden"
+        )}>
+          <span className="text-white font-bold text-sm md:text-base">
+            {formatAmount(amount)}
+          </span>
+        </div>
       </div>
-      
-      {/* Label */}
+
+      {/* Label - Matches Legacy Style */}
       <span className="text-xs md:text-sm font-medium text-gold">
         {formatAmount(amount)}
       </span>

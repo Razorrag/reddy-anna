@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timer Synchronization Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .timer-display {
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .phase-display {
+            font-size: 24px;
+            text-align: center;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0069d9;
+        }
+        .test-instructions {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Timer Synchronization Test</h1>
+    
+    <div class="test-instructions">
+        <h2>Test Instructions</h2>
+        <ol>
+            <li>Open this page in one browser window</li>
+            <li>Open game-admin.html in another browser window</li>
+            <li>Start a game in game-admin.html and select an opening card</li>
+            <li>Click "Start 1st Round" in game-admin.html</li>
+            <li>Observe if the timer countdown appears and updates in real-time on this page</li>
+            <li>The timer should count down from 30 to 0 and match the timer in game-admin.html</li>
+        </ol>
+    </div>
+    
+    <div class="container">
+        <h2>Connection Status</h2>
+        <div id="connectionStatus" class="status disconnected">Disconnected</div>
+        <button onclick="connectWebSocket()">Connect WebSocket</button>
+        <button onclick="disconnectWebSocket()">Disconnect WebSocket</button>
+    </div>
+    
+    <div class="container">
+        <h2>Timer Display</h2>
+        <div id="timerDisplay" class="timer-display">--</div>
+        <div id="phaseDisplay" class="phase-display">Waiting for game state...</div>
+    </div>
+    
+    <div class="container">
+        <h2>Event Log</h2>
+        <div id="eventLog" class="log"></div>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <script src="config.js"></script>
+    <script>
+        let websocketConnection = null;
+        let currentGameId = 'default-game';
+        
+        function log(message) {
+            const logElement = document.getElementById('eventLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('eventLog').innerHTML = '';
+        }
+        
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            if (connected) {
+                statusElement.textContent = 'Connected';
+                statusElement.className = 'status connected';
+            } else {
+                statusElement.textContent = 'Disconnected';
+                statusElement.className = 'status disconnected';
+            }
+        }
+        
+        function updateTimerDisplay(timer) {
+            document.getElementById('timerDisplay').textContent = timer;
+        }
+        
+        function updatePhaseDisplay(phase) {
+            let phaseText = 'Unknown';
+            switch (phase) {
+                case 'betting':
+                    phaseText = 'Betting Phase';
+                    break;
+                case 'dealing':
+                    phaseText = 'Dealing Phase';
+                    break;
+                case 'complete':
+                    phaseText = 'Game Complete';
+                    break;
+                case 'closed':
+                    phaseText = 'Betting Closed';
+                    break;
+                default:
+                    phaseText = phase || 'Waiting for game state...';
+            }
+            document.getElementById('phaseDisplay').textContent = phaseText;
+        }
+        
+        function connectWebSocket() {
+            if (websocketConnection) {
+                log('WebSocket already connected');
+                return;
+            }
+            
+            // Ensure API_BASE_URL is defined
+            if (!window.API_BASE_URL) {
+                window.API_BASE_URL = 'http://localhost:4000';
+            }
+            
+            const wsUrl = `${window.API_BASE_URL.replace('http', 'ws')}`;
+            log(`Connecting to WebSocket at: ${wsUrl}`);
+            
+            try {
+                websocketConnection = new WebSocket(wsUrl);
+                
+                websocketConnection.onopen = function(event) {
+                    log('WebSocket connection established');
+                    updateConnectionStatus(true);
+                    
+                    // Authenticate as test client
+                    websocketConnection.send(JSON.stringify({
+                        type: 'authenticate',
+                        data: { userId: 'test-client' }
+                    }));
+                    
+                    // Subscribe to game updates
+                    websocketConnection.send(JSON.stringify({
+                        type: 'subscribe_game',
+                        data: { gameId: currentGameId }
+                    }));
+                    
+                    // Request current game state
+                    setTimeout(() => {
+                        websocketConnection.send(JSON.stringify({
+                            type: 'sync_request',
+                            data: { gameId: currentGameId }
+                        }));
+                    }, 1000);
+                };
+                
+                websocketConnection.onmessage = function(event) {
+                    try {
+                        const message = JSON.parse(event.data);
+                        log(`Received message: ${message.type}`);
+                        
+                        switch (message.type) {
+                            case 'connection':
+                                log(`Connected with client ID: ${message.data.clientId}`);
+                                break;
+                                
+                            case 'authenticated':
+                                log(`Authenticated as: ${message.data.userId}`);
+                                break;
+                                
+                            case 'subscribed':
+                                log(`Subscribed to game: ${message.data.gameId}`);
+                                break;
+                                
+                            case 'timer_update':
+                                log(`Timer update: ${message.data.timer}s, phase: ${message.data.phase}`);
+                                updateTimerDisplay(message.data.timer);
+                                updatePhaseDisplay(message.data.phase);
+                                break;
+                                
+                            case 'game_state_update':
+                                log(`Game state update`);
+                                if (message.data.gameState) {
+                                    if (message.data.gameState.currentTimer !== undefined) {
+                                        updateTimerDisplay(message.data.gameState.currentTimer);
+                                    }
+                                    if (message.data.gameState.phase) {
+                                        updatePhaseDisplay(message.data.gameState.phase);
+                                    }
+                                }
+                                break;
+                                
+                            case 'sync_game_state':
+                                log(`Game state synchronized`);
+                                if (message.data.gameState) {
+                                    if (message.data.gameState.currentTimer !== undefined) {
+                                        updateTimerDisplay(message.data.gameState.currentTimer);
+                                    }
+                                    if (message.data.gameState.phase) {
+                                        updatePhaseDisplay(message.data.gameState.phase);
+                                    }
+                                }
+                                break;
+                                
+                            default:
+                                log(`Unknown message type: ${message.type}`);
+                        }
+                    } catch (error) {
+                        log(`Error parsing message: ${error.message}`);
+                    }
+                };
+                
+                websocketConnection.onclose = function(event) {
+                    log(`WebSocket connection closed: ${event.code} - ${event.reason}`);
+                    updateConnectionStatus(false);
+                    websocketConnection = null;
+                };
+                
+                websocketConnection.onerror = function(error) {
+                    log(`WebSocket error: ${error.message || 'Unknown error'}`);
+                };
+            } catch (error) {
+                log(`Failed to connect WebSocket: ${error.message}`);
+            }
+        }
+        
+        function disconnectWebSocket() {
+            if (websocketConnection) {
+                websocketConnection.close();
+                websocketConnection = null;
+                log('WebSocket disconnected manually');
+            } else {
+                log('No WebSocket connection to disconnect');
+            }
+        }
+        
+        // Auto-connect when page loads
+        window.addEventListener('load', function() {
+            log('Page loaded, ready to connect WebSocket');
+        });
+    </script>
+</body>
+</html>

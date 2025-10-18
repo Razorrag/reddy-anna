@@ -41,7 +41,7 @@ export default function AdminGame() {
   const [timerRunning, setTimerRunning] = useState(false);
   const [currentTimer, setCurrentTimer] = useState(30);
   const [timerDuration, setTimerDuration] = useState(30);
-  const [dealtCards, setDealtCards] = useState<Array<{ card: Card; side: Side; position: number }>>([]);
+  const [dealtCards, setDealtCards] = useState<Array<{ card: Card; side: Side; position: number; isWinningCard?: boolean }>>([]);
   const [gameId, setGameId] = useState<string>('');
   const [round, setRound] = useState(1);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -58,7 +58,7 @@ export default function AdminGame() {
   
   const [streamSettings, setStreamSettings] = useState<StreamSettings>({
     streamType: 'video',
-    streamUrl: '',
+    streamUrl: '/hero images/uhd_30fps.mp4',
     streamTitle: 'Andar Bahar Live Game',
     streamStatus: 'live',
     streamDescription: 'Experience the excitement of live Andar Bahar',
@@ -335,9 +335,9 @@ export default function AdminGame() {
   const baharCards = dealtCards.filter(c => c.side === 'bahar');
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-red-900/20 text-foreground p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-purple-900/20 to-red-900/20 text-white p-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* Header - Matches Legacy Admin Style */}
         <div className="relative bg-black/50 backdrop-blur-md rounded-xl p-6 mb-6 border border-gold/30">
           <div className="text-center mb-2">
             <h1 className="text-3xl md:text-4xl font-bold text-gold drop-shadow-lg">
@@ -360,7 +360,7 @@ export default function AdminGame() {
                 <Settings className="w-6 h-6" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-[#0a0a0a] border-gold/30">
               <DialogHeader>
                 <DialogTitle className="text-2xl text-gold">Game Settings</DialogTitle>
               </DialogHeader>
@@ -368,7 +368,7 @@ export default function AdminGame() {
               <div className="space-y-6 py-4">
                 {/* Game Settings */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-foreground">Game Configuration</h3>
+                  <h3 className="text-lg font-semibold text-white">Game Configuration</h3>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -378,6 +378,7 @@ export default function AdminGame() {
                         type="number"
                         value={gameSettings.minBet}
                         onChange={(e) => setGameSettings(prev => ({ ...prev, minBet: parseInt(e.target.value) }))}
+                        className="bg-black/50 border-gold/30 text-white"
                         data-testid="input-min-bet"
                       />
                     </div>
@@ -389,6 +390,7 @@ export default function AdminGame() {
                         type="number"
                         value={gameSettings.maxBet}
                         onChange={(e) => setGameSettings(prev => ({ ...prev, maxBet: parseInt(e.target.value) }))}
+                        className="bg-black/50 border-gold/30 text-white"
                         data-testid="input-max-bet"
                       />
                     </div>
@@ -403,18 +405,23 @@ export default function AdminGame() {
                       max="300"
                       value={gameSettings.timerDuration}
                       onChange={(e) => setGameSettings(prev => ({ ...prev, timerDuration: parseInt(e.target.value) }))}
+                      className="bg-black/50 border-gold/30 text-white"
                       data-testid="input-timer-duration"
                     />
                   </div>
                   
-                  <Button onClick={saveGameSettings} className="w-full bg-gold text-black hover:bg-gold-light" data-testid="button-save-game-settings">
+                  <Button 
+                    onClick={saveGameSettings} 
+                    className="w-full bg-gold text-black hover:bg-gold-light" 
+                    data-testid="button-save-game-settings"
+                  >
                     Save Game Settings
                   </Button>
                 </div>
                 
                 {/* Stream Settings */}
-                <div className="space-y-4 border-t pt-4">
-                  <h3 className="text-lg font-semibold text-foreground">Stream Configuration</h3>
+                <div className="space-y-4 border-t pt-4 border-gold/30">
+                  <h3 className="text-lg font-semibold text-white">Stream Configuration</h3>
                   
                   <div className="space-y-2">
                     <Label htmlFor="streamType">Stream Type</Label>
@@ -422,10 +429,10 @@ export default function AdminGame() {
                       value={streamSettings.streamType}
                       onValueChange={(value: any) => setStreamSettings(prev => ({ ...prev, streamType: value }))}
                     >
-                      <SelectTrigger id="streamType" data-testid="select-stream-type">
+                      <SelectTrigger id="streamType" className="bg-black/50 border-gold/30 text-white" data-testid="select-stream-type">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-[#0a0a0a] border-gold/30">
                         <SelectItem value="video">Video File</SelectItem>
                         <SelectItem value="embed">Embed URL</SelectItem>
                         <SelectItem value="rtmp">RTMP Stream</SelectItem>
@@ -441,6 +448,7 @@ export default function AdminGame() {
                         value={streamSettings.streamUrl}
                         onChange={(e) => setStreamSettings(prev => ({ ...prev, streamUrl: e.target.value }))}
                         placeholder="https://example.com/stream"
+                        className="bg-black/50 border-gold/30 text-white"
                         data-testid="input-stream-url"
                       />
                     </div>
@@ -454,7 +462,8 @@ export default function AdminGame() {
                           id="rtmpUrl"
                           value={streamSettings.rtmpUrl || ''}
                           onChange={(e) => setStreamSettings(prev => ({ ...prev, rtmpUrl: e.target.value }))}
-                          placeholder="rtmp://server/app"
+                          placeholder="rtmps://live.restream.io:1937/live"
+                          className="bg-black/50 border-gold/30 text-white"
                           data-testid="input-rtmp-url"
                         />
                       </div>
@@ -467,6 +476,7 @@ export default function AdminGame() {
                           value={streamSettings.rtmpKey || ''}
                           onChange={(e) => setStreamSettings(prev => ({ ...prev, rtmpKey: e.target.value }))}
                           placeholder="Stream key"
+                          className="bg-black/50 border-gold/30 text-white"
                           data-testid="input-rtmp-key"
                         />
                       </div>
@@ -479,6 +489,7 @@ export default function AdminGame() {
                       id="streamTitle"
                       value={streamSettings.streamTitle}
                       onChange={(e) => setStreamSettings(prev => ({ ...prev, streamTitle: e.target.value }))}
+                      className="bg-black/50 border-gold/30 text-white"
                       data-testid="input-stream-title"
                     />
                   </div>
@@ -489,10 +500,10 @@ export default function AdminGame() {
                       value={streamSettings.streamStatus}
                       onValueChange={(value: any) => setStreamSettings(prev => ({ ...prev, streamStatus: value }))}
                     >
-                      <SelectTrigger id="streamStatus" data-testid="select-stream-status">
+                      <SelectTrigger id="streamStatus" className="bg-black/50 border-gold/30 text-white" data-testid="select-stream-status">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-[#0a0a0a] border-gold/30">
                         <SelectItem value="live">Live</SelectItem>
                         <SelectItem value="offline">Offline</SelectItem>
                         <SelectItem value="maintenance">Maintenance</SelectItem>
@@ -507,11 +518,16 @@ export default function AdminGame() {
                       value={streamSettings.streamDescription}
                       onChange={(e) => setStreamSettings(prev => ({ ...prev, streamDescription: e.target.value }))}
                       rows={3}
+                      className="bg-black/50 border-gold/30 text-white"
                       data-testid="textarea-stream-description"
                     />
                   </div>
                   
-                  <Button onClick={saveStreamSettings} className="w-full bg-gold text-black hover:bg-gold-light" data-testid="button-save-stream-settings">
+                  <Button 
+                    onClick={saveStreamSettings} 
+                    className="w-full bg-gold text-black hover:bg-gold-light" 
+                    data-testid="button-save-stream-settings"
+                  >
                     Save Stream Settings
                   </Button>
                 </div>
@@ -520,11 +536,11 @@ export default function AdminGame() {
           </Dialog>
         </div>
         
-        {/* Opening Card Selection */}
+        {/* Opening Card Selection - Matches Legacy Layout */}
         <div className="bg-black/50 backdrop-blur-md rounded-xl p-6 mb-6 border border-gold/30">
           <h2 className="text-2xl font-bold text-gold mb-4">Select Opening Card</h2>
           
-          {/* 52 Card Grid */}
+          {/* 52 Card Grid - Matches Legacy Layout */}
           <div className="grid grid-cols-13 gap-2 mb-4">
             {allCards.map((card) => (
               <button
@@ -541,21 +557,21 @@ export default function AdminGame() {
             ))}
           </div>
           
-          {/* Selected Card Display */}
+          {/* Selected Card Display - Matches Legacy */}
           <div className="flex items-center justify-center gap-4 p-4 bg-gold/10 rounded-lg border border-gold/30">
-            <span className="text-lg font-semibold text-foreground">Selected Card:</span>
+            <span className="text-lg font-semibold text-white">Selected Card:</span>
             {selectedOpeningCard ? (
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold text-gold">{selectedOpeningCard}</span>
                 <PlayingCard card={selectedOpeningCard} size="sm" />
               </div>
             ) : (
-              <span className="text-muted-foreground">None</span>
+              <span className="text-white/60">None</span>
             )}
           </div>
         </div>
         
-        {/* Game Controls */}
+        {/* Game Controls - Matches Legacy Layout */}
         <div className="bg-black/50 backdrop-blur-md rounded-xl p-6 mb-6 border border-gold/30">
           <div className="flex flex-wrap gap-4 justify-center">
             <Button
@@ -589,29 +605,29 @@ export default function AdminGame() {
             </Button>
           </div>
           
-          {/* Timer Display */}
+          {/* Timer Display - Matches Legacy */}
           {timerRunning && (
             <div className="mt-4 text-center">
               <div className="text-6xl font-bold text-gold tabular-nums" data-testid="text-timer">
                 {currentTimer}
               </div>
-              <div className="text-sm text-muted-foreground mt-2">
+              <div className="text-sm text-white/60 mt-2">
                 {currentTimer > 0 ? 'Betting Phase' : 'Dealing Phase'}
               </div>
             </div>
           )}
         </div>
         
-        {/* Card Dealing Section */}
+        {/* Card Dealing Section - Matches Legacy Layout */}
         {gameStarted && !timerRunning && (
           <div className="bg-black/50 backdrop-blur-md rounded-xl p-6 mb-6 border border-gold/30">
             <h2 className="text-2xl font-bold text-gold mb-4">Deal Cards (Alternating: Bahar → Andar)</h2>
             
-            {/* Dealt Cards Display */}
+            {/* Dealt Cards Display - Matches Legacy */}
             {dealtCards.length > 0 && (
               <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-andar mb-2">ANDAR ({andarCards.length})</h3>
+                  <h3 className="text-lg font-semibold text-[#A52A2A] mb-2">ANDAR ({andarCards.length})</h3>
                   <div className="flex flex-wrap gap-2">
                     {andarCards.map((c, i) => (
                       <PlayingCard key={i} card={c.card} size="sm" isWinning={c.isWinningCard} />
@@ -620,7 +636,7 @@ export default function AdminGame() {
                 </div>
                 
                 <div>
-                  <h3 className="text-lg font-semibold text-bahar mb-2">BAHAR ({baharCards.length})</h3>
+                  <h3 className="text-lg font-semibold text-[#01073b] mb-2">BAHAR ({baharCards.length})</h3>
                   <div className="flex flex-wrap gap-2">
                     {baharCards.map((c, i) => (
                       <PlayingCard key={i} card={c.card} size="sm" isWinning={c.isWinningCard} />
@@ -630,7 +646,7 @@ export default function AdminGame() {
               </div>
             )}
             
-            {/* Card Selection Grid */}
+            {/* Card Selection Grid - Matches Legacy */}
             <div className="grid grid-cols-13 gap-2">
               {allCards.map((card) => (
                 <button
@@ -640,7 +656,7 @@ export default function AdminGame() {
                   className={cn(
                     "aspect-card transition-all hover:scale-105 hover:shadow-xl",
                     "disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
-                    selectedCard === card && "ring-2 ring-casino-success"
+                    selectedCard === card && "ring-2 ring-gold"
                   )}
                   data-testid={`button-deal-${card}`}
                 >
@@ -649,7 +665,7 @@ export default function AdminGame() {
               ))}
             </div>
             
-            <div className="mt-4 text-center text-sm text-muted-foreground">
+            <div className="mt-4 text-center text-sm text-white/60">
               Next card goes to: <span className="font-bold text-gold">
                 {dealtCards.length % 2 === 0 ? 'BAHAR' : 'ANDAR'}
               </span>
@@ -657,26 +673,26 @@ export default function AdminGame() {
           </div>
         )}
         
-        {/* Game Info */}
+        {/* Game Info - Matches Legacy */}
         <div className="bg-black/50 backdrop-blur-md rounded-xl p-6 border border-gold/30">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div>
-              <div className="text-sm text-muted-foreground">Round</div>
+              <div className="text-sm text-white/60">Round</div>
               <div className="text-2xl font-bold text-gold">{round}</div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">Game ID</div>
-              <div className="text-lg font-mono text-foreground truncate">{gameId || 'Not started'}</div>
+              <div className="text-sm text-white/60">Game ID</div>
+              <div className="text-lg font-mono text-white truncate">{gameId || 'Not started'}</div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">Cards Dealt</div>
+              <div className="text-sm text-white/60">Cards Dealt</div>
               <div className="text-2xl font-bold text-gold">{dealtCards.length}</div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">Status</div>
+              <div className="text-sm text-white/60">Status</div>
               <div className={cn(
                 "text-lg font-semibold",
-                gameStarted ? "text-casino-success" : "text-muted-foreground"
+                gameStarted ? "text-green-500" : "text-white/60"
               )}>
                 {gameStarted ? 'Active' : 'Idle'}
               </div>

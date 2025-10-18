@@ -49,6 +49,9 @@ export default function PlayerGame() {
   const [gameHistory, setGameHistory] = useState<GameHistoryEntry[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
+  // Card sequence display - NEW FEATURE FROM LEGACY
+  const [cardSequence, setCardSequence] = useState<{ andar: DealtCard[]; bahar: DealtCard[] }>({ andar: [], bahar: [] });
+  
   // WebSocket connection
   const [ws, setWs] = useState<WebSocket | null>(null);
   
@@ -69,6 +72,13 @@ export default function PlayerGame() {
       .then(data => setGameHistory(data))
       .catch(err => console.error('Failed to load game history:', err));
   }, []);
+  
+  // Update card sequence when dealtCards change
+  useEffect(() => {
+    const andarCards = gameState.dealtCards.filter(c => c.side === 'andar');
+    const baharCards = gameState.dealtCards.filter(c => c.side === 'bahar');
+    setCardSequence({ andar: andarCards, bahar: baharCards });
+  }, [gameState.dealtCards]);
   
   // Place bet
   const placeBet = async (side: Side) => {
@@ -309,7 +319,7 @@ export default function PlayerGame() {
         seconds={gameState.currentTimer}
         totalSeconds={30}
         phase={gameState.phase}
-        isVisible={gameState.phase === 'betting' || gameState.phase === 'dealing'}
+        isVisible={gameState.phase === 'betting'}
       />
       
       {/* Header */}
@@ -334,10 +344,48 @@ export default function PlayerGame() {
           {/* Video Stream */}
           <div className="mb-6">
             <VideoStream 
-              title="Andar Bahar Live"
+              title="Andar Bahar Live Game"
               isLive={true}
             />
           </div>
+          
+          {/* Card Sequence Display - NEW FEATURE FROM LEGACY */}
+          {(cardSequence.andar.length > 0 || cardSequence.bahar.length > 0) && (
+            <div className="mb-6 bg-black/50 rounded-xl p-4 border border-gold/30">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold text-[#A52A2A] mb-2">ANDAR SEQUENCE</h3>
+                  <ScrollArea className="w-full">
+                    <div className="flex gap-2 pb-2">
+                      {cardSequence.andar.map((card, index) => (
+                        <PlayingCard
+                          key={card.id || index}
+                          card={card.card as Card}
+                          size="sm"
+                          isWinning={card.isWinningCard}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold text-[#01073b] mb-2">BAHAR SEQUENCE</h3>
+                  <ScrollArea className="w-full">
+                    <div className="flex gap-2 pb-2 justify-end">
+                      {cardSequence.bahar.map((card, index) => (
+                        <PlayingCard
+                          key={card.id || index}
+                          card={card.card as Card}
+                          size="sm"
+                          isWinning={card.isWinningCard}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Betting Areas - Three Column Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-4 mb-6">

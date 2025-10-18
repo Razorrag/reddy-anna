@@ -404,5 +404,407 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Legacy API endpoints to ensure full compatibility
+
+  // Deal a card in the game (legacy endpoint)
+  app.post('/api/game/deal-card', async (req, res) => {
+    try {
+      const { card, side, position, game_id } = req.body;
+      
+      if (!card || !side || !position) {
+        return res.status(400).json({
+          success: false,
+          message: 'Card, side, and position are required'
+        });
+      }
+      
+      // Use default game ID if not provided
+      const currentGameId = game_id || 'default-game';
+      
+      // Check if game session exists
+      const existingSession = await storage.getGameSession(currentGameId);
+      if (!existingSession) {
+        return res.status(404).json({
+          success: false,
+          message: 'Game session not found'
+        });
+      }
+      
+      // Store the dealt card
+      const dealtCard = await storage.dealCard({
+        gameId: currentGameId,
+        card: card,
+        side: side,
+        position: position,
+        isWinningCard: false
+      });
+      
+      // Check if this card matches the opening card (winning condition)
+      let isWinningCard = false;
+      if (existingSession.openingCard && existingSession.openingCard.length >= 2 && card.length >= 2) {
+        isWinningCard = existingSession.openingCard[0] === card[0]; // Check if rank matches
+      }
+      
+      if (isWinningCard) {
+        // Mark as winning card
+        await storage.updateDealtCard(dealtCard.id, { isWinningCard: true });
+        
+        // Update game session with winner
+        await storage.updateGameSession(currentGameId, {
+          winner: side,
+          winningCard: card,
+          phase: 'complete',
+          status: 'completed'
+        });
+        
+        // Get total cards dealt
+        const totalCardsResult = await storage.getDealtCards(currentGameId);
+        
+        // Update game history
+        await storage.addGameHistory({
+          gameId: currentGameId,
+          openingCard: existingSession.openingCard!,
+          winner: side,
+          winningCard: card,
+          totalCards: totalCardsResult.length,
+          round: existingSession.round
+        });
+      } else {
+        // Update game session phase to dealing
+        await storage.updateGameSession(currentGameId, {
+          phase: 'dealing'
+        });
+      }
+      
+      // Broadcast card dealt to all clients
+      broadcast({
+        type: 'card_dealt',
+        data: {
+          gameId: currentGameId,
+          card: card,
+          side: side,
+          position: position,
+          isWinningCard: isWinningCard
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: 'Card dealt successfully',
+        data: {
+          card: card,
+          side: side,
+          position: position,
+          game_id: currentGameId,
+          isWinningCard: isWinningCard
+        }
+      });
+    } catch (error) {
+      console.error('Error dealing card:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to deal card'
+      });
+    }
+  });
+
+  // Set opening card (legacy endpoint)
+  app.post('/api/game/set-opening-card', async (req, res) => {
+    try {
+      const { card, game_id } = req.body;
+      
+      if (!card) {
+        return res.status(400).json({
+          success: false,
+          message: 'Card is required'
+        });
+      }
+      
+      // Store opening card in settings
+      await storage.updateGameSetting('openingCard', card);
+      
+      // Create or update game session with opening card
+      const currentGameId = game_id || 'game-' + Date.now();
+      
+      // Check if game session exists
+      const existingSession = await storage.getGameSession(currentGameId);
+      if (!existingSession) {
+        // Create new game session
+        await storage.createGameSession({
+          openingCard: card,
+          phase: 'waiting',
+          status: 'active',
+          round: 1
+        });
+      } else {
+        // Update existing session
+        await storage.updateGameSession(currentGameId, {
+          openingCard: card,
+          phase: 'waiting',
+          status: 'active'
+        });
+      }
+      
+      // Broadcast opening card to all clients
+      broadcast({
+        type: 'sync_game_state',
+        data: {
+          openingCard: card,
+          phase: 'waiting'
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: 'Opening card set successfully',
+        data: { card, game_id: currentGameId }
+      });
+    } catch (error) {
+      console.error('Error setting opening card:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to set opening card'
+      });
+    }
+  });
+
+  // Start timer (legacy endpoint)
+  app.post('/api/game/start-timer', async (req, res) => {
+    try {
+      const { duration, phase, game_id } = req.body;
+      
+      // Get or create a game session
+      const currentGameId = game_id || 'game-' + Date.now();
+      
+      // Check if game session exists
+      const existingSession = await storage.getGameSession(currentGameId);
+      if (!existingSession) {
+        // Create new game session
+        await storage.createGameSession({
+          phase: phase || 'betting',
+          currentTimer: duration || 30,
+          status: 'active',
+          round: 1
+        });
+      } else {
+        // Update existing session
+        await storage.updateGameSession(currentGameId, {
+          phase: phase || 'betting',
+          currentTimer: duration || 30,
+          status: 'active'
+        });
+      }
+      
+      // Broadcast timer start to all clients
+      broadcast({
+        type: 'timer_update',
+        data: {
+          seconds: duration || 30,
+          phase: phase || 'betting'
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: 'Timer started successfully',
+        data: { game_id: currentGameId }
+      });
+    } catch (error) {
+      console.error('Error starting timer:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to start timer'
+      });
+    }
+  });
+
+  // Get opening card (legacy endpoint)
+  app.get('/api/game/settings/opening_card', async (req, res) => {
+    try {
+      const setting = await storage.getGameSetting('openingCard');
+      
+      if (setting) {
+        res.json({
+          success: true,
+          data: { setting_key: 'opening_card', setting_value: setting }
+        });
+      } else {
+        res.json({
+          success: false,
+          message: 'Opening card not found'
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching opening card:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch opening card'
+      });
+    }
+  });
+
+  // Get stream settings (legacy endpoint)
+  app.get('/api/game/stream-settings', async (req, res) => {
+    try {
+      const settings = await storage.getStreamSettings();
+      
+      const settingsObj: Record<string, any> = {};
+      settings.forEach(setting => {
+        settingsObj[setting.settingKey] = {
+          value: setting.settingValue,
+          description: setting.description
+        };
+      });
+      
+      res.json({
+        success: true,
+        data: settingsObj
+      });
+    } catch (error) {
+      console.error('Error fetching stream settings:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch stream settings'
+      });
+    }
+  });
+
+  // Update stream settings (legacy endpoint)
+  app.post('/api/game/update-stream-settings', async (req, res) => {
+    try {
+      const {
+        streamType,
+        streamUrl,
+        streamTitle,
+        streamStatus,
+        streamDescription
+      } = req.body;
+
+      // Validate required fields
+      if (!streamUrl || !streamTitle || !streamStatus) {
+        return res.status(400).json({
+          success: false,
+          message: 'Stream URL, title, and status are required'
+        });
+      }
+
+      // Validate stream status
+      if (!['live', 'offline', 'maintenance'].includes(streamStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Stream status must be live, offline, or maintenance'
+        });
+      }
+
+      // Validate stream type
+      if (streamType && !['video', 'rtmp', 'embed'].includes(streamType)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Stream type must be video, rtmp, or embed'
+        });
+      }
+
+      // Update settings in storage
+      const settings = [
+        { key: 'stream_url', value: streamUrl },
+        { key: 'stream_title', value: streamTitle },
+        { key: 'stream_status', value: streamStatus },
+        { key: 'stream_description', value: streamDescription || '' },
+        { key: 'stream_type', value: streamType || 'video' }
+      ];
+
+      for (const setting of settings) {
+        await storage.updateStreamSetting(setting.key, setting.value);
+      }
+
+      // Broadcast stream settings update to all clients
+      broadcast({
+        type: 'stream_status_update',
+        data: {
+          streamType: streamType || 'video',
+          streamUrl: streamUrl,
+          streamStatus: streamStatus,
+          streamTitle: streamTitle
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'Stream settings updated successfully',
+        data: {
+          stream_url: streamUrl,
+          stream_title: streamTitle,
+          stream_status: streamStatus,
+          stream_description: streamDescription,
+          stream_type: streamType || 'video'
+        }
+      });
+    } catch (error) {
+      console.error('Error updating stream settings:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update stream settings'
+      });
+    }
+  });
+
+  // Change game phase (legacy endpoint)
+  app.post('/api/game/change-phase', async (req, res) => {
+    try {
+      const { phase, game_id, message } = req.body;
+
+      if (!phase) {
+        return res.status(400).json({
+          success: false,
+          message: 'Phase is required'
+        });
+      }
+
+      // Use default game ID if not provided
+      const currentGameId = game_id || 'default-game';
+
+      // Check if game session exists
+      const existingSession = await storage.getGameSession(currentGameId);
+      if (!existingSession) {
+        // Create new game session
+        await storage.createGameSession({
+          phase: phase,
+          status: 'active',
+          currentTimer: 30,
+          round: 1
+        });
+      } else {
+        // Update existing session
+        await storage.updateGameSession(currentGameId, {
+          phase: phase
+        });
+      }
+
+      // Broadcast phase change to all clients
+      broadcast({
+        type: 'phase_change',
+        data: {
+          phase: phase,
+          message: message || `Game phase changed to ${phase}`
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'Phase changed successfully',
+        data: {
+          phase: phase,
+          game_id: currentGameId
+        }
+      });
+    } catch (error) {
+      console.error('Error changing phase:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to change phase'
+      });
+    }
+  });
+
   return httpServer;
 }

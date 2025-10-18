@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Andar Bahar - Game Room | Reddy Anna Kossu</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="logo">
+                    <h1>Reddy Anna Kossu</h1>
+                </div>
+                
+                <div class="nav-menu">
+                    <ul class="nav-list">
+                        <li><a href="index.html#home" class="nav-link">Home</a></li>
+                        <li><a href="index.html#game-rules" class="nav-link">Game Rules</a></li>
+                        <li><a href="https://wa.me/918686886632" target="_blank" class="nav-link">Contact</a></li>
+                        <li><a href="login.html" class="nav-link">Login</a></li>
+                        <li><a href="signup.html" class="nav-link">SignUp</a></li>
+                    </ul>
+                </div>
+                
+                <div class="nav-controls">
+                    <div class="language-selector">
+                        <select id="languageSelect" class="language-dropdown">
+                            <option value="en">English</option>
+                            <option value="hi">हिंदी</option>
+                            <option value="te">తెలుగు</option>
+                        </select>
+                    </div>
+                    
+                    <div class="hamburger">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Game Room -->
+    <section class="game-room-section">
+        <div class="container">
+            <div class="game-room">
+                <div class="game-room-header">
+                    <button class="back-btn" onclick="window.location.href='index.html#games'">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>Back</span>
+                    </button>
+                    <h2>Andar Bahar - Live Room</h2>
+                    <div class="room-actions">
+                        <a href="https://wa.me/918686886632" target="_blank" class="help-btn">
+                            <i class="fab fa-whatsapp"></i>
+                            <span>Support</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="game-stage">
+                    <div class="stage-media">
+                        <div class="stage-video">
+                            <video id="roomVideo" autoplay muted loop playsinline>
+                                <source src="hero images/uhd_30fps.mp4" type="video/mp4">
+                            </video>
+                            <div class="stage-overlay"></div>
+                            <div class="stage-badge">LIVE</div>
+                        </div>
+                    </div>
+                    <div class="stage-info">
+                        <h3>Table Status: <span class="status-open">Open</span></h3>
+                        <p>Welcome to the Andar Bahar live table. Click "Join Table" to start playing and place your bets.</p>
+                        <div class="stage-cta">
+                            <button class="btn btn-primary" onclick="window.location.href='start-game.html'">Join Table</button>
+                            <a href="index.html#game-rules" class="btn btn-secondary">Read Rules</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script src="script.js"></script>
+    <script>
+        function scrollToBets(){
+            document.getElementById('betPanel').scrollIntoView({behavior:'smooth'});
+        }
+        function resetBets(){
+            showNotification('Bets cleared', 'info');
+        }
+        function placeBets(){
+            showNotification('Bet placed (demo)', 'success');
+        }
+    </script>
+</body>
+</html>
+
+

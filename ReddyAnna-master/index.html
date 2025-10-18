@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddy Anna Kossu - Premium Gaming Experience</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Video Background -->
+    <div class="video-background">
+        <video autoplay muted loop playsinline>
+            <source src="hero images/uhd_30fps.mp4" type="video/mp4">
+        </video>
+    </div>
+    <div class="video-overlay"></div>
+    
+    <!-- Header -->
+    <header class="header">
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="logo">
+                    <h1>Reddy Anna Kossu</h1>
+                </div>
+                
+                <div class="nav-menu">
+                    <ul class="nav-list">
+                        <li><a href="#home" class="nav-link">Home</a></li>
+                        <li><a href="#about" class="nav-link">About</a></li>
+                        <li><a href="#game-rules" class="nav-link">Game Rules</a></li>
+                        <li><a href="https://wa.me/918686886632" target="_blank" class="nav-link">Contact</a></li>
+                        <li><a href="login.html" class="nav-link">Login</a></li>
+                        <li><a href="signup.html" class="nav-link">SignUp</a></li>
+                    </ul>
+                </div>
+                
+                <div class="nav-controls">
+                    <div class="language-selector">
+                        <select id="languageSelect" class="language-dropdown">
+                            <option value="en">English</option>
+                            <option value="hi">हिंदी</option>
+                            <option value="te">తెలుగు</option>
+                        </select>
+                    </div>
+                    
+                    <div class="hamburger">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="hero-background">
+            <video id="heroVideo" class="hero-video" autoplay muted loop playsinline>
+                <source src="hero images/uhd_30fps.mp4" type="video/mp4">
+                <source src="hero-images/hero-video.webm" type="video/webm">
+            </video>
+            
+            <!-- Image Slider Fallback -->
+            <div id="imageSlider" class="image-slider">
+                <div class="slide active">
+                    <img src="hero-images/slide1.jpg" alt="Gaming Experience 1">
+                </div>
+                <div class="slide">
+                    <img src="hero-images/slide2.jpg" alt="Gaming Experience 2">
+                </div>
+                <div class="slide">
+                    <img src="hero-images/slide3.jpg" alt="Gaming Experience 3">
+                </div>
+            </div>
+            
+            <div class="hero-overlay"></div>
+        </div>
+        
+        <div class="hero-content">
+            <div class="hero-text">
+                <h1 class="hero-title" data-en="Welcome to Reddy Anna Kossu" data-hi="रेड्डी अन्ना कोस्सु में आपका स्वागत है" data-te="రెడ్డి అన్నా కొస్సుకు స్వాగతం">
+                    Welcome to Reddy Anna Kossu
+                </h1>
+                <p class="hero-subtitle" data-en="Experience the ultimate gaming adventure with premium quality and unmatched excitement" data-hi="प्रीमियम गुणवत्ता और अतुलनीय उत्साह के साथ अंतिम गेमिंग साहसिक कार्य का अनुभव करें" data-te="ప్రీమియం నాణ్యత మరియు సాటిలేని ఉత్సాహంతో అంతిమ గేమింగ్ సాహసాన్ని అనుభవించండి">
+                    Experience the ultimate gaming adventure with premium quality and unmatched excitement
+                </p>
+                <div class="hero-buttons">
+                    <button class="btn btn-primary" data-en="Start Playing" data-hi="खेलना शुरू करें" data-te="ఆడటం ప్రారంభించండి">
+                        Start Playing
+                    </button>
+                    <button class="btn btn-secondary" data-en="Learn More" data-hi="और जानें" data-te="మరింత తెలుసుకోండి">
+                        Learn More
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="hero-scroll">
+            <div class="scroll-indicator">
+                <span data-en="Scroll Down" data-hi="नीचे स्क्रॉल करें" data-te="క్రిందికి స్క్రోల్ చేయండి">Scroll Down</span>
+                <i class="fas fa-chevron-down"></i>
+            </div>
+        </div>
+    </section>
+
+    <!-- Games Section -->
+    <section id="games" class="games-section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title" data-en="Featured Game" data-hi="विशेष गेम" data-te="విశేష ఆట">Featured Game</h2>
+                <p class="section-subtitle" data-en="Experience the ultimate Andar Bahar gaming adventure" data-hi="अंतिम अंदर बाहर गेमिंग साहसिक कार्य का अनुभव करें" data-te="అంతిమ అందర్ బహార్ గేమింగ్ సాహసాన్ని అనుభవించండి">
+                    Experience the ultimate Andar Bahar gaming adventure
+                </p>
+            </div>
+            
+            <div class="game-showcase">
+                <div class="game-image-side">
+                    <div class="game-image-container">
+                        <img src="hero images/pexels-javon-swaby-197616-3279691.jpg" alt="Andar Bahar Game">
+                        <div class="game-overlay">
+                            <button class="play-btn">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        </div>
+                        <div class="game-badge">
+                            <span data-en="LIVE" data-hi="लाइव" data-te="లైవ్">LIVE</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="game-content-side">
+                    <div class="game-info">
+                        <h3 class="game-title">Andar Bahar</h3>
+                        <p class="game-description" data-en="The most popular Indian card game with exciting gameplay and fair odds. Choose between Andar (left) or Bahar (right) and watch as the dealer draws cards until a matching suit appears. Win 1:1 odds when your chosen side matches first!" data-hi="रोमांचक गेमप्ले और निष्पक्ष ऑड्स के साथ सबसे लोकप्रिय भारतीय कार्ड गेम। अंदर (बाएं) या बाहर (दाएं) के बीच चुनें और देखें कि डीलर तब तक कार्ड खींचता है जब तक मैचिंग सूट नहीं आता। जब आपका चुना हुआ पक्ष पहले मैच करता है तो 1:1 ऑड्स जीतें!" data-te="ఉత్తేజకరమైన గేమ్‌ప్లే మరియు న్యాయమైన అసమానతతో అత్యంత ప్రజాదరణ పొందిన భారతీయ కార్డ్ గేమ్. అందర్ (ఎడమ) లేదా బహార్ (కుడి) మధ్య ఎంచుకోండి మరియు సరిపోయే సూట్ వచ్చేవరకు డీలర్ కార్డ్లను గీస్తున్నట్లు చూడండి. మీ ఎంచుకున్న వైపు మొదట సరిపోయినప్పుడు 1:1 అసమానతను గెలవండి!">
+                            The most popular Indian card game with exciting gameplay and fair odds. Choose between Andar (left) or Bahar (right) and watch as the dealer draws cards until a matching suit appears. Win 1:1 odds when your chosen side matches first!
+                        </p>
+                        
+                        <div class="game-features">
+                            <div class="feature-item">
+                                <i class="fas fa-clock"></i>
+                                <span data-en="24/7 Available" data-hi="24/7 उपलब्ध" data-te="24/7 అందుబాటులో">24/7 Available</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-shield-alt"></i>
+                                <span data-en="Fair Play Guaranteed" data-hi="निष्पक्ष खेल की गारंटी" data-te="న్యాయమైన ఆట హామీ">Fair Play Guaranteed</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-trophy"></i>
+                                <span data-en="1:1 Odds" data-hi="1:1 ऑड्स" data-te="1:1 అసమానత">1:1 Odds</span>
+                            </div>
+                        </div>
+                        
+                        <div class="game-actions">
+                            <button class="btn btn-primary" data-en="Play Now" data-hi="अभी खेलें" data-te="ఇప్పుడు ఆడండి">
+                                Play Now
+                            </button>
+                            <button class="btn btn-secondary" data-en="Learn Rules" data-hi="नियम सीखें" data-te="నియమాలు నేర్చుకోండి">
+                                Learn Rules
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Game Rules Section -->
+    <section id="game-rules" class="game-rules-section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title" data-en="Game Rules" data-hi="गेम नियम" data-te="ఆట నియమాలు">Game Rules</h2>
+                <p class="section-subtitle" data-en="Learn how to play our exciting games" data-hi="हमारे रोमांचक गेम्स कैसे खेलें" data-te="మా ఉత్తేజకరమైన ఆటలను ఎలా ఆడాలో తెలుసుకోండి">
+                    Learn how to play our exciting games
+                </p>
+            </div>
+            
+            <div class="rules-showcase">
+                <div class="rules-main-card">
+                    <div class="rules-header">
+                        <div class="rules-icon">
+                            <i class="fas fa-cards-blank"></i>
+                        </div>
+                        <h3 data-en="Andar Bahar Game Rules" data-hi="अंदर बाहर गेम नियम" data-te="అందర్ బహార్ గేమ్ నియమాలు">Andar Bahar Game Rules</h3>
+                        <p class="rules-subtitle" data-en="Learn how to play the most popular Indian card game" data-hi="सबसे लोकप्रिय भारतीय कार्ड गेम कैसे खेलें सीखें" data-te="అత్యంత ప్రజాదరణ పొందిన భారతీయ కార్డ్ గేమ్‌ను ఎలా ఆడాలో నేర్చుకోండి">
+                            Learn how to play the most popular Indian card game
+                        </p>
+                    </div>
+                    
+                    <div class="rules-steps">
+                        <div class="rule-step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h4 data-en="Choose Your Side" data-hi="अपना पक्ष चुनें" data-te="మీ వైపును ఎంచుకోండి">Choose Your Side</h4>
+                                <p data-en="Select between Andar (left side) or Bahar (right side) before the game starts" data-hi="गेम शुरू होने से पहले अंदर (बाएं तरफ) या बाहर (दाएं तरफ) के बीच चुनें" data-te="ఆట ప్రారంభమవ్వడానికి ముందు అందర్ (ఎడమ వైపు) లేదా బహార్ (కుడి వైపు) మధ్య ఎంచుకోండి">
+                                    Select between Andar (left side) or Bahar (right side) before the game starts
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="rule-step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h4 data-en="Dealer Draws Cards" data-hi="डीलर कार्ड खींचता है" data-te="డీలర్ కార్డ్లను గీస్తాడు">Dealer Draws Cards</h4>
+                                <p data-en="The dealer draws cards one by one, alternating between Andar and Bahar sides" data-hi="डीलर एक-एक करके कार्ड खींचता है, अंदर और बाहर पक्षों के बीच बारी-बारी से" data-te="డీలర్ ఒక్కొక్కటిగా కార్డ్లను గీస్తాడు, అందర్ మరియు బహార్ వైపుల మధ్య మారుతూ">
+                                    The dealer draws cards one by one, alternating between Andar and Bahar sides
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="rule-step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h4 data-en="Match the Suit" data-hi="सूट मैच करें" data-te="సూట్‌ను సరిపోల్చండి">Match the Suit</h4>
+                                <p data-en="When a card with the same suit as the first card appears on your chosen side, you win!" data-hi="जब पहले कार्ड के समान सूट का कार्ड आपके चुने हुए पक्ष पर दिखाई देता है, तो आप जीत जाते हैं!" data-te="మొదటి కార్డ్‌తో సమాన సూట్‌తో కార్డ్ మీ ఎంచుకున్న వైపున కనిపించినప్పుడు, మీరు గెలుస్తారు!">
+                                    When a card with the same suit as the first card appears on your chosen side, you win!
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="rule-step">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <h4 data-en="Win 1:1 Odds" data-hi="1:1 ऑड्स जीतें" data-te="1:1 అసమానతను గెలవండి">Win 1:1 Odds</h4>
+                                <p data-en="If your chosen side matches first, you win with 1:1 odds - double your bet amount!" data-hi="यदि आपका चुना हुआ पक्ष पहले मैच करता है, तो आप 1:1 ऑड्स के साथ जीतते हैं - अपनी बेट राशि को दोगुना करें!" data-te="మీ ఎంచుకున్న వైపు మొదట సరిపోతే, మీరు 1:1 అసమానతతో గెలుస్తారు - మీ బెట్ మొత్తాన్ని రెట్టింపు చేయండి!">
+                                    If your chosen side matches first, you win with 1:1 odds - double your bet amount!
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="rules-sidebar">
+                    <div class="info-card">
+                        <div class="info-icon">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <h4 data-en="Game Info" data-hi="गेम जानकारी" data-te="గేమ్ సమాచారం">Game Info</h4>
+                        <ul>
+                            <li><span data-en="Minimum Age:" data-hi="न्यूनतम आयु:" data-te="కనీస వయస్సు:">Minimum Age:</span> 18+</li>
+                            <li><span data-en="Game Type:" data-hi="गेम प्रकार:" data-te="గేమ్ రకం:">Game Type:</span> <span data-en="Card Game" data-hi="कार्ड गेम" data-te="కార్డ్ గేమ్">Card Game</span></li>
+                            <li><span data-en="Odds:" data-hi="ऑड्स:" data-te="అసమానత:">Odds:</span> 1:1</li>
+                            <li><span data-en="Availability:" data-hi="उपलब्धता:" data-te="అందుబాటు:">Availability:</span> <span data-en="24/7" data-hi="24/7" data-te="24/7">24/7</span></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="info-card">
+                        <div class="info-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h4 data-en="Fair Play" data-hi="निष्पक्ष खेल" data-te="న్యాయమైన ఆట">Fair Play</h4>
+                        <ul>
+                            <li data-en="✓ Random card shuffling" data-hi="✓ यादृच्छिक कार्ड शफलिंग" data-te="✓ యాదృచ్ఛిక కార్డ్ షఫ్లింగ్">✓ Random card shuffling</li>
+                            <li data-en="✓ Live dealer monitoring" data-hi="✓ लाइव डीलर मॉनिटरिंग" data-te="✓ లైవ్ డీలర్ మానిటరింగ్">✓ Live dealer monitoring</li>
+                            <li data-en="✓ Secure transactions" data-hi="✓ सुरक्षित लेनदेन" data-te="✓ సురక్షిత లావాదేవీలు">✓ Secure transactions</li>
+                            <li data-en="✓ 24/7 support" data-hi="✓ 24/7 सहायता" data-te="✓ 24/7 మద్దతు">✓ 24/7 support</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="info-card">
+                        <div class="info-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <h4 data-en="Play Responsibly" data-hi="जिम्मेदारी से खेलें" data-te="బాధ్యతాయుతంగా ఆడండి">Play Responsibly</h4>
+                        <p data-en="Gaming should be fun and entertaining. Set limits, play within your means, and seek help if needed." data-hi="गेमिंग मजेदार और मनोरंजक होना चाहिए। सीमा निर्धारित करें, अपने साधनों के भीतर खेलें, और आवश्यकता हो तो सहायता लें।" data-te="గేమింగ్ సరదాగా మరియు వినోదకరంగా ఉండాలి. పరిమితులు నిర్ణయించండి, మీ సాధనలలో ఆడండి, మరియు అవసరమైతే సహాయం కోరండి.">
+                            Gaming should be fun and entertaining. Set limits, play within your means, and seek help if needed.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about-section">
+        <div class="container">
+            <div class="about-content">
+                <div class="about-text">
+                    <h2 class="section-title" data-en="About Reddy Anna Kossu" data-hi="रेड्डी अन्ना कोस्सु के बारे में" data-te="రెడ్డి అన్నా కొస్సు గురించి">About Reddy Anna Kossu</h2>
+                    <p data-en="We are committed to providing the best gaming experience with fair play, secure transactions, and 24/7 customer support. Join thousands of satisfied players who trust us for their gaming needs." data-hi="हम निष्पक्ष खेल, सुरक्षित लेनदेन और 24/7 ग्राहक सहायता के साथ सर्वोत्तम गेमिंग अनुभव प्रदान करने के लिए प्रतिबद्ध हैं। अपनी गेमिंग आवश्यकताओं के लिए हम पर भरोसा करने वाले हजारों संतुष्ट खिलाड़ियों में शामिल हों।" data-te="న్యాయమైన ఆట, సురక్షిత లావాదేవీలు మరియు 24/7 కస్టమర్ మద్దతుతో ఉత్తమ గేమింగ్ అనుభవాన్ని అందించడానికి మేము కట్టుబడి ఉన్నాము. వారి గేమింగ్ అవసరాల కోసం మాపై నమ్మకం ఉన్న వేలాది సంతృప్త ఆటగాళ్లలో చేరండి.">
+                        We are committed to providing the best gaming experience with fair play, secure transactions, and 24/7 customer support. Join thousands of satisfied players who trust us for their gaming needs.
+                    </p>
+                    
+                    <div class="features">
+                        <div class="feature">
+                            <i class="fas fa-shield-alt"></i>
+                            <h4 data-en="Secure & Safe" data-hi="सुरक्षित और सुरक्षित" data-te="సురక్షితమైన మరియు సురక్షితమైన">Secure & Safe</h4>
+                        </div>
+                        <div class="feature">
+                            <i class="fas fa-clock"></i>
+                            <h4 data-en="24/7 Support" data-hi="24/7 सहायता" data-te="24/7 మద్దతు">24/7 Support</h4>
+                        </div>
+                        <div class="feature">
+                            <i class="fas fa-trophy"></i>
+                            <h4 data-en="Fair Play" data-hi="निष्पक्ष खेल" data-te="న్యాయమైన ఆట">Fair Play</h4>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="about-image">
+                    <img src="hero images/pexels-pixabay-269630.jpg" alt="About Us">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact" class="contact-section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title" data-en="Get In Touch" data-hi="संपर्क में रहें" data-te="సంప్రదించండి">Get In Touch</h2>
+                <p class="section-subtitle" data-en="Have questions? We're here to help!" data-hi="प्रश्न हैं? हम यहाँ मदद के लिए हैं!" data-te="ప్రశ్నలు ఉన్నాయా? మేము సహాయం కోసం ఇక్కడ ఉన్నాము!">
+                    Have questions? We're here to help!
+                </p>
+            </div>
+            
+            <div class="contact-content">
+                <div class="contact-info">
+                    <div class="contact-item">
+                        <i class="fab fa-whatsapp"></i>
+                        <div>
+                            <h4 data-en="WhatsApp Support" data-hi="व्हाट्सऐप सहायता" data-te="వాట్సాప్ మద్దతు">WhatsApp Support</h4>
+                            <p id="whatsappNumber">+91 8686868686</p>
+                        </div>
+                    </div>
+                    
+                    <div class="contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <div>
+                            <h4 data-en="Email Support" data-hi="ईमेल सहायता" data-te="ఇమెయిల్ మద్దతు">Email Support</h4>
+                            <p>support@reddyannakossu.com</p>
+                        </div>
+                    </div>
+                    
+                    <div class="contact-item">
+                        <i class="fas fa-clock"></i>
+                        <div>
+                            <h4 data-en="Available 24/7" data-hi="24/7 उपलब्ध" data-te="24/7 అందుబాటులో">Available 24/7</h4>
+                            <p data-en="Round the clock support" data-hi="चौबीसों घंटे सहायता" data-te="24 గంటల మద్దతు">Round the clock support</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="contact-form">
+                    <form id="contactForm">
+                        <div class="form-group">
+                            <input type="text" id="name" name="name" placeholder="Your Name" required>
+                        </div>
+                        <div class="form-group">
+                            <input type="email" id="email" name="email" placeholder="Your Email" required>
+                        </div>
+                        <div class="form-group">
+                            <textarea id="message" name="message" placeholder="Your Message" rows="5" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary" data-en="Send Message" data-hi="संदेश भेजें" data-te="సందేశం పంపండి">
+                            Send Message
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Reddy Anna Kossu</h3>
+                    <p data-en="Your trusted gaming partner for premium entertainment" data-hi="प्रीमियम मनोरंजन के लिए आपका भरोसेमंद गेमिंग पार्टनर" data-te="ప్రీమియం వినోదం కోసం మీ విశ్వసనీయ గేమింగ్ భాగస్వామి">
+                        Your trusted gaming partner for premium entertainment
+                    </p>
+                </div>
+                
+                <div class="footer-section">
+                    <h4 data-en="Quick Links" data-hi="त्वरित लिंक्स" data-te="త్వరిత లింకులు">Quick Links</h4>
+                    <ul>
+                        <li><a href="#home" data-en="Home" data-hi="होम" data-te="హోమ్">Home</a></li>
+                        <li><a href="#games" data-en="Games" data-hi="गेम्स" data-te="ఆటలు">Games</a></li>
+                        <li><a href="#about" data-en="About" data-hi="के बारे में" data-te="గురించి">About</a></li>
+                        <li><a href="#contact" data-en="Contact" data-hi="संपर्क" data-te="సంప్రదించండి">Contact</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4 data-en="Contact Info" data-hi="संपर्क जानकारी" data-te="సంప్రదింపు సమాచారం">Contact Info</h4>
+                    <p><i class="fab fa-whatsapp"></i> +91 8686868686</p>
+                    <p><i class="fas fa-envelope"></i> support@reddyannakossu.com</p>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2024 Reddy Anna Kossu. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- WhatsApp Float Button -->
+    <div class="whatsapp-float">
+        <a href="https://wa.me/918686886632" target="_blank" class="whatsapp-btn">
+            <i class="fab fa-whatsapp"></i>
+        </a>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
