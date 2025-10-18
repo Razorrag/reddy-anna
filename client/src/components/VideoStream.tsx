@@ -59,7 +59,7 @@ export function VideoStream({
           {/* Live Indicator - Legacy Style */}
           {isLive && (
             <div className="flex items-center gap-2 bg-red-600 px-3 py-1.5 rounded-full shadow-lg">
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse-live" />
+              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
               <span className="text-white font-semibold text-sm uppercase">LIVE</span>
             </div>
           )}
