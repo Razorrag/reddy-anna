@@ -305,15 +305,19 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 20px;
+  font-size: 18px; /* ADJUSTED for better fit */
   font-weight: 700;
   color: #ffd700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); /* ADDED text shadow */
+  line-height: 1.2; /* ADDED line height */
 }
 
 .bet-amount {
-  font-size: 14px;
+  font-size: 15px; /* INCREASED from 14px */
   font-weight: 700;
   color: #ffd700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); /* ADDED text shadow */
+  letter-spacing: 0.5px; /* ADDED letter spacing */
 }
 
 .card-representation {
@@ -481,15 +485,17 @@
   filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
 }
 
-/* Card Sequence - Exactly from original */
+/* Card Sequence - IMPROVED for better visibility */
 .card-sequence-container {
   display: flex;
   justify-content: space-between;
   padding: 10px;
-  background: rgba(0, 0, 0, 0.8);
-  border-top: 1px solid #ffd700;
-  max-height: 120px;
+  background: rgba(0, 0, 0, 0.9);
+  border-top: 2px solid #ffd700;
+  max-height: 180px; /* INCREASED from 120px */
   overflow-x: auto;
+  overflow-y: auto;
+  box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.5);
 }
 
 .sequence-section {
@@ -515,18 +521,20 @@
 }
 
 .sequence-card {
-  min-width: 40px;
-  height: 55px;
+  min-width: 45px; /* INCREASED from 40px */
+  height: 60px; /* INCREASED from 55px */
   background-color: #ffffff;
-  border-radius: 4px;
+  border-radius: 6px; /* INCREASED from 4px */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   font-weight: 600;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4); /* ENHANCED shadow */
   position: relative;
+  border: 2px solid #e0e0e0; /* ADDED border */
+  transition: transform 0.2s ease;
 }
 
 .sequence-card .card-rank {
@@ -541,8 +549,15 @@
 }
 
 .sequence-card.winning {
-  border: 2px solid #ffd700;
-  box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+  border: 3px solid #ffd700; /* INCREASED from 2px */
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.9); /* ENHANCED glow */
+  transform: scale(1.1); /* ADDED scale effect */
+  animation: pulse-win 1s ease-in-out infinite; /* ADDED animation */
+}
+
+@keyframes pulse-win {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.9); }
+  50% { box-shadow: 0 0 30px rgba(255, 215, 0, 1); }
 }
 
 /* History Modal - Simple overlay */
@@ -645,7 +660,7 @@ html, body {
   font-family: var(--font-primary);
   background-color: var(--primary-black);
   color: var(--white);
-  overflow: hidden; /* Prevent scrolling of the whole page */
+  overflow: auto; /* FIXED: Allow scrolling when needed */
 }
 
 body {

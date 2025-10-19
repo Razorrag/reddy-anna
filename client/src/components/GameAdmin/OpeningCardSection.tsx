@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useGameState } from '../../contexts/GameStateContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
+import { useNotification } from '../NotificationSystem/NotificationSystem';
 
 interface Card {
   suit: string;
@@ -11,6 +12,7 @@ interface Card {
 const OpeningCardSection: React.FC = () => {
   const { gameState, setSelectedOpeningCard, phase } = useGameState();
   const { sendWebSocketMessage } = useWebSocket();
+  const { showNotification } = useNotification();
   const [showTimerPopup, setShowTimerPopup] = useState(false);
   const [customTime, setCustomTime] = useState(30);
 
@@ -23,14 +25,17 @@ const OpeningCardSection: React.FC = () => {
 
   const handleCardSelect = (card: Card) => {
     setSelectedOpeningCard(card);
+    showNotification(`Opening card selected: ${card.display}`, 'info');
   };
 
   const handleUndo = () => {
     setSelectedOpeningCard(null as any);
+    showNotification('Selection cleared', 'info');
   };
 
   const handleConfirm = () => {
     if (!gameState.selectedOpeningCard) {
+      showNotification('Please select a card first!', 'error');
       return;
     }
     setShowTimerPopup(true);
@@ -66,6 +71,7 @@ const OpeningCardSection: React.FC = () => {
     });
     
     setShowTimerPopup(false);
+    showNotification(`Round 1 started with ${customTime} seconds!`, 'success');
   };
 
   if (phase !== 'opening') return null;

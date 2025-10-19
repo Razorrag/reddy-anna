@@ -73,6 +73,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   const connectWebSocket = useCallback(() => {
     if (typeof window === 'undefined') return; // Skip on server
     
+    // Prevent multiple connections
+    const existingWs = (window as any).gameWebSocket;
+    if (existingWs && (existingWs.readyState === WebSocket.CONNECTING || existingWs.readyState === WebSocket.OPEN)) {
+      console.log('WebSocket already connected or connecting, skipping...');
+      return;
+    }
+    
     setWebSocketState(prev => ({ ...prev, isConnecting: true, connectionError: null }));
 
     try {
@@ -274,12 +281,22 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   useEffect(() => {
+    // Only connect once on mount
     connectWebSocket();
     
+    // Cleanup on unmount or HMR
     return () => {
-      disconnectWebSocket();
+      console.log('Cleaning up WebSocket connection...');
+      const ws = (window as any).gameWebSocket;
+      if (ws) {
+        ws.close(1000, 'Component unmounting'); // Normal close
+        delete (window as any).gameWebSocket;
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
     };
-  }, [connectWebSocket, disconnectWebSocket]);
+  }, []); // Empty deps - only run once on mount
 
   const sendWebSocketMessage = useCallback((message: any) => {
     const ws = (window as any).gameWebSocket;

@@ -3,9 +3,13 @@
   max-width: 100%;
   margin: 0 auto;
   padding: 16px; /* Fixed padding for mobile */
+  padding-bottom: 40px; /* Extra padding at bottom */
   background: linear-gradient(135deg, #1a1a1a 0%, #2d1b69 50%, #8b0000 100%);
   min-height: 100vh;
   font-family: 'Poppins', sans-serif;
+  overflow-y: auto; /* ADDED: Enable vertical scrolling */
+  overflow-x: hidden; /* ADDED: Prevent horizontal scroll */
+  height: 100vh; /* ADDED: Set fixed height */
 }
 
 /* Fixed header layout */

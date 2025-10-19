@@ -355,37 +355,47 @@ export default function PlayerGame() {
     }));
   };
 
-  // WebSocket connection setup
+  // WebSocket message handler integration
   useEffect(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    // In development, connect to backend on port 5000; in production, use current host
-    const wsPort = import.meta.env.DEV ? '5000' : window.location.port;
-    const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}/ws`;
-    console.log('Connecting to WebSocket:', wsUrl);
-    const socket = new WebSocket(wsUrl);
-
-    socket.onopen = () => {
-      console.log('WebSocket connected');
+    // Get WebSocket from window (set by WebSocketContext)
+    const ws = (window as any).gameWebSocket;
+    
+    if (ws) {
       setConnectionStatus('connected');
-      socket.send(JSON.stringify({
-        type: 'authenticate',
-        data: { userId, role: 'player' }
-      }));
       
-      // Request current game state to synchronize
-      setTimeout(() => {
-        socket.send(JSON.stringify({
-          type: 'sync_request',
-          data: { gameId: 'default-game' }
-        }));
+      // Add our message handler
+      const messageHandler = (event: MessageEvent) => {
+        try {
+          const message = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+      
+      ws.addEventListener('message', messageHandler);
+      
+      // Cleanup
+      return () => {
+        ws.removeEventListener('message', messageHandler);
+        setConnectionStatus('disconnected');
+      };
+    } else {
+      // WebSocket not ready yet, retry
+      const timeout = setTimeout(() => {
+        setConnectionStatus('disconnected');
       }, 1000);
-    };
+      
+      return () => clearTimeout(timeout);
+    }
+  }, []);
 
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      console.log('Received WebSocket message:', message);
+  // Handle WebSocket messages (this would need to be integrated with WebSocketContext)
+  // For now, keeping message handlers as reference but they should be moved to context
+  const handleWebSocketMessage = (message: any) => {
+    console.log('Received WebSocket message:', message);
 
-      switch (message.type) {
+    switch (message.type) {
         case 'connection':
           console.log('Connected with client ID:', message.data.clientId);
           break;
@@ -550,6 +560,36 @@ export default function PlayerGame() {
           }
           break;
 
+        case 'START_ROUND_2_BETTING':
+          setGameState(prev => ({
+            ...prev,
+            round: 2,
+            phase: 'betting',
+            currentTimer: message.data.timer || 30
+          }));
+          addNotification('info', '🎲 Round 2 betting has started! You can add more bets.');
+          break;
+
+        case 'START_FINAL_DRAW':
+          setGameState(prev => ({
+            ...prev,
+            round: 3,
+            phase: 'dealing',
+            currentTimer: 0
+          }));
+          addNotification('warning', '🔥 Round 3: Continuous draw! Betting is now locked.');
+          break;
+
+        case 'opening_card_confirmed':
+          setGameState(prev => ({
+            ...prev,
+            openingCard: message.data.openingCard,
+            phase: 'betting',
+            round: 1
+          }));
+          addNotification('success', `Opening card confirmed: ${message.data.openingCard}`);
+          break;
+
         case 'error':
           addNotification('error', message.data.message || 'An error occurred');
           break;
@@ -557,29 +597,7 @@ export default function PlayerGame() {
         default:
           console.log('Unknown message type:', message.type);
       }
-    };
-
-    socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setConnectionStatus('error');
-      addNotification('error', 'Connection error');
-    };
-
-    socket.onclose = () => {
-      console.log('WebSocket disconnected');
-      setConnectionStatus('disconnected');
-      addNotification('warning', 'Disconnected from server. Reconnecting...');
-      
-      // Attempt to reconnect after 3 seconds
-      setTimeout(() => {
-        // This effect will run again due to state change
-      }, 3000);
-    };
-
-    return () => {
-      socket.close();
-    };
-  }, [userId]);
+  };
 
   return (
     <div className="game-body">
@@ -642,6 +660,38 @@ export default function PlayerGame() {
           </div>
         </div>
 
+        {/* Round Indicator */}
+        <div className="round-indicator" style={{
+          position: 'absolute',
+          top: '80px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.95) 0%, rgba(255, 237, 78, 0.95) 100%)',
+          color: '#000',
+          padding: '10px 30px',
+          borderRadius: '25px',
+          fontSize: '1.1rem',
+          fontWeight: 'bold',
+          boxShadow: '0 4px 15px rgba(255, 215, 0, 0.5)',
+          zIndex: 15,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '15px'
+        }}>
+          <div style={{ fontSize: '1.5rem' }}>
+            {gameState.round === 1 ? '1️⃣' : gameState.round === 2 ? '2️⃣' : '3️⃣'}
+          </div>
+          <div>
+            <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>ROUND {gameState.round}</div>
+            <div style={{ fontSize: '0.9rem' }}>
+              {gameState.phase === 'betting' ? '⏱️ Place Your Bets!' :
+               gameState.phase === 'dealing' ? '🎴 Dealing Cards...' :
+               gameState.phase === 'complete' ? '🏆 Game Complete!' :
+               '⏸️ Waiting...'}
+            </div>
+          </div>
+        </div>
+
         {/* Centered Timer Overlay */}
         <div className="timer-overlay">
           <div ref={circularTimerRef} className={`circular-timer ${gameState.currentTimer <= 0 ? 'timer-hidden' : ''}`}>
@@ -665,7 +715,11 @@ export default function PlayerGame() {
           <div className="betting-zone andar-zone" id="andarZone" onClick={() => placeBet('andar')}>
             <div className="bet-info">
               <div className="bet-title">
-                <span>ANDAR 1:1</span>
+                <span>ANDAR {
+                  gameState.round === 1 ? '1:1 (Double)' :
+                  gameState.round === 2 ? '1:1 on All' :
+                  '1:1 on Total'
+                }</span>
               </div>
               <div className="bet-amount" id="andarBet" ref={andarBetRef}>₹ {gameState.andarBets.toLocaleString('en-IN')}</div>
             </div>
@@ -695,7 +749,11 @@ export default function PlayerGame() {
             </div>
             <div className="bet-info">
               <div className="bet-title">
-                <span>BAHAR 1:1</span>
+                <span>BAHAR {
+                  gameState.round === 1 ? '1:0 (Refund)' :
+                  gameState.round === 2 ? 'R1: 1:1, R2: Refund' :
+                  '1:1 on Total'
+                }</span>
               </div>
               <div className="bet-amount" id="baharBet" ref={baharBetRef}>₹ {gameState.baharBets.toLocaleString('en-IN')}</div>
             </div>
