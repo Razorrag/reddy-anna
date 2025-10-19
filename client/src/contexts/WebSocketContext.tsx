@@ -20,6 +20,7 @@ interface WebSocketContextType {
   sendWebSocketMessage: (message: WebSocketMessage) => void;
   startGame: () => Promise<void>;
   dealCard: (card: Card, side: BetSide, position: number) => Promise<void>;
+  placeBet: (side: BetSide, amount: number) => Promise<void>;
   connectWebSocket: () => void;
   disconnectWebSocket: () => void;
   connectionState: ConnectionState;
@@ -27,16 +28,17 @@ interface WebSocketContextType {
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
 
-// Fixed URL function to use backend port only
+// Fixed URL function to use proxy in development
 const getWebSocketUrl = (): string => {
   if (typeof window !== 'undefined') {
-    // Use environment variable or fallback to known backend port
-    const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL || `localhost:${import.meta.env.PORT || '5000'}`;
+    // In development, use the same host (proxy will forward to backend)
+    // In production, use the actual WebSocket URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${wsBaseUrl}/ws`;
+    const host = window.location.host; // Uses current host (localhost:3000 in dev)
+    return `${protocol}//${host}/ws`;
   }
   // Server environment
-  return process.env.WEBSOCKET_URL || 'ws://localhost:5000';
+  return process.env.WEBSOCKET_URL || 'ws://localhost:5000/ws';
 };
 
 const getApiBaseUrl = (): string => {
@@ -61,7 +63,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     updateTotalBets,
     setCurrentRound,
     addDealtCard,
-    updatePlayerWallet
+    updatePlayerWallet,
+    updatePlayerRoundBets,
+    updateRoundBets
   } = useGameState();
   const { showNotification } = useNotification();
   const [webSocketState, setWebSocketState] = useState<ConnectionState>({
@@ -107,6 +111,26 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           setReconnectTimeout(null);
         }
         
+        // Send authentication message
+        const userData = localStorage.getItem('user');
+        if (userData) {
+          try {
+            const user = JSON.parse(userData);
+            ws.send(JSON.stringify({
+              type: 'authenticate',
+              data: {
+                userId: user.id,
+                username: user.username,
+                role: user.role || 'player'
+              },
+              timestamp: Date.now()
+            }));
+            console.log('Authentication message sent');
+          } catch (error) {
+            console.error('Failed to parse user data for authentication:', error);
+          }
+        }
+        
         showNotification('Connected to game server', 'success');
       };
 
@@ -130,19 +154,80 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
 
             case 'sync_game_state':
-              // Sync complete game state
+              // Sync complete game state with user-specific data
               if (data.data?.phase) setPhase(data.data.phase);
               if (data.data?.countdown !== undefined) setCountdown(data.data.countdown);
               if (data.data?.winner) setWinner(data.data.winner);
-              if (data.data?.openingCard) setSelectedOpeningCard(data.data.openingCard);
               if (data.data?.currentRound) setCurrentRound(data.data.currentRound);
+              
+              // Convert opening card string to Card object
+              if (data.data?.openingCard) {
+                const openingCard = typeof data.data.openingCard === 'string'
+                  ? {
+                      display: data.data.openingCard,
+                      value: data.data.openingCard.replace(/[♠♥♦♣]/g, ''),
+                      suit: data.data.openingCard.match(/[♠♥♦♣]/)?.[0] || ''
+                    }
+                  : data.data.openingCard;
+                setSelectedOpeningCard(openingCard);
+              }
+              
+              // Sync dealt cards
+              if (data.data?.andarCards && Array.isArray(data.data.andarCards)) {
+                data.data.andarCards.forEach((cardStr: string) => {
+                  const card = typeof cardStr === 'string'
+                    ? {
+                        display: cardStr,
+                        value: cardStr.replace(/[♠♥♦♣]/g, ''),
+                        suit: cardStr.match(/[♠♥♦♣]/)?.[0] || ''
+                      }
+                    : cardStr;
+                  addAndarCard(card);
+                });
+              }
+              if (data.data?.baharCards && Array.isArray(data.data.baharCards)) {
+                data.data.baharCards.forEach((cardStr: string) => {
+                  const card = typeof cardStr === 'string'
+                    ? {
+                        display: cardStr,
+                        value: cardStr.replace(/[♠♥♦♣]/g, ''),
+                        suit: cardStr.match(/[♠♥♦♣]/)?.[0] || ''
+                      }
+                    : cardStr;
+                  addBaharCard(card);
+                });
+              }
+              
+              // Update total bets
+              if (data.data?.andarTotal !== undefined && data.data?.baharTotal !== undefined) {
+                updateTotalBets({ andar: data.data.andarTotal, bahar: data.data.baharTotal });
+              }
+              
+              // Update user's individual bets from previous rounds
+              if (data.data?.userRound1Bets) {
+                updatePlayerRoundBets(1, data.data.userRound1Bets);
+              }
+              if (data.data?.userRound2Bets) {
+                updatePlayerRoundBets(2, data.data.userRound2Bets);
+              }
               break;
 
             case 'opening_card_set':
             case 'opening_card_confirmed':
               if (data.data?.openingCard) {
-                setSelectedOpeningCard(data.data.openingCard);
-                showNotification(`Opening card set: ${data.data.openingCard.display}`, 'info');
+                // Convert string to Card object if needed
+                const openingCard = typeof data.data.openingCard === 'string'
+                  ? {
+                      display: data.data.openingCard,
+                      value: data.data.openingCard.replace(/[♠♥♦♣]/g, ''),
+                      suit: data.data.openingCard.match(/[♠♥♦♣]/)?.[0] || ''
+                    }
+                  : data.data.openingCard;
+                
+                setSelectedOpeningCard(openingCard);
+                setPhase('betting'); // Update phase to betting
+                if (data.data.round) setCurrentRound(data.data.round);
+                showNotification(`Opening card: ${openingCard.display} - Round ${data.data.round || 1} betting started!`, 'success');
               }
               break;
               
@@ -188,14 +273,35 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               setCurrentRound(2);
               setPhase('betting');
               if (data.data?.timer) setCountdown(data.data.timer);
-              showNotification('Round 2 betting started!', 'info');
+              
+              // Update round 1 locked bets display
+              if (data.data?.round1Bets) {
+                updateRoundBets(1, data.data.round1Bets);
+              }
+              
+              showNotification(
+                data.data?.message || 'Round 2 betting started! Your Round 1 bets are locked.',
+                'success'
+              );
               break;
 
             case 'start_final_draw':
               setCurrentRound(3);
               setPhase('dealing');
               setCountdown(0);
-              showNotification('Round 3: Continuous draw started!', 'warning');
+              
+              // Update locked bets from both rounds
+              if (data.data?.round1Bets) {
+                updateRoundBets(1, data.data.round1Bets);
+              }
+              if (data.data?.round2Bets) {
+                updateRoundBets(2, data.data.round2Bets);
+              }
+              
+              showNotification(
+                data.data?.message || 'Round 3: Continuous draw! All bets locked.',
+                'warning'
+              );
               break;
               
             case 'game_complete':
@@ -227,6 +333,23 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               // Update player wallet from backend
               if (data.data?.balance !== undefined) {
                 updatePlayerWallet(data.data.balance);
+              }
+              break;
+            
+            case 'user_bets_update':
+              // Update user's locked bets from previous rounds
+              if (data.data?.round1Bets) {
+                updatePlayerRoundBets(1, data.data.round1Bets);
+              }
+              if (data.data?.round2Bets) {
+                updatePlayerRoundBets(2, data.data.round2Bets);
+              }
+              break;
+            
+            case 'payout_received':
+              // Show payout notification
+              if (data.data?.amount > 0) {
+                showNotification(`You won ₹${data.data.amount.toLocaleString()}!`, 'success');
               }
               break;
 
@@ -314,25 +437,17 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     const customTime = 30; // Default for demo
 
     try {
-      // Use API client with proper error handling
-      
-      // Set opening card in backend
-      await apiClient.post('/api/game/set-opening-card', {
-        card: gameState.selectedOpeningCard.display,
-        game_id: 'default-game'
-      });
-
-      // Start timer in backend
-      await apiClient.post('/api/game/start-timer', {
-        duration: customTime,
-        phase: 'betting',
-        game_id: 'default-game'
+      // Send WebSocket message to start game (backend handles this)
+      sendWebSocketMessage({
+        type: 'game_start',
+        data: {
+          openingCard: gameState.selectedOpeningCard,
+          timer: customTime,
+          gameId: 'default-game'
+        }
       });
 
       showNotification(`Game started with ${customTime} seconds!`, 'success');
-
-      setPhase('betting');
-      setCountdown(customTime);
     } catch (error) {
       handleComponentError(error, 'startGame');
       showNotification('Failed to start game. Please try again.', 'error');
@@ -341,34 +456,41 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const dealCard = async (card: Card, side: BetSide, position: number) => {
     try {
-      const result = await apiClient.post('/api/game/deal-card', {
-        card: card.display,
-        side: side,
-        position: position,
-        game_id: 'default-game'
+      // Send WebSocket message to deal card
+      sendWebSocketMessage({
+        type: 'deal_card',
+        data: {
+          card: card,
+          side: side,
+          position: position,
+          gameId: 'default-game'
+        }
       });
 
-      if (result.success) {
-        console.log('Card dealt successfully:', result);
-
-        // Update local state
-        if (side === 'andar') {
-          addAndarCard(card);
-        } else {
-          addBaharCard(card);
-        }
-
-        if (result.data.isWinningCard) {
-          showNotification(`Game complete! ${side.toUpperCase()} wins with ${card.display}!`, 'success');
-          setWinner(side);
-          setPhase('complete');
-        }
-      } else {
-        showNotification('Failed to deal card in backend', 'error');
-      }
+      console.log('Card dealt message sent:', card.display, side);
     } catch (error) {
       handleComponentError(error, 'dealCard');
       showNotification('Error dealing card', 'error');
+    }
+  };
+
+  const placeBet = async (side: BetSide, amount: number) => {
+    try {
+      // Send WebSocket message to place bet
+      sendWebSocketMessage({
+        type: 'bet_placed',
+        data: {
+          side: side,
+          amount: amount,
+          round: gameState.currentRound,
+          gameId: 'default-game'
+        }
+      });
+
+      console.log('Bet placed message sent:', side, amount);
+    } catch (error) {
+      handleComponentError(error, 'placeBet');
+      showNotification('Error placing bet', 'error');
     }
   };
 
@@ -409,6 +531,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     sendWebSocketMessage,
     startGame,
     dealCard,
+    placeBet,
     connectWebSocket,
     disconnectWebSocket,
     connectionState: webSocketState,

@@ -14,7 +14,7 @@ const GamePage = () => {
   const { connectionState } = useWebSocket();
   
   // Chip values for betting
-  const [selectedChip, setSelectedChip] = useState<number>(100000); // Default to ₹1,00,000
+  const [selectedChip, setSelectedChip] = useState<number>(5000); // Default to ₹5,000
   
   // Player betting functionality
   const handlePlaceBet = (side: 'andar' | 'bahar') => {
@@ -25,7 +25,7 @@ const GamePage = () => {
 
   // Chip selection component
   const ChipSelector = () => {
-    const chips = [50000, 100000, 500000, 1000000]; // ₹50k, ₹1L, ₹5L, ₹10L
+    const chips = [1000, 2500, 5000, 10000, 20000, 30000, 40000, 50000]; // Within schema limits
     
     return (
       <div className="chip-selector flex gap-2 mb-4">

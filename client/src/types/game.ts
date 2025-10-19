@@ -71,6 +71,64 @@ export interface StreamSettings {
   streamTitle: string;
   streamStatus: 'live' | 'offline' | 'maintenance';
   streamDescription: string;
+  streamQuality: 'auto' | '1080p' | '720p' | '480p' | '360p';
+  streamDelay: number; // in seconds
+  backupStreamUrl: string;
+  embedCode: string;
+}
+
+// Stream statistics
+export interface StreamStatistics {
+  currentViewers: number;
+  totalViewsToday: number;
+  streamUptime: string; // formatted as "HH:MM:SS"
+  averageLatency: number; // in milliseconds
+  bitrate: number; // in kbps
+  framerate: number; // in fps
+}
+
+// Live simulation settings
+export interface LiveSimulationSettings {
+  viewers: {
+    min: number;
+    max: number;
+    current: number;
+  };
+  betAmount: {
+    min: number;
+    max: number;
+    current: number;
+  };
+  winAmount: {
+    min: number;
+    max: number;
+    current: number;
+  };
+}
+
+// Round completion popup data
+export interface RoundCompletionData {
+  round: number;
+  cardsDealt: number;
+  nextRoundTimer: number;
+  message: string;
+}
+
+// Winner popup data
+export interface WinnerPopupData {
+  winner: 'andar' | 'bahar';
+  winningCard: string;
+  round: number;
+  earnings: {
+    andar: number;
+    bahar: number;
+    total: number;
+  };
+  breakdown: {
+    round1: string;
+    round2?: string;
+    round3?: string;
+  };
 }
 
 // Complete game state interface
@@ -146,6 +204,7 @@ export type WebSocketMessageType =
   | 'opening_card_set'
   | 'opening_card_confirmed'
   | 'card_dealt'
+  | 'deal_card'
   
   // Timer
   | 'timer_start'
@@ -156,6 +215,8 @@ export type WebSocketMessageType =
   | 'bet_placed'
   | 'betting_stats'
   | 'balance_update'
+  | 'user_bets_update'
+  | 'payout_received'
   
   // Round control
   | 'start_round_2'

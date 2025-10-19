@@ -16,5 +16,19 @@ export default defineConfig({
   server: {
     host: true,
     port: 3000,
+    proxy: {
+      // Proxy API requests to backend
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false,
+      },
+      // Proxy WebSocket connections to backend
+      '/ws': {
+        target: 'ws://localhost:5000',
+        ws: true,
+        changeOrigin: true,
+      },
+    },
   },
 });

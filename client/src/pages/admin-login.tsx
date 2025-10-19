@@ -21,9 +21,21 @@ export default function AdminLogin() {
 
     // Simulate admin login process
     setTimeout(() => {
+      // Set admin user data in localStorage
+      const adminUser = {
+        id: 'admin-' + Date.now(),
+        username: formData.username || 'admin',
+        role: 'admin', // Critical: Set role as admin
+        balance: 0 // Admin doesn't need balance
+      };
+      
+      localStorage.setItem('user', JSON.stringify(adminUser));
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('userRole', 'admin');
+      
       setIsLoading(false);
       // Redirect to admin game after successful login
-      window.location.href = '/admin-game';
+      window.location.href = '/game';
     }, 1500);
   };
 

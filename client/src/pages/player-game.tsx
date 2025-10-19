@@ -15,7 +15,7 @@ import { formatCurrency, formatCurrencyShort } from "@/lib/payoutCalculator";
 import type { BetSide, GameHistoryEntry } from "@/types/game";
 import "../player-game.css";
 
-const CHIP_VALUES = [100000, 50000, 40000, 30000, 20000, 10000, 5000, 2500];
+const CHIP_VALUES = [50000, 40000, 30000, 20000, 10000, 5000, 2500, 1000];
 
 interface GameHistoryItem {
   id: string;
@@ -26,10 +26,9 @@ interface GameHistoryItem {
 
 export default function PlayerGame() {
   const { showNotification } = useNotification();
-  const { connectionState } = useWebSocket();
+  const { connectionState, placeBet: placeBetWebSocket } = useWebSocket();
   const {
     gameState,
-    placeBet,
     updatePlayerWallet
   } = useGameState();
 
@@ -73,15 +72,15 @@ export default function PlayerGame() {
         balance: gameState.playerWallet
       }]);
 
-      // Place bet using context
-      placeBet(side, selectedChip);
+      // Place bet using WebSocket
+      await placeBetWebSocket(side, selectedChip);
       
       showNotification(`Bet of ${formatCurrencyShort(selectedChip)} placed on ${side.toUpperCase()}!`, 'success');
     } catch (error) {
       console.error('Error placing bet:', error);
       showNotification('Failed to place bet. Please try again.', 'error');
     }
-  }, [gameState.phase, gameState.playerRound1Bets, gameState.playerRound2Bets, selectedChip, gameState.playerWallet, placeBet, showNotification]);
+  }, [gameState.phase, gameState.playerRound1Bets, gameState.playerRound2Bets, selectedChip, gameState.playerWallet, placeBetWebSocket, showNotification]);
 
   // Undo last bet
   const undoBet = useCallback(() => {
@@ -294,6 +293,52 @@ export default function PlayerGame() {
             </div>
           </div>
         </div>
+
+        {/* Locked Bets Display - Show player's bets from previous rounds */}
+        {(gameState.currentRound >= 2 && (gameState.playerRound1Bets.andar > 0 || gameState.playerRound1Bets.bahar > 0)) && (
+          <div className="locked-bets-display" style={{
+            padding: '12px',
+            margin: '10px 0',
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
+          }}>
+            <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: '#ffd700' }}>
+              🔒 Your Locked Bets (Round 1)
+            </div>
+            <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
+              {gameState.playerRound1Bets.andar > 0 && (
+                <div style={{ color: '#ff4444' }}>
+                  Andar: {formatCurrencyShort(gameState.playerRound1Bets.andar)}
+                </div>
+              )}
+              {gameState.playerRound1Bets.bahar > 0 && (
+                <div style={{ color: '#4444ff' }}>
+                  Bahar: {formatCurrencyShort(gameState.playerRound1Bets.bahar)}
+                </div>
+              )}
+            </div>
+            {gameState.currentRound >= 3 && (gameState.playerRound2Bets.andar > 0 || gameState.playerRound2Bets.bahar > 0) && (
+              <>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', margin: '8px 0', color: '#ffd700' }}>
+                  🔒 Your Locked Bets (Round 2)
+                </div>
+                <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
+                  {gameState.playerRound2Bets.andar > 0 && (
+                    <div style={{ color: '#ff4444' }}>
+                      Andar: {formatCurrencyShort(gameState.playerRound2Bets.andar)}
+                    </div>
+                  )}
+                  {gameState.playerRound2Bets.bahar > 0 && (
+                    <div style={{ color: '#4444ff' }}>
+                      Bahar: {formatCurrencyShort(gameState.playerRound2Bets.bahar)}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Card Sequence Display */}
         {gameState.dealtCards.length > 0 && (

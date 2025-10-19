@@ -39,7 +39,7 @@ const OpeningCardSection: React.FC = () => {
   const handleStartRound1 = () => {
     if (!gameState.selectedOpeningCard) return;
     
-    // Send game start with opening card
+    // Send game start with opening card - backend will handle all broadcasts
     sendWebSocketMessage({
       type: 'game_start',
       data: {
@@ -50,39 +50,8 @@ const OpeningCardSection: React.FC = () => {
       }
     });
     
-    // Broadcast opening card to players
-    sendWebSocketMessage({
-      type: 'opening_card_confirmed',
-      data: {
-        openingCard: gameState.selectedOpeningCard.display,
-        phase: 'betting',
-        round: 1
-      }
-    });
-    
-    // Start timer for Round 1 betting
-    sendWebSocketMessage({
-      type: 'timer_update',
-      data: {
-        seconds: customTime,
-        phase: 'betting',
-        round: 1
-      }
-    });
-    
-    // Update local phase to betting (game in progress)
-    setPhase('betting');
-    
-    // Notify GameAdmin component about phase change
-    window.dispatchEvent(new CustomEvent('game-phase-change', {
-      detail: {
-        phase: 'betting',
-        openingCard: gameState.selectedOpeningCard
-      }
-    }));
-    
     setShowTimerPopup(false);
-    showNotification(`Round 1 started with ${customTime} seconds! Opening card: ${gameState.selectedOpeningCard.display}`, 'success');
+    showNotification(`Starting Round 1 with ${customTime} seconds...`, 'info');
   };
 
   // Always show in admin, but indicate if not active

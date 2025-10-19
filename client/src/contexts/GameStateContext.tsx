@@ -296,6 +296,8 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const placeBet = (side: BetSide, amount: number) => {
+    // This function now only updates local state
+    // The actual bet placement is handled by WebSocket messages
     if (gameState.currentRound === 1) {
       const newBets: RoundBets = {
         ...gameState.playerRound1Bets,

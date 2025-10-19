@@ -13,8 +13,10 @@ import GameHeader from './GameHeader';
 import OpeningCardSection from './OpeningCardSection';
 import AndarBaharSection from './AndarBaharSection';
 import SettingsModal from '../SettingsModal/SettingsModal';
+import AdvancedBettingStats from '../BettingStats/AdvancedBettingStats';
+import LiveStreamSimulation from '../LiveStreamSimulation/LiveStreamSimulation';
 import { LoadingButton, LoadingOverlay } from '../LoadingSpinner';
-import type { GameSettings, StreamSettings } from '@/types/game';
+import type { GameSettings, StreamSettings, LiveSimulationSettings } from '@/types/game';
 import './GameAdmin.css';
 
 const GameAdmin: React.FC = () => {
@@ -30,6 +32,9 @@ const GameAdmin: React.FC = () => {
     resetGame: resetGameState,
     updateTotalBets,
   } = useGameState();
+  
+  // Note: Role validation is handled by ProtectedRoute in App.tsx
+  // In DEV mode, ProtectedRoute bypasses authentication for easier testing
   
   // UI state (not game state)
   const [showSettings, setShowSettings] = useState(false);
@@ -49,12 +54,16 @@ const GameAdmin: React.FC = () => {
   // Stream settings
   const [streamSettings, setStreamSettings] = useState<StreamSettings>({
     streamType: 'video',
-    streamUrl: 'hero images/uhd_30fps.mp4',
-    rtmpUrl: 'rtmps://live.restream.io:1937/live',
-    rtmpStreamKey: 're_10541509_eventd4960ba1734c49369fc0d114295801a0',
-    streamTitle: 'Andar Bahar Live Game',
+    streamUrl: '/hero images/uhd_30fps.mp4',
+    rtmpUrl: 'rtmp://localhost:1935/live',
+    rtmpStreamKey: 'streamKey',
+    streamTitle: 'Andar Bahar Live',
     streamStatus: 'live',
-    streamDescription: 'Watch live Andar Bahar games with real-time betting and instant results.'
+    streamDescription: 'Live Andar Bahar Game',
+    streamQuality: 'auto',
+    streamDelay: 5,
+    backupStreamUrl: '',
+    embedCode: ''
   });
 
   // Initialize phase to 'opening' on mount for admin
@@ -304,6 +313,19 @@ const GameAdmin: React.FC = () => {
                 </button>
               </div>
             </div>
+
+            {/* Advanced Betting Statistics */}
+            <AdvancedBettingStats
+              round1Bets={gameState.round1Bets}
+              round2Bets={gameState.round2Bets}
+              currentRound={gameState.currentRound as 1 | 2 | 3}
+              isGameActive={gameState.phase === 'betting' || gameState.phase === 'dealing'}
+            />
+
+            {/* Live Stream Simulation */}
+            <LiveStreamSimulation
+              isGameActive={gameState.phase === 'betting' || gameState.phase === 'dealing'}
+            />
 
             {/* Card Dealing Section */}
             <AndarBaharSection />
