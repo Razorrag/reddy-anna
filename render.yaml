@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: andar-bahar-game
+    env: node
+    region: frankfurt  # or your preferred region
+    buildCommand: "npm install --production=false && npm run build"
+    startCommand: "npm start"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        sync: false  # Render will provide this automatically
+    healthCheckPath: /
