@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage"; // Using in-memory storage for development
+import { storage } from "./storage-supabase"; // Using Supabase for production
 import { insertBetSchema, insertGameHistorySchema } from "@shared/schema";
 import { z } from "zod";
 import { hashPassword, comparePassword, validatePassword, validateUsername } from "./lib/auth";
@@ -16,6 +16,13 @@ interface WSClient {
 }
 
 const clients = new Set<WSClient>();
+
+// WebSocket bet rate limiting - prevent spam betting
+interface BetRateLimit {
+  count: number;
+  resetTime: number;
+}
+const userBetRateLimits = new Map<string, BetRateLimit>();
 
 // Standardized game phases - matches frontend exactly
 type GamePhase = 'idle' | 'betting' | 'dealing' | 'complete';
@@ -467,6 +474,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const betAmount = message.data.amount;
             const betSide = message.data.side;
             const betRound = currentGameState.currentRound;
+            
+            // Rate limiting: Max 30 bets per minute per user
+            const now = Date.now();
+            const userLimit = userBetRateLimits.get(client.userId);
+            
+            if (userLimit && now < userLimit.resetTime) {
+              if (userLimit.count >= 30) {
+                ws.send(JSON.stringify({
+                  type: 'error',
+                  data: { message: 'Too many bets. Please slow down (max 30 bets per minute).' }
+                }));
+                break;
+              }
+              userLimit.count++;
+            } else {
+              // Reset or initialize rate limit
+              userBetRateLimits.set(client.userId, { 
+                count: 1, 
+                resetTime: now + 60000 // 1 minute
+              });
+            }
             
             // Validate bet amount (schema limits: 1000-50000)
             if (!betAmount || betAmount < 1000 || betAmount > 50000) {

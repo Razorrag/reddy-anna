@@ -11,9 +11,20 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { nms } from "./rtmp-server";
 
+// Validate required environment variables
+const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'SESSION_SECRET'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingEnvVars.join(', '));
+  console.error('Please set these variables in your .env file');
+  process.exit(1);
+}
+
 // Debug environment variables
-console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
-console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('✅ SUPABASE_URL:', process.env.SUPABASE_URL);
+console.log('✅ NODE_ENV:', process.env.NODE_ENV);
+console.log('✅ All required environment variables are set');
 
 const app = express();
 app.use(express.json());

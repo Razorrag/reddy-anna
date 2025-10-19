@@ -16,7 +16,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 // MockBettingSimulation removed for live testing
 // import MockBettingSimulation from "@/components/MockBettingSimulation/MockBettingSimulation";
-import type { BetSide, GameHistoryEntry } from "@/types/game";
+import type { BetSide } from "@/types/game";
 import "../player-game.css";
 
 const CHIP_VALUES = [50000, 40000, 30000, 20000, 10000, 5000, 2500, 1000];
@@ -30,12 +30,10 @@ interface GameHistoryItem {
 
 export default function PlayerGame() {
   const { showNotification } = useNotification();
-  const { connectionState, placeBet: placeBetWebSocket } = useWebSocket();
+  const { placeBet: placeBetWebSocket } = useWebSocket();
   const {
     gameState,
-    updatePlayerWallet,
-    setPhase,
-    setCountdown
+    updatePlayerWallet
   } = useGameState();
 
   // UI state
@@ -49,8 +47,8 @@ export default function PlayerGame() {
     balance: number;
   }>>([]);
 
-  // User display
-  const [userId] = useState('1308544430');
+  // User display - get from localStorage or use guest
+  const userId = localStorage.getItem('userId') || localStorage.getItem('username') || 'guest';
   const [viewerCount] = useState('1,234');
 
   // Opening card display - phase transitions handled by WebSocket
@@ -136,28 +134,39 @@ export default function PlayerGame() {
     }
   }, [betHistory, gameState.playerWallet, showNotification]);
 
+  // Fetch game history from API
+  const fetchGameHistory = useCallback(async () => {
+    try {
+      const response = await fetch('/api/game/history');
+      if (!response.ok) {
+        throw new Error('Failed to fetch game history');
+      }
+      const data = await response.json();
+      
+      // Transform API data to match GameHistoryItem interface
+      const transformedData: GameHistoryItem[] = data.map((item: any) => ({
+        id: item.id || item.gameId,
+        round: item.round || item.winningRound || 1,
+        winner: item.winner,
+        timestamp: new Date(item.createdAt)
+      }));
+      
+      setGameHistory(transformedData);
+    } catch (error) {
+      console.error('Failed to fetch game history:', error);
+      showNotification('Failed to load game history', 'error');
+      // Fallback to empty array
+      setGameHistory([]);
+    }
+  }, [showNotification]);
+
   // Show history
   const showFullHistory = useCallback(() => {
     setShowHistory(true);
     if (gameHistory.length === 0) {
-      generateHistoryData();
+      fetchGameHistory();
     }
-  }, [gameHistory.length]);
-
-  // Generate history data
-  const generateHistoryData = () => {
-    const results: GameHistoryItem[] = [];
-    for (let i = 1; i <= 50; i++) {
-      const isAndar = Math.random() > 0.5;
-      results.push({
-        id: `round-${i}`,
-        round: i,
-        winner: isAndar ? 'andar' : 'bahar',
-        timestamp: new Date(Date.now() - (i * 60000))
-      });
-    }
-    setGameHistory(results);
-  };
+  }, [gameHistory.length, fetchGameHistory]);
 
   // Get recent results for display
   const recentResults = gameHistory.slice(-12).reverse();
