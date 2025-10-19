@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 export default function Login() {
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -22,8 +22,8 @@ export default function Login() {
     // Simulate login process
     setTimeout(() => {
       setIsLoading(false);
-      // Redirect to player game after successful login
-      window.location.href = '/player-game';
+      // Redirect to main game page after successful login
+      window.location.href = '/';
     }, 1500);
   };
 
@@ -59,17 +59,17 @@ export default function Login() {
 
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
+            {/* Username Field */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-gold font-semibold">
-                Email Address
+              <Label htmlFor="username" className="text-gold font-semibold">
+                Username
               </Label>
               <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Enter your email"
-                value={formData.email}
+                id="username"
+                name="username"
+                type="text"
+                placeholder="Enter your username"
+                value={formData.username}
                 onChange={handleChange}
                 className="bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold"
                 required

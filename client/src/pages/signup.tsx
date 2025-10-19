@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 export default function Signup() {
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
+    username: '',
     password: '',
     confirmPassword: '',
     phone: ''
@@ -45,8 +45,8 @@ export default function Signup() {
     // Simulate signup process
     setTimeout(() => {
       setIsLoading(false);
-      // Redirect to player game after successful signup
-      window.location.href = '/player-game';
+      // Redirect to main game page after successful signup
+      window.location.href = '/';
     }, 1500);
   };
 
@@ -107,17 +107,17 @@ export default function Signup() {
               />
             </div>
 
-            {/* Email Field */}
+            {/* Username Field */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-gold font-semibold">
-                Email Address
+              <Label htmlFor="username" className="text-gold font-semibold">
+                Username
               </Label>
               <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Enter your email"
-                value={formData.email}
+                id="username"
+                name="username"
+                type="text"
+                placeholder="Enter your username"
+                value={formData.username}
                 onChange={handleChange}
                 className="bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold"
                 required

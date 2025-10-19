@@ -307,24 +307,25 @@ class GameLoopService {
   // Calculate and distribute winnings based on complex payout rules
   private async calculateAndDistributeWinnings(gameId: string, winningSide: 'andar' | 'bahar', winningCard: string, gameState: GameSessionState): Promise<void> {
     if (gameState.winningRound === 1) {
-      // Round 1 winner - 1:0 payout (refund only)
+      // Round 1 winner
       const winningBets = gameState.round1Bets.filter(bet => bet.side === winningSide);
       for (const bet of winningBets) {
         const user = await storage.getUser(bet.userId);
         if (user) {
-          // 1:0 payout = return original bet
-          await storage.updateUserBalance(bet.userId, user.balance + bet.amount);
+          // 1:1 payout for Andar winner, 1:0 for Bahar winner
+          const payout = winningSide === 'andar' ? 2 * bet.amount : bet.amount;
+          await storage.updateUserBalance(bet.userId, user.balance + payout);
         }
       }
     } else if (gameState.winningRound === 2) {
       // Round 2 winner - different payouts for R1 vs R2 bets
-      // R1 bets get 1:1 payout (original + same amount)
+      // R1 bets get 1:1 payout (original + profit)
       const round1Winners = gameState.round1Bets.filter(bet => bet.side === winningSide);
       for (const bet of round1Winners) {
         const user = await storage.getUser(bet.userId);
         if (user) {
-          // 1:1 payout = original bet + same amount = 2x bet
-          await storage.updateUserBalance(bet.userId, user.balance + bet.amount);
+          // 1:1 payout = original bet + same amount as profit = 2x bet
+          await storage.updateUserBalance(bet.userId, user.balance + 2 * bet.amount);
         }
       }
       
@@ -348,8 +349,8 @@ class GameLoopService {
       for (const bet of allWinningBets) {
         const user = await storage.getUser(bet.userId);
         if (user) {
-          // 1:1 payout = original bet + same amount = 2x bet
-          await storage.updateUserBalance(bet.userId, user.balance + bet.amount);
+          // 1:1 payout = original bet + same amount as profit = 2x bet
+          await storage.updateUserBalance(bet.userId, user.balance + 2 * bet.amount);
         }
       }
     }

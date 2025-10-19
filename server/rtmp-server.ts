@@ -19,7 +19,7 @@ const config = {
       {
         app: process.env.RTMP_APP_NAME || 'live',
         mode: 'push',
-        edge: 'ws://localhost:8080/live'
+        edge: `ws://localhost:${process.env.RTMP_HTTP_PORT || '8001'}/live`
       }
     ]
   }

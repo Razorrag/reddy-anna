@@ -216,45 +216,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           case 'game_complete':
             const completedGame = await storage.getCurrentGameSession();
             if (completedGame) {
-              // Complete game session
-              await storage.completeGameSession(
-                message.data.gameId,
-                message.data.winner,
-                message.data.winningCard
-              );
-              
-              // Add to game history
-              await storage.addGameHistory({
-                gameId: message.data.gameId,
-                openingCard: completedGame.openingCard!,
-                winner: message.data.winner,
-                winningCard: message.data.winningCard,
-                totalCards: message.data.totalCards,
-                round: message.data.round,
-              });
-              
-              // Get all bets for this game
-              const gameBets = await storage.getBetsForGame(message.data.gameId);
-              
-              // Update bet statuses and user balances
-              for (const bet of gameBets) {
-                const won = bet.side === message.data.winner;
-                await storage.updateBetStatus(bet.id, won ? 'won' : 'lost');
-                
-                // Update user balance if won (1:1 payout + original bet)
-                if (won) {
-                  const user = await storage.getUser(bet.userId);
-                  if (user) {
-                    const payout = bet.amount * 2;
-                    await storage.updateUserBalance(bet.userId, user.balance + payout);
-                  }
-                }
-              }
+              // Note: Payouts are already calculated and distributed in GameLoopService.dealCard()
+              // This handler only needs to broadcast the completion
               
               // Broadcast game complete
               broadcast({
                 type: 'game_complete',
-                data: message.data
+                data: {
+                  gameId: message.data.gameId,
+                  winner: message.data.winner,
+                  winningCard: message.data.winningCard,
+                  winningRound: message.data.winningRound,
+                  totalCards: message.data.totalCards
+                }
               });
             }
             break;

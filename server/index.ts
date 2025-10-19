@@ -1,9 +1,16 @@
+// Load environment variables from .env file
+import 'dotenv/config';
+
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { nms } from "./rtmp-server";
+
+// Debug environment variables
+console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
+console.log('NODE_ENV:', process.env.NODE_ENV);
 
 const app = express();
 app.use(express.json());
