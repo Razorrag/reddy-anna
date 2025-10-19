@@ -1,10 +1,19 @@
-import React, { createContext, useContext, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useState, ReactNode } from 'react';
 import { useGameState } from './GameStateContext';
+import { useNotification } from '../components/NotificationSystem/NotificationSystem';
+import { WebSocketMessage } from '@shared/schema';
+import apiClient, { isValidWebSocketMessage, handleComponentError } from '../lib/apiClient';
 
 interface Card {
   suit: string;
   value: string;
   display: string;
+}
+
+interface WebSocketState {
+  isConnected: boolean;
+  isConnecting: boolean;
+  connectionError: string | null;
 }
 
 declare global {
@@ -20,118 +29,131 @@ interface WebSocketContextType {
   dealCard: (card: Card, side: 'andar' | 'bahar', position: number) => Promise<void>;
   connectWebSocket: () => void;
   disconnectWebSocket: () => void;
+  connectionState: WebSocketState;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
 
+// Dynamic URL functions
+const getWebSocketUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    // Browser environment - use backend server port
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // Use environment variable for backend host or default to localhost:5000
+    const backendHost = import.meta.env.VITE_API_BASE_URL || 'localhost:5000';
+    return `${protocol}//${backendHost}/ws`;
+  }
+  // Server environment - use environment variable or default
+  return process.env.WEBSOCKET_URL || 'ws://localhost:5000';
+};
+
+const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    // Use the same origin as the frontend
+    return '';
+  }
+  // Server environment
+  return process.env.API_BASE_URL || 'http://localhost:5000';
+};
+
+
 export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { gameState, setPhase, setCountdown, setWinner, addAndarCard, addBaharCard } = useGameState();
-  
-  const showNotification = useCallback((message: string, type: 'success' | 'error' | 'info') => {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    
-    // Style the notification
-    Object.assign(notification.style, {
-      position: 'fixed',
-      top: '20px',
-      right: '20px',
-      padding: '15px 25px',
-      borderRadius: '10px',
-      color: 'white',
-      fontFamily: 'Poppins, sans-serif',
-      zIndex: '1000',
-      transform: 'translateX(400px)',
-      transition: 'transform 0.3s ease',
-    });
-    
-    // Add gradient background based on type
-    if (type === 'success') {
-      notification.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
-    } else if (type === 'error') {
-      notification.style.background = 'linear-gradient(45deg, #dc3545, #fd7e14)';
-    } else {
-      notification.style.background = 'linear-gradient(45deg, #17a2b8, #20c997)';
-    }
-    
-    document.body.appendChild(notification);
-    
-    // Animate in
-    setTimeout(() => {
-      notification.style.transform = 'translateX(0)';
-    }, 100);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-      notification.style.transform = 'translateX(400px)';
-      setTimeout(() => {
-        if (notification.parentNode) {
-          notification.parentNode.removeChild(notification);
-        }
-      }, 300);
-    }, 3000);
-  }, []);
+  const { showNotification } = useNotification();
+  const [webSocketState, setWebSocketState] = useState<WebSocketState>({
+    isConnected: false,
+    isConnecting: false,
+    connectionError: null,
+  });
 
   const connectWebSocket = useCallback(() => {
+    if (typeof window === 'undefined') return; // Skip on server
+    
+    setWebSocketState(prev => ({ ...prev, isConnecting: true, connectionError: null }));
+
     try {
-      const ws = new WebSocket('ws://localhost:8080');
-      
+      // Use the dynamic URL function
+      const wsUrl = getWebSocketUrl();
+      const ws = new WebSocket(wsUrl);
+
       ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('WebSocket connected successfully');
+        setWebSocketState({ isConnected: true, isConnecting: false, connectionError: null });
+        (window as any).gameWebSocket = ws;
         showNotification('Connected to game server', 'success');
       };
-      
+
       ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        
-        switch (data.type) {
-          case 'gameState':
-            // Update game state based on server message
-            if (data.phase) setPhase(data.phase);
-            if (data.countdown !== undefined) setCountdown(data.countdown);
-            if (data.winner) setWinner(data.winner);
-            break;
-            
-          case 'cardDealt':
-            // Handle card dealt message
-            if (data.side === 'andar') {
-              addAndarCard(data.card);
-            } else {
-              addBaharCard(data.card);
-            }
-            break;
-            
-          case 'gameComplete':
-            // Handle game complete message
-            setWinner(data.winner);
-            showNotification(`Game complete! ${data.winner.toUpperCase()} wins!`, 'success');
-            break;
-            
-          default:
-            console.log('Unknown message type:', data.type);
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (!isValidWebSocketMessage(data)) {
+            console.warn('Received invalid WebSocket message:', data);
+            return;
+          }
+
+          // Handle validated message
+          switch (data.type) {
+            case 'gameState':
+              // Update game state based on server message
+              if (data.data?.phase) setPhase(data.data.phase);
+              if (data.data?.countdown !== undefined) setCountdown(data.data.countdown);
+              if (data.data?.winner) setWinner(data.data.winner);
+              break;
+              
+            case 'cardDealt':
+              // Handle card dealt message
+              if (data.data?.side === 'andar') {
+                addAndarCard(data.data.card);
+              } else if (data.data?.side === 'bahar') {
+                addBaharCard(data.data.card);
+              }
+              break;
+              
+            case 'gameComplete':
+              // Handle game complete message
+              if (data.data?.winner) {
+                setWinner(data.data.winner);
+                showNotification(`Game complete! ${data.data.winner.toUpperCase()} wins!`, 'success');
+              }
+              break;
+              
+            default:
+              console.log('Unknown message type:', data.type);
+          }
+        } catch (parseError) {
+          handleComponentError(parseError, 'WebSocket message parsing');
         }
       };
-      
+
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        showNotification('Connection error', 'error');
+        setWebSocketState(prev => ({ ...prev, isConnected: false, isConnecting: false, connectionError: 'Connection failed' }));
+        showNotification('WebSocket connection failed', 'error');
       };
-      
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
+
+      ws.onclose = (event) => {
+        console.log('WebSocket disconnected:', event.code, event.reason);
+        setWebSocketState({ isConnected: false, isConnecting: false, connectionError: null });
         showNotification('Disconnected from game server', 'info');
+        
+        // Attempt to reconnect after delay
+        if (event.code !== 1000) { // Not a normal close
+          setTimeout(() => {
+            console.log('Attempting to reconnect...');
+            connectWebSocket();
+          }, 5000); // Retry after 5 seconds
+        }
       };
-      
-      // Store websocket instance for later use
+
+      // Store WebSocket instance
       (window as any).gameWebSocket = ws;
-      
-    } catch (error) {
-      console.error('Failed to connect WebSocket:', error);
-      showNotification('Failed to connect to game server', 'error');
+    } catch (connectionError) {
+      console.error('Failed to initialize WebSocket:', connectionError);
+      setWebSocketState(prev => ({ ...prev, isConnecting: false, connectionError: 'Initialization failed' }));
+      showNotification('Failed to initialize WebSocket connection', 'error');
     }
-  }, [showNotification, setPhase, setCountdown, setWinner, addAndarCard, addBaharCard]);
+  }, [setPhase, setCountdown, setWinner, addAndarCard, addBaharCard, showNotification]);
 
   const disconnectWebSocket = useCallback(() => {
     const ws = (window as any).gameWebSocket;
@@ -151,25 +173,19 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     const customTime = 30; // Default for demo
 
     try {
+      // Use API client with proper error handling
+      
       // Set opening card in backend
-      await fetch(`${window.API_BASE_URL || 'http://localhost:5000'}/api/game/set-opening-card`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          card: gameState.selectedOpeningCard.display,
-          game_id: 'default-game'
-        })
+      await apiClient.post('/api/game/set-opening-card', {
+        card: gameState.selectedOpeningCard.display,
+        game_id: 'default-game'
       });
 
       // Start timer in backend
-      await fetch(`${window.API_BASE_URL || 'http://localhost:5000'}/api/game/start-timer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          duration: customTime,
-          phase: 'betting',
-          game_id: 'default-game'
-        })
+      await apiClient.post('/api/game/start-timer', {
+        duration: customTime,
+        phase: 'betting',
+        game_id: 'default-game'
       });
 
       showNotification(`Game started with ${customTime} seconds!`, 'success');
@@ -177,25 +193,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       setPhase('betting');
       setCountdown(customTime);
     } catch (error) {
-      console.error('Error starting game:', error);
-      showNotification('Error starting game', 'error');
+      handleComponentError(error, 'startGame');
+      showNotification('Failed to start game. Please try again.', 'error');
     }
   };
 
   const dealCard = async (card: Card, side: 'andar' | 'bahar', position: number) => {
     try {
-      const response = await fetch(`${window.API_BASE_URL || 'http://localhost:5000'}/api/game/deal-card`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          card: card.display,
-          side: side,
-          position: position,
-          game_id: 'default-game'
-        })
+      const result = await apiClient.post('/api/game/deal-card', {
+        card: card.display,
+        side: side,
+        position: position,
+        game_id: 'default-game'
       });
 
-      const result = await response.json();
       if (result.success) {
         console.log('Card dealt successfully:', result);
 
@@ -215,7 +226,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         showNotification('Failed to deal card in backend', 'error');
       }
     } catch (error) {
-      console.error('Error dealing card:', error);
+      handleComponentError(error, 'dealCard');
       showNotification('Error dealing card', 'error');
     }
   };
@@ -243,6 +254,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     dealCard,
     connectWebSocket,
     disconnectWebSocket,
+    connectionState: webSocketState,
   };
 
   return (

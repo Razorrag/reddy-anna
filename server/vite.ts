@@ -41,8 +41,20 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
-  app.use("*", async (req, res, next) => {
+  // Only serve index.html for routes that don't match API endpoints or static assets
+  app.get("*", async (req, res, next) => {
     const url = req.originalUrl;
+
+    // Skip API routes and assets that should be handled by other middleware
+    if (
+      url.startsWith('/api/') ||
+      url.startsWith('/@') ||  // Vite internal modules
+      url.startsWith('/node_modules/') ||
+      url.match(/\.(js|css|svg|png|jpg|jpeg|gif|ico|webp|avif|mp4|webm|ogg|mp3|wav|flac|aac|woff|woff2|eot|ttf|otf)$/)  // static files
+    ) {
+      next();
+      return;
+    }
 
     try {
       const clientTemplate = path.resolve(

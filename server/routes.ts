@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage";
+import { storage } from "./storage-supabase";
 import { insertBetSchema, insertGameHistorySchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -467,7 +467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           winner: side,
           winningCard: card,
           totalCards: totalCardsResult.length,
-          round: existingSession.round
+          round: existingSession.round || 1
         });
       } else {
         // Update game session phase to dealing

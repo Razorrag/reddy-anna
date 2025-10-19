@@ -42,65 +42,8 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
   
-  // Create WebSocket server
-  const wss = new WebSocketServer({ server });
-  
   // Start RTMP server
   nms.run();
-  
-  // WebSocket connection handling
-  wss.on('connection', (ws) => {
-    console.log('WebSocket client connected');
-    
-    ws.on('message', (message) => {
-      try {
-        const data = JSON.parse(message.toString());
-        console.log('Received WebSocket message:', data);
-        
-        // Handle different message types
-        switch (data.type) {
-          case 'authenticate':
-            ws.send(JSON.stringify({
-              type: 'authenticated',
-              data: { userId: data.data.userId }
-            }));
-            break;
-            
-          case 'subscribe_game':
-            ws.send(JSON.stringify({
-              type: 'subscribed',
-              data: { gameId: data.data.gameId }
-            }));
-            break;
-            
-          case 'stream_status_update':
-            // Broadcast stream status update to all clients
-            wss.clients.forEach(client => {
-              if (client.readyState === 1) { // WebSocket.OPEN
-                client.send(JSON.stringify({
-                  type: 'stream_status_update',
-                  data: data.data
-                }));
-              }
-            });
-            break;
-            
-          default:
-            console.log('Unknown WebSocket message type:', data.type);
-        }
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
-      }
-    });
-    
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
-    });
-    
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
-  });
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -123,7 +66,8 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "development") {
+  const nodeEnv = process.env.NODE_ENV?.trim();
+  if (nodeEnv === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
@@ -134,9 +78,11 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
+  
   server.listen(port, "127.0.0.1", () => {
     log(`serving on http://localhost:${port}`);
     log(`RTMP server running on port 1935`);
     log(`HTTP server for HLS running on port 8000`);
+    log(`WebSocket server running on the same port as HTTP server`);
   });
 })();
