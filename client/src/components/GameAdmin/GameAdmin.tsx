@@ -14,9 +14,10 @@ import OpeningCardSection from './OpeningCardSection';
 import AndarBaharSection from './AndarBaharSection';
 import SettingsModal from '../SettingsModal/SettingsModal';
 import AdvancedBettingStats from '../BettingStats/AdvancedBettingStats';
-import LiveStreamSimulation from '../LiveStreamSimulation/LiveStreamSimulation';
+// MockBettingSimulation removed for live testing
+// import MockBettingSimulation from '../MockBettingSimulation/MockBettingSimulation';
 import { LoadingButton, LoadingOverlay } from '../LoadingSpinner';
-import type { GameSettings, StreamSettings, LiveSimulationSettings } from '@/types/game';
+import type { GameSettings, StreamSettings } from '@/types/game';
 import './GameAdmin.css';
 
 const GameAdmin: React.FC = () => {
@@ -179,6 +180,8 @@ const GameAdmin: React.FC = () => {
   return (
     <LoadingOverlay isLoading={isResettingGame} message="Resetting game...">
       <div className="game-admin-container">
+        {/* Mock Betting Simulation removed for live testing */}
+        
         <GameHeader onSettingsClick={openSettings} />
 
         {/* PHASE 1: Opening Card Selection */}
@@ -319,11 +322,6 @@ const GameAdmin: React.FC = () => {
               round1Bets={gameState.round1Bets}
               round2Bets={gameState.round2Bets}
               currentRound={gameState.currentRound as 1 | 2 | 3}
-              isGameActive={gameState.phase === 'betting' || gameState.phase === 'dealing'}
-            />
-
-            {/* Live Stream Simulation */}
-            <LiveStreamSimulation
               isGameActive={gameState.phase === 'betting' || gameState.phase === 'dealing'}
             />
 

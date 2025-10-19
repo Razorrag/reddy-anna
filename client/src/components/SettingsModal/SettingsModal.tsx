@@ -52,10 +52,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       setStreamSettings(JSON.parse(savedStreamSettings));
     }
 
-    const savedSimulationSettings = localStorage.getItem('simulationSettings');
-    if (savedSimulationSettings) {
-      setSimulationSettings(JSON.parse(savedSimulationSettings));
-    }
   }, []);
 
   // Save settings

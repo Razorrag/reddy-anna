@@ -5,7 +5,7 @@ import { useNotification } from '../NotificationSystem/NotificationSystem';
 import type { Card } from '@/types/game';
 
 const OpeningCardSection: React.FC = () => {
-  const { gameState, setSelectedOpeningCard, phase, setPhase } = useGameState();
+  const { gameState, setSelectedOpeningCard, phase, setPhase, setCountdown, setCurrentRound } = useGameState();
   const { sendWebSocketMessage } = useWebSocket();
   const { showNotification } = useNotification();
   const [showTimerPopup, setShowTimerPopup] = useState(false);
@@ -39,6 +39,11 @@ const OpeningCardSection: React.FC = () => {
   const handleStartRound1 = () => {
     if (!gameState.selectedOpeningCard) return;
     
+    // Immediately update local state for instant feedback
+    setPhase('betting');
+    setCountdown(customTime);
+    setCurrentRound(1);
+    
     // Send game start with opening card - backend will handle all broadcasts
     sendWebSocketMessage({
       type: 'game_start',
@@ -51,7 +56,7 @@ const OpeningCardSection: React.FC = () => {
     });
     
     setShowTimerPopup(false);
-    showNotification(`Starting Round 1 with ${customTime} seconds...`, 'info');
+    showNotification(`Round 1 started! ${customTime} seconds for betting!`, 'success');
   };
 
   // Always show in admin, but indicate if not active

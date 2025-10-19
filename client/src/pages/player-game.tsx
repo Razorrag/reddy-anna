@@ -12,6 +12,8 @@ import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useNotification } from "@/components/NotificationSystem/NotificationSystem";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/payoutCalculator";
+// MockBettingSimulation removed for live testing
+// import MockBettingSimulation from "@/components/MockBettingSimulation/MockBettingSimulation";
 import type { BetSide, GameHistoryEntry } from "@/types/game";
 import "../player-game.css";
 
@@ -29,7 +31,9 @@ export default function PlayerGame() {
   const { connectionState, placeBet: placeBetWebSocket } = useWebSocket();
   const {
     gameState,
-    updatePlayerWallet
+    updatePlayerWallet,
+    setPhase,
+    setCountdown
   } = useGameState();
 
   // UI state
@@ -46,6 +50,32 @@ export default function PlayerGame() {
   // User display
   const [userId] = useState('1308544430');
   const [viewerCount] = useState('1,234');
+
+  // Auto-start timer when opening card is selected
+  useEffect(() => {
+    if (gameState.selectedOpeningCard && gameState.phase === 'idle') {
+      // Start betting phase with timer when opening card is selected
+      setPhase('betting');
+      setCountdown(30); // 30 seconds betting time
+      
+      showNotification(`Opening card selected! Betting started - 30 seconds remaining!`, 'success');
+    }
+  }, [gameState.selectedOpeningCard, gameState.phase, setPhase, setCountdown, showNotification]);
+
+  // Timer countdown effect
+  useEffect(() => {
+    if (gameState.countdownTimer > 0 && gameState.phase === 'betting') {
+      const timer = setTimeout(() => {
+        setCountdown(gameState.countdownTimer - 1);
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    } else if (gameState.countdownTimer === 0 && gameState.phase === 'betting') {
+      // Timer ended - move to dealing phase
+      setPhase('dealing');
+      showNotification('Betting time ended! Dealing cards...', 'info');
+    }
+  }, [gameState.countdownTimer, gameState.phase, setCountdown, setPhase, showNotification]);
 
   // Handle bet placement
   const handlePlaceBet = useCallback(async (side: BetSide) => {
@@ -141,6 +171,8 @@ export default function PlayerGame() {
 
   return (
     <div className="game-body">
+      {/* Mock Betting Simulation removed for live testing */}
+      
       {/* Header Section */}
       <header className="header">
         <nav className="navbar">
@@ -404,10 +436,11 @@ export default function PlayerGame() {
             <span>Undo</span>
           </button>
           <button 
-            className="select-chip-btn" 
+            className="control-btn select-chip-btn" 
             onClick={() => setShowChipSelector(!showChipSelector)}
           >
-            {selectedChip > 0 ? formatCurrencyShort(selectedChip) : 'Select Chip'}
+            <i className="fas fa-coins"></i>
+            <span>{selectedChip > 0 ? formatCurrencyShort(selectedChip) : 'Select Chip'}</span>
           </button>
           <button className="control-btn" onClick={rebet}>
             <i className="fas fa-redo"></i>
