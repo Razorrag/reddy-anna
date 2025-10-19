@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, Shield } from "lucide-react";
+import { Eye, EyeOff, Shield, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import apiClient from "@/lib/apiClient";
 
 export default function AdminLogin() {
   const [formData, setFormData] = useState({
@@ -14,29 +15,50 @@ export default function AdminLogin() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
 
-    // Simulate admin login process
-    setTimeout(() => {
+    try {
+      // Make real API call to login endpoint
+      const response = await apiClient.post('/api/auth/login', {
+        username: formData.username,
+        password: formData.password
+      });
+
+      // Verify admin credentials (you should check role from backend)
+      // For now, we'll check if username contains 'admin'
+      const isAdmin = formData.username.toLowerCase().includes('admin');
+
+      if (!isAdmin) {
+        setError('Invalid admin credentials. Admin access only.');
+        setIsLoading(false);
+        return;
+      }
+
       // Set admin user data in localStorage
       const adminUser = {
-        id: 'admin-' + Date.now(),
-        username: formData.username || 'admin',
+        id: response.id,
+        username: response.username,
         role: 'admin', // Critical: Set role as admin
-        balance: 0 // Admin doesn't need balance
+        balance: response.balance || 0
       };
       
       localStorage.setItem('user', JSON.stringify(adminUser));
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('userRole', 'admin');
       
-      setIsLoading(false);
-      // Redirect to admin game after successful login
+      // Redirect to admin panel after successful login
       window.location.href = '/admin';
-    }, 1500);
+    } catch (err: any) {
+      console.error('Admin login error:', err);
+      setError(err.message || 'Invalid admin credentials. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,6 +141,14 @@ export default function AdminLogin() {
                 </Button>
               </div>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
 
             {/* Submit Button */}
             <Button

@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, LogIn } from "lucide-react";
+import { Eye, EyeOff, LogIn, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import apiClient from "@/lib/apiClient";
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -14,17 +15,40 @@ export default function Login() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
 
-    // Simulate login process
-    setTimeout(() => {
-      setIsLoading(false);
-      // Redirect to main game page after successful login
+    try {
+      // Make real API call to login endpoint
+      const response = await apiClient.post('/api/auth/login', {
+        username: formData.username,
+        password: formData.password
+      });
+
+      // Store user data in localStorage for WebSocket authentication
+      const userData = {
+        id: response.id,
+        username: response.username,
+        balance: response.balance,
+        role: 'player' // Regular user role
+      };
+
+      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('userRole', 'player');
+
+      // Redirect to player game after successful login
       window.location.href = '/player-game';
-    }, 1500);
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.message || 'Invalid username or password');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,6 +131,14 @@ export default function Login() {
                 </Button>
               </div>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
 
             {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between text-sm">

@@ -18,17 +18,27 @@ class ApiClient {
           'Content-Type': 'application/json',
           ...options.headers,
         },
+        credentials: 'include', // Include cookies for session
         ...options,
       });
 
+      // Try to parse JSON response
+      const data = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Extract error message from response
+        const errorMessage = data.error || data.message || `HTTP error! status: ${response.status}`;
+        throw new Error(errorMessage);
       }
 
-      return await response.json();
+      return data;
     } catch (error) {
       console.error(`API request failed: ${endpoint}`, error);
-      throw error;
+      // Re-throw with better error message
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Network error. Please check your connection.');
     }
   }
 

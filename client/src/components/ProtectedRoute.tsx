@@ -36,13 +36,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   redirectTo = '/admin-login',
   children 
 }) => {
-  // 🔓 DEVELOPMENT MODE: Bypass authentication for testing
-  // Remove this in production!
-  if (import.meta.env.DEV) {
-    console.log('🔓 Development mode: Bypassing authentication');
-    return children ? <>{children}</> : <Component />;
-  }
-  
   // Implement authentication check
   const isAuthenticated = checkAuthStatus();
   

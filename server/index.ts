@@ -4,6 +4,9 @@ import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
+import session from 'express-session';
+import MemoryStore from 'memorystore';
+import cors from 'cors';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { nms } from "./rtmp-server";
@@ -15,6 +18,35 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// CORS configuration
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  credentials: true, // Allow cookies/session
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+log('✅ CORS configured');
+
+// Session middleware configuration
+const MemoryStoreSession = MemoryStore(session);
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production-IMPORTANT',
+  resave: false,
+  saveUninitialized: false,
+  store: new MemoryStoreSession({
+    checkPeriod: 86400000 // prune expired entries every 24h
+  }),
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+log('✅ Session middleware configured');
 
 app.use((req, res, next) => {
   const start = Date.now();

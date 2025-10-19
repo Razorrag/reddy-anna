@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, UserPlus } from "lucide-react";
+import { Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import apiClient from "@/lib/apiClient";
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -19,6 +20,8 @@ export default function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState('');
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,12 +45,39 @@ export default function Signup() {
       return;
     }
 
-    // Simulate signup process
-    setTimeout(() => {
+    try {
+      // Make real API call to signup endpoint
+      const response = await apiClient.post('/api/auth/signup', {
+        username: formData.username,
+        password: formData.password
+      });
+
+      // Show success message
+      setSuccess(true);
+      setApiError('');
+
+      // Store user data and redirect to player game
+      const userData = {
+        id: response.id,
+        username: response.username,
+        balance: response.balance,
+        role: 'player'
+      };
+
+      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('userRole', 'player');
+
+      // Redirect after 1 second to show success message
+      setTimeout(() => {
+        window.location.href = '/player-game';
+      }, 1000);
+    } catch (err: any) {
+      console.error('Signup error:', err);
+      setApiError(err.message || 'Failed to create account. Please try again.');
+    } finally {
       setIsLoading(false);
-      // Redirect to login page after successful signup
-      window.location.href = '/login';
-    }, 1500);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,6 +245,22 @@ export default function Signup() {
                 <p className="text-red-500 text-sm">{errors.confirmPassword}</p>
               )}
             </div>
+
+            {/* API Error Message */}
+            {apiError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-red-400 text-sm">{apiError}</p>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {success && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 flex items-start gap-2">
+                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <p className="text-green-400 text-sm">Account created successfully! Redirecting...</p>
+              </div>
+            )}
 
             {/* Terms and Conditions */}
             <div className="flex items-start text-sm">
