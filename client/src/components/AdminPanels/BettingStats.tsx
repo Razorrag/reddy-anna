@@ -5,8 +5,8 @@ const BettingStats = () => {
   const { gameState } = useGameState();
 
   // Calculate lowest bet
-  const totalAndar = gameState.roundBets.round1.andar + gameState.roundBets.round2.andar;
-  const totalBahar = gameState.roundBets.round1.bahar + gameState.roundBets.round2.bahar;
+  const totalAndar = (gameState.round1Bets?.andar || 0) + (gameState.round2Bets?.andar || 0);
+  const totalBahar = (gameState.round1Bets?.bahar || 0) + (gameState.round2Bets?.bahar || 0);
   const lowestBet = Math.min(totalAndar, totalBahar);
   const lowestBetSide = totalAndar <= totalBahar ? 'Andar' : 'Bahar';
 
@@ -17,14 +17,14 @@ const BettingStats = () => {
       <div className="grid grid-cols-2 gap-4 mb-3">
         <div className="bg-red-800 p-3 rounded">
           <h4 className="font-semibold">Round 1 Stats</h4>
-          <p>Andar: ₹{gameState.roundBets.round1.andar.toLocaleString()}</p>
-          <p>Bahar: ₹{gameState.roundBets.round1.bahar.toLocaleString()}</p>
+          <p>Andar: ₹{(gameState.round1Bets?.andar || 0).toLocaleString()}</p>
+          <p>Bahar: ₹{(gameState.round1Bets?.bahar || 0).toLocaleString()}</p>
         </div>
         
         <div className="bg-blue-800 p-3 rounded">
           <h4 className="font-semibold">Round 2 Stats</h4>
-          <p>Andar: ₹{gameState.roundBets.round2.andar.toLocaleString()}</p>
-          <p>Bahar: ₹{gameState.roundBets.round2.bahar.toLocaleString()}</p>
+          <p>Andar: ₹{(gameState.round2Bets?.andar || 0).toLocaleString()}</p>
+          <p>Bahar: ₹{(gameState.round2Bets?.bahar || 0).toLocaleString()}</p>
         </div>
       </div>
       

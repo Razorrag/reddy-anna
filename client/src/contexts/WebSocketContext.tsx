@@ -355,7 +355,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             
             case 'payout_received':
               // Show payout notification
-              if (data.data?.amount > 0) {
+              if (data.data?.amount && data.data.amount > 0) {
                 showNotification(`You won ₹${data.data.amount.toLocaleString()}!`, 'success');
               }
               break;
