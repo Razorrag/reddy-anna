@@ -12,6 +12,8 @@ import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useNotification } from "@/components/NotificationSystem/NotificationSystem";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatCurrencyShort } from "@/lib/payoutCalculator";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 // MockBettingSimulation removed for live testing
 // import MockBettingSimulation from "@/components/MockBettingSimulation/MockBettingSimulation";
 import type { BetSide, GameHistoryEntry } from "@/types/game";
@@ -51,31 +53,22 @@ export default function PlayerGame() {
   const [userId] = useState('1308544430');
   const [viewerCount] = useState('1,234');
 
-  // Auto-start timer when opening card is selected
+  // Opening card display - phase transitions handled by WebSocket
   useEffect(() => {
-    if (gameState.selectedOpeningCard && gameState.phase === 'idle') {
-      // Start betting phase with timer when opening card is selected
-      setPhase('betting');
-      setCountdown(30); // 30 seconds betting time
-      
-      showNotification(`Opening card selected! Betting started - 30 seconds remaining!`, 'success');
+    if (gameState.selectedOpeningCard && gameState.phase === 'betting') {
+      showNotification(`Opening card: ${gameState.selectedOpeningCard.display} - Place your bets!`, 'success');
     }
-  }, [gameState.selectedOpeningCard, gameState.phase, setPhase, setCountdown, showNotification]);
+  }, [gameState.selectedOpeningCard, gameState.phase, showNotification]);
 
-  // Timer countdown effect
+  // Timer updates come from backend via WebSocket - no local countdown needed
+  // Just show notifications for important timer events
   useEffect(() => {
-    if (gameState.countdownTimer > 0 && gameState.phase === 'betting') {
-      const timer = setTimeout(() => {
-        setCountdown(gameState.countdownTimer - 1);
-      }, 1000);
-
-      return () => clearTimeout(timer);
-    } else if (gameState.countdownTimer === 0 && gameState.phase === 'betting') {
-      // Timer ended - move to dealing phase
-      setPhase('dealing');
+    if (gameState.countdownTimer === 10 && gameState.phase === 'betting') {
+      showNotification('⏰ 10 seconds remaining!', 'warning');
+    } else if (gameState.countdownTimer === 0 && gameState.phase === 'dealing') {
       showNotification('Betting time ended! Dealing cards...', 'info');
     }
-  }, [gameState.countdownTimer, gameState.phase, setCountdown, setPhase, showNotification]);
+  }, [gameState.countdownTimer, gameState.phase, showNotification]);
 
   // Handle bet placement
   const handlePlaceBet = useCallback(async (side: BetSide) => {
@@ -194,6 +187,24 @@ export default function PlayerGame() {
               <div className="wallet-amount-display">
                 {formatCurrency(gameState.playerWallet)}
               </div>
+              
+              {/* Admin Access Button for logged-in users */}
+              <Link to="/admin" className="ml-4">
+                <Button 
+                  variant="outline" 
+                  className="border-gold/30 text-gold hover:bg-gold/10 h-10 px-4"
+                  onClick={(e) => {
+                    // Check if user is admin before allowing access
+                    const userRole = localStorage.getItem('userRole');
+                    if (userRole !== 'admin') {
+                      e.preventDefault();
+                      showNotification('Access denied. Admin privileges required.', 'error');
+                    }
+                  }}
+                >
+                  Admin
+                </Button>
+              </Link>
             </div>
           </div>
         </nav>
@@ -238,13 +249,67 @@ export default function PlayerGame() {
 
         {/* Timer Overlay */}
         <div className="timer-overlay">
-          {gameState.countdownTimer > 0 && (
-            <div className="circular-timer">
-              <div className="timer-value">{gameState.countdownTimer}</div>
-              <div className="round-info">
-                {gameState.phase === 'betting' ? `Betting Time: ${gameState.countdownTimer}s` :
-                 gameState.phase === 'dealing' ? 'Dealing Phase' :
-                 'Waiting...'}
+          {gameState.phase === 'betting' && gameState.countdownTimer > 0 && (
+            <div className="circular-timer" style={{
+              background: gameState.countdownTimer <= 10 
+                ? 'radial-gradient(circle, rgba(255, 68, 68, 0.9) 0%, rgba(200, 0, 0, 0.8) 100%)'
+                : 'radial-gradient(circle, rgba(255, 215, 0, 0.9) 0%, rgba(255, 165, 0, 0.8) 100%)',
+              border: gameState.countdownTimer <= 10 ? '4px solid #ff4444' : '4px solid #ffd700',
+              boxShadow: gameState.countdownTimer <= 10 
+                ? '0 0 30px rgba(255, 68, 68, 0.8), inset 0 0 20px rgba(255, 255, 255, 0.3)'
+                : '0 0 30px rgba(255, 215, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3)',
+              animation: gameState.countdownTimer <= 10 ? 'pulse 1s infinite' : 'none',
+              padding: '20px',
+              borderRadius: '50%',
+              minWidth: '120px',
+              minHeight: '120px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <div className="timer-value" style={{
+                fontSize: '3rem',
+                fontWeight: 'bold',
+                color: '#fff',
+                textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                lineHeight: '1'
+              }}>
+                {gameState.countdownTimer}
+              </div>
+              <div className="round-info" style={{
+                fontSize: '0.9rem',
+                color: '#fff',
+                marginTop: '8px',
+                textAlign: 'center',
+                fontWeight: '600',
+                textShadow: '0 1px 4px rgba(0,0,0,0.5)'
+              }}>
+                {gameState.countdownTimer <= 10 ? '⚠️ HURRY!' : '⏱️ Betting Time'}
+              </div>
+            </div>
+          )}
+          {gameState.phase === 'dealing' && (
+            <div className="circular-timer" style={{
+              background: 'radial-gradient(circle, rgba(100, 100, 100, 0.9) 0%, rgba(60, 60, 60, 0.8) 100%)',
+              border: '4px solid #888',
+              boxShadow: '0 0 20px rgba(100, 100, 100, 0.5)',
+              padding: '20px',
+              borderRadius: '50%',
+              minWidth: '120px',
+              minHeight: '120px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <div style={{
+                fontSize: '1.2rem',
+                color: '#fff',
+                textAlign: 'center',
+                fontWeight: '600'
+              }}>
+                🎴<br/>Dealing...
               </div>
             </div>
           )}
@@ -268,32 +333,112 @@ export default function PlayerGame() {
                 {formatCurrencyShort(gameState.andarTotalBet)}
               </div>
             </div>
-            <div className="card-representation">
-              {gameState.andarCards.length > 0 && (
+            <div className="card-representation" style={{
+              background: gameState.andarCards.length > 0 
+                ? 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)'
+                : 'rgba(165, 42, 42, 0.2)',
+              border: gameState.andarCards.length > 0 
+                ? '3px solid #A52A2A'
+                : '2px solid rgba(165, 42, 42, 0.5)',
+              borderRadius: '12px',
+              padding: '20px',
+              minWidth: '100px',
+              minHeight: '140px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: gameState.andarCards.length > 0 
+                ? '0 8px 24px rgba(165, 42, 42, 0.4), inset 0 2px 8px rgba(255, 255, 255, 0.3)'
+                : 'none',
+              transition: 'all 0.3s ease'
+            }}>
+              {gameState.andarCards.length > 0 ? (
                 <>
-                  <span className="card-rank">
+                  <span className="card-rank" style={{
+                    fontSize: '3rem',
+                    fontWeight: 'bold',
+                    color: ['♥', '♦'].includes(gameState.andarCards[gameState.andarCards.length - 1].suit) ? '#dc143c' : '#000',
+                    lineHeight: '1'
+                  }}>
                     {gameState.andarCards[gameState.andarCards.length - 1].value}
                   </span>
-                  <span className="card-suit">
+                  <span className="card-suit" style={{
+                    fontSize: '2.5rem',
+                    color: ['♥', '♦'].includes(gameState.andarCards[gameState.andarCards.length - 1].suit) ? '#dc143c' : '#000',
+                    marginTop: '8px'
+                  }}>
                     {gameState.andarCards[gameState.andarCards.length - 1].suit}
                   </span>
                 </>
+              ) : (
+                <div style={{ 
+                  color: 'rgba(165, 42, 42, 0.6)', 
+                  fontSize: '0.9rem',
+                  textAlign: 'center',
+                  fontWeight: '600'
+                }}>
+                  No Card<br/>Yet
+                </div>
               )}
             </div>
           </div>
 
           {/* CENTRAL CARD AREA */}
-          <div className="central-card-area">
-            <div className="opening-card">
-              {gameState.selectedOpeningCard && (
+          <div className="central-card-area" style={{ position: 'relative' }}>
+            {gameState.selectedOpeningCard && (
+              <div style={{
+                position: 'absolute',
+                top: '-30px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                color: '#ffd700',
+                fontSize: '0.9rem',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                letterSpacing: '2px',
+                textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+              }}>
+                Opening Card
+              </div>
+            )}
+            <div className="opening-card" style={{
+              background: gameState.selectedOpeningCard 
+                ? 'linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%)'
+                : 'rgba(255, 255, 255, 0.1)',
+              border: gameState.selectedOpeningCard 
+                ? '3px solid #ffd700'
+                : '2px solid rgba(255, 255, 255, 0.3)',
+              boxShadow: gameState.selectedOpeningCard 
+                ? '0 8px 32px rgba(255, 215, 0, 0.5), inset 0 2px 8px rgba(255, 255, 255, 0.3)'
+                : 'none',
+              transform: gameState.selectedOpeningCard ? 'scale(1.05)' : 'scale(1)',
+              transition: 'all 0.3s ease'
+            }}>
+              {gameState.selectedOpeningCard ? (
                 <>
-                  <span className="card-rank">
+                  <span className="card-rank" style={{
+                    fontSize: '3rem',
+                    fontWeight: 'bold',
+                    color: ['♥', '♦'].includes(gameState.selectedOpeningCard.suit) ? '#dc143c' : '#000'
+                  }}>
                     {gameState.selectedOpeningCard.value}
                   </span>
-                  <span className="card-suit">
+                  <span className="card-suit" style={{
+                    fontSize: '2.5rem',
+                    color: ['♥', '♦'].includes(gameState.selectedOpeningCard.suit) ? '#dc143c' : '#000'
+                  }}>
                     {gameState.selectedOpeningCard.suit}
                   </span>
                 </>
+              ) : (
+                <div style={{ 
+                  color: 'rgba(255, 255, 255, 0.5)', 
+                  fontSize: '1rem',
+                  textAlign: 'center'
+                }}>
+                  Waiting for<br/>Opening Card
+                </div>
               )}
             </div>
           </div>
@@ -303,16 +448,53 @@ export default function PlayerGame() {
             className="betting-zone bahar-zone" 
             onClick={() => handlePlaceBet('bahar')}
           >
-            <div className="card-representation">
-              {gameState.baharCards.length > 0 && (
+            <div className="card-representation" style={{
+              background: gameState.baharCards.length > 0 
+                ? 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)'
+                : 'rgba(1, 7, 59, 0.2)',
+              border: gameState.baharCards.length > 0 
+                ? '3px solid #01073b'
+                : '2px solid rgba(1, 7, 59, 0.5)',
+              borderRadius: '12px',
+              padding: '20px',
+              minWidth: '100px',
+              minHeight: '140px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: gameState.baharCards.length > 0 
+                ? '0 8px 24px rgba(1, 7, 59, 0.4), inset 0 2px 8px rgba(255, 255, 255, 0.3)'
+                : 'none',
+              transition: 'all 0.3s ease'
+            }}>
+              {gameState.baharCards.length > 0 ? (
                 <>
-                  <span className="card-rank">
+                  <span className="card-rank" style={{
+                    fontSize: '3rem',
+                    fontWeight: 'bold',
+                    color: ['♥', '♦'].includes(gameState.baharCards[gameState.baharCards.length - 1].suit) ? '#dc143c' : '#000',
+                    lineHeight: '1'
+                  }}>
                     {gameState.baharCards[gameState.baharCards.length - 1].value}
                   </span>
-                  <span className="card-suit">
+                  <span className="card-suit" style={{
+                    fontSize: '2.5rem',
+                    color: ['♥', '♦'].includes(gameState.baharCards[gameState.baharCards.length - 1].suit) ? '#dc143c' : '#000',
+                    marginTop: '8px'
+                  }}>
                     {gameState.baharCards[gameState.baharCards.length - 1].suit}
                   </span>
                 </>
+              ) : (
+                <div style={{ 
+                  color: 'rgba(1, 7, 59, 0.6)', 
+                  fontSize: '0.9rem',
+                  textAlign: 'center',
+                  fontWeight: '600'
+                }}>
+                  No Card<br/>Yet
+                </div>
               )}
             </div>
             <div className="bet-info">

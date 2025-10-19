@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Breadcrumb from "@/components/Breadcrumb";
 import {
   Search,
   Filter,
@@ -119,14 +120,23 @@ export default function UserAdmin() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-purple-900/20 to-red-900/20 p-4">
+      {/* Breadcrumb */}
+      <Breadcrumb 
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Admin', href: '/admin' },
+          { label: 'User Management', active: true }
+        ]} 
+      />
+      
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold text-gold mb-2">User Management</h1>
             <p className="text-white/80">Manage user accounts and permissions</p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="border-gold/30 text-gold hover:bg-gold/10">
               <Filter className="w-4 h-4 mr-2" />
               Export Users
@@ -134,6 +144,25 @@ export default function UserAdmin() {
             <Button className="bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-gold-light hover:to-yellow-500">
               Add New User
             </Button>
+            
+            {/* Navigation Options */}
+            <Link href="/admin">
+              <Button variant="outline" className="border-gold/30 text-gold hover:bg-gold/10">
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Dashboard
+              </Button>
+            </Link>
+            <Link href="/admin-game">
+              <Button variant="outline" className="border-gold/30 text-gold hover:bg-gold/10">
+                <GamepadIcon className="w-4 h-4 mr-2" />
+                Game Control
+              </Button>
+            </Link>
+            <Link href="/">
+              <Button variant="secondary" className="border-purple-500 text-purple-300 hover:bg-purple-500 hover:text-white">
+                ← Back to Game
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

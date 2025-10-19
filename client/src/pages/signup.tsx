@@ -45,8 +45,8 @@ export default function Signup() {
     // Simulate signup process
     setTimeout(() => {
       setIsLoading(false);
-      // Redirect to main game page after successful signup
-      window.location.href = '/';
+      // Redirect to login page after successful signup
+      window.location.href = '/login';
     }, 1500);
   };
 
@@ -254,6 +254,13 @@ export default function Signup() {
                 </>
               )}
             </Button>
+
+            {/* Back to Home */}
+            <div className="text-center">
+              <Link href="/" className="text-white/80 hover:text-gold transition-colors">
+                ← Back to Home
+              </Link>
+            </div>
 
             {/* Divider */}
             <div className="relative my-6">

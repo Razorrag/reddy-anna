@@ -23,7 +23,7 @@ export default function Login() {
     setTimeout(() => {
       setIsLoading(false);
       // Redirect to main game page after successful login
-      window.location.href = '/';
+      window.location.href = '/player-game';
     }, 1500);
   };
 
@@ -140,6 +140,13 @@ export default function Login() {
                 </>
               )}
             </Button>
+
+            {/* Back to Home */}
+            <div className="text-center">
+              <Link href="/" className="text-white/80 hover:text-gold transition-colors">
+                ← Back to Home
+              </Link>
+            </div>
 
             {/* Divider */}
             <div className="relative my-6">

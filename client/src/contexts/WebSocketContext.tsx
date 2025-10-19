@@ -224,9 +224,11 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                     }
                   : data.data.openingCard;
                 
+                console.log('Opening card received:', openingCard);
                 setSelectedOpeningCard(openingCard);
                 setPhase('betting'); // Update phase to betting
                 if (data.data.round) setCurrentRound(data.data.round);
+                console.log('Opening card set in state, phase updated to betting');
                 showNotification(`Opening card: ${openingCard.display} - Round ${data.data.round || 1} betting started!`, 'success');
               }
               break;
@@ -240,18 +242,23 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                 isWinningCard: data.data.isWinningCard,
                 timestamp: Date.now()
               };
+              
+              console.log(`Card dealt to ${data.data.side}:`, data.data.card.display || `${data.data.card.value}${data.data.card.suit}`);
               addDealtCard(dealtCard);
               
               if (data.data.side === 'andar') {
                 addAndarCard(data.data.card);
+                showNotification(`🎴 Andar: ${data.data.card.display || `${data.data.card.value}${data.data.card.suit}`}`, 'info');
               } else {
                 addBaharCard(data.data.card);
+                showNotification(`🎴 Bahar: ${data.data.card.display || `${data.data.card.value}${data.data.card.suit}`}`, 'info');
               }
               break;
 
             case 'timer_start':
             case 'timer_update':
               if (data.data?.seconds !== undefined) {
+                console.log(`Timer update: ${data.data.seconds}s (phase: ${data.data?.phase || gameState.phase})`);
                 setCountdown(data.data.seconds);
               }
               if (data.data?.phase) {

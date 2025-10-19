@@ -73,6 +73,16 @@ export default function Index() {
                 Sign In
               </Button>
             </Link>
+            
+            <Link to="/signup">
+              <Button
+                size="lg"
+                variant="secondary"
+                className="border-2 border-purple-500 text-purple-300 hover:bg-purple-500 hover:text-white text-lg px-8 py-4 h-auto font-semibold transition-all duration-300"
+              >
+                Sign Up
+              </Button>
+            </Link>
           </div>
 
           {/* Features Grid */}

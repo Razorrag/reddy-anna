@@ -72,6 +72,16 @@ function startTimer(duration: number, onComplete: () => void) {
   currentGameState.timer = duration;
   currentGameState.bettingLocked = false; // Unlock betting when timer starts
   
+  // Broadcast initial timer value immediately for instant sync
+  broadcast({
+    type: 'timer_update',
+    data: {
+      seconds: currentGameState.timer,
+      phase: currentGameState.phase,
+      round: currentGameState.currentRound
+    }
+  });
+  
   currentGameState.timerInterval = setInterval(() => {
     currentGameState.timer--;
     

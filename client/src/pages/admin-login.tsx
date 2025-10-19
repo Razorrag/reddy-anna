@@ -35,7 +35,7 @@ export default function AdminLogin() {
       
       setIsLoading(false);
       // Redirect to admin game after successful login
-      window.location.href = '/game';
+      window.location.href = '/admin';
     }, 1500);
   };
 
@@ -139,13 +139,18 @@ export default function AdminLogin() {
               )}
             </Button>
 
-            {/* Back to User Login */}
-            <div className="text-center pt-4">
-              <span className="text-white/80">
+            {/* Navigation Options */}
+            <div className="flex flex-col gap-2">
+              <div className="text-center">
                 <Link href="/login" className="text-gold hover:text-gold-light font-semibold transition-colors">
                   ← Back to User Login
                 </Link>
-              </span>
+              </div>
+              <div className="text-center">
+                <Link href="/" className="text-white/80 hover:text-gold transition-colors">
+                  Back to Home
+                </Link>
+              </div>
             </div>
           </form>
         </CardContent>

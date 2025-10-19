@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import Breadcrumb from "@/components/Breadcrumb";
 import {
   Users,
   Settings,
@@ -42,19 +43,40 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-purple-900/20 to-red-900/20 p-4">
+      {/* Breadcrumb */}
+      <Breadcrumb 
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Admin Dashboard', active: true }
+        ]} 
+      />
+      
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold text-gold mb-2">Admin Dashboard</h1>
             <p className="text-white/80">Manage your gaming platform</p>
           </div>
-          <Link href="/admin-game">
-            <Button className="bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-gold-light hover:to-yellow-500">
-              <GamepadIcon className="w-5 h-5 mr-2" />
-              Game Control
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin-game">
+              <Button className="bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-gold-light hover:to-yellow-500">
+                <GamepadIcon className="w-5 h-5 mr-2" />
+                Game Control
+              </Button>
+            </Link>
+            <Link href="/user-admin">
+              <Button variant="outline" className="border-gold/30 text-gold hover:bg-gold/10">
+                <Users className="w-5 h-5 mr-2" />
+                User Admin
+              </Button>
+            </Link>
+            <Link href="/">
+              <Button variant="secondary" className="border-purple-500 text-purple-300 hover:bg-purple-500 hover:text-white">
+                ← Back to Game
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 

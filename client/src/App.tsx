@@ -1,15 +1,16 @@
 import { Switch, Route } from "wouter";
-import PlayerGame from "@/pages/player-game";
-import AdminGame from "@/pages/admin-game";
-import Admin from "@/pages/admin";
-import AdminLogin from "@/pages/admin-login";
-import UserAdmin from "@/pages/user-admin";
-import Login from "@/pages/login";
-import Signup from "@/pages/signup";
-import NotFound from "@/pages/not-found";
-import ProtectedRoute from "@/components/ProtectedRoute";
-import ErrorBoundary from "@/components/ErrorBoundary";
-import AppProviders from "@/providers/AppProviders";
+import PlayerGame from "@/pages/player-game.tsx";
+import AdminGame from "@/pages/admin-game.tsx";
+import Admin from "@/pages/admin.tsx";
+import AdminLogin from "@/pages/admin-login.tsx";
+import UserAdmin from "@/pages/user-admin.tsx";
+import Login from "@/pages/login.tsx";
+import Signup from "@/pages/signup.tsx";
+import NotFound from "@/pages/not-found.tsx";
+import Unauthorized from "@/pages/unauthorized.tsx";
+import ProtectedRoute from "@/components/ProtectedRoute.tsx";
+import ErrorBoundary from "@/components/ErrorBoundary.tsx";
+import AppProviders from "@/providers/AppProviders.tsx";
 
 function Router() {
   return (
@@ -63,6 +64,7 @@ function Router() {
         )}
       </Route>
       
+      <Route path="/unauthorized" component={Unauthorized} />
       <Route component={NotFound} />
     </Switch>
   );

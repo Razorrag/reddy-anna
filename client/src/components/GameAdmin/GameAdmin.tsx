@@ -74,33 +74,9 @@ const GameAdmin: React.FC = () => {
     }
   }, []);
 
-  // Timer effect
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-    
-    if (gameState.countdownTimer > 0 && gameState.phase === 'betting') {
-      intervalId = setInterval(() => {
-        const newTimer = gameState.countdownTimer - 1;
-        setCountdown(newTimer);
-        
-        if (newTimer <= 0) {
-          sendWebSocketMessage({
-            type: 'timer_update',
-            data: { seconds: 0, phase: 'closed' }
-          });
-        } else {
-          sendWebSocketMessage({
-            type: 'timer_update',
-            data: { seconds: newTimer, phase: 'betting' }
-          });
-        }
-      }, 1000);
-    }
-    
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [gameState.countdownTimer, gameState.phase, setCountdown, sendWebSocketMessage]);
+  // Timer updates come from backend via WebSocket - no local countdown needed
+  // Backend is the single source of truth for timer synchronization
+  // This ensures admin and all players see the exact same timer value
 
   // Start Round 2
   const startRound2 = useCallback(() => {
