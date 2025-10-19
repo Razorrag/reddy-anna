@@ -1,7 +1,12 @@
 import type { Config } from "tailwindcss";
 
+// @ts-expect-error - CommonJS modules in ESM context
+const tailwindcssAnimate = require("tailwindcss-animate");
+// @ts-expect-error - CommonJS modules in ESM context
+const tailwindcssTypography = require("@tailwindcss/typography");
+
 export default {
-  darkMode: ["class"],
+  darkMode: "class",
   content: [
     "./index.html",
     "./src/**/*.{js,jsx,ts,tsx}",
@@ -95,9 +100,9 @@ export default {
         "casino-error": "hsl(0 84% 60% / <alpha-value>)",
       },
       fontFamily: {
-        sans: ["var(--font-sans)"],
-        serif: ["var(--font-serif)"],
-        mono: ["var(--font-mono)"],
+        sans: ["Poppins", "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+        serif: ["ui-serif", "Georgia", "Cambria", "Times New Roman", "Times", "serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", "monospace"],
       },
       keyframes: {
         "accordion-down": {
@@ -115,5 +120,8 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
+  plugins: [
+    tailwindcssAnimate, 
+    tailwindcssTypography
+  ],
 } satisfies Config;
