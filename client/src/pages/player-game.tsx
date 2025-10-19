@@ -49,6 +49,7 @@ export default function PlayerGame() {
 
   // User display - get from localStorage or use guest
   const userId = localStorage.getItem('userId') || localStorage.getItem('username') || 'guest';
+  const userRole = localStorage.getItem('userRole');
   const [viewerCount] = useState('1,234');
 
   // Opening card display - phase transitions handled by WebSocket
@@ -197,23 +198,17 @@ export default function PlayerGame() {
                 {formatCurrency(gameState.playerWallet)}
               </div>
               
-              {/* Admin Access Button for logged-in users */}
-              <Link to="/admin" className="ml-4">
-                <Button 
-                  variant="outline" 
-                  className="border-gold/30 text-gold hover:bg-gold/10 h-10 px-4"
-                  onClick={(e) => {
-                    // Check if user is admin before allowing access
-                    const userRole = localStorage.getItem('userRole');
-                    if (userRole !== 'admin') {
-                      e.preventDefault();
-                      showNotification('Access denied. Admin privileges required.', 'error');
-                    }
-                  }}
-                >
-                  Admin
-                </Button>
-              </Link>
+              {/* Admin Access Button - only visible to admin users */}
+              {userRole === 'admin' && (
+                <Link to="/admin" className="ml-4">
+                  <Button 
+                    variant="outline" 
+                    className="border-gold/30 text-gold hover:bg-gold/10 h-10 px-4"
+                  >
+                    Admin
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         </nav>

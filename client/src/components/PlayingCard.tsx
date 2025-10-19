@@ -1,18 +1,18 @@
-import { type Card } from "@shared/schema";
+import { type Card } from "@/types/game";
 import { cn } from "@/lib/utils";
 
 interface PlayingCardProps {
-  card: Card;
+  card: Card | string;
   size?: "sm" | "md" | "lg" | "xl";
   isWinning?: boolean;
   className?: string;
 }
 
 export function PlayingCard({ card, size = "md", isWinning, className }: PlayingCardProps) {
-  // Extract rank and suit
-  const rank = card.slice(0, -1);
-  const suit = card.slice(-1);
-  
+  // Extract rank and suit - handle both string and object formats
+  const rank = typeof card === 'string' ? card.slice(0, -1) : card.value;
+  const suit = typeof card === 'string' ? card.slice(-1) : card.suit;
+
   // Determine suit color
   const suitColor = (suit === '♥' || suit === '♦') ? 'text-red-600' : 'text-gray-900';
   

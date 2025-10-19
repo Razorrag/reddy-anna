@@ -12,6 +12,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
       "@shared": path.resolve(__dirname, "..", "shared"),
     },
+    dedupe: ['react', 'react-dom'],
   },
   server: {
     host: true,

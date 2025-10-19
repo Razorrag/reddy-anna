@@ -1,4 +1,4 @@
-import { WebSocketMessage } from '../../../shared/schema';
+import { WebSocketMessage } from '@shared/schema';
 
 class ApiClient {
   private baseUrl: string;

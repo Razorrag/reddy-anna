@@ -27,7 +27,8 @@
   --player-header-height: 78px;
 }
 
-html, body {
+/* Player game specific body styles - only apply when game-body class is present */
+body:has(.game-body) {
   height: 100%;
   width: 100%;
   margin: 0;
@@ -37,16 +38,13 @@ html, body {
   color: var(--white);
   overflow: hidden;
   position: fixed; /* Prevent any scrolling and layout shifts */
-}
-
-body {
   display: flex;
   flex-direction: column;
 }
 
 /* Header Styles */
 .header {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
@@ -119,8 +117,8 @@ body {
   flex-direction: column;
   position: relative;
   width: 100%;
-  height: calc(100vh - var(--player-header-height));
-  max-height: calc(100vh - var(--player-header-height));
+  height: 100vh;
+  max-height: 100vh;
   overflow: hidden;
 }
 
@@ -133,6 +131,7 @@ body {
   height: 100%;
   background-color: #000;
   overflow: hidden;
+  z-index: 1;
 }
 
 .video-section video {
@@ -146,7 +145,7 @@ body {
 
 .video-overlay-content {
   position: absolute;
-  top: 50px;
+  top: 90px;
   left: 15px;
   right: 15px;
   z-index: 10;
@@ -206,7 +205,7 @@ body {
 /* Timer Overlay */
 .timer-overlay {
   position: absolute;
-  top: 45%;
+  top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 10;
@@ -252,14 +251,17 @@ body {
   bottom: 0;
   left: 0;
   width: 100%;
-  background: #000;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.95) 80%, rgba(0, 0, 0, 0.85) 100%);
   display: flex;
   flex-direction: column;
-  max-height: 50vh; /* Prevent overflow */
+  max-height: 45vh; /* Reduced to prevent hiding video */
   overflow-y: auto;
   overflow-x: hidden;
   transform: translateZ(0); /* GPU acceleration */
   backface-visibility: hidden;
+  z-index: 50;
+  backdrop-filter: blur(10px);
+  border-top: 2px solid rgba(255, 215, 0, 0.3);
 }
 
 /* Main Betting Area - NEW DESIGN */
@@ -1141,10 +1143,10 @@ body {
   }
   
   .round-indicator {
-    top: 75px;
-    padding: 10px 25px;
-    font-size: 1rem;
-    gap: 12px;
+    top: 110px;
+    padding: 8px 20px;
+    font-size: 0.9rem;
+    gap: 10px;
   }
 
   .round-indicator .round-emoji {
@@ -1442,20 +1444,20 @@ body {
 /* Round Indicator */
 .round-indicator {
   position: absolute;
-  top: 85px;
+  top: 130px;
   left: 50%;
   transform: translateX(-50%);
   background: linear-gradient(135deg, rgba(255, 215, 0, 0.95) 0%, rgba(255, 237, 78, 0.95) 100%);
   color: #000;
-  padding: 12px 35px;
+  padding: 10px 30px;
   border-radius: 30px;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
   box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
   z-index: 15;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 15px;
   backdrop-filter: blur(8px);
   border: 2px solid rgba(255, 255, 255, 0.2);
   transition: all 0.3s ease;
