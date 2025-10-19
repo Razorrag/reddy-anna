@@ -1,5 +1,5 @@
 import { Switch, Route } from "wouter";
-import GamePage from "@/pages/game";
+import PlayerGame from "@/pages/player-game";
 import AdminGame from "@/pages/admin-game";
 import Admin from "@/pages/admin";
 import AdminLogin from "@/pages/admin-login";
@@ -14,7 +14,7 @@ import AppProviders from "@/providers/AppProviders";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={GamePage} />
+      <Route path="/" component={PlayerGame} />
       <Route path="/admin-login" component={AdminLogin} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />

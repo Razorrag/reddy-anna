@@ -358,8 +358,9 @@ export default function PlayerGame() {
   // WebSocket connection setup
   useEffect(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsPort = window.location.port === '5000' ? '8080' : window.location.port;
-    const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}`;
+    // In development, connect to backend on port 5000; in production, use current host
+    const wsPort = import.meta.env.DEV ? '5000' : window.location.port;
+    const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}/ws`;
     console.log('Connecting to WebSocket:', wsUrl);
     const socket = new WebSocket(wsUrl);
 
@@ -608,6 +609,20 @@ export default function PlayerGame() {
                 <i className="fas fa-wallet"></i>
                 <div className="wallet-amount-display" id="walletBalance">{balanceDisplay}</div>
               </div>
+              <button 
+                className="menu-button"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffd700',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '5px 10px'
+                }}
+                onClick={() => {/* TODO: Add menu functionality */}}
+              >
+                <i className="fas fa-bars"></i>
+              </button>
             </div>
           </nav>
         </header>

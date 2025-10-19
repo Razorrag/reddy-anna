@@ -17,6 +17,16 @@ const OpeningCardSection: React.FC = () => {
     setSelectedOpeningCard(card);
   };
 
+  const handleUndo = () => {
+    setSelectedOpeningCard(null);
+  };
+
+  const handleConfirm = () => {
+    if (gameState.selectedOpeningCard) {
+      startGame();
+    }
+  };
+
   if (phase !== 'opening') return null;
 
   return (
@@ -35,9 +45,27 @@ const OpeningCardSection: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="game-controls">
-        <button className="control-btn" onClick={startGame}>Start Game</button>
-        <button className="control-btn danger">Reset Game</button>
+      <div className="game-controls" style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '20px' }}>
+        <button 
+          className="control-btn" 
+          onClick={handleUndo}
+          disabled={!gameState.selectedOpeningCard}
+          style={{ opacity: !gameState.selectedOpeningCard ? 0.5 : 1 }}
+        >
+          Undo Selected Card
+        </button>
+        <button 
+          className="control-btn primary" 
+          onClick={handleConfirm}
+          disabled={!gameState.selectedOpeningCard}
+          style={{ 
+            opacity: !gameState.selectedOpeningCard ? 0.5 : 1,
+            backgroundColor: '#4CAF50',
+            cursor: !gameState.selectedOpeningCard ? 'not-allowed' : 'pointer'
+          }}
+        >
+          Confirm & Start Game
+        </button>
       </div>
     </div>
   );
