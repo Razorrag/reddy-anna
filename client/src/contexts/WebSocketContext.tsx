@@ -14,6 +14,8 @@ interface WebSocketState {
   isConnected: boolean;
   isConnecting: boolean;
   connectionError: string | null;
+  reconnectAttempts: number;
+  maxReconnectAttempts: number;
 }
 
 declare global {
@@ -63,7 +65,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     isConnected: false,
     isConnecting: false,
     connectionError: null,
+    reconnectAttempts: 0,
+    maxReconnectAttempts: 5,
   });
+  const [reconnectTimeout, setReconnectTimeout] = useState<NodeJS.Timeout | null>(null);
 
   const connectWebSocket = useCallback(() => {
     if (typeof window === 'undefined') return; // Skip on server
@@ -77,8 +82,21 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       ws.onopen = () => {
         console.log('WebSocket connected successfully');
-        setWebSocketState({ isConnected: true, isConnecting: false, connectionError: null });
+        setWebSocketState({
+          isConnected: true,
+          isConnecting: false,
+          connectionError: null,
+          reconnectAttempts: 0,
+          maxReconnectAttempts: 5,
+        });
         (window as any).gameWebSocket = ws;
+        
+        // Clear any pending reconnection timeout
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout);
+          setReconnectTimeout(null);
+        }
+        
         showNotification('Connected to game server', 'success');
       };
 
@@ -133,16 +151,41 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       ws.onclose = (event) => {
         console.log('WebSocket disconnected:', event.code, event.reason);
-        setWebSocketState({ isConnected: false, isConnecting: false, connectionError: null });
-        showNotification('Disconnected from game server', 'info');
+        setWebSocketState(prev => ({
+          ...prev,
+          isConnected: false,
+          isConnecting: false,
+          connectionError: event.code !== 1000 ? 'Connection closed unexpectedly' : null,
+        }));
         
-        // Attempt to reconnect after delay
-        if (event.code !== 1000) { // Not a normal close
-          setTimeout(() => {
-            console.log('Attempting to reconnect...');
-            connectWebSocket();
-          }, 5000); // Retry after 5 seconds
+        if (event.code === 1000) {
+          // Normal close, no reconnection
+          showNotification('Disconnected from game server', 'info');
+          return;
         }
+        
+        // Attempt to reconnect with exponential backoff
+        setWebSocketState(prev => {
+          if (prev.reconnectAttempts >= prev.maxReconnectAttempts) {
+            showNotification('Failed to reconnect. Please refresh the page.', 'error');
+            return { ...prev, connectionError: 'Max reconnection attempts reached' };
+          }
+          
+          const delay = Math.min(1000 * Math.pow(2, prev.reconnectAttempts), 30000);
+          showNotification(`Reconnecting in ${delay / 1000} seconds...`, 'info');
+          
+          const timeout = setTimeout(() => {
+            console.log(`Reconnection attempt ${prev.reconnectAttempts + 1}/${prev.maxReconnectAttempts}`);
+            connectWebSocket();
+          }, delay);
+          
+          setReconnectTimeout(timeout);
+          
+          return {
+            ...prev,
+            reconnectAttempts: prev.reconnectAttempts + 1,
+          };
+        });
       };
 
       // Store WebSocket instance

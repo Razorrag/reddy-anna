@@ -5,6 +5,8 @@ import { storage } from "./storage-supabase";
 import { insertBetSchema, insertGameHistorySchema } from "@shared/schema";
 import { z } from "zod";
 import { gameLoopService } from "./GameLoopService";
+import { hashPassword, comparePassword, validatePassword, validateUsername } from "./lib/auth";
+import { authLimiter, betLimiter, apiLimiter } from "./middleware/rateLimiter";
 
 // WebSocket client tracking
 interface WSClient {
@@ -372,8 +374,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // REST API endpoints
   
-  // Login endpoint
-  app.post('/api/auth/login', async (req, res) => {
+  // Login endpoint with rate limiting and password hashing
+  app.post('/api/auth/login', authLimiter, async (req, res) => {
     try {
       const { username, password } = req.body;
       
@@ -381,9 +383,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Username and password required' });
       }
       
+      // Validate username format
+      const usernameValidation = validateUsername(username);
+      if (!usernameValidation.isValid) {
+        return res.status(400).json({ error: usernameValidation.error });
+      }
+      
       // Authenticate user
       const user = await storage.getUserByUsername(username);
-      if (!user || user.password !== password) { // Note: In real app, use proper password hashing
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+      
+      // Compare password with hash
+      const isPasswordValid = await comparePassword(password, user.password);
+      if (!isPasswordValid) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
       
@@ -402,13 +416,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Signup endpoint
-  app.post('/api/auth/signup', async (req, res) => {
+  // Signup endpoint with rate limiting and password hashing
+  app.post('/api/auth/signup', authLimiter, async (req, res) => {
     try {
       const { username, password } = req.body;
       
       if (!username || !password) {
         return res.status(400).json({ error: 'Username and password required' });
+      }
+      
+      // Validate username
+      const usernameValidation = validateUsername(username);
+      if (!usernameValidation.isValid) {
+        return res.status(400).json({ error: usernameValidation.error });
+      }
+      
+      // Validate password
+      const passwordValidation = validatePassword(password);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({ error: passwordValidation.error });
       }
       
       // Check if user exists
@@ -417,10 +443,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Username already exists' });
       }
       
+      // Hash password before storing
+      const hashedPassword = await hashPassword(password);
+      
       // Create user with default balance (₹50,00,000 as mentioned in demo)
       const newUser = await storage.createUser({
         username,
-        password,
+        password: hashedPassword,
       });
       
       res.json({

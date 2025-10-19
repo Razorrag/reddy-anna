@@ -451,12 +451,24 @@ const GameAdminContent: React.FC = () => {
       <div className="game-admin-container">
         <GameHeader onSettingsClick={openSettings} />
 
-        {/* Opening Card Selection */}
-        <LoadingOverlay isLoading={isStartingGame} message="Starting game...">
-          <OpeningCardSection />
-        </LoadingOverlay>
-
-        {/* Andar Bahar Card Selection */}
+        {/* Round Control Panel */}
+        <div className="round-control-panel" style={{
+          background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.9) 0%, rgba(20, 20, 20, 0.9) 100%)',
+          border: '2px solid #ffd700',
+          borderRadius: '10px',
+          padding: '20px',
+          margin: '20px',
+          color: '#ffd700'
+        }}>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '15px', textAlign: 'center' }}>
+            Game Flow Control
+          </h2>
+          
+          {/* Current Status */}
+          <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '0.9rem', color: '#aaa' }}>Current Round</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{gameState.currentRound}</div>
         <LoadingOverlay isLoading={isDealingCard} message="Dealing card...">
           <AndarBaharSection />
         </LoadingOverlay>

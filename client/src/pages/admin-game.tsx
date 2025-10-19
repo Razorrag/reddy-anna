@@ -1,6 +1,5 @@
 import React from 'react';
-// @ts-ignore
-import GameAdmin from '../components/GameAdmin';
+import GameAdmin from '../components/GameAdmin/GameAdmin';
 
 export default function AdminGame() {
   return <GameAdmin />;
