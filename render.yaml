@@ -3,6 +3,7 @@ services:
     name: andar-bahar-game
     env: node
     region: frankfurt  # or your preferred region
+    plan: free  # or starter/standard based on your needs
     buildCommand: "npm install --production=false && npm run build"
     startCommand: "npm start"
     envVars:
@@ -10,4 +11,12 @@ services:
         value: production
       - key: PORT
         sync: false  # Render will provide this automatically
+      - key: SESSION_SECRET
+        generateValue: true  # Auto-generate secure session secret
+      - key: SUPABASE_URL
+        sync: false  # Add your Supabase URL in Render dashboard
+      - key: SUPABASE_ANON_KEY
+        sync: false  # Add your Supabase anon key in Render dashboard
+      - key: CORS_ORIGIN
+        sync: false  # Set to your deployed URL
     healthCheckPath: /
