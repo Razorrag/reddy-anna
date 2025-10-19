@@ -217,7 +217,7 @@ export default function PlayerGame() {
       {/* Video Stream Section */}
       <div className="video-section">
         <video autoPlay muted loop playsInline style={{ display: 'block' }}>
-          <source src="/hero images/uhd_30fps.mp4" type="video/mp4" />
+          <source src="/hero-images/uhd_30fps.mp4" type="video/mp4" />
         </video>
 
         {/* Video Overlay */}

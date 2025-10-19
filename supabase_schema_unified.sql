@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS game_sessions (
     phase VARCHAR(20) DEFAULT 'idle' CHECK (phase IN ('idle', 'BETTING_R1', 'DEALING_R1', 'BETTING_R2', 'DEALING_R2', 'CONTINUOUS_DRAW', 'COMPLETE')),
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled')),
     current_timer INTEGER DEFAULT 30,
+    currentTimer INTEGER DEFAULT 30, -- Alias for backend compatibility
     winner VARCHAR(10) CHECK (winner IN ('andar', 'bahar', NULL)),
     winning_card VARCHAR(10),
     round INTEGER DEFAULT 1,
