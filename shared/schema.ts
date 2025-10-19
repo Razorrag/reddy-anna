@@ -8,7 +8,7 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
-  balance: integer("balance").notNull().default(1000000), // Default balance ₹10,00,000
+  balance: integer("balance").notNull().default(5000000), // Default balance ₹50,00,000
 });
 
 // Game settings table
@@ -27,7 +27,8 @@ export const gameSessions = pgTable("game_sessions", {
   status: text("status").notNull().default("active"), // active, completed
   winner: text("winner"), // andar or bahar
   winningCard: text("winning_card"),
-  round: integer("round").default(1),
+  round: integer("round").default(1), // Current round
+  winningRound: integer("winning_round"), // Round in which winner was found
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -48,7 +49,7 @@ export const playerBets = pgTable("player_bets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
   gameId: varchar("game_id").notNull(),
-  round: integer("round").notNull(),
+  round: integer("round").notNull(), // Added: round number
   side: text("side").notNull(), // andar or bahar
   amount: integer("amount").notNull(),
   status: text("status").notNull().default("pending"), // pending, won, lost
@@ -78,7 +79,7 @@ export const gameHistory = pgTable("game_history", {
   winner: text("winner").notNull(), // andar or bahar
   winningCard: text("winning_card").notNull(),
   totalCards: integer("total_cards").notNull(),
-  round: integer("round").notNull(),
+  round: integer("round").notNull(), // This is now the winning round
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -92,6 +93,9 @@ export const insertGameSessionSchema = createInsertSchema(gameSessions).omit({
   gameId: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  round: z.number().optional(),
+  winningRound: z.number().optional(),
 });
 
 export const insertBetSchema = createInsertSchema(playerBets).omit({
@@ -100,6 +104,7 @@ export const insertBetSchema = createInsertSchema(playerBets).omit({
   updatedAt: true,
 }).extend({
   amount: z.number().min(1000).max(50000), // Bet limits
+  round: z.number().min(1).max(3), // Added: round number
 });
 
 export const insertDealtCardSchema = createInsertSchema(dealtCards).omit({
@@ -138,12 +143,135 @@ export type Card = `${Rank}${Suit}`;
 export type GamePhase = 'idle' | 'betting' | 'dealing' | 'complete';
 export type Side = 'andar' | 'bahar';
 
-// WebSocket event types
+// NEW: Enhanced WebSocket event types
 export interface WebSocketMessage {
   type: string;
   data?: any;
 }
 
+// Specific message types
+export interface GameStartMessage extends WebSocketMessage {
+  type: 'game_start';
+  data: {
+    openingCard: string;
+    gameId: string;
+  };
+}
+
+export interface PlaceBetMessage extends WebSocketMessage {
+  type: 'place_bet';
+  data: {
+    side: Side;
+    amount: number;
+    userId: string;
+    gameId: string;
+    round: number;
+  };
+}
+
+export interface CardDealtMessage extends WebSocketMessage {
+  type: 'card_dealt';
+  data: {
+    card: string;
+    side: Side;
+    position: number;
+    gameId: string;
+    isWinningCard: boolean;
+  };
+}
+
+export interface StartRoundTimerMessage extends WebSocketMessage {
+  type: 'startRoundTimer';
+  data: {
+    seconds: number;
+    round: number;
+    phase: string;
+  };
+}
+
+export interface GameStateMessage extends WebSocketMessage {
+  type: 'sync_game_state';
+  data: {
+    openingCard: string | null;
+    phase: string;
+    currentTimer: number;
+    round: number;
+    dealtCards: DealtCard[];
+    andarBets: number;
+    baharBets: number;
+    winner: string | null;
+    winningCard: string | null;
+  };
+}
+
+export interface GameCompleteMessage extends WebSocketMessage {
+  type: 'game_complete';
+  data: {
+    winner: Side;
+    winningCard: string;
+    winningRound: number | null;
+    gameId: string;
+  };
+}
+
+export interface BetPlacedMessage extends WebSocketMessage {
+  type: 'betPlaced';
+  data: {
+    side: Side;
+    amount: number;
+    userId: string;
+    andarTotal: number;
+    baharTotal: number;
+  };
+}
+
+export interface PhaseChangeMessage extends WebSocketMessage {
+  type: 'phase_change';
+  data: {
+    phase: string;
+    round: number;
+    message: string;
+  };
+}
+
+export interface AdminBetReportUpdateMessage extends WebSocketMessage {
+  type: 'ADMIN_BET_REPORT_UPDATE';
+  data: {
+    round1Andar: number;
+    round1Bahar: number;
+    round2Andar: number;
+    round2Bahar: number;
+    totalAndar: number;
+    totalBahar: number;
+    lowestBetSide: string;
+    lowestBetAmount: number;
+  };
+}
+
+export interface StartRound2BettingMessage extends WebSocketMessage {
+  type: 'START_ROUND_2_BETTING';
+  data: {
+    gameId: string;
+  };
+}
+
+export interface StartFinalDrawMessage extends WebSocketMessage {
+  type: 'START_FINAL_DRAW';
+  data: {
+    gameId: string;
+  };
+}
+
+export interface PlayerBetHistoryUpdateMessage extends WebSocketMessage {
+  type: 'PLAYER_BET_HISTORY_UPDATE';
+  data: {
+    round1Bets: { andar: number; bahar: number };
+    round2Bets: { andar: number; bahar: number };
+    currentRound: number;
+  };
+}
+
+// GameState interface
 export interface GameState {
   gameId: string;
   openingCard: string | null;

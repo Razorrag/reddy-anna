@@ -106,7 +106,7 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id, balance: 1000000 }; // Default balance
+    const user: User = { ...insertUser, id, balance: 5000000 }; // Default balance ₹50,00,000
     this.users.set(id, user);
     return user;
   }
@@ -131,6 +131,7 @@ export class MemStorage implements IStorage {
       winner: null,
       winningCard: null,
       round: session.round || 1,
+      winningRound: null, // Added for payout logic
       createdAt: now,
       updatedAt: now,
     };
@@ -199,6 +200,15 @@ export class MemStorage implements IStorage {
   async updateBetStatus(betId: string, status: string): Promise<void> {
     const bet = this.bets.get(betId);
     if (bet) {
+      bet.status = status;
+      bet.updatedAt = new Date();
+    }
+  }
+
+  // New method to update bet status by userId instead of betId
+  async updateBetStatusByUserId(userId: string, status: string): Promise<void> {
+    const bets = Array.from(this.bets.values()).filter(bet => bet.userId === userId);
+    for (const bet of bets) {
       bet.status = status;
       bet.updatedAt = new Date();
     }

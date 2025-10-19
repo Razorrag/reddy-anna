@@ -1,318 +1,238 @@
-import { useState, useEffect } from "react";
-import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Play,
-  Users,
-  Clock,
-  TrendingUp,
-  Star,
-  Zap,
-  Crown,
-  Award
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import React, { useState } from 'react';
+import { useGameState } from '../contexts/GameStateContext';
+import { useWebSocket } from '../contexts/WebSocketContext';
 
-interface LiveGame {
-  id: string;
-  name: string;
-  players: number;
-  maxPlayers: number;
-  status: 'waiting' | 'active' | 'completed';
-  prize: number;
-  duration: string;
-  entryFee: number;
-}
-
-export default function Game() {
-  const [liveGames, setLiveGames] = useState<LiveGame[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  useEffect(() => {
-    // Simulate loading live games
-    setTimeout(() => {
-      setLiveGames([
-        {
-          id: '1',
-          name: 'Premium Andar Bahar',
-          players: 45,
-          maxPlayers: 50,
-          status: 'active',
-          prize: 250000,
-          duration: '30 min',
-          entryFee: 1000
-        },
-        {
-          id: '2',
-          name: 'High Stakes Tournament',
-          players: 23,
-          maxPlayers: 30,
-          status: 'waiting',
-          prize: 500000,
-          duration: '45 min',
-          entryFee: 5000
-        },
-        {
-          id: '3',
-          name: 'Quick Match',
-          players: 12,
-          maxPlayers: 20,
-          status: 'active',
-          prize: 50000,
-          duration: '15 min',
-          entryFee: 500
-        },
-        {
-          id: '4',
-          name: 'VIP Exclusive',
-          players: 8,
-          maxPlayers: 10,
-          status: 'waiting',
-          prize: 1000000,
-          duration: '60 min',
-          entryFee: 10000
-        }
-      ]);
-      setIsLoaded(true);
-    }, 1000);
-  }, []);
-
-  const formatCurrency = (amount: number) => {
-    return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return <Badge className="bg-green-500/20 text-green-400 border-green-500/30 animate-pulse">Live</Badge>;
-      case 'waiting':
-        return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Waiting</Badge>;
-      case 'completed':
-        return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30">Completed</Badge>;
-      default:
-        return <Badge variant="outline">Unknown</Badge>;
+const GamePage = () => {
+  const { 
+    gameState, 
+    phase, 
+    placeBet,
+    setCurrentRound,
+    setRound1PlayerBets,
+    setRound2PlayerBets
+  } = useGameState();
+  const { connectionState } = useWebSocket();
+  
+  // Chip values for betting
+  const [selectedChip, setSelectedChip] = useState<number>(100000); // Default to ₹1,00,000
+  
+  // Player betting functionality
+  const handlePlaceBet = (side: 'andar' | 'bahar') => {
+    if (placeBet) {
+      placeBet(side, selectedChip);
     }
   };
 
+  // Chip selection component
+  const ChipSelector = () => {
+    const chips = [50000, 100000, 500000, 1000000]; // ₹50k, ₹1L, ₹5L, ₹10L
+    
+    return (
+      <div className="chip-selector flex gap-2 mb-4">
+        {chips.map((chipValue) => (
+          <button
+            key={chipValue}
+            className={`chip px-4 py-2 rounded-lg font-bold ${
+              selectedChip === chipValue
+                ? 'bg-yellow-500 text-black border-2 border-yellow-300'
+                : 'bg-gray-700 text-white hover:bg-gray-600'
+            }`}
+            onClick={() => setSelectedChip(chipValue)}
+          >
+            ₹{chipValue.toLocaleString()}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  // Determine if betting is currently allowed
+  const bettingAllowed = ['betting', 'BETTING_R1', 'BETTING_R2'].includes(phase as string);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-purple-900/20 to-red-900/20 p-4">
-      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="text-center">
-          <h1 className="text-5xl font-bold text-gold mb-4">Live Games</h1>
-          <p className="text-xl text-white/80 mb-8">
-            Join exciting Andar Bahar games and tournaments
-          </p>
-        </div>
-      </div>
-
-      {/* Quick Play Options */}
-      <div className="max-w-7xl mx-auto mb-12">
-        <div className={cn(
-          "grid grid-cols-1 md:grid-cols-3 gap-8 transition-all duration-1000",
-          isLoaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-        )}>
-          <Card className="bg-black/50 border-gold/30 backdrop-blur-sm hover:bg-black/70 transition-all duration-300 group cursor-pointer">
-            <CardHeader className="text-center pb-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-gold to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                <Zap className="w-10 h-10 text-black" />
-              </div>
-              <CardTitle className="text-gold text-2xl">Quick Match</CardTitle>
-              <CardDescription className="text-white/80">
-                Jump into a game instantly
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-center">
-              <Button className="w-full bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-gold-light hover:to-yellow-500 text-lg py-3">
-                <Play className="w-5 h-5 mr-2" />
-                Play Now
-              </Button>
-              <p className="text-sm text-white/60 mt-2">Free to play • Instant entry</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-black/50 border-gold/30 backdrop-blur-sm hover:bg-black/70 transition-all duration-300 group cursor-pointer border-2">
-            <CardHeader className="text-center pb-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                <Crown className="w-10 h-10 text-white" />
-              </div>
-              <CardTitle className="text-gold text-2xl">Premium</CardTitle>
-              <CardDescription className="text-white/80">
-                High stakes games with big prizes
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-center">
-              <Button className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-400 hover:to-pink-500 text-lg py-3">
-                <Star className="w-5 h-5 mr-2" />
-                Join Premium
-              </Button>
-              <p className="text-sm text-white/60 mt-2">₹1000+ entry • Higher rewards</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-black/50 border-gold/30 backdrop-blur-sm hover:bg-black/70 transition-all duration-300 group cursor-pointer">
-            <CardHeader className="text-center pb-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                <Award className="w-10 h-10 text-white" />
-              </div>
-              <CardTitle className="text-gold text-2xl">Tournaments</CardTitle>
-              <CardDescription className="text-white/80">
-                Compete for massive prize pools
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-center">
-              <Button className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-400 hover:to-emerald-500 text-lg py-3">
-                <TrendingUp className="w-5 h-5 mr-2" />
-                View Tournaments
-              </Button>
-              <p className="text-sm text-white/60 mt-2">Weekly events • Huge prizes</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Live Games Section */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-gold">Live Games</h2>
-          <div className="flex items-center gap-2 text-white/80">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span>{liveGames.filter(g => g.status === 'active').length} games live</span>
+    <div className="player-game min-h-screen bg-gradient-to-b from-green-900 to-green-700 p-4 text-white">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="header flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Andar Bahar</h1>
+          <div className="wallet-info bg-green-800 px-4 py-2 rounded-lg">
+            <span className="text-sm">Wallet: </span>
+            <span className="font-bold">₹{gameState.playerWallet?.toLocaleString() || '0'}</span>
           </div>
         </div>
 
-        <div className={cn(
-          "grid grid-cols-1 md:grid-cols-2 gap-6 transition-all duration-1000 delay-300",
-          isLoaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-        )}>
-          {liveGames.map((game) => (
-            <Card key={game.id} className="bg-black/50 border-gold/30 backdrop-blur-sm hover:bg-black/70 transition-all duration-300">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-xl text-gold mb-1">{game.name}</CardTitle>
-                    <CardDescription className="text-white/80">
-                      {game.players}/{game.maxPlayers} players • {game.duration}
-                    </CardDescription>
-                  </div>
-                  {getStatusBadge(game.status)}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gold">{formatCurrency(game.prize)}</div>
-                      <div className="text-sm text-white/60">Prize Pool</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-400">{formatCurrency(game.entryFee)}</div>
-                      <div className="text-sm text-white/60">Entry Fee</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex -space-x-2">
-                    {[...Array(Math.min(game.players, 5))].map((_, i) => (
-                      <div key={i} className="w-8 h-8 bg-gradient-to-br from-gold to-yellow-600 rounded-full border-2 border-black flex items-center justify-center text-black font-bold text-sm">
-                        {i + 1}
-                      </div>
-                    ))}
-                    {game.players > 5 && (
-                      <div className="w-8 h-8 bg-black/50 rounded-full border-2 border-gold/30 flex items-center justify-center text-gold font-bold text-sm">
-                        +{game.players - 5}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="w-full bg-black/30 rounded-full h-2">
-                      <div
-                        className="bg-gradient-to-r from-gold to-yellow-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${(game.players / game.maxPlayers) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-
-                <Button
-                  className={cn(
-                    "w-full text-lg py-3 font-semibold transition-all duration-300",
-                    game.status === 'active'
-                      ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-400 hover:to-emerald-500"
-                      : "bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-gold-light hover:to-yellow-500"
-                  )}
-                  disabled={game.status === 'completed'}
-                >
-                  {game.status === 'active' ? (
-                    <>
-                      <Play className="w-5 h-5 mr-2" />
-                      Join Game
-                    </>
-                  ) : game.status === 'waiting' ? (
-                    <>
-                      <Clock className="w-5 h-5 mr-2" />
-                      Join Waiting Room
-                    </>
-                  ) : (
-                    <>
-                      <Award className="w-5 h-5 mr-2" />
-                      View Results
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+        {/* Connection status */}
+        <div className="mb-4 text-center">
+          <span className={`px-3 py-1 rounded-full text-sm ${
+            connectionState.isConnected 
+              ? 'bg-green-600' 
+              : connectionState.isConnecting 
+                ? 'bg-yellow-600' 
+                : 'bg-red-600'
+          }`}>
+            {connectionState.isConnected 
+              ? 'Connected' 
+              : connectionState.isConnecting 
+                ? 'Connecting...' 
+                : 'Disconnected'
+            }
+          </span>
         </div>
-      </div>
 
-      {/* Game Modes Info */}
-      <div className="max-w-7xl mx-auto">
-        <Card className="bg-black/50 border-gold/30 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-2xl text-gold text-center">Game Modes</CardTitle>
-            <CardDescription className="text-white/80 text-center">
-              Choose your preferred way to play Andar Bahar
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Zap className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-gold mb-2">Classic Mode</h3>
-                <p className="text-white/80">
-                  Traditional Andar Bahar with standard rules and betting options
-                </p>
-              </div>
+        {/* Game Phase Display */}
+        <div className="mb-6 text-center">
+          <div className="bg-gray-800 px-4 py-2 rounded-lg inline-block">
+            <span className="font-bold">Phase: </span>
+            <span className="text-xl">
+              {phase === 'idle' && 'Game Idle'}
+              {phase === 'opening' && 'Selecting Opening Card'}
+              {phase === 'betting' && 'Betting Open'}
+              {phase === 'dealing' && 'Dealing Cards'}
+              {phase === 'complete' && 'Game Complete'}
+              {phase === 'BETTING_R1' && 'Round 1 Betting'}
+              {phase === 'DEALING_R1' && 'Round 1 Dealing'}
+              {phase === 'BETTING_R2' && 'Round 2 Betting'}
+              {phase === 'DEALING_R2' && 'Round 2 Dealing'}
+              {phase === 'CONTINUOUS_DRAW' && 'Continuous Draw'}
+            </span>
+          </div>
+        </div>
 
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Crown className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-gold mb-2">Tournament Mode</h3>
-                <p className="text-white/80">
-                  Compete against other players in structured tournaments with rankings
-                </p>
-              </div>
+        {/* Timer Display */}
+        {(phase === 'betting' || phase === 'BETTING_R1' || phase === 'BETTING_R2') && (
+          <div className="timer-display text-center mb-6">
+            <div className="bg-red-600 text-white px-6 py-3 rounded-lg inline-block">
+              <span className="text-2xl font-bold">Time Left: {gameState.countdownTimer}s</span>
+            </div>
+          </div>
+        )}
 
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Award className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-gold mb-2">Practice Mode</h3>
-                <p className="text-white/80">
-                  Learn and improve your skills with unlimited practice games
-                </p>
+        {/* Opening Card Display */}
+        {gameState.selectedOpeningCard && (
+          <div className="opening-card-display mb-8">
+            <div className="flex justify-center">
+              <div className="card bg-white text-black px-8 py-4 rounded-lg shadow-lg">
+                <div className="text-4xl font-bold">{gameState.selectedOpeningCard.display}</div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+            <div className="text-center mt-2">
+              <span className="text-lg">Opening Card</span>
+            </div>
+          </div>
+        )}
+
+        {/* Round 1 Locked Bets Display */}
+        {gameState.currentRound > 1 && (
+          <div className="round1-locked-bets bg-gray-800 p-4 rounded-lg mb-4">
+            <h3 className="text-lg font-semibold mb-2">Round 1 Locked Bets</h3>
+            <div className="flex justify-between">
+              <div className="bg-red-800 px-3 py-2 rounded">
+                <span>Andar: ₹{gameState.round1PlayerBets.andar.toLocaleString()}</span>
+              </div>
+              <div className="bg-blue-800 px-3 py-2 rounded">
+                <span>Bahar: ₹{gameState.round1PlayerBets.bahar.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Betting Area */}
+        <div className="betting-area grid grid-cols-2 gap-8 mb-8">
+          {/* Andar Side */}
+          <div className="andar-side bg-gray-800 p-6 rounded-lg">
+            <h2 className="text-xl font-bold mb-4 text-center">ANDAR</h2>
+            <div className="betting-buttons flex flex-col gap-3 mb-4">
+              <ChipSelector />
+              <button
+                onClick={() => handlePlaceBet('andar')}
+                disabled={!bettingAllowed || gameState.playerWallet < selectedChip}
+                className={`bet-andar ${
+                  bettingAllowed ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-600'
+                } text-white font-bold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Place Bet on Andar
+              </button>
+            </div>
+            <div className="total-bets bg-red-800 p-3 rounded-lg">
+              <div className="text-center">Total Andar Bets: ₹{gameState.playerBets?.andar?.toLocaleString() || 0}</div>
+            </div>
+            
+            {/* Andar Cards */}
+            <div className="dealt-cards mt-4">
+              <h3 className="text-lg font-semibold mb-2">Dealt Cards</h3>
+              <div className="flex flex-wrap gap-2">
+                {gameState.andarCards.map((card, index) => (
+                  <div key={index} className="card bg-white text-black px-3 py-2 rounded text-sm">
+                    {card.display}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Bahar Side */}
+          <div className="bahar-side bg-gray-800 p-6 rounded-lg">
+            <h2 className="text-xl font-bold mb-4 text-center">BAHAR</h2>
+            <div className="betting-buttons flex flex-col gap-3 mb-4">
+              <ChipSelector />
+              <button
+                onClick={() => handlePlaceBet('bahar')}
+                disabled={!bettingAllowed || gameState.playerWallet < selectedChip}
+                className={`bet-bahar ${
+                  bettingAllowed ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600'
+                } text-white font-bold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Place Bet on Bahar
+              </button>
+            </div>
+            <div className="total-bets bg-blue-800 p-3 rounded-lg">
+              <div className="text-center">Total Bahar Bets: ₹{gameState.playerBets?.bahar?.toLocaleString() || 0}</div>
+            </div>
+            
+            {/* Bahar Cards */}
+            <div className="dealt-cards mt-4">
+              <h3 className="text-lg font-semibold mb-2">Dealt Cards</h3>
+              <div className="flex flex-wrap gap-2">
+                {gameState.baharCards.map((card, index) => (
+                  <div key={index} className="card bg-white text-black px-3 py-2 rounded text-sm">
+                    {card.display}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Game Winner Display */}
+        {phase === 'complete' && gameState.gameWinner && (
+          <div className="winner-display text-center mb-6">
+            <div className="bg-green-700 text-white px-8 py-4 rounded-lg inline-block">
+              <h2 className="text-3xl font-bold">WINNER: {gameState.gameWinner.toUpperCase()}</h2>
+              {gameState.winningCard && (
+                <p className="mt-2">Winning Card: {gameState.winningCard.display}</p>
+              )}
+              <p>Won in Round: {gameState.currentRound}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Game Stats */}
+        <div className="game-stats bg-gray-800 p-4 rounded-lg">
+          <h3 className="text-lg font-bold mb-2">Game Stats</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p>Current Round: {gameState.currentRound}</p>
+              <p>Opening Card: {gameState.selectedOpeningCard?.display || 'Not Set'}</p>
+            </div>
+            <div>
+              <p>Player Role: {gameState.userRole}</p>
+              <p>Game Active: {gameState.isGameActive ? 'Yes' : 'No'}</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
-}
+};
+
+export default GamePage;

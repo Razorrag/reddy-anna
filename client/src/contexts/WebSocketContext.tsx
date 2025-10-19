@@ -34,16 +34,15 @@ interface WebSocketContextType {
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
 
-// Dynamic URL functions
+// Fixed URL function to use backend port only
 const getWebSocketUrl = (): string => {
   if (typeof window !== 'undefined') {
-    // Browser environment - use backend server port
+    // Use environment variable or fallback to known backend port
+    const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL || `localhost:${import.meta.env.PORT || '5000'}`;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Use environment variable for backend host or default to localhost:5000
-    const backendHost = import.meta.env.VITE_API_BASE_URL || 'localhost:5000';
-    return `${protocol}//${backendHost}/ws`;
+    return `${protocol}//${wsBaseUrl}/ws`;
   }
-  // Server environment - use environment variable or default
+  // Server environment
   return process.env.WEBSOCKET_URL || 'ws://localhost:5000';
 };
 

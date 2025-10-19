@@ -4,12 +4,14 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage-supabase";
 import { insertBetSchema, insertGameHistorySchema } from "@shared/schema";
 import { z } from "zod";
+import { gameLoopService } from "./GameLoopService";
 
 // WebSocket client tracking
 interface WSClient {
   ws: WebSocket;
   userId: string;
   role: 'player' | 'admin';
+  wallet: number;
 }
 
 const clients = new Set<WSClient>();
@@ -36,14 +38,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             client = {
               ws,
               userId: message.data.userId,
-              role: message.data.role || 'player'
+              role: message.data.role || 'player',
+              wallet: message.data.wallet || 0,
             };
             clients.add(client);
             
             // Send confirmation
             ws.send(JSON.stringify({
               type: 'authenticated',
-              data: { userId: client.userId, role: client.role }
+              data: { userId: client.userId, role: client.role, wallet: client.wallet }
             }));
             
             // Send current game state if it exists
@@ -71,30 +74,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
           
           case 'game_start':
-            // Create new game session
-            const newGame = await storage.createGameSession({
-              openingCard: message.data.openingCard,
-              phase: 'betting',
-              currentTimer: 30,
-              round: message.data.round || 1,
-            });
-            
-            // Broadcast to all clients
-            broadcast({
-              type: 'sync_game_state',
-              data: {
-                gameId: newGame.gameId,
-                openingCard: newGame.openingCard,
-                phase: newGame.phase,
-                currentTimer: newGame.currentTimer,
-                round: newGame.round,
-                dealtCards: [],
-                andarBets: 0,
-                baharBets: 0,
-                winner: null,
-                winningCard: null,
-              }
-            });
+            try {
+              // Create new game session and start Round 1 betting
+              const gameState = await gameLoopService.startRound1Betting(
+                message.data.gameId || 'default-game',
+                message.data.openingCard
+              );
+              
+              // Broadcast start of Round 1 betting
+              broadcast({
+                type: 'startRoundTimer',
+                data: { seconds: 30, round: 1, phase: 'BETTING_R1' }
+              });
+              
+              // Broadcast sync game state
+              broadcast({
+                type: 'sync_game_state',
+                data: {
+                  openingCard: message.data.openingCard,
+                  phase: 'BETTING_R1',
+                  currentTimer: 30,
+                  round: 1,
+                  dealtCards: [],
+                  andarBets: 0,
+                  baharBets: 0,
+                  winner: null,
+                  winningCard: null,
+                }
+              });
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Failed to start game' }
+              }));
+            }
             break;
           
           case 'timer_update':
@@ -116,36 +129,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           case 'place_bet':
             try {
-              // Validate bet
               const betData = insertBetSchema.parse(message.data);
               
-              // Check if betting is allowed
-              const gameSession = await storage.getCurrentGameSession();
-              if (!gameSession || gameSession.phase !== 'betting') {
+              const success = await gameLoopService.placeBet(
+                betData.gameId,
+                betData.userId,
+                betData.side as 'andar' | 'bahar',
+                betData.amount
+              );
+              
+              if (success) {
+                // Get updated betting stats
+                const updatedStats = await storage.getBettingStats(betData.gameId);
+                
+                // Broadcast betting stats update
+                broadcast({
+                  type: 'betPlaced',
+                  data: {
+                    side: betData.side,
+                    amount: betData.amount,
+                    userId: betData.userId,
+                    andarTotal: updatedStats.andarTotal,
+                    baharTotal: updatedStats.baharTotal
+                  }
+                });
+                
+                // Send confirmation to player
+                ws.send(JSON.stringify({
+                  type: 'bet_placed',
+                  data: { success: true }
+                }));
+              } else {
                 ws.send(JSON.stringify({
                   type: 'error',
-                  data: { message: 'Betting is closed' }
+                  data: { message: 'Failed to place bet' }
                 }));
-                break;
               }
-              
-              // Place bet
-              const bet = await storage.placeBet(betData);
-              
-              // Get updated betting stats
-              const updatedStats = await storage.getBettingStats(betData.gameId);
-              
-              // Broadcast betting stats update
-              broadcast({
-                type: 'betting_stats',
-                data: updatedStats
-              });
-              
-              // Send confirmation to player
-              ws.send(JSON.stringify({
-                type: 'bet_placed',
-                data: bet
-              }));
             } catch (error) {
               ws.send(JSON.stringify({
                 type: 'error',
@@ -155,22 +174,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
           
           case 'card_dealt':
-            // Record dealt card
-            const gameForCard = await storage.getCurrentGameSession();
-            if (gameForCard) {
-              const dealtCard = await storage.dealCard({
-                gameId: message.data.gameId,
-                card: message.data.card,
-                side: message.data.side,
-                position: message.data.position,
-                isWinningCard: message.data.isWinningCard
-              });
+            try {
+              const gameState = await gameLoopService.dealCard(
+                message.data.gameId,
+                message.data.card,
+                message.data.side,
+                message.data.position
+              );
               
-              // Broadcast to all clients
+              // Send card dealt to all clients
               broadcast({
                 type: 'card_dealt',
-                data: dealtCard
+                data: {
+                  card: message.data.card,
+                  side: message.data.side,
+                  position: message.data.position,
+                  isWinningCard: gameState.winner !== null
+                }
               });
+              
+              // Check if game is complete
+              if (gameState.phase === 'COMPLETE') {
+                broadcast({
+                  type: 'game_complete',
+                  data: {
+                    winner: gameState.winner,
+                    winningCard: gameState.winningCard,
+                    winningRound: gameState.winningRound,
+                    gameId: gameState.gameId
+                  }
+                });
+              }
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: error instanceof Error ? error.message : 'Failed to deal card' }
+              }));
             }
             break;
           
@@ -220,6 +259,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             break;
           
+          case 'start_round_2':
+            try {
+              const gameState = await gameLoopService.startRound2Betting(
+                message.data.gameId || 'default-game'
+              );
+              
+              // Broadcast start of Round 2 betting
+              broadcast({
+                type: 'startRoundTimer',
+                data: { seconds: 30, round: 2, phase: 'BETTING_R2' }
+              });
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Failed to start Round 2' }
+              }));
+            }
+            break;
+          
+          case 'start_final_draw':
+            try {
+              const gameState = await gameLoopService.startContinuousDraw(
+                message.data.gameId || 'default-game'
+              );
+              
+              // Broadcast start of continuous draw
+              broadcast({
+                type: 'phase_change',
+                data: { phase: 'CONTINUOUS_DRAW', round: 3, message: 'Starting continuous draw' }
+              });
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Failed to start final draw' }
+              }));
+            }
+            break;
+          
+          case 'game_reset':
+            gameLoopService.resetGame(message.data.gameId || 'default-game');
+            
+            broadcast({
+              type: 'game_reset',
+              data: message.data
+            });
+            break;
+          
           case 'phase_change':
             const phaseGame = await storage.getCurrentGameSession();
             if (phaseGame) {
@@ -235,13 +321,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             break;
           
-          case 'game_reset':
-            // Broadcast reset to all clients
-            broadcast({
-              type: 'game_reset',
-              data: message.data
-            });
-            break;
           
           case 'settings_update':
             await storage.updateGameSettings(message.data);
@@ -318,6 +397,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   // REST API endpoints
+  
+  // Login endpoint
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password required' });
+      }
+      
+      // Authenticate user
+      const user = await storage.getUserByUsername(username);
+      if (!user || user.password !== password) { // Note: In real app, use proper password hashing
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+      
+      res.json({
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          balance: user.balance,
+          role: 'player' // default role
+        }
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ error: 'Login failed' });
+    }
+  });
+
+  // Signup endpoint
+  app.post('/api/auth/signup', async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password required' });
+      }
+      
+      // Check if user exists
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(400).json({ error: 'Username already exists' });
+      }
+      
+      // Create user with default balance (₹50,00,000 as mentioned in demo)
+      const newUser = await storage.createUser({
+        username,
+        password,
+      });
+      
+      res.json({
+        success: true,
+        user: {
+          id: newUser.id,
+          username: newUser.username,
+          balance: newUser.balance,
+          role: 'player' // default role
+        }
+      });
+    } catch (error) {
+      console.error('Signup error:', error);
+      res.status(500).json({ error: 'Signup failed' });
+    }
+  });
   
   // Get game history
   app.get('/api/game-history', async (req, res) => {
