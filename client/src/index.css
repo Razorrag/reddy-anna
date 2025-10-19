@@ -654,13 +654,27 @@
   --font-primary: 'Poppins', sans-serif;
 }
 
+/* Global body styles - only apply when game-body class is present */
+body:has(.game-body) {
+  height: 100%;
+  margin: 0;
+  font-family: var(--font-primary);
+  background-color: var(--primary-black);
+  color: var(--white);
+  overflow: hidden; /* Prevent scrolling for player game */
+  position: fixed; /* Prevent any scrolling and layout shifts */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Default body styles for all other pages */
 html, body {
   height: 100%;
   margin: 0;
   font-family: var(--font-primary);
   background-color: var(--primary-black);
   color: var(--white);
-  overflow: auto; /* FIXED: Allow scrolling when needed */
+  overflow: auto; /* Allow scrolling for non-game pages */
 }
 
 body {
