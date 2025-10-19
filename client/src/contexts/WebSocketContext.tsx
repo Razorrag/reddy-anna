@@ -1,22 +1,13 @@
 import React, { createContext, useContext, useCallback, useEffect, useState, ReactNode } from 'react';
 import { useGameState } from './GameStateContext';
 import { useNotification } from '../components/NotificationSystem/NotificationSystem';
-import { WebSocketMessage } from '@shared/schema';
-import apiClient, { isValidWebSocketMessage, handleComponentError } from '../lib/apiClient';
+import type { Card, WebSocketMessage, ConnectionState, BetSide, DealtCard } from '@/types/game';
+import apiClient, { handleComponentError } from '../lib/apiClient';
 
-interface Card {
-  suit: string;
-  value: string;
-  display: string;
-}
-
-interface WebSocketState {
-  isConnected: boolean;
-  isConnecting: boolean;
-  connectionError: string | null;
-  reconnectAttempts: number;
-  maxReconnectAttempts: number;
-}
+// Validate WebSocket message structure
+const isValidWebSocketMessage = (data: any): data is WebSocketMessage => {
+  return data && typeof data === 'object' && 'type' in data;
+};
 
 declare global {
   interface Window {
@@ -26,12 +17,12 @@ declare global {
 }
 
 interface WebSocketContextType {
-  sendWebSocketMessage: (message: any) => void;
+  sendWebSocketMessage: (message: WebSocketMessage) => void;
   startGame: () => Promise<void>;
-  dealCard: (card: Card, side: 'andar' | 'bahar', position: number) => Promise<void>;
+  dealCard: (card: Card, side: BetSide, position: number) => Promise<void>;
   connectWebSocket: () => void;
   disconnectWebSocket: () => void;
-  connectionState: WebSocketState;
+  connectionState: ConnectionState;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -59,9 +50,21 @@ const getApiBaseUrl = (): string => {
 
 
 export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { gameState, setPhase, setCountdown, setWinner, addAndarCard, addBaharCard } = useGameState();
+  const { 
+    gameState, 
+    setPhase, 
+    setCountdown, 
+    setWinner, 
+    addAndarCard, 
+    addBaharCard,
+    setSelectedOpeningCard,
+    updateTotalBets,
+    setCurrentRound,
+    addDealtCard,
+    updatePlayerWallet
+  } = useGameState();
   const { showNotification } = useNotification();
-  const [webSocketState, setWebSocketState] = useState<WebSocketState>({
+  const [webSocketState, setWebSocketState] = useState<ConnectionState>({
     isConnected: false,
     isConnecting: false,
     connectionError: null,
@@ -116,30 +119,119 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             return;
           }
 
-          // Handle validated message
+          // Handle validated message with standardized types
           switch (data.type) {
-            case 'gameState':
-              // Update game state based on server message
+            case 'connection':
+              console.log('WebSocket connection established:', data.data);
+              break;
+
+            case 'authenticated':
+              console.log('WebSocket authenticated:', data.data);
+              break;
+
+            case 'sync_game_state':
+              // Sync complete game state
               if (data.data?.phase) setPhase(data.data.phase);
               if (data.data?.countdown !== undefined) setCountdown(data.data.countdown);
               if (data.data?.winner) setWinner(data.data.winner);
+              if (data.data?.openingCard) setSelectedOpeningCard(data.data.openingCard);
+              if (data.data?.currentRound) setCurrentRound(data.data.currentRound);
+              break;
+
+            case 'opening_card_set':
+            case 'opening_card_confirmed':
+              if (data.data?.openingCard) {
+                setSelectedOpeningCard(data.data.openingCard);
+                showNotification(`Opening card set: ${data.data.openingCard.display}`, 'info');
+              }
               break;
               
-            case 'cardDealt':
+            case 'card_dealt':
               // Handle card dealt message
-              if (data.data?.side === 'andar') {
+              const dealtCard: DealtCard = {
+                card: data.data.card,
+                side: data.data.side,
+                position: data.data.position,
+                isWinningCard: data.data.isWinningCard,
+                timestamp: Date.now()
+              };
+              addDealtCard(dealtCard);
+              
+              if (data.data.side === 'andar') {
                 addAndarCard(data.data.card);
-              } else if (data.data?.side === 'bahar') {
+              } else {
                 addBaharCard(data.data.card);
               }
               break;
+
+            case 'timer_start':
+            case 'timer_update':
+              if (data.data?.seconds !== undefined) {
+                setCountdown(data.data.seconds);
+              }
+              if (data.data?.phase) {
+                setPhase(data.data.phase);
+              }
+              break;
+
+            case 'timer_stop':
+              setCountdown(0);
+              break;
+
+            case 'betting_stats':
+              if (data.data?.andarTotal !== undefined && data.data?.baharTotal !== undefined) {
+                updateTotalBets({ andar: data.data.andarTotal, bahar: data.data.baharTotal });
+              }
+              break;
+
+            case 'start_round_2':
+              setCurrentRound(2);
+              setPhase('betting');
+              if (data.data?.timer) setCountdown(data.data.timer);
+              showNotification('Round 2 betting started!', 'info');
+              break;
+
+            case 'start_final_draw':
+              setCurrentRound(3);
+              setPhase('dealing');
+              setCountdown(0);
+              showNotification('Round 3: Continuous draw started!', 'warning');
+              break;
               
-            case 'gameComplete':
+            case 'game_complete':
               // Handle game complete message
               if (data.data?.winner) {
                 setWinner(data.data.winner);
+                setPhase('complete');
                 showNotification(`Game complete! ${data.data.winner.toUpperCase()} wins!`, 'success');
               }
+              break;
+
+            case 'game_reset':
+              setPhase('opening');
+              setCurrentRound(1);
+              setCountdown(0);
+              showNotification('Game has been reset', 'info');
+              break;
+
+            case 'phase_change':
+              if (data.data?.phase) {
+                setPhase(data.data.phase);
+              }
+              if (data.data?.message) {
+                showNotification(data.data.message, 'info');
+              }
+              break;
+
+            case 'balance_update':
+              // Update player wallet from backend
+              if (data.data?.balance !== undefined) {
+                updatePlayerWallet(data.data.balance);
+              }
+              break;
+
+            case 'error':
+              showNotification(data.data?.message || 'An error occurred', 'error');
               break;
               
             default:
@@ -202,7 +294,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       setWebSocketState(prev => ({ ...prev, isConnecting: false, connectionError: 'Initialization failed' }));
       showNotification('Failed to initialize WebSocket connection', 'error');
     }
-  }, [setPhase, setCountdown, setWinner, addAndarCard, addBaharCard, showNotification]);
+  }, [setPhase, setCountdown, setWinner, addAndarCard, addBaharCard, setSelectedOpeningCard, updateTotalBets, setCurrentRound, addDealtCard, showNotification]);
 
   const disconnectWebSocket = useCallback(() => {
     const ws = (window as any).gameWebSocket;
@@ -247,7 +339,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const dealCard = async (card: Card, side: 'andar' | 'bahar', position: number) => {
+  const dealCard = async (card: Card, side: BetSide, position: number) => {
     try {
       const result = await apiClient.post('/api/game/deal-card', {
         card: card.display,
@@ -298,14 +390,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
   }, []); // Empty deps - only run once on mount
 
-  const sendWebSocketMessage = useCallback((message: any) => {
+  const sendWebSocketMessage = useCallback((message: WebSocketMessage) => {
     const ws = (window as any).gameWebSocket;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
+      const messageWithTimestamp: WebSocketMessage = {
+        ...message,
+        timestamp: message.timestamp || Date.now()
+      };
+      ws.send(JSON.stringify(messageWithTimestamp));
+      console.log('Sent WebSocket message:', messageWithTimestamp.type);
     } else {
       console.warn('WebSocket not connected, cannot send message:', message);
+      showNotification('Not connected to server', 'warning');
     }
-  }, []);
+  }, [showNotification]);
 
   const value: WebSocketContextType = {
     sendWebSocketMessage,

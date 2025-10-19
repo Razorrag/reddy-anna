@@ -36,6 +36,15 @@ function Router() {
         )}
       </Route>
       
+      {/* Alias route for game-admin */}
+      <Route path="/game-admin">
+        {() => (
+          <ProtectedRoute component={AdminGame} role="admin">
+            <AdminGame />
+          </ProtectedRoute>
+        )}
+      </Route>
+      
       <Route path="/user-admin">
         {() => (
           <ProtectedRoute component={UserAdmin} role="admin">

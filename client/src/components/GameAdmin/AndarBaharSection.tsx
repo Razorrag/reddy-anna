@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useGameState } from '../../contexts/GameStateContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
+import type { Card } from '@/types/game';
 
 const AndarBaharSection = () => {
   const { gameState, setCurrentRound } = useGameState();
   const { sendWebSocketMessage, dealCard } = useWebSocket();
-  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [selectedBaharCard, setSelectedBaharCard] = useState<string | null>(null);
+  const [selectedAndarCard, setSelectedAndarCard] = useState<string | null>(null);
   const [cardPosition, setCardPosition] = useState(1);
+  const [showDealButton, setShowDealButton] = useState(false);
 
   // Card grid for dealing
   const suits = ['♠', '♥', '♦', '♣'];
@@ -37,20 +40,48 @@ const AndarBaharSection = () => {
   };
 
   const handleCardSelect = (card: any) => {
-    setSelectedCard(card.display);
+    // Determine which card to select based on current selection state
+    if (!selectedBaharCard) {
+      setSelectedBaharCard(card.display);
+    } else if (!selectedAndarCard) {
+      setSelectedAndarCard(card.display);
+      setShowDealButton(true); // Show deal button when both cards selected
+    }
   };
 
-  const handleDealCard = (side: 'andar' | 'bahar') => {
-    if (!selectedCard) return;
+  const handleShowCards = () => {
+    if (!selectedBaharCard || !selectedAndarCard) return;
     
+    // Deal Bahar card first
     dealCard(
-      { display: selectedCard, suit: selectedCard.slice(-1), value: selectedCard.slice(0, -1) },
-      side,
+      { display: selectedBaharCard, suit: selectedBaharCard.slice(-1), value: selectedBaharCard.slice(0, -1) },
+      'bahar',
       cardPosition
     );
     
-    setCardPosition(cardPosition + 1);
-    setSelectedCard(null);
+    // Deal Andar card second
+    setTimeout(() => {
+      dealCard(
+        { display: selectedAndarCard, suit: selectedAndarCard.slice(-1), value: selectedAndarCard.slice(0, -1) },
+        'andar',
+        cardPosition + 1
+      );
+    }, 500);
+    
+    // Reset selections
+    setCardPosition(cardPosition + 2);
+    setSelectedBaharCard(null);
+    setSelectedAndarCard(null);
+    setShowDealButton(false);
+  };
+  
+  const handleUndoSelection = () => {
+    if (selectedAndarCard) {
+      setSelectedAndarCard(null);
+      setShowDealButton(false);
+    } else if (selectedBaharCard) {
+      setSelectedBaharCard(null);
+    }
   };
 
   return (
@@ -97,38 +128,41 @@ const AndarBaharSection = () => {
         }}>
           {cardGrid.map((card, index) => {
             const isRed = ['', ''].includes(card.suit);
+            const isSelected = selectedBaharCard === card.display || selectedAndarCard === card.display;
             return (
               <button
                 key={index}
                 onClick={() => handleCardSelect(card)}
+                disabled={showDealButton}
                 style={{
                   padding: '8px 4px',
                   fontSize: '0.9rem',
                   fontWeight: 'bold',
                   borderRadius: '6px',
-                  border: selectedCard === card.display ? '3px solid #ffed4e' : '2px solid #ffd700',
-                  background: selectedCard === card.display 
+                  border: isSelected ? '3px solid #ffed4e' : '2px solid #ffd700',
+                  background: isSelected 
                     ? 'linear-gradient(135deg, #ffd700 0%, #ffed4e 100%)'
                     : 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%)',
                   color: isRed ? '#dc143c' : '#000',
-                  cursor: 'pointer',
+                  cursor: showDealButton ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s ease',
                   minHeight: '35px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: selectedCard === card.display 
+                  boxShadow: isSelected 
                     ? '0 4px 12px rgba(255, 215, 0, 0.5)'
-                    : '0 2px 4px rgba(0, 0, 0, 0.2)'
+                    : '0 2px 4px rgba(0, 0, 0, 0.2)',
+                  opacity: showDealButton ? 0.6 : 1
                 }}
                 onMouseEnter={(e) => {
-                  if (selectedCard !== card.display) {
+                  if (!isSelected && !showDealButton) {
                     e.currentTarget.style.transform = 'translateY(-2px)';
                     e.currentTarget.style.boxShadow = '0 4px 8px rgba(255, 215, 0, 0.3)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (selectedCard !== card.display) {
+                  if (!isSelected) {
                     e.currentTarget.style.transform = 'translateY(0)';
                     e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)';
                   }
@@ -140,8 +174,8 @@ const AndarBaharSection = () => {
           })}
         </div>
         
-        {/* Selected Card Display */}
-        {selectedCard && (
+        {/* Selected Cards Display */}
+        {(selectedBaharCard || selectedAndarCard) && (
           <div style={{
             marginTop: '15px',
             padding: '15px',
@@ -152,12 +186,54 @@ const AndarBaharSection = () => {
             fontWeight: 'bold',
             fontSize: '1.2rem'
           }}>
-            Selected: {selectedCard}
+            <div>Bahar Card: {selectedBaharCard || '—'}</div>
+            <div style={{ marginTop: '8px' }}>Andar Card: {selectedAndarCard || '—'}</div>
           </div>
         )}
+        
+        {/* Show Cards and Undo Buttons */}
+        <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
+          <button
+            onClick={handleUndoSelection}
+            disabled={!selectedBaharCard && !selectedAndarCard}
+            style={{
+              flex: 1,
+              background: (selectedBaharCard || selectedAndarCard) ? '#ff9800' : '#555',
+              color: '#fff',
+              border: 'none',
+              padding: '12px',
+              borderRadius: '8px',
+              fontSize: '1rem',
+              fontWeight: 'bold',
+              cursor: (selectedBaharCard || selectedAndarCard) ? 'pointer' : 'not-allowed',
+              opacity: (selectedBaharCard || selectedAndarCard) ? 1 : 0.5
+            }}
+          >
+            ↩️ Undo
+          </button>
+          <button
+            onClick={handleShowCards}
+            disabled={!showDealButton}
+            style={{
+              flex: 2,
+              background: showDealButton ? 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)' : '#555',
+              color: '#fff',
+              border: 'none',
+              padding: '12px',
+              borderRadius: '8px',
+              fontSize: '1.1rem',
+              fontWeight: 'bold',
+              cursor: showDealButton ? 'pointer' : 'not-allowed',
+              opacity: showDealButton ? 1 : 0.5,
+              boxShadow: showDealButton ? '0 4px 15px rgba(76, 175, 80, 0.3)' : 'none'
+            }}
+          >
+            🎴 Show Cards
+          </button>
+        </div>
       </div>
       
-      {/* Automatic Alternation Indicator */}
+      {/* Round Info */}
       <div style={{
         background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 237, 78, 0.2) 100%)',
         padding: '20px',
@@ -171,7 +247,7 @@ const AndarBaharSection = () => {
           fontSize: '1.3rem',
           marginBottom: '15px',
           fontWeight: 'bold'
-        }}>🔄 Automatic Card Dealing</h3>
+        }}>📋 Round {gameState.currentRound} - Card Dealing</h3>
         
         <div style={{
           fontSize: '1.1rem',
@@ -179,61 +255,31 @@ const AndarBaharSection = () => {
           marginBottom: '15px',
           lineHeight: '1.6'
         }}>
-          <p style={{ marginBottom: '10px' }}>Cards automatically alternate:</p>
+          <p style={{ marginBottom: '10px' }}>Select 2 cards in order:</p>
           <p style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#ffd700' }}>
-            1st → BAHAR | 2nd → ANDAR | 3rd → BAHAR | 4th → ANDAR...
+            1st Card → BAHAR | 2nd Card → ANDAR
+          </p>
+          <p style={{ fontSize: '0.9rem', color: '#aaa', marginTop: '10px' }}>
+            Click "Show Cards" to deal both cards to players
           </p>
         </div>
         
-        {/* Next Card Indicator */}
+        {/* Cards Dealt Counter */}
         <div style={{
           marginTop: '20px',
           padding: '15px',
           background: 'rgba(0, 0, 0, 0.4)',
           borderRadius: '8px'
         }}>
-          <div style={{ fontSize: '0.9rem', color: '#aaa', marginBottom: '5px' }}>Next card goes to:</div>
+          <div style={{ fontSize: '0.9rem', color: '#aaa', marginBottom: '5px' }}>Cards Dealt This Round:</div>
           <div style={{
             fontSize: '1.8rem',
             fontWeight: 'bold',
-            color: (gameState.andarCards.length + gameState.baharCards.length) % 2 === 0 ? '#4169E1' : '#A52A2A'
+            color: '#ffd700'
           }}>
-            {(gameState.andarCards.length + gameState.baharCards.length) % 2 === 0 ? '🎴 BAHAR' : '🎴 ANDAR'}
+            Bahar: {gameState.baharCards.length} | Andar: {gameState.andarCards.length}
           </div>
         </div>
-      </div>
-      
-      {/* Position Counter */}
-      <div style={{
-        background: 'rgba(0, 0, 0, 0.3)',
-        padding: '15px',
-        borderRadius: '10px',
-        textAlign: 'center'
-      }}>
-        <label style={{
-          display: 'block',
-          color: '#ffd700',
-          fontSize: '1rem',
-          marginBottom: '10px',
-          fontWeight: '600'
-        }}>Card Position:</label>
-        <input
-          type="number"
-          min="1"
-          value={cardPosition}
-          onChange={(e) => setCardPosition(parseInt(e.target.value) || 1)}
-          style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            color: '#fff',
-            border: '2px solid #ffd700',
-            padding: '10px',
-            borderRadius: '8px',
-            fontSize: '1.2rem',
-            textAlign: 'center',
-            width: '100px',
-            fontWeight: 'bold'
-          }}
-        />
       </div>
     </div>
   );

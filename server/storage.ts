@@ -98,6 +98,10 @@ export class MemStorage implements IStorage {
     return this.users.get(id);
   }
 
+  async getUserById(id: string): Promise<User | undefined> {
+    return this.users.get(id); // Alias for getUser
+  }
+
   async getUserByUsername(username: string): Promise<User | undefined> {
     return Array.from(this.users.values()).find(
       (user) => user.username === username,
@@ -169,6 +173,10 @@ export class MemStorage implements IStorage {
   }
 
   // Betting operations
+  async createBet(bet: InsertBet): Promise<PlayerBet> {
+    return this.placeBet(bet); // Alias for placeBet
+  }
+
   async placeBet(bet: InsertBet): Promise<PlayerBet> {
     const id = randomUUID();
     const now = new Date();
@@ -214,6 +222,16 @@ export class MemStorage implements IStorage {
     }
   }
 
+  async updateBetStatusByGameUser(gameId: string, userId: string, side: string, status: string): Promise<void> {
+    const bets = Array.from(this.bets.values()).filter(
+      bet => bet.gameId === gameId && bet.userId === userId && bet.side === side
+    );
+    for (const bet of bets) {
+      bet.status = status;
+      bet.updatedAt = new Date();
+    }
+  }
+
   async getBettingStats(gameId: string): Promise<{ andarTotal: number; baharTotal: number; andarCount: number; baharCount: number }> {
     const bets = await this.getBetsForGame(gameId);
     const andarBets = bets.filter(b => b.side === 'andar');
@@ -228,6 +246,10 @@ export class MemStorage implements IStorage {
   }
 
   // Card operations
+  async createDealtCard(card: InsertDealtCard): Promise<DealtCard> {
+    return this.dealCard(card); // Alias for dealCard
+  }
+
   async dealCard(card: InsertDealtCard): Promise<DealtCard> {
     const id = randomUUID();
     const dealtCard: DealtCard = {
@@ -252,6 +274,10 @@ export class MemStorage implements IStorage {
   }
 
   // Game history operations
+  async saveGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry> {
+    return this.addGameHistory(history); // Alias for addGameHistory
+  }
+
   async addGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry> {
     const id = randomUUID();
     const entry: GameHistoryEntry = {

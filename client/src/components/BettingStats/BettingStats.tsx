@@ -10,12 +10,15 @@ interface BettingStatsProps {
 const BettingStats: React.FC<BettingStatsProps> = ({ maxBetMultiplier = 2 }) => {
   const { gameState } = useGameState();
 
-  // Mock betting data - in a real app this would come from the backend
+  // Use actual game state data with proper round tracking
+  const andarTotal = (gameState.round1Bets?.andar || 0) + (gameState.round2Bets?.andar || 0);
+  const baharTotal = (gameState.round1Bets?.bahar || 0) + (gameState.round2Bets?.bahar || 0);
+  
   const bettingData: BettingStatsType = {
-    andarTotal: 12500,
-    baharTotal: 8750,
-    andarCount: 8,
-    baharCount: 5,
+    andarTotal,
+    baharTotal,
+    andarCount: 0, // TODO: Track player count per side
+    baharCount: 0,
   };
 
   const totalBets = bettingData.andarTotal + bettingData.baharTotal;

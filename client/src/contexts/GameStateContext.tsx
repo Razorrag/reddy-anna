@@ -1,127 +1,112 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import type {
+  Card,
+  GamePhase,
+  GameRound,
+  GameWinner,
+  BetSide,
+  RoundBets,
+  DealtCard,
+  GameHistoryEntry
+} from '@/types/game';
 
-interface Card {
-  suit: string;
-  value: string;
-  display: string;
-}
-
-interface UserBet {
-  id: string;
-  side: 'andar' | 'bahar';
-  amount: number;
-  round: number;
-  status: 'pending' | 'won' | 'lost';
-}
-
-// Enhanced GameState interface with real user data
+// Enhanced GameState interface using shared types
 interface GameState {
+  // Game identification
+  gameId: string;
+  
+  // Card state
   selectedOpeningCard: Card | null;
   andarCards: Card[];
   baharCards: Card[];
-  phase: 'idle' | 'opening' | 'betting' | 'dealing' | 'complete' | 'BETTING_R1' | 'DEALING_R1' | 'BETTING_R2' | 'DEALING_R2' | 'CONTINUOUS_DRAW';
+  dealtCards: DealtCard[];
+  
+  // Game flow
+  phase: GamePhase;
+  currentRound: GameRound;
   countdownTimer: number;
-  gameWinner: 'andar' | 'bahar' | null;
   isGameActive: boolean;
-  currentRound: number;  // Track current round
-  playerBets: {
-    andar: number; // total amount bet on andar
-    bahar: number; // total amount bet on bahar
-  };
-  userRole: 'player' | 'admin'; // track user role
-  roundBets: {
-    round1: { andar: number; bahar: number };
-    round2: { andar: number; bahar: number };
-  };
-  winningCard: Card | null; // track winning card
+  
+  // Winner state
+  gameWinner: GameWinner;
+  winningCard: Card | null;
+  
+  // Betting state - total from all players
+  andarTotalBet: number;
+  baharTotalBet: number;
+  
+  // Round-specific total bets
+  round1Bets: RoundBets;
+  round2Bets: RoundBets;
+  
   // User-specific data
   userId: string | null;
   username: string | null;
-  playerWallet: number; // player's balance from authentication
-  playerRoundBets: {
-    round1: { andar: number; bahar: number };
-    round2: { andar: number; bahar: number };
-  }; // track individual player bets
-  // Multi-round specific data
-  round1PlayerBets: {
-    andar: number;
-    bahar: number;
-  };
-  round2PlayerBets: {
-    andar: number;
-    bahar: number;
-  };
-}
-
-interface GameResult {
-  id: string;
-  openingCard: string;
-  winner: 'andar' | 'bahar';
-  winningCard: string;
-  totalCards: number;
-  createdAt: Date;
+  userRole: 'player' | 'admin';
+  playerWallet: number;
+  
+  // Player's individual bets per round
+  playerRound1Bets: RoundBets;
+  playerRound2Bets: RoundBets;
 }
 
 type GameStateAction =
+  | { type: 'SET_GAME_ID'; payload: string }
   | { type: 'SET_OPENING_CARD'; payload: Card }
   | { type: 'ADD_ANDAR_CARD'; payload: Card }
   | { type: 'ADD_BAHAR_CARD'; payload: Card }
-  | { type: 'SET_PHASE'; payload: GameState['phase'] }
+  | { type: 'ADD_DEALT_CARD'; payload: DealtCard }
+  | { type: 'SET_PHASE'; payload: GamePhase }
   | { type: 'SET_COUNTDOWN'; payload: number }
-  | { type: 'SET_WINNER'; payload: GameState['gameWinner'] }
+  | { type: 'SET_WINNER'; payload: GameWinner }
   | { type: 'RESET_GAME' }
   | { type: 'SET_GAME_ACTIVE'; payload: boolean }
-  | { type: 'SET_CURRENT_ROUND'; payload: number }
-  | { type: 'UPDATE_BETS'; payload: { andar: number; bahar: number } }
+  | { type: 'SET_CURRENT_ROUND'; payload: GameRound }
+  | { type: 'UPDATE_TOTAL_BETS'; payload: { andar: number; bahar: number } }
   | { type: 'UPDATE_PLAYER_WALLET'; payload: number }
-  | { type: 'ADD_GAME_HISTORY'; payload: GameResult }
   | { type: 'SET_USER_ROLE'; payload: 'player' | 'admin' }
-  | { type: 'UPDATE_ROUND_BETS'; payload: { round: number; andar: number; bahar: number } }
+  | { type: 'UPDATE_ROUND_BETS'; payload: { round: GameRound; bets: RoundBets } }
   | { type: 'SET_WINNING_CARD'; payload: Card }
-  // User-specific actions
   | { type: 'SET_USER_DATA'; payload: { userId: string; username: string; wallet: number } }
-  | { type: 'UPDATE_PLAYER_ROUND_BETS'; payload: { round: number; andar: number; bahar: number } }
-  // Multi-round specific actions
-  | { type: 'SET_ROUND1_PLAYER_BETS'; payload: { andar: number; bahar: number } }
-  | { type: 'SET_ROUND2_PLAYER_BETS'; payload: { andar: number; bahar: number } };
+  | { type: 'UPDATE_PLAYER_ROUND_BETS'; payload: { round: GameRound; bets: RoundBets } }
+  | { type: 'CLEAR_CARDS' };
 
 const initialState: GameState = {
+  gameId: '',
   selectedOpeningCard: null,
   andarCards: [],
   baharCards: [],
+  dealtCards: [],
   phase: 'idle',
-  countdownTimer: 0,
-  gameWinner: null,
-  isGameActive: false,
   currentRound: 1,
-  playerBets: { andar: 0, bahar: 0 },
-  userRole: 'player',
-  roundBets: {
-    round1: { andar: 0, bahar: 0 },
-    round2: { andar: 0, bahar: 0 }
-  },
+  countdownTimer: 0,
+  isGameActive: false,
+  gameWinner: null,
   winningCard: null,
-  // Initialize user-specific data to null
+  andarTotalBet: 0,
+  baharTotalBet: 0,
+  round1Bets: { andar: 0, bahar: 0 },
+  round2Bets: { andar: 0, bahar: 0 },
   userId: null,
   username: null,
+  userRole: 'player',
   playerWallet: 0,
-  playerRoundBets: {
-    round1: { andar: 0, bahar: 0 },
-    round2: { andar: 0, bahar: 0 }
-  },
-  // Multi-round specific
-  round1PlayerBets: { andar: 0, bahar: 0 },
-  round2PlayerBets: { andar: 0, bahar: 0 }
+  playerRound1Bets: { andar: 0, bahar: 0 },
+  playerRound2Bets: { andar: 0, bahar: 0 }
 };
 
 const gameReducer = (state: GameState, action: GameStateAction): GameState => {
   switch (action.type) {
+    case 'SET_GAME_ID':
+      return { ...state, gameId: action.payload };
     case 'SET_OPENING_CARD':
       return { ...state, selectedOpeningCard: action.payload };
     case 'ADD_ANDAR_CARD':
       return { ...state, andarCards: [...state.andarCards, action.payload] };
     case 'ADD_BAHAR_CARD':
       return { ...state, baharCards: [...state.baharCards, action.payload] };
+    case 'ADD_DEALT_CARD':
+      return { ...state, dealtCards: [...state.dealtCards, action.payload] };
     case 'SET_PHASE':
       return { ...state, phase: action.payload };
     case 'SET_COUNTDOWN':
@@ -131,7 +116,7 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
     case 'RESET_GAME':
       return {
         ...initialState,
-        userId: state.userId, // preserve user data
+        userId: state.userId,
         username: state.username,
         playerWallet: state.playerWallet,
         userRole: state.userRole,
@@ -140,34 +125,21 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
       return { ...state, isGameActive: action.payload };
     case 'SET_CURRENT_ROUND':
       return { ...state, currentRound: action.payload };
-    case 'UPDATE_BETS':
-      return { ...state, playerBets: action.payload };
+    case 'UPDATE_TOTAL_BETS':
+      return { ...state, andarTotalBet: action.payload.andar, baharTotalBet: action.payload.bahar };
     case 'UPDATE_PLAYER_WALLET':
       return { ...state, playerWallet: action.payload };
     case 'SET_USER_ROLE':
       return { ...state, userRole: action.payload };
     case 'UPDATE_ROUND_BETS':
       if (action.payload.round === 1) {
-        return {
-          ...state,
-          roundBets: {
-            ...state.roundBets,
-            round1: { andar: action.payload.andar, bahar: action.payload.bahar }
-          }
-        };
+        return { ...state, round1Bets: action.payload.bets };
       } else if (action.payload.round === 2) {
-        return {
-          ...state,
-          roundBets: {
-            ...state.roundBets,
-            round2: { andar: action.payload.andar, bahar: action.payload.bahar }
-          }
-        };
+        return { ...state, round2Bets: action.payload.bets };
       }
       return state;
     case 'SET_WINNING_CARD':
       return { ...state, winningCard: action.payload };
-    // User-specific reducers
     case 'SET_USER_DATA':
       return {
         ...state,
@@ -177,34 +149,13 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
       };
     case 'UPDATE_PLAYER_ROUND_BETS':
       if (action.payload.round === 1) {
-        return {
-          ...state,
-          playerRoundBets: {
-            ...state.playerRoundBets,
-            round1: { andar: action.payload.andar, bahar: action.payload.bahar }
-          }
-        };
+        return { ...state, playerRound1Bets: action.payload.bets };
       } else if (action.payload.round === 2) {
-        return {
-          ...state,
-          playerRoundBets: {
-            ...state.playerRoundBets,
-            round2: { andar: action.payload.andar, bahar: action.payload.bahar }
-          }
-        };
+        return { ...state, playerRound2Bets: action.payload.bets };
       }
       return state;
-    // Multi-round specific reducers
-    case 'SET_ROUND1_PLAYER_BETS':
-      return {
-        ...state,
-        round1PlayerBets: action.payload
-      };
-    case 'SET_ROUND2_PLAYER_BETS':
-      return {
-        ...state,
-        round2PlayerBets: action.payload
-      };
+    case 'CLEAR_CARDS':
+      return { ...state, andarCards: [], baharCards: [], dealtCards: [] };
     default:
       return state;
   }
@@ -212,30 +163,27 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
 
 interface GameStateContextType {
   gameState: GameState;
-  // Existing functions
+  setGameId: (id: string) => void;
   setSelectedOpeningCard: (card: Card) => void;
   addAndarCard: (card: Card) => void;
   addBaharCard: (card: Card) => void;
-  setPhase: (phase: GameState['phase']) => void;
+  addDealtCard: (card: DealtCard) => void;
+  setPhase: (phase: GamePhase) => void;
   setCountdown: (time: number) => void;
-  setWinner: (winner: GameState['gameWinner']) => void;
+  setWinner: (winner: GameWinner) => void;
   resetGame: () => void;
   setGameActive: (active: boolean) => void;
-  setCurrentRound: (round: number) => void;
-  updateBets: (bets: { andar: number; bahar: number }) => void;
+  setCurrentRound: (round: GameRound) => void;
+  updateTotalBets: (bets: RoundBets) => void;
   updatePlayerWallet: (wallet: number) => void;
   setUserRole: (role: 'player' | 'admin') => void;
-  updateRoundBets: (round: number, bets: { andar: number; bahar: number }) => void;
+  updateRoundBets: (round: GameRound, bets: RoundBets) => void;
   setWinningCard: (card: Card) => void;
-  // New user functions
   setUserData: (userData: { userId: string; username: string; wallet: number }) => void;
-  updatePlayerRoundBets: (round: number, bets: { andar: number; bahar: number }) => void;
-  // Multi-round specific functions
-  setRound1PlayerBets: (bets: { andar: number; bahar: number }) => void;
-  setRound2PlayerBets: (bets: { andar: number; bahar: number }) => void;
-  // Betting function
-  placeBet: (side: 'andar' | 'bahar', amount: number) => void;
-  phase: GameState['phase'];
+  updatePlayerRoundBets: (round: GameRound, bets: RoundBets) => void;
+  clearCards: () => void;
+  placeBet: (side: BetSide, amount: number) => void;
+  phase: GamePhase;
 }
 
 const GameStateContext = createContext<GameStateContextType | undefined>(undefined);
@@ -265,6 +213,10 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   // Dispatchers for all actions
+  const setGameId = (id: string) => {
+    dispatch({ type: 'SET_GAME_ID', payload: id });
+  };
+
   const setSelectedOpeningCard = (card: Card) => {
     dispatch({ type: 'SET_OPENING_CARD', payload: card });
   };
@@ -277,7 +229,11 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'ADD_BAHAR_CARD', payload: card });
   };
 
-  const setPhase = (phase: GameState['phase']) => {
+  const addDealtCard = (card: DealtCard) => {
+    dispatch({ type: 'ADD_DEALT_CARD', payload: card });
+  };
+
+  const setPhase = (phase: GamePhase) => {
     dispatch({ type: 'SET_PHASE', payload: phase });
   };
 
@@ -285,7 +241,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'SET_COUNTDOWN', payload: time });
   };
 
-  const setWinner = (winner: GameState['gameWinner']) => {
+  const setWinner = (winner: GameWinner) => {
     dispatch({ type: 'SET_WINNER', payload: winner });
   };
 
@@ -297,12 +253,12 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'SET_GAME_ACTIVE', payload: active });
   };
 
-  const setCurrentRound = (round: number) => {
+  const setCurrentRound = (round: GameRound) => {
     dispatch({ type: 'SET_CURRENT_ROUND', payload: round });
   };
 
-  const updateBets = (bets: { andar: number; bahar: number }) => {
-    dispatch({ type: 'UPDATE_BETS', payload: bets });
+  const updateTotalBets = (bets: RoundBets) => {
+    dispatch({ type: 'UPDATE_TOTAL_BETS', payload: bets });
   };
 
   const updatePlayerWallet = (wallet: number) => {
@@ -313,59 +269,47 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'SET_USER_ROLE', payload: role });
   };
 
-  const updateRoundBets = (round: number, bets: { andar: number; bahar: number }) => {
-    dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round, ...bets } });
+  const updateRoundBets = (round: GameRound, bets: RoundBets) => {
+    dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round, bets } });
   };
 
   const setWinningCard = (card: Card) => {
     dispatch({ type: 'SET_WINNING_CARD', payload: card });
   };
 
-  // New user functions
   const setUserData = (userData: { userId: string; username: string; wallet: number }) => {
     dispatch({ type: 'SET_USER_DATA', payload: userData });
     localStorage.setItem('user', JSON.stringify({
       userId: userData.userId,
       username: userData.username,
       wallet: userData.wallet,
-      role: 'player' // Default role
+      role: 'player'
     }));
   };
 
-  const updatePlayerRoundBets = (round: number, bets: { andar: number; bahar: number }) => {
-    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round, ...bets } });
+  const updatePlayerRoundBets = (round: GameRound, bets: RoundBets) => {
+    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round, bets } });
   };
 
-  // Multi-round specific functions
-  const setRound1PlayerBets = (bets: { andar: number; bahar: number }) => {
-    dispatch({ type: 'SET_ROUND1_PLAYER_BETS', payload: bets });
+  const clearCards = () => {
+    dispatch({ type: 'CLEAR_CARDS' });
   };
 
-  const setRound2PlayerBets = (bets: { andar: number; bahar: number }) => {
-    dispatch({ type: 'SET_ROUND2_PLAYER_BETS', payload: bets });
-  };
-
-  // Betting function
-  const placeBet = (side: 'andar' | 'bahar', amount: number) => {
-    // This will be implemented in WebSocket context
-    // For now, just update local state
+  const placeBet = (side: BetSide, amount: number) => {
     if (gameState.currentRound === 1) {
-      const currentBets = gameState.round1PlayerBets;
-      const newBets = {
-        ...currentBets,
-        [side]: currentBets[side] + amount
+      const newBets: RoundBets = {
+        ...gameState.playerRound1Bets,
+        [side]: gameState.playerRound1Bets[side] + amount
       };
-      setRound1PlayerBets(newBets);
+      updatePlayerRoundBets(1, newBets);
     } else if (gameState.currentRound === 2) {
-      const currentBets = gameState.round2PlayerBets;
-      const newBets = {
-        ...currentBets,
-        [side]: currentBets[side] + amount
+      const newBets: RoundBets = {
+        ...gameState.playerRound2Bets,
+        [side]: gameState.playerRound2Bets[side] + amount
       };
-      setRound2PlayerBets(newBets);
+      updatePlayerRoundBets(2, newBets);
     }
     
-    // Update player wallet
     if (gameState.playerWallet >= amount) {
       updatePlayerWallet(gameState.playerWallet - amount);
     }
@@ -373,24 +317,25 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const value: GameStateContextType = {
     gameState,
+    setGameId,
     setSelectedOpeningCard,
     addAndarCard,
     addBaharCard,
+    addDealtCard,
     setPhase,
     setCountdown,
     setWinner,
     resetGame,
     setGameActive,
     setCurrentRound,
-    updateBets,
+    updateTotalBets,
     updatePlayerWallet,
     setUserRole,
     updateRoundBets,
     setWinningCard,
     setUserData,
     updatePlayerRoundBets,
-    setRound1PlayerBets,
-    setRound2PlayerBets,
+    clearCards,
     placeBet,
     phase: gameState.phase,
   };

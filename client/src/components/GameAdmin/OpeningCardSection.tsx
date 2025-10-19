@@ -2,15 +2,10 @@ import React, { useState } from 'react';
 import { useGameState } from '../../contexts/GameStateContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useNotification } from '../NotificationSystem/NotificationSystem';
-
-interface Card {
-  suit: string;
-  value: string;
-  display: string;
-}
+import type { Card } from '@/types/game';
 
 const OpeningCardSection: React.FC = () => {
-  const { gameState, setSelectedOpeningCard, phase } = useGameState();
+  const { gameState, setSelectedOpeningCard, phase, setPhase } = useGameState();
   const { sendWebSocketMessage } = useWebSocket();
   const { showNotification } = useNotification();
   const [showTimerPopup, setShowTimerPopup] = useState(false);
@@ -44,12 +39,14 @@ const OpeningCardSection: React.FC = () => {
   const handleStartRound1 = () => {
     if (!gameState.selectedOpeningCard) return;
     
-    // Send to backend
+    // Send game start with opening card
     sendWebSocketMessage({
       type: 'game_start',
       data: {
         openingCard: gameState.selectedOpeningCard.display,
-        gameId: 'default-game'
+        gameId: 'default-game',
+        round: 1,
+        timer: customTime
       }
     });
     
@@ -57,24 +54,39 @@ const OpeningCardSection: React.FC = () => {
     sendWebSocketMessage({
       type: 'opening_card_confirmed',
       data: {
-        openingCard: gameState.selectedOpeningCard.display
+        openingCard: gameState.selectedOpeningCard.display,
+        phase: 'betting',
+        round: 1
       }
     });
     
-    // Start timer
+    // Start timer for Round 1 betting
     sendWebSocketMessage({
       type: 'timer_update',
       data: {
         seconds: customTime,
-        phase: 'betting'
+        phase: 'betting',
+        round: 1
       }
     });
     
+    // Update local phase to betting (game in progress)
+    setPhase('betting');
+    
+    // Notify GameAdmin component about phase change
+    window.dispatchEvent(new CustomEvent('game-phase-change', {
+      detail: {
+        phase: 'betting',
+        openingCard: gameState.selectedOpeningCard
+      }
+    }));
+    
     setShowTimerPopup(false);
-    showNotification(`Round 1 started with ${customTime} seconds!`, 'success');
+    showNotification(`Round 1 started with ${customTime} seconds! Opening card: ${gameState.selectedOpeningCard.display}`, 'success');
   };
 
-  if (phase !== 'opening') return null;
+  // Always show in admin, but indicate if not active
+  const isActive = phase === 'opening' || phase === 'idle';
 
   return (
     <div id="openingCardSection" className="game-section" style={{ padding: '20px' }}>

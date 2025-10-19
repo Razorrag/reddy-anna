@@ -1,10 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage-supabase";
+import { storage } from "./storage"; // Using in-memory storage for development
 import { insertBetSchema, insertGameHistorySchema } from "@shared/schema";
 import { z } from "zod";
-import { gameLoopService } from "./GameLoopService";
 import { hashPassword, comparePassword, validatePassword, validateUsername } from "./lib/auth";
 import { authLimiter, betLimiter, apiLimiter } from "./middleware/rateLimiter";
 
@@ -17,6 +16,277 @@ interface WSClient {
 }
 
 const clients = new Set<WSClient>();
+
+// Phase mapping: Backend → Frontend
+const phaseMap: Record<string, string> = {
+  'idle': 'idle',
+  'betting': 'betting',
+  'dealing': 'dealing',
+  'complete': 'complete',
+  'IDLE': 'idle',
+  'BETTING_R1': 'betting',
+  'DEALING_R1': 'dealing',
+  'BETTING_R2': 'betting',
+  'DEALING_R2': 'dealing',
+  'CONTINUOUS_DRAW': 'dealing',
+  'COMPLETE': 'complete'
+};
+
+// Broadcast to all connected clients
+function broadcast(message: any, excludeClient?: WSClient) {
+  const messageStr = JSON.stringify(message);
+  clients.forEach(client => {
+    if (client !== excludeClient && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(messageStr);
+    }
+  });
+}
+
+// Broadcast to specific role
+function broadcastToRole(message: any, role: 'player' | 'admin') {
+  const messageStr = JSON.stringify(message);
+  clients.forEach(client => {
+    if (client.role === role && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(messageStr);
+    }
+  });
+}
+
+// Game state management
+let currentGameState = {
+  gameId: 'default-game',
+  openingCard: null as string | null,
+  phase: 'idle',
+  currentRound: 1,
+  timer: 0,
+  andarCards: [] as string[],
+  baharCards: [] as string[],
+  winner: null as string | null,
+  winningCard: null as string | null,
+  round1Bets: { andar: 0, bahar: 0 },
+  round2Bets: { andar: 0, bahar: 0 },
+  timerInterval: null as NodeJS.Timeout | null
+};
+
+// Timer management
+function startTimer(duration: number, onComplete: () => void) {
+  if (currentGameState.timerInterval) {
+    clearInterval(currentGameState.timerInterval);
+  }
+  
+  currentGameState.timer = duration;
+  
+  currentGameState.timerInterval = setInterval(() => {
+    currentGameState.timer--;
+    
+    // Broadcast timer update
+    broadcast({
+      type: 'timer_update',
+      data: {
+        seconds: currentGameState.timer,
+        phase: currentGameState.phase
+      }
+    });
+    
+    if (currentGameState.timer <= 0) {
+      if (currentGameState.timerInterval) {
+        clearInterval(currentGameState.timerInterval);
+        currentGameState.timerInterval = null;
+      }
+      onComplete();
+    }
+  }, 1000);
+}
+
+// Check for winner
+function checkWinner(card: string): boolean {
+  if (!currentGameState.openingCard) return false;
+  
+  // Extract rank from card (e.g., "7♥" → "7")
+  const cardRank = card.replace(/[♠♥♦♣]/g, '');
+  const openingRank = currentGameState.openingCard.replace(/[♠♥♦♣]/g, '');
+  
+  return cardRank === openingRank;
+}
+
+// Calculate payouts based on round
+function calculatePayout(
+  round: number,
+  winner: 'andar' | 'bahar',
+  playerBets: { round1: { andar: number; bahar: number }, round2: { andar: number; bahar: number } }
+): number {
+  if (round === 1) {
+    if (winner === 'andar') {
+      return playerBets.round1.andar * 2; // 1:1 (double money)
+    } else {
+      return playerBets.round1.bahar; // 1:0 (refund only)
+    }
+  } else if (round === 2) {
+    if (winner === 'andar') {
+      const totalAndar = playerBets.round1.andar + playerBets.round2.andar;
+      return totalAndar * 2; // ALL bets paid 1:1
+    } else {
+      const round1Payout = playerBets.round1.bahar * 2; // R1 paid 1:1
+      const round2Refund = playerBets.round2.bahar; // R2 refund only
+      return round1Payout + round2Refund;
+    }
+  } else {
+    // Round 3: Both sides paid 1:1
+    const totalBet = playerBets.round1[winner] + playerBets.round2[winner];
+    return totalBet * 2;
+  }
+}
+
+// Auto-transition to Round 2
+async function transitionToRound2() {
+  console.log('Auto-transitioning to Round 2...');
+  
+  currentGameState.currentRound = 2;
+  currentGameState.phase = 'betting';
+  
+  // Update database
+  await storage.updateGameSession(currentGameState.gameId, {
+    phase: 'betting',
+    round: 2,
+    currentTimer: 30
+  });
+  
+  // Broadcast Round 2 start
+  broadcast({
+    type: 'start_round_2',
+    data: {
+      gameId: currentGameState.gameId,
+      timer: 30,
+      round: 2,
+      round1Bets: currentGameState.round1Bets
+    }
+  });
+  
+  // Start Round 2 timer
+  startTimer(30, async () => {
+    currentGameState.phase = 'dealing';
+    broadcast({
+      type: 'phase_change',
+      data: { phase: 'dealing', message: 'Round 2 betting closed' }
+    });
+  });
+}
+
+// Auto-transition to Round 3
+async function transitionToRound3() {
+  console.log('Auto-transitioning to Round 3 (Continuous Draw)...');
+  
+  currentGameState.currentRound = 3;
+  currentGameState.phase = 'dealing';
+  
+  // Update database
+  await storage.updateGameSession(currentGameState.gameId, {
+    phase: 'dealing',
+    round: 3,
+    currentTimer: 0
+  });
+  
+  // Broadcast Round 3 start
+  broadcast({
+    type: 'start_final_draw',
+    data: {
+      gameId: currentGameState.gameId,
+      round: 3
+    }
+  });
+}
+
+// Complete game and distribute payouts
+async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
+  console.log(`Game complete! Winner: ${winner}, Card: ${winningCard}, Round: ${currentGameState.currentRound}`);
+  
+  currentGameState.winner = winner;
+  currentGameState.winningCard = winningCard;
+  currentGameState.phase = 'complete';
+  
+  // Update database
+  await storage.updateGameSession(currentGameState.gameId, {
+    phase: 'complete',
+    winner,
+    winningCard,
+    winningRound: currentGameState.currentRound,
+    status: 'completed'
+  });
+  
+  // Get all bets for this game
+  const allBets = await storage.getBetsForGame(currentGameState.gameId);
+  
+  // Group bets by user and round
+  const userBets: Record<string, { round1: { andar: number; bahar: number }, round2: { andar: number; bahar: number } }> = {};
+  
+  allBets.forEach(bet => {
+    if (!userBets[bet.userId]) {
+      userBets[bet.userId] = {
+        round1: { andar: 0, bahar: 0 },
+        round2: { andar: 0, bahar: 0 }
+      };
+    }
+    
+    if (bet.round === 1) {
+      userBets[bet.userId].round1[bet.side as 'andar' | 'bahar'] += bet.amount;
+    } else if (bet.round === 2) {
+      userBets[bet.userId].round2[bet.side as 'andar' | 'bahar'] += bet.amount;
+    }
+  });
+  
+  // Calculate and distribute payouts
+  const payouts: Record<string, number> = {};
+  
+  for (const [userId, bets] of Object.entries(userBets)) {
+    const payout = calculatePayout(currentGameState.currentRound, winner, bets);
+    payouts[userId] = payout;
+    
+    // Update user balance
+    if (payout > 0) {
+      await storage.updateUserBalance(userId, payout);
+      
+      // Update bet status
+      await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, winner === 'andar' ? 'andar' : 'bahar', 'won');
+    } else {
+      await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, winner === 'andar' ? 'bahar' : 'andar', 'lost');
+    }
+    
+    // Send updated balance to each player
+    const updatedUser = await storage.getUserById(userId);
+    if (updatedUser) {
+      // Find client and send balance update
+      clients.forEach(client => {
+        if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+          client.ws.send(JSON.stringify({
+            type: 'balance_update',
+            data: { balance: updatedUser.balance }
+          }));
+        }
+      });
+    }
+  }
+  
+  // Broadcast game complete
+  broadcast({
+    type: 'game_complete',
+    data: {
+      winner,
+      winningCard,
+      round: currentGameState.currentRound,
+      payouts
+    }
+  });
+  
+  // Save to game history
+  await storage.saveGameHistory({
+    gameId: currentGameState.gameId,
+    openingCard: currentGameState.openingCard!,
+    winner,
+    winningCard,
+    totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
+    round: currentGameState.currentRound
+  });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -32,16 +302,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on('message', async (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString());
-        console.log('Received message:', message.type);
+        console.log('Received WebSocket message:', message.type);
         
         switch (message.type) {
           case 'authenticate':
+          case 'connection':
             // Register client
             client = {
               ws,
-              userId: message.data.userId,
-              role: message.data.role || 'player',
-              wallet: message.data.wallet || 0,
+              userId: message.data?.userId || 'anonymous',
+              role: message.data?.role || 'player',
+              wallet: message.data?.wallet || 0,
             };
             clients.add(client);
             
@@ -51,307 +322,246 @@ export async function registerRoutes(app: Express): Promise<Server> {
               data: { userId: client.userId, role: client.role, wallet: client.wallet }
             }));
             
-            // Send current game state if it exists
-            const currentGame = await storage.getCurrentGameSession();
-            if (currentGame) {
-              const dealtCards = await storage.getDealtCards(currentGame.gameId);
-              const stats = await storage.getBettingStats(currentGame.gameId);
-              
-              ws.send(JSON.stringify({
-                type: 'sync_game_state',
-                data: {
-                  gameId: currentGame.gameId,
-                  openingCard: currentGame.openingCard,
-                  phase: currentGame.phase,
-                  currentTimer: currentGame.currentTimer,
-                  round: currentGame.round,
-                  dealtCards,
-                  andarBets: stats.andarTotal,
-                  baharBets: stats.baharTotal,
-                  winner: currentGame.winner,
-                  winningCard: currentGame.winningCard,
-                }
-              }));
-            }
+            // Send current game state
+            ws.send(JSON.stringify({
+              type: 'sync_game_state',
+              data: {
+                gameId: currentGameState.gameId,
+                openingCard: currentGameState.openingCard,
+                phase: currentGameState.phase,
+                currentRound: currentGameState.currentRound,
+                countdown: currentGameState.timer,
+                andarCards: currentGameState.andarCards,
+                baharCards: currentGameState.baharCards,
+                winner: currentGameState.winner,
+                winningCard: currentGameState.winningCard,
+                andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+                baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar
+              }
+            }));
             break;
           
+          case 'opening_card_set':
+          case 'opening_card_confirmed':
           case 'game_start':
-            try {
-              // Create new game session and start Round 1 betting
-              const gameState = await gameLoopService.startRound1Betting(
-                message.data.gameId || 'default-game',
-                message.data.openingCard
-              );
-              
-              // Broadcast start of Round 1 betting
-              broadcast({
-                type: 'startRoundTimer',
-                data: { seconds: 30, round: 1, phase: 'BETTING_R1' }
-              });
-              
-              // Broadcast sync game state
-              broadcast({
-                type: 'sync_game_state',
-                data: {
-                  openingCard: message.data.openingCard,
-                  phase: 'BETTING_R1',
-                  currentTimer: 30,
-                  round: 1,
-                  dealtCards: [],
-                  andarBets: 0,
-                  baharBets: 0,
-                  winner: null,
-                  winningCard: null,
-                }
-              });
-            } catch (error) {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Failed to start game' }
-              }));
-            }
-            break;
-          
-          case 'timer_update':
-            // Update game timer
-            const game = await storage.getCurrentGameSession();
-            if (game) {
-              await storage.updateGameSession(game.gameId, {
-                currentTimer: message.data.seconds,
-                phase: message.data.phase
-              });
-            }
+            // Set opening card and start Round 1
+            currentGameState.openingCard = message.data.openingCard?.display || message.data.openingCard;
+            currentGameState.phase = 'betting';
+            currentGameState.currentRound = 1;
+            currentGameState.andarCards = [];
+            currentGameState.baharCards = [];
+            currentGameState.winner = null;
+            currentGameState.winningCard = null;
+            currentGameState.round1Bets = { andar: 0, bahar: 0 };
+            currentGameState.round2Bets = { andar: 0, bahar: 0 };
             
-            // Broadcast timer update to all clients
+            // Save to database
+            const newGame = await storage.createGameSession({
+              openingCard: currentGameState.openingCard,
+              phase: 'betting',
+              round: 1,
+              currentTimer: message.data.timer || 30
+            });
+            currentGameState.gameId = newGame.gameId;
+            
+            // Broadcast to all clients
             broadcast({
-              type: 'timer_update',
-              data: message.data
+              type: 'opening_card_confirmed',
+              data: {
+                openingCard: currentGameState.openingCard,
+                phase: 'betting',
+                round: 1
+              }
+            });
+            
+            // Start timer
+            const timerDuration = message.data.timer || 30;
+            startTimer(timerDuration, async () => {
+              currentGameState.phase = 'dealing';
+              broadcast({
+                type: 'phase_change',
+                data: { phase: 'dealing', message: 'Betting closed' }
+              });
+            });
+            
+            broadcast({
+              type: 'timer_start',
+              data: { seconds: timerDuration, phase: 'betting', round: 1 }
             });
             break;
           
+          case 'bet_placed':
           case 'place_bet':
-            try {
-              const betData = insertBetSchema.parse(message.data);
-              
-              const success = await gameLoopService.placeBet(
-                betData.gameId,
-                betData.userId,
-                betData.side as 'andar' | 'bahar',
-                betData.amount
-              );
-              
-              if (success) {
-                // Get updated betting stats
-                const updatedStats = await storage.getBettingStats(betData.gameId);
-                
-                // Broadcast betting stats update
-                broadcast({
-                  type: 'betPlaced',
-                  data: {
-                    side: betData.side,
-                    amount: betData.amount,
-                    userId: betData.userId,
-                    andarTotal: updatedStats.andarTotal,
-                    baharTotal: updatedStats.baharTotal
-                  }
-                });
-                
-                // Send confirmation to player
-                ws.send(JSON.stringify({
-                  type: 'bet_placed',
-                  data: { success: true }
-                }));
-              } else {
-                ws.send(JSON.stringify({
-                  type: 'error',
-                  data: { message: 'Failed to place bet' }
-                }));
-              }
-            } catch (error) {
+            if (!client) break;
+            
+            const betAmount = message.data.amount;
+            const betSide = message.data.side;
+            const betRound = currentGameState.currentRound;
+            
+            // Validate bet
+            if (currentGameState.phase !== 'betting') {
               ws.send(JSON.stringify({
                 type: 'error',
-                data: { message: error instanceof Error ? error.message : 'Invalid bet' }
+                data: { message: 'Betting is closed' }
+              }));
+              break;
+            }
+            
+            // Save bet to database
+            await storage.createBet({
+              userId: client.userId,
+              gameId: currentGameState.gameId,
+              round: betRound,
+              side: betSide,
+              amount: betAmount,
+              status: 'pending'
+            });
+            
+            // Update bet totals
+            if (betRound === 1) {
+              currentGameState.round1Bets[betSide as 'andar' | 'bahar'] += betAmount;
+            } else if (betRound === 2) {
+              currentGameState.round2Bets[betSide as 'andar' | 'bahar'] += betAmount;
+            }
+            
+            // Deduct from user balance
+            await storage.updateUserBalance(client.userId, -betAmount);
+            
+            // Get updated balance and send to client
+            const updatedUser = await storage.getUserById(client.userId);
+            if (updatedUser) {
+              ws.send(JSON.stringify({
+                type: 'balance_update',
+                data: { balance: updatedUser.balance }
               }));
             }
+            
+            // Broadcast updated betting stats
+            broadcast({
+              type: 'betting_stats',
+              data: {
+                andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+                baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
+                round1Bets: currentGameState.round1Bets,
+                round2Bets: currentGameState.round2Bets,
+                round: betRound
+              }
+            });
             break;
           
           case 'card_dealt':
-            try {
-              const gameState = await gameLoopService.dealCard(
-                message.data.gameId,
-                message.data.card,
-                message.data.side,
-                message.data.position
-              );
-              
-              // Send card dealt to all clients
-              broadcast({
-                type: 'card_dealt',
-                data: {
-                  card: message.data.card,
-                  side: message.data.side,
-                  position: message.data.position,
-                  isWinningCard: gameState.winner !== null
-                }
-              });
-              
-              // Check if game is complete
-              if (gameState.phase === 'COMPLETE') {
-                broadcast({
-                  type: 'game_complete',
-                  data: {
-                    winner: gameState.winner,
-                    winningCard: gameState.winningCard,
-                    winningRound: gameState.winningRound,
-                    gameId: gameState.gameId
-                  }
-                });
-              }
-            } catch (error) {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: error instanceof Error ? error.message : 'Failed to deal card' }
-              }));
+          case 'deal_card':
+            const card = message.data.card?.display || message.data.card;
+            const side = message.data.side;
+            const position = message.data.position || (side === 'bahar' ? currentGameState.baharCards.length + 1 : currentGameState.andarCards.length + 1);
+            
+            // Add card to appropriate side
+            if (side === 'andar') {
+              currentGameState.andarCards.push(card);
+            } else {
+              currentGameState.baharCards.push(card);
             }
-            break;
-          
-          case 'game_complete':
-            const completedGame = await storage.getCurrentGameSession();
-            if (completedGame) {
-              // Note: Payouts are already calculated and distributed in GameLoopService.dealCard()
-              // This handler only needs to broadcast the completion
+            
+            // Save to database
+            await storage.createDealtCard({
+              gameId: currentGameState.gameId,
+              card,
+              side,
+              position,
+              isWinningCard: false
+            });
+            
+            // Check for winner
+            const isWinner = checkWinner(card);
+            
+            // Broadcast card dealt
+            broadcast({
+              type: 'card_dealt',
+              data: {
+                card: { display: card, value: card.replace(/[♠♥♦♣]/g, ''), suit: card.match(/[♠♥♦♣]/)?.[0] || '' },
+                side,
+                position,
+                isWinningCard: isWinner
+              }
+            });
+            
+            if (isWinner) {
+              // Winner found!
+              await completeGame(side as 'andar' | 'bahar', card);
+            } else {
+              // Check if round is complete
+              const roundComplete = (currentGameState.currentRound === 1 && currentGameState.andarCards.length === 1 && currentGameState.baharCards.length === 1) ||
+                                   (currentGameState.currentRound === 2 && currentGameState.andarCards.length === 2 && currentGameState.baharCards.length === 2);
               
-              // Broadcast game complete
-              broadcast({
-                type: 'game_complete',
-                data: {
-                  gameId: message.data.gameId,
-                  winner: message.data.winner,
-                  winningCard: message.data.winningCard,
-                  winningRound: message.data.winningRound,
-                  totalCards: message.data.totalCards
+              if (roundComplete) {
+                // Auto-transition to next round
+                if (currentGameState.currentRound === 1) {
+                  setTimeout(() => transitionToRound2(), 2000);
+                } else if (currentGameState.currentRound === 2) {
+                  setTimeout(() => transitionToRound3(), 2000);
                 }
-              });
+              }
             }
             break;
           
           case 'start_round_2':
-            try {
-              const gameState = await gameLoopService.startRound2Betting(
-                message.data.gameId || 'default-game'
-              );
-              
-              // Broadcast start of Round 2 betting
-              broadcast({
-                type: 'startRoundTimer',
-                data: { seconds: 30, round: 2, phase: 'BETTING_R2' }
-              });
-            } catch (error) {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Failed to start Round 2' }
-              }));
-            }
+            await transitionToRound2();
             break;
           
           case 'start_final_draw':
-            try {
-              const gameState = await gameLoopService.startContinuousDraw(
-                message.data.gameId || 'default-game'
-              );
-              
-              // Broadcast start of continuous draw
-              broadcast({
-                type: 'phase_change',
-                data: { phase: 'CONTINUOUS_DRAW', round: 3, message: 'Starting continuous draw' }
-              });
-            } catch (error) {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Failed to start final draw' }
-              }));
-            }
+            await transitionToRound3();
             break;
           
           case 'game_reset':
-            gameLoopService.resetGame(message.data.gameId || 'default-game');
+            // Clear timer
+            if (currentGameState.timerInterval) {
+              clearInterval(currentGameState.timerInterval);
+              currentGameState.timerInterval = null;
+            }
             
+            // Reset game state
+            currentGameState = {
+              gameId: `game-${Date.now()}`,
+              openingCard: null,
+              phase: 'idle',
+              currentRound: 1,
+              timer: 0,
+              andarCards: [],
+              baharCards: [],
+              winner: null,
+              winningCard: null,
+              round1Bets: { andar: 0, bahar: 0 },
+              round2Bets: { andar: 0, bahar: 0 },
+              timerInterval: null
+            };
+            
+            // Broadcast reset
             broadcast({
               type: 'game_reset',
-              data: message.data
+              data: { round: 1 }
             });
             break;
           
-          case 'phase_change':
-            const phaseGame = await storage.getCurrentGameSession();
-            if (phaseGame) {
-              await storage.updateGameSession(phaseGame.gameId, {
-                phase: message.data.phase
-              });
-            }
-            
-            // Broadcast phase change
-            broadcast({
-              type: 'phase_change',
-              data: message.data
-            });
+          case 'timer_update':
+            // Ignore - this is sent by server, not received from clients
             break;
           
-          
-          case 'settings_update':
-            await storage.updateGameSettings(message.data);
-            
-            // Broadcast settings update
-            broadcast({
-              type: 'settings_update',
-              data: message.data
-            });
-            break;
-          
-          case 'stream_status_update':
-            // Broadcast stream status update
-            broadcast({
-              type: 'stream_status_update',
-              data: message.data
-            });
-            break;
-          
-          case 'sync_request':
-            // Send current game state to requesting client
-            const syncGame = await storage.getCurrentGameSession();
-            if (syncGame) {
-              const syncCards = await storage.getDealtCards(syncGame.gameId);
-              const syncStats = await storage.getBettingStats(syncGame.gameId);
-              
-              ws.send(JSON.stringify({
-                type: 'sync_game_state',
-                data: {
-                  gameId: syncGame.gameId,
-                  openingCard: syncGame.openingCard,
-                  phase: syncGame.phase,
-                  currentTimer: syncGame.currentTimer,
-                  round: syncGame.round,
-                  dealtCards: syncCards,
-                  andarBets: syncStats.andarTotal,
-                  baharBets: syncStats.baharTotal,
-                  winner: syncGame.winner,
-                  winningCard: syncGame.winningCard,
-                }
-              }));
-            }
-            break;
+          default:
+            console.log('Unknown message type:', message.type);
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
-        ws.send(JSON.stringify({
-          type: 'error',
-          data: { message: 'Server error' }
-        }));
+        if (client) {
+          ws.send(JSON.stringify({
+            type: 'error',
+            data: { message: 'Failed to process message' }
+          }));
+        }
       }
     });
     
     ws.on('close', () => {
-      console.log('WebSocket disconnected');
+      console.log('WebSocket connection closed');
       if (client) {
         clients.delete(client);
       }
@@ -359,600 +569,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
+      if (client) {
+        clients.delete(client);
+      }
     });
   });
   
-  // Broadcast helper function
-  function broadcast(message: any, excludeWs?: WebSocket) {
-    const messageStr = JSON.stringify(message);
-    clients.forEach(client => {
-      if (client.ws !== excludeWs && client.ws.readyState === WebSocket.OPEN) {
-        client.ws.send(messageStr);
-      }
-    });
-  }
+  // REST API Routes
   
-  // REST API endpoints
-  
-  // Login endpoint with rate limiting and password hashing
-  app.post('/api/auth/login', authLimiter, async (req, res) => {
+  // Auth routes
+  app.post("/api/auth/signup", authLimiter, async (req, res) => {
     try {
       const { username, password } = req.body;
       
-      if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password required' });
+      // Validate inputs
+      const usernameError = validateUsername(username);
+      if (usernameError) {
+        return res.status(400).json({ error: usernameError });
       }
       
-      // Validate username format
-      const usernameValidation = validateUsername(username);
-      if (!usernameValidation.isValid) {
-        return res.status(400).json({ error: usernameValidation.error });
-      }
-      
-      // Authenticate user
-      const user = await storage.getUserByUsername(username);
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-      
-      // Compare password with hash
-      const isPasswordValid = await comparePassword(password, user.password);
-      if (!isPasswordValid) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-      
-      res.json({
-        success: true,
-        user: {
-          id: user.id,
-          username: user.username,
-          balance: user.balance,
-          role: 'player' // default role
-        }
-      });
-    } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({ error: 'Login failed' });
-    }
-  });
-
-  // Signup endpoint with rate limiting and password hashing
-  app.post('/api/auth/signup', authLimiter, async (req, res) => {
-    try {
-      const { username, password } = req.body;
-      
-      if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password required' });
-      }
-      
-      // Validate username
-      const usernameValidation = validateUsername(username);
-      if (!usernameValidation.isValid) {
-        return res.status(400).json({ error: usernameValidation.error });
-      }
-      
-      // Validate password
-      const passwordValidation = validatePassword(password);
-      if (!passwordValidation.isValid) {
-        return res.status(400).json({ error: passwordValidation.error });
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        return res.status(400).json({ error: passwordError });
       }
       
       // Check if user exists
       const existingUser = await storage.getUserByUsername(username);
       if (existingUser) {
-        return res.status(400).json({ error: 'Username already exists' });
+        return res.status(400).json({ error: "Username already exists" });
       }
       
-      // Hash password before storing
+      // Hash password and create user
       const hashedPassword = await hashPassword(password);
-      
-      // Create user with default balance (₹50,00,000 as mentioned in demo)
-      const newUser = await storage.createUser({
+      const user = await storage.createUser({
         username,
         password: hashedPassword,
       });
       
+      // Set session
+      (req.session as any).userId = user.id;
+      (req.session as any).username = user.username;
+      (req.session as any).balance = user.balance;
+      
       res.json({
-        success: true,
-        user: {
-          id: newUser.id,
-          username: newUser.username,
-          balance: newUser.balance,
-          role: 'player' // default role
-        }
+        id: user.id,
+        username: user.username,
+        balance: user.balance,
       });
     } catch (error) {
-      console.error('Signup error:', error);
-      res.status(500).json({ error: 'Signup failed' });
+      console.error("Signup error:", error);
+      res.status(500).json({ error: "Failed to create account" });
     }
   });
   
-  // Get game history
-  app.get('/api/game-history', async (req, res) => {
+  app.post("/api/auth/login", authLimiter, async (req, res) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-      const history = await storage.getGameHistory(limit);
+      const { username, password } = req.body;
+      
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      
+      const isValid = await comparePassword(password, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      
+      // Set session
+      (req.session as any).userId = user.id;
+      (req.session as any).username = user.username;
+      (req.session as any).balance = user.balance;
+      
+      res.json({
+        id: user.id,
+        username: user.username,
+        balance: user.balance,
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Failed to login" });
+    }
+  });
+  
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Failed to logout" });
+      }
+      res.json({ success: true });
+    });
+  });
+  
+  app.get("/api/auth/me", (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    
+    res.json({
+      id: session.userId,
+      username: session.username,
+      balance: session.balance,
+    });
+  });
+  
+  // Game routes
+  app.get("/api/game/current", async (req, res) => {
+    try {
+      res.json({
+        gameId: currentGameState.gameId,
+        openingCard: currentGameState.openingCard,
+        phase: currentGameState.phase,
+        currentRound: currentGameState.currentRound,
+        timer: currentGameState.timer,
+        andarCards: currentGameState.andarCards,
+        baharCards: currentGameState.baharCards,
+        winner: currentGameState.winner,
+        winningCard: currentGameState.winningCard,
+        round1Bets: currentGameState.round1Bets,
+        round2Bets: currentGameState.round2Bets
+      });
+    } catch (error) {
+      console.error("Get current game error:", error);
+      res.status(500).json({ error: "Failed to get game state" });
+    }
+  });
+  
+  app.get("/api/game/history", async (req, res) => {
+    try {
+      const history = await storage.getGameHistory(50);
       res.json(history);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch game history' });
+      console.error("Get game history error:", error);
+      res.status(500).json({ error: "Failed to get game history" });
     }
   });
   
-  // Get current game state
-  app.get('/api/game/current', async (req, res) => {
+  app.get("/api/user/balance", async (req, res) => {
     try {
-      const game = await storage.getCurrentGameSession();
-      if (!game) {
-        return res.status(404).json({ error: 'No active game' });
+      const session = req.session as any;
+      if (!session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const dealtCards = await storage.getDealtCards(game.gameId);
-      const stats = await storage.getBettingStats(game.gameId);
+      const user = await storage.getUserById(session.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       
-      res.json({
-        gameId: game.gameId,
-        openingCard: game.openingCard,
-        phase: game.phase,
-        currentTimer: game.currentTimer,
-        round: game.round,
-        dealtCards,
-        andarBets: stats.andarTotal,
-        baharBets: stats.baharTotal,
-        winner: game.winner,
-        winningCard: game.winningCard,
-      });
+      res.json({ balance: user.balance });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch game state' });
+      console.error("Get balance error:", error);
+      res.status(500).json({ error: "Failed to get balance" });
     }
   });
   
-  // Get game settings
-  app.get('/api/settings', async (req, res) => {
-    try {
-      const settings = await storage.getGameSettings();
-      res.json(settings);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch settings' });
-    }
-  });
-  
-  // Update game settings
-  app.post('/api/settings', async (req, res) => {
-    try {
-      await storage.updateGameSettings(req.body);
-      const settings = await storage.getGameSettings();
-      res.json(settings);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to update settings' });
-    }
-  });
-  
-  // Get user bets
-  app.get('/api/bets/user/:userId', async (req, res) => {
-    try {
-      const game = await storage.getCurrentGameSession();
-      if (!game) {
-        return res.json([]);
-      }
-      
-      const bets = await storage.getBetsForUser(req.params.userId, game.gameId);
-      res.json(bets);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch bets' });
-    }
-  });
-  
-  // Get betting statistics
-  app.get('/api/bets/stats/:gameId', async (req, res) => {
-    try {
-      const stats = await storage.getBettingStats(req.params.gameId);
-      res.json(stats);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch betting stats' });
-    }
-  });
-
-  // Legacy API endpoints to ensure full compatibility
-
-  // Deal a card in the game (legacy endpoint)
-  app.post('/api/game/deal-card', async (req, res) => {
-    try {
-      const { card, side, position, game_id } = req.body;
-      
-      if (!card || !side || !position) {
-        return res.status(400).json({
-          success: false,
-          message: 'Card, side, and position are required'
-        });
-      }
-      
-      // Use default game ID if not provided
-      const currentGameId = game_id || 'default-game';
-      
-      // Check if game session exists
-      const existingSession = await storage.getGameSession(currentGameId);
-      if (!existingSession) {
-        return res.status(404).json({
-          success: false,
-          message: 'Game session not found'
-        });
-      }
-      
-      // Store the dealt card
-      const dealtCard = await storage.dealCard({
-        gameId: currentGameId,
-        card: card,
-        side: side,
-        position: position,
-        isWinningCard: false
-      });
-      
-      // Check if this card matches the opening card (winning condition)
-      let isWinningCard = false;
-      if (existingSession.openingCard && existingSession.openingCard.length >= 2 && card.length >= 2) {
-        isWinningCard = existingSession.openingCard[0] === card[0]; // Check if rank matches
-      }
-      
-      if (isWinningCard) {
-        // Mark as winning card
-        await storage.updateDealtCard(dealtCard.id, { isWinningCard: true });
-        
-        // Update game session with winner
-        await storage.updateGameSession(currentGameId, {
-          winner: side,
-          winningCard: card,
-          phase: 'complete',
-          status: 'completed'
-        });
-        
-        // Get total cards dealt
-        const totalCardsResult = await storage.getDealtCards(currentGameId);
-        
-        // Update game history
-        await storage.addGameHistory({
-          gameId: currentGameId,
-          openingCard: existingSession.openingCard!,
-          winner: side,
-          winningCard: card,
-          totalCards: totalCardsResult.length,
-          round: existingSession.round || 1
-        });
-      } else {
-        // Update game session phase to dealing
-        await storage.updateGameSession(currentGameId, {
-          phase: 'dealing'
-        });
-      }
-      
-      // Broadcast card dealt to all clients
-      broadcast({
-        type: 'card_dealt',
-        data: {
-          gameId: currentGameId,
-          card: card,
-          side: side,
-          position: position,
-          isWinningCard: isWinningCard
-        }
-      });
-      
-      res.json({
-        success: true,
-        message: 'Card dealt successfully',
-        data: {
-          card: card,
-          side: side,
-          position: position,
-          game_id: currentGameId,
-          isWinningCard: isWinningCard
-        }
-      });
-    } catch (error) {
-      console.error('Error dealing card:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to deal card'
-      });
-    }
-  });
-
-  // Set opening card (legacy endpoint)
-  app.post('/api/game/set-opening-card', async (req, res) => {
-    try {
-      const { card, game_id } = req.body;
-      
-      if (!card) {
-        return res.status(400).json({
-          success: false,
-          message: 'Card is required'
-        });
-      }
-      
-      // Store opening card in settings
-      await storage.updateGameSetting('openingCard', card);
-      
-      // Create or update game session with opening card
-      const currentGameId = game_id || 'game-' + Date.now();
-      
-      // Check if game session exists
-      const existingSession = await storage.getGameSession(currentGameId);
-      if (!existingSession) {
-        // Create new game session
-        await storage.createGameSession({
-          openingCard: card,
-          phase: 'waiting',
-          status: 'active',
-          round: 1
-        });
-      } else {
-        // Update existing session
-        await storage.updateGameSession(currentGameId, {
-          openingCard: card,
-          phase: 'waiting',
-          status: 'active'
-        });
-      }
-      
-      // Broadcast opening card to all clients
-      broadcast({
-        type: 'sync_game_state',
-        data: {
-          openingCard: card,
-          phase: 'waiting'
-        }
-      });
-      
-      res.json({
-        success: true,
-        message: 'Opening card set successfully',
-        data: { card, game_id: currentGameId }
-      });
-    } catch (error) {
-      console.error('Error setting opening card:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to set opening card'
-      });
-    }
-  });
-
-  // Start timer (legacy endpoint)
-  app.post('/api/game/start-timer', async (req, res) => {
-    try {
-      const { duration, phase, game_id } = req.body;
-      
-      // Get or create a game session
-      const currentGameId = game_id || 'game-' + Date.now();
-      
-      // Check if game session exists
-      const existingSession = await storage.getGameSession(currentGameId);
-      if (!existingSession) {
-        // Create new game session
-        await storage.createGameSession({
-          phase: phase || 'betting',
-          currentTimer: duration || 30,
-          status: 'active',
-          round: 1
-        });
-      } else {
-        // Update existing session
-        await storage.updateGameSession(currentGameId, {
-          phase: phase || 'betting',
-          currentTimer: duration || 30,
-          status: 'active'
-        });
-      }
-      
-      // Broadcast timer start to all clients
-      broadcast({
-        type: 'timer_update',
-        data: {
-          seconds: duration || 30,
-          phase: phase || 'betting'
-        }
-      });
-      
-      res.json({
-        success: true,
-        message: 'Timer started successfully',
-        data: { game_id: currentGameId }
-      });
-    } catch (error) {
-      console.error('Error starting timer:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to start timer'
-      });
-    }
-  });
-
-  // Get opening card (legacy endpoint)
-  app.get('/api/game/settings/opening_card', async (req, res) => {
-    try {
-      const setting = await storage.getGameSetting('openingCard');
-      
-      if (setting) {
-        res.json({
-          success: true,
-          data: { setting_key: 'opening_card', setting_value: setting }
-        });
-      } else {
-        res.json({
-          success: false,
-          message: 'Opening card not found'
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching opening card:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to fetch opening card'
-      });
-    }
-  });
-
-  // Get stream settings (legacy endpoint)
-  app.get('/api/game/stream-settings', async (req, res) => {
-    try {
-      const settings = await storage.getStreamSettings();
-      
-      const settingsObj: Record<string, any> = {};
-      settings.forEach(setting => {
-        settingsObj[setting.settingKey] = {
-          value: setting.settingValue,
-          description: setting.description
-        };
-      });
-      
-      res.json({
-        success: true,
-        data: settingsObj
-      });
-    } catch (error) {
-      console.error('Error fetching stream settings:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to fetch stream settings'
-      });
-    }
-  });
-
-  // Update stream settings (legacy endpoint)
-  app.post('/api/game/update-stream-settings', async (req, res) => {
-    try {
-      const {
-        streamType,
-        streamUrl,
-        streamTitle,
-        streamStatus,
-        streamDescription
-      } = req.body;
-
-      // Validate required fields
-      if (!streamUrl || !streamTitle || !streamStatus) {
-        return res.status(400).json({
-          success: false,
-          message: 'Stream URL, title, and status are required'
-        });
-      }
-
-      // Validate stream status
-      if (!['live', 'offline', 'maintenance'].includes(streamStatus)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Stream status must be live, offline, or maintenance'
-        });
-      }
-
-      // Validate stream type
-      if (streamType && !['video', 'rtmp', 'embed'].includes(streamType)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Stream type must be video, rtmp, or embed'
-        });
-      }
-
-      // Update settings in storage
-      const settings = [
-        { key: 'stream_url', value: streamUrl },
-        { key: 'stream_title', value: streamTitle },
-        { key: 'stream_status', value: streamStatus },
-        { key: 'stream_description', value: streamDescription || '' },
-        { key: 'stream_type', value: streamType || 'video' }
-      ];
-
-      for (const setting of settings) {
-        await storage.updateStreamSetting(setting.key, setting.value);
-      }
-
-      // Broadcast stream settings update to all clients
-      broadcast({
-        type: 'stream_status_update',
-        data: {
-          streamType: streamType || 'video',
-          streamUrl: streamUrl,
-          streamStatus: streamStatus,
-          streamTitle: streamTitle
-        }
-      });
-
-      res.json({
-        success: true,
-        message: 'Stream settings updated successfully',
-        data: {
-          stream_url: streamUrl,
-          stream_title: streamTitle,
-          stream_status: streamStatus,
-          stream_description: streamDescription,
-          stream_type: streamType || 'video'
-        }
-      });
-    } catch (error) {
-      console.error('Error updating stream settings:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to update stream settings'
-      });
-    }
-  });
-
-  // Change game phase (legacy endpoint)
-  app.post('/api/game/change-phase', async (req, res) => {
-    try {
-      const { phase, game_id, message } = req.body;
-
-      if (!phase) {
-        return res.status(400).json({
-          success: false,
-          message: 'Phase is required'
-        });
-      }
-
-      // Use default game ID if not provided
-      const currentGameId = game_id || 'default-game';
-
-      // Check if game session exists
-      const existingSession = await storage.getGameSession(currentGameId);
-      if (!existingSession) {
-        // Create new game session
-        await storage.createGameSession({
-          phase: phase,
-          status: 'active',
-          currentTimer: 30,
-          round: 1
-        });
-      } else {
-        // Update existing session
-        await storage.updateGameSession(currentGameId, {
-          phase: phase
-        });
-      }
-
-      // Broadcast phase change to all clients
-      broadcast({
-        type: 'phase_change',
-        data: {
-          phase: phase,
-          message: message || `Game phase changed to ${phase}`
-        }
-      });
-
-      res.json({
-        success: true,
-        message: 'Phase changed successfully',
-        data: {
-          phase: phase,
-          game_id: currentGameId
-        }
-      });
-    } catch (error) {
-      console.error('Error changing phase:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to change phase'
-      });
-    }
-  });
-
   return httpServer;
 }

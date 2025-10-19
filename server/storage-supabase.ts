@@ -19,8 +19,9 @@ export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserById(id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUserBalance(userId: string, newBalance: number): Promise<void>;
+  updateUserBalance(userId: string, amountChange: number): Promise<void>;
   
   // Game session operations
   createGameSession(session: InsertGameSession): Promise<GameSession>;
@@ -31,19 +32,23 @@ export interface IStorage {
   
   // Betting operations
   placeBet(bet: InsertBet): Promise<PlayerBet>;
+  createBet(bet: InsertBet): Promise<PlayerBet>;
   getBetsForGame(gameId: string): Promise<PlayerBet[]>;
   getBetsForUser(userId: string, gameId: string): Promise<PlayerBet[]>;
   updateBetStatus(betId: string, status: string): Promise<void>;
+  updateBetStatusByGameUser(gameId: string, userId: string, side: string, status: string): Promise<void>;
   getBettingStats(gameId: string): Promise<{ andarTotal: number; baharTotal: number; andarCount: number; baharCount: number }>;
   
   // Card operations
   dealCard(card: InsertDealtCard): Promise<DealtCard>;
+  createDealtCard(card: InsertDealtCard): Promise<DealtCard>;
   getDealtCards(gameId: string): Promise<DealtCard[]>;
   updateDealtCard(cardId: string, updates: Partial<DealtCard>): Promise<void>;
   updateDealtCardForGame(gameId: string, cardId: string, updates: Partial<DealtCard>): Promise<void>;
   
   // Game history operations
   addGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry>;
+  saveGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry>;
   getGameHistory(limit?: number): Promise<GameHistoryEntry[]>;
   
   // Settings operations
@@ -89,6 +94,21 @@ export class SupabaseStorage implements IStorage {
     return data;
   }
 
+  async getUserById(id: string): Promise<User | undefined> {
+    const { data, error } = await supabaseServer
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Error getting user by ID:', error);
+      return undefined;
+    }
+
+    return data;
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
     const user = { ...insertUser, id, balance: 1000000 }; // Default balance
@@ -107,7 +127,15 @@ export class SupabaseStorage implements IStorage {
     return data;
   }
 
-  async updateUserBalance(userId: string, newBalance: number): Promise<void> {
+  async updateUserBalance(userId: string, amountChange: number): Promise<void> {
+    // Get current balance
+    const user = await this.getUserById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const newBalance = user.balance + amountChange;
+
     const { error } = await supabaseServer
       .from('users')
       .update({ balance: newBalance })
@@ -115,7 +143,7 @@ export class SupabaseStorage implements IStorage {
 
     if (error) {
       console.error('Error updating user balance:', error);
-      throw error;
+      throw new Error('Failed to update user balance');
     }
   }
 
@@ -242,6 +270,26 @@ export class SupabaseStorage implements IStorage {
     return data;
   }
 
+  async createBet(bet: InsertBet): Promise<PlayerBet> {
+    const { data, error } = await supabaseServer
+      .from('player_bets')
+      .insert({
+        id: randomUUID(),
+        ...bet,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating bet:', error);
+      throw new Error('Failed to create bet');
+    }
+
+    return data;
+  }
+
   async getBetsForGame(gameId: string): Promise<PlayerBet[]> {
     const { data, error } = await supabaseServer
       .from('player_bets')
@@ -283,6 +331,20 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
+  async updateBetStatusByGameUser(gameId: string, userId: string, side: string, status: string): Promise<void> {
+    const { error } = await supabaseServer
+      .from('player_bets')
+      .update({ status, updatedAt: new Date() })
+      .eq('gameId', gameId)
+      .eq('userId', userId)
+      .eq('side', side);
+
+    if (error) {
+      console.error('Error updating bet status:', error);
+      throw new Error('Failed to update bet status');
+    }
+  }
+
   async getBettingStats(gameId: string): Promise<{ andarTotal: number; baharTotal: number; andarCount: number; baharCount: number }> {
     const bets = await this.getBetsForGame(gameId);
     const andarBets = bets.filter(b => b.side === 'andar');
@@ -318,6 +380,25 @@ export class SupabaseStorage implements IStorage {
     if (error) {
       console.error('Error dealing card:', error);
       throw error;
+    }
+
+    return data;
+  }
+
+  async createDealtCard(card: InsertDealtCard): Promise<DealtCard> {
+    const { data, error } = await supabaseServer
+      .from('dealt_cards')
+      .insert({
+        id: randomUUID(),
+        ...card,
+        createdAt: new Date()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating dealt card:', error);
+      throw new Error('Failed to create dealt card');
     }
 
     return data;
@@ -386,6 +467,25 @@ export class SupabaseStorage implements IStorage {
     if (error) {
       console.error('Error adding game history:', error);
       throw error;
+    }
+
+    return data;
+  }
+
+  async saveGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry> {
+    const { data, error } = await supabaseServer
+      .from('game_history')
+      .insert({
+        id: randomUUID(),
+        ...history,
+        createdAt: new Date()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error saving game history:', error);
+      throw new Error('Failed to save game history');
     }
 
     return data;
