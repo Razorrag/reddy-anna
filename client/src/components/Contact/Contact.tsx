@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getSectionClass, getCardClass, getButtonClass, getInputClass } from '../ThemeUtils/ThemeUtils';
+import { getSectionClass, getCardClass, getButtonClass, getInputClass } from '../../lib/theme-utils';
 import { cn } from '../../lib/utils';
 
 const Contact: React.FC = () => {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,14 +8,16 @@ import Breadcrumb from "@/components/Breadcrumb";
 import {
   Search,
   Filter,
-  MoreHorizontal,
+  // MoreHorizontal,
   Ban,
   CheckCircle,
   XCircle,
   UserCheck,
-  UserX,
+  // UserX,
   Mail,
-  Phone
+  Phone,
+  BarChart3,
+  GamepadIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

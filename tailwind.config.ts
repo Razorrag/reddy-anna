@@ -13,6 +13,69 @@ export default {
     extend: {
       colors: {
         gold: '#FFD700',
+        'gold-light': '#FFED4E',
+        'gold-dark': '#DAA520',
+        primary: {
+          DEFAULT: '#FFD700',
+          light: '#FFED4E',
+          dark: '#DAA520',
+        },
+        secondary: {
+          DEFAULT: '#8B5CF6',
+          light: '#A78BFA',
+          dark: '#7C3AED',
+        },
+        accent: {
+          DEFAULT: '#F59E0B',
+          light: '#FCD34D',
+          dark: '#D97706',
+        },
+        muted: {
+          DEFAULT: '#6B7280',
+          light: '#9CA3AF',
+          dark: '#4B5563',
+        },
+        background: {
+          DEFAULT: '#0F0F0F',
+          light: '#1A1A1A',
+          dark: '#000000',
+        },
+        card: {
+          DEFAULT: '#1A1A1A',
+          light: '#2A2A2A',
+          dark: '#0A0A0A',
+        },
+        border: {
+          DEFAULT: '#374151',
+          light: '#4B5563',
+          dark: '#1F2937',
+        },
+        input: {
+          DEFAULT: '#1F2937',
+          light: '#374151',
+          dark: '#111827',
+        },
+        ring: '#FFD700',
+        destructive: {
+          DEFAULT: '#EF4444',
+          light: '#F87171',
+          dark: '#DC2626',
+        },
+        warning: {
+          DEFAULT: '#F59E0B',
+          light: '#FCD34D',
+          dark: '#D97706',
+        },
+        success: {
+          DEFAULT: '#10B981',
+          light: '#34D399',
+          dark: '#059669',
+        },
+        info: {
+          DEFAULT: '#3B82F6',
+          light: '#60A5FA',
+          dark: '#2563EB',
+        },
       },
       // Custom shadow utilities for casino-themed effects
       boxShadow: {

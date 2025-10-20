@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { NotificationContainer } from '../components/Notification';
+import { NotificationContainerExternal } from '../components/Notification/Notification';
 
 type NotificationType = 'success' | 'error' | 'info' | 'warning';
 
@@ -38,7 +38,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   return (
     <NotificationContext.Provider value={value}>
       {children}
-      <NotificationContainer notifications={notifications} onRemove={removeNotification} />
+      <NotificationContainerExternal notifications={notifications} onRemove={removeNotification} />
     </NotificationContext.Provider>
   );
 };

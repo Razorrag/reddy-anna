@@ -1,19 +1,20 @@
 import React from 'react';
-import { useGameState } from '../../contexts/GameStateContext';
+import type { GameState } from '../GameLogic/GameLogic';
 
 interface MobileTopBarProps {
   onWalletClick?: () => void;
+  userBalance?: number;
+  gameState: GameState;
 }
 
-const MobileTopBar: React.FC<MobileTopBarProps> = ({ onWalletClick }) => {
-  const { gameState } = useGameState();
+const MobileTopBar: React.FC<MobileTopBarProps> = ({ onWalletClick, userBalance = 0 }) => {
 
   return (
     <div className="bg-black/90 backdrop-blur-sm px-4 py-2 flex justify-between items-center border-b border-yellow-500/20">
       {/* Left side - Game ID and Title */}
       <div className="flex-1">
         <div className="text-white text-xs font-medium">
-          Game ID: {gameState.gameId || '1308544430'}
+          Game ID: 1308544430
         </div>
         <div className="text-yellow-400 text-xs font-semibold">
           Andar Bahar Live Game
@@ -51,7 +52,7 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({ onWalletClick }) => {
             <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
           </svg>
           <span className="text-yellow-900 text-sm font-bold">
-            ₹{gameState.playerWallet.toLocaleString('en-IN')}
+            ₹{userBalance.toLocaleString('en-IN')}
           </span>
         </button>
       </div>

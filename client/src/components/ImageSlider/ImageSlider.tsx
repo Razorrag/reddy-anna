@@ -100,7 +100,7 @@ const ImageSlider: React.FC = () => {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
                   <a
-                    href="/player-game"
+                    href="/game"
                     className="bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-gold-light hover:to-yellow-500 text-lg px-8 py-4 rounded-full font-semibold shadow-2xl hover:shadow-gold/30 transition-all duration-300 inline-flex items-center"
                   >
                     <svg className="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 20 20">

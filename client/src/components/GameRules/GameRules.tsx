@@ -1,5 +1,5 @@
 import React from 'react';
-import { getSectionClass, getCardClass } from '../ThemeUtils/ThemeUtils';
+import { getSectionClass, getCardClass } from '../../lib/theme-utils';
 
 const GameRules: React.FC = () => {
   return (

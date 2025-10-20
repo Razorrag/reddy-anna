@@ -14,8 +14,15 @@ const OpeningCardSection: React.FC = () => {
   // Card grid
   const suits = ['♠', '♥', '♦', '♣'];
   const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-  const allCards: Card[] = suits.flatMap(suit =>
-    ranks.map(value => ({ suit, value, display: `${value}${suit}` }))
+  const allCards: Card[] = suits.flatMap((suit) =>
+    ranks.map((rank, rankIndex) => ({
+      id: `${suit}-${rank}`,
+      suit: suit === '♠' || suit === '♣' ? 'spades' : suit === '♥' ? 'hearts' : suit === '♦' ? 'diamonds' : 'clubs',
+      rank,
+      value: rankIndex + 1,
+      color: (suit === '♥' || suit === '♦') ? 'red' as const : 'black' as const,
+      display: `${rank}${suit}`
+    }))
   );
 
   const handleCardSelect = (card: Card) => {

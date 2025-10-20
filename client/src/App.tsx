@@ -1,10 +1,8 @@
 import { Switch, Route } from "wouter";
 import Index from "@/pages/index.tsx";
 import PlayerGame from "@/pages/player-game.tsx";
-import AdminGame from "@/pages/admin-game.tsx";
 import Admin from "@/pages/admin.tsx";
 import AdminLogin from "@/pages/admin-login.tsx";
-import UserAdmin from "@/pages/user-admin.tsx";
 import Login from "@/pages/login.tsx";
 import Signup from "@/pages/signup.tsx";
 import NotFound from "@/pages/not-found.tsx";
@@ -24,7 +22,7 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/admin-login" component={AdminLogin} />
       
-      {/* Protected Player Routes */}
+      {/* Protected Player Routes - Single unified game page */}
       <Route path="/game">
         {() => (
           <ProtectedRoute component={PlayerGame}>
@@ -33,15 +31,7 @@ function Router() {
         )}
       </Route>
       
-      <Route path="/player-game">
-        {() => (
-          <ProtectedRoute component={PlayerGame}>
-            <PlayerGame />
-          </ProtectedRoute>
-        )}
-      </Route>
-      
-      {/* Protected Admin Routes */}
+      {/* Protected Admin Routes - Single consolidated admin interface */}
       <Route path="/admin">
         {() => (
           <ProtectedRoute component={Admin} role="admin">
@@ -50,27 +40,19 @@ function Router() {
         )}
       </Route>
       
+      {/* Legacy admin routes - redirect to main admin */}
       <Route path="/admin-game">
         {() => (
-          <ProtectedRoute component={AdminGame} role="admin">
-            <AdminGame />
-          </ProtectedRoute>
-        )}
-      </Route>
-      
-      {/* Alias route for game-admin */}
-      <Route path="/game-admin">
-        {() => (
-          <ProtectedRoute component={AdminGame} role="admin">
-            <AdminGame />
+          <ProtectedRoute component={Admin} role="admin">
+            <Admin />
           </ProtectedRoute>
         )}
       </Route>
       
       <Route path="/user-admin">
         {() => (
-          <ProtectedRoute component={UserAdmin} role="admin">
-            <UserAdmin />
+          <ProtectedRoute component={Admin} role="admin">
+            <Admin />
           </ProtectedRoute>
         )}
       </Route>

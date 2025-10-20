@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, EyeOff, Shield, AlertCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
-import apiClient from "@/lib/apiClient";
+// import { cn } from "@/lib/utils";
+import { apiClient } from "@/lib/api-client";
 
 export default function AdminLogin() {
   const [formData, setFormData] = useState({
@@ -24,7 +24,7 @@ export default function AdminLogin() {
 
     try {
       // Make real API call to login endpoint
-      const response = await apiClient.post('/api/auth/login', {
+      const response = await apiClient.post<any>('/api/auth/login', {
         username: formData.username,
         password: formData.password
       });

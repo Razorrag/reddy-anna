@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'wouter';
-import { getButtonClass, getGradientClass } from '../ThemeUtils/ThemeUtils';
+import { getButtonClass, getGradientClass } from '../../lib/theme-utils';
 
 const HeroSection: React.FC = () => {
   return (

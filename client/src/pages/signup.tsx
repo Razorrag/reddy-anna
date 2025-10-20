@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import apiClient from "@/lib/apiClient";
+import { apiClient } from "@/lib/api-client";
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -47,7 +47,7 @@ export default function Signup() {
 
     try {
       // Make real API call to signup endpoint
-      const response = await apiClient.post('/api/auth/signup', {
+      const response = await apiClient.post<any>('/api/auth/signup', {
         username: formData.username,
         password: formData.password
       });
@@ -60,7 +60,7 @@ export default function Signup() {
       const userData = {
         id: response.id,
         username: response.username,
-        balance: response.balance,
+        balance: response.balance || 10000,
         role: 'player'
       };
 

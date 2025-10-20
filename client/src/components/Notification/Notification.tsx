@@ -99,6 +99,32 @@ export const NotificationContainer: React.FC = () => {
   );
 };
 
+// Container component that accepts props for external notification management
+interface NotificationContainerProps {
+  notifications: Array<{ id: string; type: 'success' | 'error' | 'warning' | 'info'; message: string }>;
+  onRemove: (id: string) => void;
+}
+
+export const NotificationContainerExternal: React.FC<NotificationContainerProps> = ({ 
+  notifications, 
+  onRemove 
+}) => {
+  return (
+    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+      {notifications.map((notification) => (
+        <div key={notification.id} className="pointer-events-auto">
+          <Notification
+            id={notification.id}
+            message={notification.message}
+            type={notification.type}
+            onClose={onRemove}
+          />
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // Hook for easy notification usage
 export const useNotification = () => {
   const { addNotification } = useNotifications();

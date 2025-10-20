@@ -2,7 +2,7 @@ import React, { createContext, useContext, useCallback, useEffect, useState, Rea
 import { useGameState } from './GameStateContext';
 import { useNotification } from './NotificationContext';
 import type { Card, WebSocketMessage, ConnectionState, BetSide } from '@/types/game';
-import { handleComponentError } from '../lib/apiClient';
+import { handleComponentError } from '../lib/utils';
 
 // Validate WebSocket message structure
 const isValidWebSocketMessage = (data: any): data is WebSocketMessage => {
@@ -60,12 +60,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     clearCards
   } = useGameState();
   const { showNotification } = useNotification();
-  const [webSocketState, setWebSocketState] = useState<ConnectionState>({
+  const [connectionState, setConnectionState] = useState<ConnectionState>({
+    connected: false,
+    connecting: false,
     isConnected: false,
     isConnecting: false,
     connectionError: null,
     reconnectAttempts: 0,
-    maxReconnectAttempts: 5,
+    maxReconnectAttempts: 5
   });
   const [reconnectTimeout, setReconnectTimeout] = useState<NodeJS.Timeout | null>(null);
 
@@ -79,7 +81,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
     
-    setWebSocketState(prev => ({ ...prev, isConnecting: true, connectionError: null }));
+    setConnectionState(prev => ({ ...prev, connecting: true, isConnecting: true, connectionError: null }));
 
     try {
       // Use the dynamic URL function
@@ -88,12 +90,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       ws.onopen = () => {
         console.log('WebSocket connected successfully');
-        setWebSocketState({
+        setConnectionState({
+          connected: true,
+          connecting: false,
           isConnected: true,
           isConnecting: false,
           connectionError: null,
           reconnectAttempts: 0,
-          maxReconnectAttempts: 5,
+          maxReconnectAttempts: 5
         });
         (window as any).gameWebSocket = ws;
         
@@ -298,45 +302,46 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        setWebSocketState(prev => ({ ...prev, isConnected: false, isConnecting: false, connectionError: 'Connection failed' }));
-        showNotification('WebSocket connection failed', 'error');
+        setConnectionState(prev => ({ 
+          ...prev, 
+          connected: false, 
+          connecting: false, 
+          isConnected: false, 
+          isConnecting: false, 
+          connectionError: 'Connection failed' 
+        }));
       };
 
       ws.onclose = (event) => {
-        console.log('WebSocket disconnected:', event.code, event.reason);
-        setWebSocketState(prev => ({
-          ...prev,
-          isConnected: false,
-          isConnecting: false,
-          connectionError: event.code !== 1000 ? 'Connection closed unexpectedly' : null,
-        }));
+        console.log('WebSocket closed:', event.code, event.reason);
         
-        if (event.code === 1000) {
-          // Normal close, no reconnection
-          showNotification('Disconnected from game server', 'info');
-          return;
-        }
-        
-        // Attempt to reconnect with exponential backoff
-        setWebSocketState(prev => {
-          if (prev.reconnectAttempts >= prev.maxReconnectAttempts) {
-            showNotification('Failed to reconnect. Please refresh the page.', 'error');
-            return { ...prev, connectionError: 'Max reconnection attempts reached' };
+        setConnectionState(prev => {
+          const reconnectAttempts = prev.reconnectAttempts ?? 0;
+          const maxReconnectAttempts = prev.maxReconnectAttempts ?? 5;
+          const shouldReconnect = event.code !== 1000 && reconnectAttempts < maxReconnectAttempts;
+          
+          if (shouldReconnect) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff, max 30s
+            
+            console.log(`Attempting to reconnect in ${delay}ms...`);
+            
+            const timeout = setTimeout(() => {
+              console.log(`Reconnection attempt ${reconnectAttempts + 1}/${maxReconnectAttempts}`);
+              connectWebSocket();
+            }, delay);
+            
+            setReconnectTimeout(timeout);
+          } else {
+            showNotification('Disconnected from game server', 'error');
           }
-          
-          const delay = Math.min(1000 * Math.pow(2, prev.reconnectAttempts), 30000);
-          showNotification(`Reconnecting in ${delay / 1000} seconds...`, 'info');
-          
-          const timeout = setTimeout(() => {
-            console.log(`Reconnection attempt ${prev.reconnectAttempts + 1}/${prev.maxReconnectAttempts}`);
-            connectWebSocket();
-          }, delay);
-          
-          setReconnectTimeout(timeout);
           
           return {
             ...prev,
-            reconnectAttempts: prev.reconnectAttempts + 1,
+            connected: false,
+            connecting: false,
+            isConnected: false,
+            isConnecting: false,
+            reconnectAttempts: shouldReconnect ? reconnectAttempts + 1 : reconnectAttempts,
           };
         });
       };
@@ -345,10 +350,15 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       (window as any).gameWebSocket = ws;
     } catch (connectionError) {
       console.error('Failed to initialize WebSocket:', connectionError);
-      setWebSocketState(prev => ({ ...prev, isConnecting: false, connectionError: 'Initialization failed' }));
+      setConnectionState(prev => ({ 
+        ...prev, 
+        connecting: false, 
+        isConnecting: false, 
+        connectionError: 'Initialization failed' 
+      }));
       showNotification('Failed to initialize WebSocket connection', 'error');
     }
-  }, [setPhase, setCountdown, setWinner, addAndarCard, addBaharCard, setSelectedOpeningCard, updateTotalBets, setCurrentRound, addDealtCard, showNotification]);
+  }, [setPhase, setCountdown, setWinner, addAndarCard, addBaharCard, setSelectedOpeningCard, updateTotalBets, setCurrentRound, addDealtCard, showNotification, reconnectTimeout]);
 
   const disconnectWebSocket = useCallback(() => {
     const ws = (window as any).gameWebSocket;
@@ -448,7 +458,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (ws && ws.readyState === WebSocket.OPEN) {
       const messageWithTimestamp: WebSocketMessage = {
         ...message,
-        timestamp: message.timestamp || Date.now()
+        timestamp: message.timestamp || new Date()
       };
       ws.send(JSON.stringify(messageWithTimestamp));
       console.log('Sent WebSocket message:', messageWithTimestamp.type);
@@ -465,7 +475,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     placeBet,
     connectWebSocket,
     disconnectWebSocket,
-    connectionState: webSocketState,
+    connectionState,
   };
 
   return (
