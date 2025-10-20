@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useCallback, useEffect, useState, ReactNode } from 'react';
 import { useGameState } from './GameStateContext';
 import { useNotification } from './NotificationContext';
-import type { Card, WebSocketMessage, ConnectionState, BetSide, DealtCard } from '@/types/game';
-import apiClient, { handleComponentError } from '../lib/apiClient';
+import type { Card, WebSocketMessage, ConnectionState, BetSide } from '@/types/game';
+import { handleComponentError } from '../lib/apiClient';
 
 // Validate WebSocket message structure
 const isValidWebSocketMessage = (data: any): data is WebSocketMessage => {
@@ -41,16 +41,6 @@ const getWebSocketUrl = (): string => {
   return process.env.WEBSOCKET_URL || 'ws://localhost:5000/ws';
 };
 
-const getApiBaseUrl = (): string => {
-  if (typeof window !== 'undefined') {
-    // Use the same origin as the frontend
-    return '';
-  }
-  // Server environment
-  return process.env.API_BASE_URL || 'http://localhost:5000';
-};
-
-
 export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { 
     gameState, 
@@ -67,8 +57,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     updatePlayerRoundBets,
     updateRoundBets,
     resetBettingData,
-    clearCards,
-    setWinningCard
+    clearCards
   } = useGameState();
   const { showNotification } = useNotification();
   const [webSocketState, setWebSocketState] = useState<ConnectionState>({

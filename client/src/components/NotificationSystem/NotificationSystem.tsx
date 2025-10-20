@@ -6,7 +6,7 @@ const NotificationSystem: React.FC = () => {
   
   return (
     <div className="fixed top-4 right-4 z-[1000] space-y-2">
-      {notifications.map((notification, index) => (
+              {notifications.map((notification) => (
         <div 
           key={notification.id}
           className={`

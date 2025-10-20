@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'wouter';
+import { getButtonClass, getGradientClass } from '../ThemeUtils/ThemeUtils';
 
 const HeroSection: React.FC = () => {
   return (
@@ -7,7 +8,7 @@ const HeroSection: React.FC = () => {
       {/* Background Video or Image Slider */}
       <div className="absolute inset-0 z-0">
         {/* Placeholder for video background */}
-        <div className="w-full h-full bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
+        <div className={`w-full h-full ${getGradientClass()} flex items-center justify-center`}>
           <div className="text-center">
             <div className="text-5xl font-bold text-gold mb-4">ANDAR BAHAR</div>
             <div className="text-xl text-white mb-8">India's Premier Card Game Experience</div>
@@ -26,7 +27,7 @@ const HeroSection: React.FC = () => {
         <div className="flex flex-col sm:flex-row justify-center gap-4">
           <Link 
             to="/player-game" 
-            className="px-8 py-4 bg-gold text-black text-lg font-bold rounded-full hover:bg-yellow-400 transition-colors duration-200 shadow-lg"
+            className={getButtonClass('primary')}
           >
             Start Playing
           </Link>

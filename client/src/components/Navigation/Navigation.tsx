@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'wouter';
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils';
+import { useApp } from '../../contexts/AppContext';
+import { getNavigationClass, getButtonClass } from '../ThemeUtils/ThemeUtils';
 
 interface NavigationProps {
   isScrolled?: boolean;
@@ -9,6 +11,7 @@ interface NavigationProps {
 const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('');
+  const { state } = useApp();
 
   // Handle scroll to update active section
   useEffect(() => {
@@ -45,12 +48,7 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
   };
 
   return (
-    <nav className={cn(
-      "fixed top-0 left-0 w-full z-50 transition-all duration-300",
-      isScrolled 
-        ? "bg-black/90 backdrop-blur-md py-2.5 shadow-lg" 
-        : "bg-transparent py-4"
-    )}>
+    <nav className={getNavigationClass(isScrolled)}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center">
           {/* Logo */}
@@ -94,18 +92,42 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
             >
               Contact
             </button>
-            <Link 
-              to="/login" 
-              className="px-4 py-2 bg-gold text-black rounded-full font-semibold hover:bg-yellow-400 transition-colors duration-200"
-            >
-              Login
-            </Link>
-            <Link 
-              to="/signup" 
-              className="px-4 py-2 bg-white text-black rounded-full font-semibold hover:bg-gray-200 transition-colors duration-200"
-            >
-              Sign Up
-            </Link>
+            {state.isAuthenticated ? (
+              <>
+                <Link 
+                  to="/game" 
+                  className={getButtonClass('primary')}
+                >
+                  Play Game
+                </Link>
+                {state.user?.role === 'admin' && (
+                  <Link 
+                    to="/admin" 
+                    className={getButtonClass('secondary')}
+                  >
+                    Admin Panel
+                  </Link>
+                )}
+                <span className="text-white">
+                  Welcome, {state.user?.name || 'Player'}
+                </span>
+              </>
+            ) : (
+              <>
+                <Link 
+                  to="/login" 
+                  className={getButtonClass('primary')}
+                >
+                  Login
+                </Link>
+                <Link 
+                  to="/signup" 
+                  className={getButtonClass('secondary')}
+                >
+                  Sign Up
+                </Link>
+              </>
+            )}
           </div>
           
           {/* Mobile menu button */}
@@ -172,13 +194,13 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
               </button>
               <Link 
                 to="/login" 
-                className="px-4 py-2 bg-gold text-black rounded-full font-semibold hover:bg-yellow-400 transition-colors duration-200 text-center"
+                className={getButtonClass('primary')}
               >
                 Login
               </Link>
               <Link 
                 to="/signup" 
-                className="px-4 py-2 bg-white text-black rounded-full font-semibold hover:bg-gray-200 transition-colors duration-200 text-center"
+                className={getButtonClass('secondary')}
               >
                 Sign Up
               </Link>

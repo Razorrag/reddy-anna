@@ -1,11 +1,46 @@
+// Enhanced Server Routes with Complete Backend Integration
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage"; // Using local memory storage for development
-import { insertBetSchema, insertGameHistorySchema } from "@shared/schema";
-import { z } from "zod";
-import { hashPassword, comparePassword, validatePassword, validateUsername } from "./lib/auth";
-import { authLimiter, betLimiter, apiLimiter } from "./middleware/rateLimiter";
+import { storage } from "./storage";
+import { 
+  registerUser, 
+  loginUser, 
+  loginAdmin,
+  generateToken,
+  verifyToken
+} from './auth';
+import { processPayment, getTransactionHistory } from './payment';
+import { 
+  updateSiteContent, 
+  getSiteContent, 
+  updateSystemSettings, 
+  getSystemSettings 
+} from './content-management';
+import { 
+  updateUserProfile, 
+  getUserDetails, 
+  getUserGameHistory, 
+  getAllUsers, 
+  updateUserStatus, 
+  updateUserBalance,
+  getUserStatistics,
+  getReferredUsers,
+  bulkUpdateUserStatus,
+  exportUserData
+} from './user-management';
+import { 
+  authLimiter, 
+  generalLimiter, 
+  apiLimiter,
+  paymentLimiter,
+  gameLimiter,
+  securityMiddleware,
+  validateAdminAccess,
+  validateInput,
+  auditLogger
+} from './security';
+import { validateUserData } from './validation';
 
 // WebSocket client tracking
 interface WSClient {
@@ -17,42 +52,23 @@ interface WSClient {
 
 const clients = new Set<WSClient>();
 
-// WebSocket bet rate limiting - prevent spam betting
+// WebSocket bet rate limiting
 interface BetRateLimit {
   count: number;
   resetTime: number;
 }
 const userBetRateLimits = new Map<string, BetRateLimit>();
 
-// Standardized game phases - matches frontend exactly
+// Game phases
 type GamePhase = 'idle' | 'betting' | 'dealing' | 'complete';
 
-// Ensure consistent broadcast function with timestamp
-function broadcast(message: any, excludeClient?: WSClient) {
-  const messageStr = JSON.stringify({...message, timestamp: Date.now()});
-  clients.forEach(client => {
-    if (client !== excludeClient && client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(messageStr);
-    }
-  });
-}
-
-// Broadcast to specific role
-function broadcastToRole(message: any, role: 'player' | 'admin') {
-  const messageStr = JSON.stringify({...message, timestamp: Date.now()});
-  clients.forEach(client => {
-    if (client.role === role && client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(messageStr);
-    }
-  });
-}
-
-// Game state management with user bet tracking
+// User bets tracking
 interface UserBets {
   round1: { andar: number; bahar: number };
   round2: { andar: number; bahar: number };
 }
 
+// Game state management
 let currentGameState = {
   gameId: 'default-game',
   openingCard: null as string | null,
@@ -65,21 +81,39 @@ let currentGameState = {
   winningCard: null as string | null,
   round1Bets: { andar: 0, bahar: 0 },
   round2Bets: { andar: 0, bahar: 0 },
-  userBets: new Map<string, UserBets>(), // Track individual user bets
+  userBets: new Map<string, UserBets>(),
   timerInterval: null as NodeJS.Timeout | null,
-  bettingLocked: false // Prevent bets after timer expires
+  bettingLocked: false
 };
 
-// Timer management - backend as source of truth
+// WebSocket broadcast functions
+function broadcast(message: any, excludeClient?: WSClient) {
+  const messageStr = JSON.stringify({...message, timestamp: Date.now()});
+  clients.forEach(client => {
+    if (client !== excludeClient && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(messageStr);
+    }
+  });
+}
+
+function broadcastToRole(message: any, role: 'player' | 'admin') {
+  const messageStr = JSON.stringify({...message, timestamp: Date.now()});
+  clients.forEach(client => {
+    if (client.role === role && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(messageStr);
+    }
+  });
+}
+
+// Timer management
 function startTimer(duration: number, onComplete: () => void) {
   if (currentGameState.timerInterval) {
     clearInterval(currentGameState.timerInterval);
   }
   
   currentGameState.timer = duration;
-  currentGameState.bettingLocked = false; // Unlock betting when timer starts
+  currentGameState.bettingLocked = false;
   
-  // Broadcast initial timer value immediately for instant sync
   broadcast({
     type: 'timer_update',
     data: {
@@ -92,7 +126,6 @@ function startTimer(duration: number, onComplete: () => void) {
   currentGameState.timerInterval = setInterval(() => {
     currentGameState.timer--;
     
-    // Broadcast timer update to all clients
     broadcast({
       type: 'timer_update',
       data: {
@@ -108,229 +141,71 @@ function startTimer(duration: number, onComplete: () => void) {
         currentGameState.timerInterval = null;
       }
       
-      // Lock betting when timer expires
       currentGameState.bettingLocked = true;
-      
-      // Execute completion callback
       onComplete();
     }
   }, 1000);
 }
 
-// Check for winner
+// Game logic functions
 function checkWinner(card: string): boolean {
   if (!currentGameState.openingCard) return false;
   
-  // Extract rank from card (e.g., "7♥" → "7")
   const cardRank = card.replace(/[♠♥♦♣]/g, '');
   const openingRank = currentGameState.openingCard.replace(/[♠♥♦♣]/g, '');
   
   return cardRank === openingRank;
 }
 
-// Calculate payouts based on round - matches exact game requirements
 function calculatePayout(
   round: number,
   winner: 'andar' | 'bahar',
   playerBets: { round1: { andar: number; bahar: number }, round2: { andar: number; bahar: number } }
 ): number {
   if (round === 1) {
-    // Round 1: Andar wins = 1:1 (double money), Bahar wins = 1:0 (refund only)
     if (winner === 'andar') {
-      return playerBets.round1.andar * 2; // 1:1 payout (stake + winnings)
+      return playerBets.round1.andar * 2;
     } else {
-      return playerBets.round1.bahar; // Refund only (stake back)
+      return playerBets.round1.bahar;
     }
   } else if (round === 2) {
-    // Round 2: Andar wins = ALL bets (R1+R2) paid 1:1
-    //          Bahar wins = R1 bets paid 1:1, R2 bets refunded
     if (winner === 'andar') {
       const totalAndar = playerBets.round1.andar + playerBets.round2.andar;
-      return totalAndar * 2; // ALL bets paid 1:1
+      return totalAndar * 2;
     } else {
-      const round1Payout = playerBets.round1.bahar * 2; // R1 paid 1:1
-      const round2Refund = playerBets.round2.bahar; // R2 refund only
+      const round1Payout = playerBets.round1.bahar * 2;
+      const round2Refund = playerBets.round2.bahar;
       return round1Payout + round2Refund;
     }
   } else {
-    // Round 3 (Continuous Draw): BOTH sides paid 1:1 on total invested (R1+R2)
     const totalBet = playerBets.round1[winner] + playerBets.round2[winner];
-    return totalBet * 2; // 1:1 payout on total
+    return totalBet * 2;
   }
 }
 
-// Auto-transition to Round 2
-async function transitionToRound2() {
-  console.log('Auto-transitioning to Round 2...');
-  
-  currentGameState.currentRound = 2;
-  currentGameState.phase = 'betting';
-  currentGameState.bettingLocked = false; // Unlock betting for Round 2
-  
-  // Update database
-  await storage.updateGameSession(currentGameState.gameId, {
-    phase: 'betting',
-    round: 2,
-    currentTimer: 30
-  });
-  
-  // Broadcast round 2 start to all clients
-  broadcast({
-    type: 'start_round_2',
-    data: {
-      gameId: currentGameState.gameId,
-      round: 2,
-      timer: 30,
-      round1Bets: currentGameState.round1Bets,
-      message: 'Round 2 betting started!'
-    }
-  });
-  
-  // Start Round 2 timer (30 seconds)
-  startTimer(30, async () => {
-    currentGameState.phase = 'dealing';
-    currentGameState.bettingLocked = true;
-    
-    // Update database
-    await storage.updateGameSession(currentGameState.gameId, {
-      phase: 'dealing',
-      round: 2
-    });
-    
-    broadcast({
-      type: 'phase_change',
-      data: { 
-        phase: 'dealing', 
-        round: 2,
-        message: 'Round 2 betting closed. Admin will deal cards.' 
-      }
-    });
-  });
-}
+// Authentication middleware
+const authenticateToken = (req: any, res: any, next: any) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
-// Auto-transition to Round 3 (Continuous Draw)
-async function transitionToRound3() {
-  console.log('Auto-transitioning to Round 3 (Continuous Draw)...');
-  
-  currentGameState.currentRound = 3;
-  currentGameState.phase = 'dealing';
-  currentGameState.bettingLocked = true; // Lock all betting permanently
-  currentGameState.timer = 0; // No timer in Round 3
-  
-  // Update database
-  await storage.updateGameSession(currentGameState.gameId, {
-    phase: 'dealing',
-    round: 3,
-    currentTimer: 0
-  });
-  
-  // Broadcast final draw start to all clients
-  broadcast({
-    type: 'start_final_draw',
-    data: {
-      gameId: currentGameState.gameId,
-      round: 3,
-      round1Bets: currentGameState.round1Bets,
-      round2Bets: currentGameState.round2Bets,
-      message: 'Round 3: Continuous draw started!'
-    }
-  });
-}
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Access token required' });
+  }
 
-// Complete game and distribute payouts
-async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
-  console.log(`Game complete! Winner: ${winner}, Card: ${winningCard}, Round: ${currentGameState.currentRound}`);
-  
-  currentGameState.winner = winner;
-  currentGameState.winningCard = winningCard;
-  currentGameState.phase = 'complete';
-  currentGameState.bettingLocked = true;
-  
-  // Clear timer if running
-  if (currentGameState.timerInterval) {
-    clearInterval(currentGameState.timerInterval);
-    currentGameState.timerInterval = null;
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    return res.status(403).json({ success: false, error: 'Invalid or expired token' });
   }
-  
-  // Update database
-  await storage.updateGameSession(currentGameState.gameId, {
-    phase: 'complete',
-    winner,
-    winningCard,
-    winningRound: currentGameState.currentRound,
-    status: 'completed'
-  });
-  
-  // Calculate and distribute payouts using in-memory userBets
-  const payouts: Record<string, number> = {};
-  
-  for (const [userId, bets] of Array.from(currentGameState.userBets.entries())) {
-    const payout = calculatePayout(currentGameState.currentRound, winner, bets);
-    payouts[userId] = payout;
-    
-    // Update user balance
-    if (payout > 0) {
-      await storage.updateUserBalance(userId, payout);
-      
-      // Update bet status to won
-      await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, winner, 'won');
-    } else {
-      // Update bet status to lost
-      const loserSide = winner === 'andar' ? 'bahar' : 'andar';
-      await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, loserSide, 'lost');
-    }
-    
-    // Send updated balance to each player
-    const updatedUser = await storage.getUserById(userId);
-    if (updatedUser) {
-      // Find client and send balance update
-      clients.forEach(client => {
-        if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
-          client.ws.send(JSON.stringify({
-            type: 'balance_update',
-            data: { balance: updatedUser.balance }
-          }));
-          
-          // Send payout details
-          client.ws.send(JSON.stringify({
-            type: 'payout_received',
-            data: {
-              amount: payout,
-              winner,
-              round: currentGameState.currentRound,
-              yourBets: bets
-            }
-          }));
-        }
-      });
-    }
-  }
-  
-  // Broadcast game completion to all clients
-  broadcast({
-    type: 'game_complete',
-    data: {
-      winner: currentGameState.winner,
-      winningCard: currentGameState.winningCard,
-      andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
-      baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
-      message: `Game completed! ${currentGameState.winner} wins!`
-    }
-  });
-  
-  // Save to game history
-  await storage.saveGameHistory({
-    gameId: currentGameState.gameId,
-    openingCard: currentGameState.openingCard!,
-    winner,
-    winningCard,
-    totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
-    round: currentGameState.currentRound
-  });
-}
+
+  req.user = decoded;
+  next();
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
+  
+  // Apply security middleware
+  app.use(securityMiddleware);
   
   // WebSocket server setup
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
@@ -348,7 +223,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         switch (message.type) {
           case 'authenticate':
           case 'connection':
-            // Register client
             client = {
               ws,
               userId: message.data?.userId || 'anonymous',
@@ -357,19 +231,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
             clients.add(client);
             
-            // Send confirmation
             ws.send(JSON.stringify({
               type: 'authenticated',
               data: { userId: client.userId, role: client.role, wallet: client.wallet }
             }));
             
-            // Get user-specific bets if they exist
             const userBets = currentGameState.userBets.get(client.userId) || {
               round1: { andar: 0, bahar: 0 },
               round2: { andar: 0, bahar: 0 }
             };
             
-            // Send current game state with user-specific data
             ws.send(JSON.stringify({
               type: 'sync_game_state',
               data: {
@@ -396,7 +267,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           case 'opening_card_set':
           case 'opening_card_confirmed':
           case 'game_start':
-            // Validate admin role
             if (!client || client.role !== 'admin') {
               ws.send(JSON.stringify({
                 type: 'error',
@@ -405,7 +275,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            // Set opening card and start Round 1
             currentGameState.openingCard = message.data.openingCard?.display || message.data.openingCard;
             currentGameState.phase = 'betting';
             currentGameState.currentRound = 1;
@@ -415,10 +284,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentGameState.winningCard = null;
             currentGameState.round1Bets = { andar: 0, bahar: 0 };
             currentGameState.round2Bets = { andar: 0, bahar: 0 };
-            currentGameState.userBets = new Map<string, UserBets>(); // Reset user bets
-            currentGameState.bettingLocked = false; // Unlock betting for new game
+            currentGameState.userBets = new Map<string, UserBets>();
+            currentGameState.bettingLocked = false;
             
-            // Save to database
             const newGame = await storage.createGameSession({
               openingCard: currentGameState.openingCard,
               phase: 'betting',
@@ -427,7 +295,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             currentGameState.gameId = newGame.gameId;
             
-            // Broadcast game start to all clients
             broadcast({ 
               type: 'opening_card_confirmed',
               data: { 
@@ -438,13 +305,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             });
             
-            // Start Round 1 timer
             const timerDuration = message.data.timer || 30;
             startTimer(timerDuration, async () => {
               currentGameState.phase = 'dealing';
               currentGameState.bettingLocked = true;
               
-              // Update database
               await storage.updateGameSession(currentGameState.gameId, {
                 phase: 'dealing',
                 round: 1
@@ -474,7 +339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const betSide = message.data.side;
             const betRound = currentGameState.currentRound;
             
-            // Rate limiting: Max 30 bets per minute per user
+            // Rate limiting
             const now = Date.now();
             const userLimit = userBetRateLimits.get(client.userId);
             
@@ -488,14 +353,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
               userLimit.count++;
             } else {
-              // Reset or initialize rate limit
               userBetRateLimits.set(client.userId, { 
                 count: 1, 
-                resetTime: now + 60000 // 1 minute
+                resetTime: now + 60000
               });
             }
             
-            // Validate bet amount (schema limits: 1000-50000)
+            // Validation
             if (!betAmount || betAmount < 1000 || betAmount > 50000) {
               ws.send(JSON.stringify({
                 type: 'error',
@@ -504,7 +368,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            // Validate bet side
             if (betSide !== 'andar' && betSide !== 'bahar') {
               ws.send(JSON.stringify({
                 type: 'error',
@@ -513,8 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            // Validate betting phase
-            if (currentGameState.phase !== 'betting') {
+            if (currentGameState.phase !== 'betting' || currentGameState.bettingLocked) {
               ws.send(JSON.stringify({
                 type: 'error',
                 data: { message: 'Betting is closed' }
@@ -522,16 +384,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            // Validate betting not locked
-            if (currentGameState.bettingLocked) {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Betting time has expired' }
-              }));
-              break;
-            }
-            
-            // Validate round 3 cannot accept bets
             if (betRound === 3) {
               ws.send(JSON.stringify({
                 type: 'error',
@@ -540,7 +392,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            // Check user has sufficient balance
             const currentUser = await storage.getUserById(client.userId);
             if (!currentUser || currentUser.balance < betAmount) {
               ws.send(JSON.stringify({
@@ -550,7 +401,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            // Initialize user bets if not exists
             if (!currentGameState.userBets.has(client.userId)) {
               currentGameState.userBets.set(client.userId, {
                 round1: { andar: 0, bahar: 0 },
@@ -558,7 +408,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
             }
             
-            // Save bet to database
             await storage.createBet({
               userId: client.userId,
               gameId: currentGameState.gameId,
@@ -568,7 +417,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               status: 'pending'
             });
             
-            // Update user-specific bet tracking
             const userBet = currentGameState.userBets.get(client.userId)!;
             if (betRound === 1) {
               userBet.round1[betSide as 'andar' | 'bahar'] += betAmount;
@@ -578,10 +426,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               currentGameState.round2Bets[betSide as 'andar' | 'bahar'] += betAmount;
             }
             
-            // Deduct from user balance
             await storage.updateUserBalance(client.userId, -betAmount);
             
-            // Get updated balance and send to client
             const updatedUser = await storage.getUserById(client.userId);
             if (updatedUser) {
               ws.send(JSON.stringify({
@@ -589,7 +435,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 data: { balance: updatedUser.balance }
               }));
               
-              // Send user's locked bets from previous rounds
               ws.send(JSON.stringify({
                 type: 'user_bets_update',
                 data: {
@@ -600,7 +445,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }));
             }
             
-            // Broadcast updated betting stats to all clients
             broadcast({ 
               type: 'betting_stats',
               data: {
@@ -614,7 +458,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           case 'card_dealt':
           case 'deal_card':
-            // Validate admin role
             if (!client || client.role !== 'admin') {
               ws.send(JSON.stringify({
                 type: 'error',
@@ -627,14 +470,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const side = message.data.side;
             const position = message.data.position || (side === 'bahar' ? currentGameState.baharCards.length + 1 : currentGameState.andarCards.length + 1);
             
-            // Add card to appropriate side
             if (side === 'andar') {
               currentGameState.andarCards.push(card);
             } else {
               currentGameState.baharCards.push(card);
             }
             
-            // Save to database
             await storage.createDealtCard({
               gameId: currentGameState.gameId,
               card,
@@ -643,30 +484,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
               isWinningCard: false
             });
             
-            // Check for winner
             const isWinner = checkWinner(card);
             
-            // Broadcast card dealing to all clients
             broadcast({ 
               type: 'card_dealt', 
               data: { 
                 card: { display: card, value: card.replace(/[♠♥♦♣]/g, ''), suit: card.match(/[♠♥♦♣]/)?.[0] || '' },
                 side,
                 position,
-                isWinningCard: checkWinner(card)
+                isWinningCard: isWinner
               }
             });
             
             if (isWinner) {
-              // Winner found!
               await completeGame(side as 'andar' | 'bahar', card);
             } else {
-              // Check if round is complete
               const roundComplete = (currentGameState.currentRound === 1 && currentGameState.andarCards.length === 1 && currentGameState.baharCards.length === 1) ||
                                    (currentGameState.currentRound === 2 && currentGameState.andarCards.length === 2 && currentGameState.baharCards.length === 2);
               
               if (roundComplete) {
-                // Auto-transition to next round
                 if (currentGameState.currentRound === 1) {
                   setTimeout(() => transitionToRound2(), 2000);
                 } else if (currentGameState.currentRound === 2) {
@@ -676,32 +512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             break;
           
-          case 'start_round_2':
-            // Validate admin role
-            if (!client || client.role !== 'admin') {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Admin privileges required' }
-              }));
-              break;
-            }
-            await transitionToRound2();
-            break;
-          
-          case 'start_final_draw':
-            // Validate admin role
-            if (!client || client.role !== 'admin') {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Admin privileges required' }
-              }));
-              break;
-            }
-            await transitionToRound3();
-            break;
-          
           case 'game_reset':
-            // Validate admin role
             if (!client || client.role !== 'admin') {
               ws.send(JSON.stringify({
                 type: 'error',
@@ -709,13 +520,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }));
               break;
             }
-            // Clear timer
+            
             if (currentGameState.timerInterval) {
               clearInterval(currentGameState.timerInterval);
               currentGameState.timerInterval = null;
             }
             
-            // Reset game state
             currentGameState = {
               gameId: `game-${Date.now()}`,
               openingCard: null,
@@ -733,7 +543,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               bettingLocked: false
             };
             
-            // Broadcast game reset to all clients
             broadcast({
               type: 'game_reset',
               data: {
@@ -741,13 +550,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             });
             break;
-          
-          case 'timer_update':
-            // Ignore - this is sent by server, not received from clients
-            break;
-          
-          default:
-            console.log('Unknown message type:', message.type);
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
@@ -777,105 +579,422 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // REST API Routes
   
-  // Auth routes
-  app.post("/api/auth/signup", authLimiter, async (req, res) => {
+  // Authentication Routes
+  app.post("/api/auth/register", authLimiter, async (req, res) => {
     try {
-      const { username, password } = req.body;
-      
-      // Validate inputs
-      const usernameError = validateUsername(username);
-      if (usernameError) {
-        return res.status(400).json({ error: usernameError });
+      const validation = validateUserData(req.body);
+      if (!validation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: validation.errors
+        });
       }
       
-      const passwordError = validatePassword(password);
-      if (passwordError) {
-        return res.status(400).json({ error: passwordError });
+      const result = await registerUser(req.body);
+      if (result.success) {
+        auditLogger('user_registration', result.user?.id, { ip: req.ip });
+        res.status(201).json({
+          success: true,
+          user: result.user,
+          token: result.token
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: result.error
+        });
       }
-      
-      // Check if user exists
-      const existingUser = await storage.getUserByUsername(username);
-      if (existingUser) {
-        return res.status(400).json({ error: "Username already exists" });
-      }
-      
-      // Hash password and create user
-      const hashedPassword = await hashPassword(password);
-      const user = await storage.createUser({
-        username,
-        password: hashedPassword,
-      });
-      
-      // Set session
-      (req.session as any).userId = user.id;
-      (req.session as any).username = user.username;
-      (req.session as any).balance = user.balance;
-      
-      res.json({
-        id: user.id,
-        username: user.username,
-        balance: user.balance,
-      });
     } catch (error) {
-      console.error("Signup error:", error);
-      res.status(500).json({ error: "Failed to create account" });
+      console.error('Registration error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
     }
   });
   
   app.post("/api/auth/login", authLimiter, async (req, res) => {
     try {
-      const { username, password } = req.body;
+      const { email, password } = req.body;
       
-      const user = await storage.getUserByUsername(username);
-      if (!user) {
-        return res.status(401).json({ error: "Invalid credentials" });
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email and password are required'
+        });
       }
       
-      const isValid = await comparePassword(password, user.password);
-      if (!isValid) {
-        return res.status(401).json({ error: "Invalid credentials" });
+      const result = await loginUser(email, password);
+      if (result.success) {
+        auditLogger('user_login', result.user?.id, { ip: req.ip });
+        res.json({
+          success: true,
+          user: result.user,
+          token: result.token
+        });
+      } else {
+        res.status(401).json({
+          success: false,
+          error: result.error
+        });
       }
-      
-      // Set session
-      (req.session as any).userId = user.id;
-      (req.session as any).username = user.username;
-      (req.session as any).balance = user.balance;
-      
-      res.json({
-        id: user.id,
-        username: user.username,
-        balance: user.balance,
-      });
     } catch (error) {
-      console.error("Login error:", error);
-      res.status(500).json({ error: "Failed to login" });
+      console.error('Login error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
     }
   });
   
-  app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ error: "Failed to logout" });
+  app.post("/api/auth/admin/login", authLimiter, async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email and password are required'
+        });
       }
-      res.json({ success: true });
-    });
-  });
-  
-  app.get("/api/auth/me", (req, res) => {
-    const session = req.session as any;
-    if (!session.userId) {
-      return res.status(401).json({ error: "Not authenticated" });
+      
+      const result = await loginAdmin(email, password);
+      if (result.success) {
+        auditLogger('admin_login', result.admin?.id, { ip: req.ip });
+        res.json({
+          success: true,
+          admin: result.admin,
+          token: result.token
+        });
+      } else {
+        res.status(401).json({
+          success: false,
+          error: result.error
+        });
+      }
+    } catch (error) {
+      console.error('Admin login error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
     }
-    
-    res.json({
-      id: session.userId,
-      username: session.username,
-      balance: session.balance,
-    });
   });
   
-  // Game routes
-  app.get("/api/game/current", async (req, res) => {
+  // Protected Routes (require authentication)
+  app.use("/api/*", authenticateToken);
+  
+  // Payment Routes
+  app.post("/api/payment/process", paymentLimiter, async (req, res) => {
+    try {
+      const { userId, amount, method, type } = req.body;
+      
+      if (!userId || !amount || !method || !type) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required payment parameters'
+        });
+      }
+      
+      // Verify user has permission
+      if (!req.user || (req.user.id !== userId && req.user.role !== 'admin')) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+      
+      const result = await processPayment({ userId, amount, method, type });
+      auditLogger('payment_processed', userId, { amount, type, method: method.type });
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Payment processing error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Payment processing failed'
+      });
+    }
+  });
+  
+  app.get("/api/payment/history/:userId", apiLimiter, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { type, status, fromDate, toDate } = req.query;
+      
+      if (!req.user || (req.user.id !== userId && req.user.role !== 'admin')) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+      
+      const filters: any = {};
+      if (type) filters.type = type;
+      if (status) filters.status = status;
+      if (fromDate) filters.fromDate = new Date(fromDate as string);
+      if (toDate) filters.toDate = new Date(toDate as string);
+      
+      const result = await getTransactionHistory(userId, filters);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Transaction history error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Transaction history retrieval failed'
+      });
+    }
+  });
+  
+  // Content Management Routes
+  app.get("/api/content", generalLimiter, async (req, res) => {
+    try {
+      const result = await getSiteContent();
+      res.json(result);
+    } catch (error) {
+      console.error('Content retrieval error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Content retrieval failed'
+      });
+    }
+  });
+  
+  app.put("/api/admin/content", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const result = await updateSiteContent(req.body, req.user!.id);
+      auditLogger('content_update', req.user!.id, { updates: Object.keys(req.body) });
+      res.json(result);
+    } catch (error) {
+      console.error('Content update error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Content update failed'
+      });
+    }
+  });
+  
+  app.get("/api/admin/settings", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const result = await getSystemSettings();
+      res.json(result);
+    } catch (error) {
+      console.error('Settings retrieval error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Settings retrieval failed'
+      });
+    }
+  });
+  
+  app.put("/api/admin/settings", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const result = await updateSystemSettings(req.body, req.user!.id);
+      auditLogger('settings_update', req.user!.id, { settings: Object.keys(req.body) });
+      res.json(result);
+    } catch (error) {
+      console.error('Settings update error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Settings update failed'
+      });
+    }
+  });
+  
+  // User Management Routes
+  app.get("/api/user/profile", generalLimiter, async (req, res) => {
+    try {
+      const result = await getUserDetails(req.user!.id);
+      res.json(result);
+    } catch (error) {
+      console.error('User details error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'User details retrieval failed'
+      });
+    }
+  });
+  
+  app.put("/api/user/profile", generalLimiter, async (req, res) => {
+    try {
+      const result = await updateUserProfile(req.user!.id, req.body);
+      auditLogger('profile_update', req.user!.id, { updates: Object.keys(req.body) });
+      res.json(result);
+    } catch (error) {
+      console.error('Profile update error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Profile update failed'
+      });
+    }
+  });
+  
+  app.get("/api/user/game-history", generalLimiter, async (req, res) => {
+    try {
+      const { fromDate, toDate, limit, offset, type, result } = req.query;
+      
+      const filters: any = {};
+      if (fromDate) filters.fromDate = new Date(fromDate as string);
+      if (toDate) filters.toDate = new Date(toDate as string);
+      if (limit) filters.limit = parseInt(limit as string);
+      if (offset) filters.offset = parseInt(offset as string);
+      if (type) filters.type = type;
+      if (result) filters.result = result;
+      
+      const result_data = await getUserGameHistory(req.user!.id, filters);
+      res.json(result_data);
+    } catch (error) {
+      console.error('Game history error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Game history retrieval failed'
+      });
+    }
+  });
+  
+  // Admin User Management Routes
+  app.get("/api/admin/users", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const { status, search, limit, offset, sortBy, sortOrder } = req.query;
+      
+      const filters: any = {};
+      if (status) filters.status = status;
+      if (search) filters.search = search as string;
+      if (limit) filters.limit = parseInt(limit as string);
+      if (offset) filters.offset = parseInt(offset as string);
+      if (sortBy) filters.sortBy = sortBy as string;
+      if (sortOrder) filters.sortOrder = sortOrder as string;
+      
+      const result = await getAllUsers(filters);
+      res.json(result);
+    } catch (error) {
+      console.error('Users retrieval error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Users retrieval failed'
+      });
+    }
+  });
+  
+  app.get("/api/admin/users/:userId", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const result = await getUserDetails(userId);
+      res.json(result);
+    } catch (error) {
+      console.error('User details error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'User details retrieval failed'
+      });
+    }
+  });
+  
+  app.patch("/api/admin/users/:userId/status", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { status, reason } = req.body;
+      
+      const result = await updateUserStatus(userId, status, req.user!.id, reason);
+      auditLogger('user_status_update', req.user!.id, { userId, status, reason });
+      res.json(result);
+    } catch (error) {
+      console.error('User status update error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'User status update failed'
+      });
+    }
+  });
+  
+  app.patch("/api/admin/users/:userId/balance", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { amount, reason, type } = req.body;
+      
+      const result = await updateUserBalance(userId, amount, req.user!.id, reason, type);
+      auditLogger('user_balance_update', req.user!.id, { userId, amount, reason, type });
+      res.json(result);
+    } catch (error) {
+      console.error('User balance update error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'User balance update failed'
+      });
+    }
+  });
+  
+  app.get("/api/admin/statistics", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const { userId } = req.query;
+      const result = await getUserStatistics(userId as string);
+      res.json(result);
+    } catch (error) {
+      console.error('Statistics error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Statistics retrieval failed'
+      });
+    }
+  });
+  
+  app.get("/api/admin/users/:userId/referrals", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const result = await getReferredUsers(userId);
+      res.json(result);
+    } catch (error) {
+      console.error('Referred users error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Referred users retrieval failed'
+      });
+    }
+  });
+  
+  app.post("/api/admin/users/bulk-status", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const { userIds, status, reason } = req.body;
+      
+      const result = await bulkUpdateUserStatus(userIds, status, req.user!.id, reason);
+      auditLogger('bulk_status_update', req.user!.id, { userIds, status, reason });
+      res.json(result);
+    } catch (error) {
+      console.error('Bulk status update error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Bulk status update failed'
+      });
+    }
+  });
+  
+  app.get("/api/admin/users/export", generalLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const { status, search, joinDateFrom, joinDateTo, balanceMin, balanceMax } = req.query;
+      
+      const filters: any = {};
+      if (status) filters.status = status;
+      if (search) filters.search = search as string;
+      if (joinDateFrom) filters.joinDateFrom = new Date(joinDateFrom as string);
+      if (joinDateTo) filters.joinDateTo = new Date(joinDateTo as string);
+      if (balanceMin) filters.balanceMin = parseFloat(balanceMin as string);
+      if (balanceMax) filters.balanceMax = parseFloat(balanceMax as string);
+      
+      const result = await exportUserData(filters);
+      auditLogger('user_export', req.user!.id, { filters });
+      res.json(result);
+    } catch (error) {
+      console.error('User export error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'User export failed'
+      });
+    }
+  });
+  
+  // Game Routes (existing functionality)
+  app.get("/api/game/current", gameLimiter, async (req, res) => {
     try {
       res.json({
         gameId: currentGameState.gameId,
@@ -908,12 +1027,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/user/balance", async (req, res) => {
     try {
-      const session = req.session as any;
-      if (!session.userId) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-      
-      const user = await storage.getUserById(session.userId);
+      const user = await storage.getUserById(req.user!.id);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -926,4 +1040,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   return httpServer;
+}
+
+// Helper functions for game transitions
+async function transitionToRound2() {
+  console.log('Auto-transitioning to Round 2...');
+  
+  currentGameState.currentRound = 2;
+  currentGameState.phase = 'betting';
+  currentGameState.bettingLocked = false;
+  
+  await storage.updateGameSession(currentGameState.gameId, {
+    phase: 'betting',
+    round: 2,
+    currentTimer: 30
+  });
+  
+  broadcast({
+    type: 'start_round_2',
+    data: {
+      gameId: currentGameState.gameId,
+      round: 2,
+      timer: 30,
+      round1Bets: currentGameState.round1Bets,
+      message: 'Round 2 betting started!'
+    }
+  });
+  
+  startTimer(30, async () => {
+    currentGameState.phase = 'dealing';
+    currentGameState.bettingLocked = true;
+    
+    await storage.updateGameSession(currentGameState.gameId, {
+      phase: 'dealing',
+      round: 2
+    });
+    
+    broadcast({
+      type: 'phase_change',
+      data: { 
+        phase: 'dealing', 
+        round: 2,
+        message: 'Round 2 betting closed. Admin will deal cards.' 
+      }
+    });
+  });
+}
+
+async function transitionToRound3() {
+  console.log('Auto-transitioning to Round 3 (Continuous Draw)...');
+  
+  currentGameState.currentRound = 3;
+  currentGameState.phase = 'dealing';
+  currentGameState.bettingLocked = true;
+  currentGameState.timer = 0;
+  
+  await storage.updateGameSession(currentGameState.gameId, {
+    phase: 'dealing',
+    round: 3,
+    currentTimer: 0
+  });
+  
+  broadcast({
+    type: 'start_final_draw',
+    data: {
+      gameId: currentGameState.gameId,
+      round: 3,
+      round1Bets: currentGameState.round1Bets,
+      round2Bets: currentGameState.round2Bets,
+      message: 'Round 3: Continuous draw started!'
+    }
+  });
+}
+
+async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
+  console.log(`Game complete! Winner: ${winner}, Card: ${winningCard}, Round: ${currentGameState.currentRound}`);
+  
+  currentGameState.winner = winner;
+  currentGameState.winningCard = winningCard;
+  currentGameState.phase = 'complete';
+  currentGameState.bettingLocked = true;
+  
+  if (currentGameState.timerInterval) {
+    clearInterval(currentGameState.timerInterval);
+    currentGameState.timerInterval = null;
+  }
+  
+  await storage.updateGameSession(currentGameState.gameId, {
+    phase: 'complete',
+    winner,
+    winningCard,
+    winningRound: currentGameState.currentRound,
+    status: 'completed'
+  });
+  
+  const payouts: Record<string, number> = {};
+  
+  for (const [userId, bets] of Array.from(currentGameState.userBets.entries())) {
+    const payout = calculatePayout(currentGameState.currentRound, winner, bets);
+    payouts[userId] = payout;
+    
+    if (payout > 0) {
+      await storage.updateUserBalance(userId, payout);
+      await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, winner, 'won');
+    } else {
+      const loserSide = winner === 'andar' ? 'bahar' : 'andar';
+      await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, loserSide, 'lost');
+    }
+    
+    const updatedUser = await storage.getUserById(userId);
+    if (updatedUser) {
+      clients.forEach(client => {
+        if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+          client.ws.send(JSON.stringify({
+            type: 'balance_update',
+            data: { balance: updatedUser.balance }
+          }));
+          
+          client.ws.send(JSON.stringify({
+            type: 'payout_received',
+            data: {
+              amount: payout,
+              winner,
+              round: currentGameState.currentRound,
+              yourBets: bets
+            }
+          }));
+        }
+      });
+    }
+  }
+  
+  broadcast({
+    type: 'game_complete',
+    data: {
+      winner: currentGameState.winner,
+      winningCard: currentGameState.winningCard,
+      andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+      baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
+      message: `Game completed! ${currentGameState.winner} wins!`
+    }
+  });
+  
+  await storage.saveGameHistory({
+    gameId: currentGameState.gameId,
+    openingCard: currentGameState.openingCard!,
+    winner,
+    winningCard,
+    totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
+    round: currentGameState.currentRound
+  });
 }

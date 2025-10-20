@@ -1,13 +1,14 @@
 import React from 'react';
+import { getSectionClass, getCardClass } from '../ThemeUtils/ThemeUtils';
 
 const GameRules: React.FC = () => {
   return (
-    <section id="gamerules" className="py-20 bg-gradient-to-br from-gray-900 to-black">
+    <section id="gamerules" className={getSectionClass()}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="text-4xl font-bold text-center text-gold mb-12">Andar Bahar Rules</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          <div className="bg-gray-800/50 p-8 rounded-xl backdrop-blur-sm border border-gray-700">
+          <div className={getCardClass()}>
             <h3 className="text-2xl font-bold text-gold mb-6">How to Play</h3>
             <ul className="space-y-4 text-gray-200">
               <li className="flex items-start">
@@ -33,7 +34,7 @@ const GameRules: React.FC = () => {
             </ul>
           </div>
           
-          <div className="bg-gray-800/50 p-8 rounded-xl backdrop-blur-sm border border-gray-700">
+          <div className={getCardClass()}>
             <h3 className="text-2xl font-bold text-gold mb-6">Winning Conditions</h3>
             <ul className="space-y-4 text-gray-200">
               <li className="flex items-start">
@@ -56,7 +57,7 @@ const GameRules: React.FC = () => {
           </div>
         </div>
         
-        <div className="mt-12 bg-gray-800/50 p-8 rounded-xl backdrop-blur-sm border border-gray-700">
+        <div className={getCardClass()}>
           <h3 className="text-2xl font-bold text-gold mb-6">Betting Phases</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center p-6 bg-gray-700/50 rounded-lg">

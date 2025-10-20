@@ -1,9 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Play, Users, Trophy, Zap } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Users, Trophy, Zap } from "lucide-react";
 
 // Import new components
 import Navigation from "@/components/Navigation/Navigation";
@@ -16,12 +13,9 @@ import Footer from "@/components/Footer/Footer";
 import WhatsAppFloatButton from "@/components/WhatsAppFloatButton/WhatsAppFloatButton";
 
 export default function Index() {
-  const [isLoaded, setIsLoaded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
-    setIsLoaded(true);
-    
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50);
     };

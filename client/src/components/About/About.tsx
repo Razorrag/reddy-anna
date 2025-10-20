@@ -1,8 +1,9 @@
 import React from 'react';
+import { getSectionClass, getCardClass } from '../ThemeUtils/ThemeUtils';
 
 const About: React.FC = () => {
   return (
-    <section id="about" className="py-20 bg-gradient-to-br from-black to-gray-900">
+    <section id="about" className={getSectionClass()}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="text-4xl font-bold text-center text-gold mb-12">About Reddy Anna</h2>
         
@@ -31,7 +32,7 @@ const About: React.FC = () => {
             </div>
           </div>
           
-          <div className="bg-gray-800/50 p-8 rounded-xl backdrop-blur-sm border border-gray-700">
+          <div className={getCardClass()}>
             <h4 className="text-2xl font-bold text-gold mb-6">Why Choose Reddy Anna?</h4>
             <div className="space-y-4">
               <div className="flex items-start">
@@ -87,7 +88,7 @@ const About: React.FC = () => {
         
         {/* Features Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="bg-gray-800/50 p-6 rounded-xl backdrop-blur-sm border border-gray-700 text-center">
+          <div className={getCardClass()}>
             <div className="w-16 h-16 bg-gradient-to-br from-gold to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-black" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
@@ -97,7 +98,7 @@ const About: React.FC = () => {
             <p className="text-gray-300">Real-time game statistics and betting trends to help you make informed decisions</p>
           </div>
           
-          <div className="bg-gray-800/50 p-6 rounded-xl backdrop-blur-sm border border-gray-700 text-center">
+          <div className={getCardClass()}>
             <div className="w-16 h-16 bg-gradient-to-br from-gold to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-black" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M6.672 1.911a1 1 0 10-1.932.518l.259.966a1 1 0 001.932-.518l-.26-.966zM2.429 4.74a1 1 0 10-.517 1.932l.966.259a1 1 0 00.517-1.932l-.966-.26zm8.814-.569a1 1 0 00-1.415-1.414l-.707.707a1 1 0 101.415 1.415l.707-.708zm-7.071 7.072l.707-.707A1 1 0 003.465 9.12l-.708.707a1 1 0 001.415 1.415zm3.2-5.171a1 1 0 00-1.3 1.3l4 10a1 1 0 001.823.075l1.38-2.759 3.018 3.02a1 1 0 001.414-1.415l-3.019-3.02 2.76-1.379a1 1 0 00-.076-1.822l-10-4z" clipRule="evenodd" />
@@ -107,7 +108,7 @@ const About: React.FC = () => {
             <p className="text-gray-300">Intuitive interface designed for players of all skill levels</p>
           </div>
           
-          <div className="bg-gray-800/50 p-6 rounded-xl backdrop-blur-sm border border-gray-700 text-center">
+          <div className={getCardClass()}>
             <div className="w-16 h-16 bg-gradient-to-br from-gold to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-black" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />

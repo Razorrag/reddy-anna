@@ -1,63 +1,56 @@
 import React from 'react';
 import { Redirect } from 'wouter';
+import { useApp } from '../contexts/AppContext';
 
 interface ProtectedRouteProps {
-  component: React.ComponentType<any>;
+  component?: React.ComponentType<any>;
   role?: 'admin' | 'user' | string[];
   redirectTo?: string;
   children?: React.ReactNode;
 }
 
-// Simple authentication check - in a real app, this would check tokens/cookies
-const checkAuthStatus = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  // Check if user is logged in (simplified for demo)
-  return localStorage.getItem('isLoggedIn') === 'true';
-};
-
-// Check if user has specific role
-const hasRole = (role: string): boolean => {
-  if (typeof window === 'undefined') return false;
-  // Check user role (simplified for demo)
-  const userRole = localStorage.getItem('userRole');
-  return userRole === role;
-};
-
-// Check if user has any of the specified roles
-const hasAnyRole = (requiredRoles: string[]): boolean => {
-  if (typeof window === 'undefined') return false;
-  const userRole = localStorage.getItem('userRole');
-  return requiredRoles.includes(userRole || '');
-};
-
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   component: Component, 
   role,
-  redirectTo = '/admin-login',
+  redirectTo = '/login',
   children 
 }) => {
-  // Implement authentication check
-  const isAuthenticated = checkAuthStatus();
+  const { state } = useApp();
   
-  if (!isAuthenticated) {
-    // Redirect to login
-    return <Redirect to={redirectTo} />;
+  // Show loading while checking authentication
+  if (!state.authChecked) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    );
+  }
+  
+  // Check if user is authenticated
+  if (!state.isAuthenticated) {
+    // Redirect to appropriate login based on required role
+    const loginPath = role === 'admin' ? '/admin-login' : redirectTo;
+    return <Redirect to={loginPath} />;
   }
   
   // Check role if specified
-  if (role && Array.isArray(role)) {
-    // Check if user has any of the required roles
-    if (!hasAnyRole(role)) {
-      return <Redirect to="/unauthorized" />;
-    }
-  } else if (role && typeof role === 'string') {
-    // Check if user has the specific required role
-    if (!hasRole(role)) {
-      return <Redirect to="/unauthorized" />;
+  if (role) {
+    const userRole = state.user?.role;
+    
+    if (Array.isArray(role)) {
+      // Check if user has any of the required roles
+      if (!userRole || !role.includes(userRole)) {
+        return <Redirect to="/unauthorized" />;
+      }
+    } else if (typeof role === 'string') {
+      // Check if user has the specific required role
+      if (userRole !== role) {
+        return <Redirect to="/unauthorized" />;
+      }
     }
   }
   
-  return children ? <>{children}</> : <Component />;
+  return children ? <>{children}</> : Component ? <Component /> : null;
 };
 
 export default ProtectedRoute;

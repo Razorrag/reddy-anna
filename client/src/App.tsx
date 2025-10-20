@@ -1,4 +1,5 @@
 import { Switch, Route } from "wouter";
+import Index from "@/pages/index.tsx";
 import PlayerGame from "@/pages/player-game.tsx";
 import AdminGame from "@/pages/admin-game.tsx";
 import Admin from "@/pages/admin.tsx";
@@ -15,11 +16,30 @@ import AppProviders from "@/providers/AppProviders.tsx";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={PlayerGame} />
-      <Route path="/player-game" component={PlayerGame} />
-      <Route path="/admin-login" component={AdminLogin} />
+      {/* Homepage - Default route */}
+      <Route path="/" component={Index} />
+      
+      {/* Public routes */}
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/admin-login" component={AdminLogin} />
+      
+      {/* Protected Player Routes */}
+      <Route path="/game">
+        {() => (
+          <ProtectedRoute component={PlayerGame}>
+            <PlayerGame />
+          </ProtectedRoute>
+        )}
+      </Route>
+      
+      <Route path="/player-game">
+        {() => (
+          <ProtectedRoute component={PlayerGame}>
+            <PlayerGame />
+          </ProtectedRoute>
+        )}
+      </Route>
       
       {/* Protected Admin Routes */}
       <Route path="/admin">
@@ -40,15 +60,6 @@ function Router() {
       
       {/* Alias route for game-admin */}
       <Route path="/game-admin">
-        {() => (
-          <ProtectedRoute component={AdminGame} role="admin">
-            <AdminGame />
-          </ProtectedRoute>
-        )}
-      </Route>
-      
-      {/* Main game route (admin panel) */}
-      <Route path="/game">
         {() => (
           <ProtectedRoute component={AdminGame} role="admin">
             <AdminGame />

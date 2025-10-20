@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { cn } from '@/lib/utils';
 
 const LanguageSelector: React.FC = () => {
   const [selectedLanguage, setSelectedLanguage] = useState<string>('en');

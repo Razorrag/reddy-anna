@@ -6,24 +6,19 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useGameState } from '../contexts/GameStateContext';
-import { useWebSocket } from '../contexts/WebSocketContext';
+import { useGame } from '../contexts/GameContext';
 import { useNotification } from '../contexts/NotificationContext';
-import LiveStreamSimulation from '@/components/LiveStreamSimulation';
-import CardGrid from '@/components/CardGrid';
+import LiveStreamSimulation from '../components/LiveStreamSimulation';
+import CardGrid from '../components/CardGrid';
 import { CircularTimer } from '../components/CircularTimer';
 import { PlayingCard } from '../components/PlayingCard';
 import BettingStats from '../components/BettingStats';
 import { LoadingButton, LoadingOverlay } from '../components/LoadingSpinner';
-import type { BetSide } from '@/types/game';
+import type { BetSide } from '../types/game';
 
 const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
-  const { sendWebSocketMessage } = useWebSocket();
-  
-  const {
-    gameState,
-  } = useGameState();
+  const { gameState, placeBet } = useGame();
 
   // Mock user data
   const user = { id: 'player-1', username: 'Player' };
@@ -39,13 +34,13 @@ const PlayerGame: React.FC = () => {
 
   // Timer countdown effect
   useEffect(() => {
-    if (gameState.countdownTimer > 0 && gameState.phase === 'betting') {
+    if (gameState.countdown > 0 && gameState.phase === 'betting') {
       const timer = setTimeout(() => {
         // Timer is managed by backend, this is just for UI updates
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [gameState.countdownTimer, gameState.phase]);
+  }, [gameState.countdown, gameState.phase]);
 
   // Place bet handler
   const handlePlaceBet = useCallback(async () => {
@@ -67,17 +62,8 @@ const PlayerGame: React.FC = () => {
     setIsPlacingBet(true);
 
     try {
-      // Send bet to backend via WebSocket
-      sendWebSocketMessage({
-        type: 'bet_placed',
-        data: {
-          gameId: 'default-game',
-          userId: user?.id,
-          betAmount: selectedBetAmount,
-          position: selectedPosition,
-          round: gameState.currentRound
-        }
-      });
+      // Use the game context placeBet function
+      placeBet(selectedPosition, selectedBetAmount);
 
       // Update local balance (optimistic)
       setUserBalance(prev => prev - selectedBetAmount);
@@ -91,7 +77,7 @@ const PlayerGame: React.FC = () => {
     } finally {
       setIsPlacingBet(false);
     }
-  }, [selectedPosition, selectedBetAmount, userBalance, gameState, sendWebSocketMessage, showNotification, user]);
+  }, [selectedPosition, selectedBetAmount, userBalance, gameState, placeBet, showNotification, user]);
 
   // Handle bet position selection
   const handlePositionSelect = useCallback((position: BetSide) => {
@@ -147,7 +133,7 @@ const PlayerGame: React.FC = () => {
                 {gameState.phase === 'betting' && (
                   <div className="absolute top-4 right-4">
                     <CircularTimer 
-                      seconds={gameState.countdownTimer}
+                      seconds={gameState.countdown}
                       totalSeconds={30}
                       phase={gameState.phase}
                       isVisible={true}
@@ -156,12 +142,12 @@ const PlayerGame: React.FC = () => {
                 )}
                 
                 {/* Opening Card Display */}
-                {gameState.selectedOpeningCard && (
+                {gameState.openingCard && (
                   <div className="absolute top-4 left-4">
                     <div className="bg-black/80 backdrop-blur-sm rounded-lg p-3 border border-gold/30">
                       <div className="text-xs text-gold mb-1">Opening Card</div>
                       <PlayingCard 
-                        card={gameState.selectedOpeningCard}
+                        card={gameState.openingCard}
                         size="sm"
                       />
                     </div>
@@ -234,7 +220,7 @@ const PlayerGame: React.FC = () => {
               )}
 
               {/* Card Dealing Area */}
-              {(gameState.phase === 'dealing' || gameState.phase === 'complete') && (
+              {(gameState.phase === 'dealing' || gameState.phase === 'completed') && (
                 <div className="mt-6 bg-black/60 backdrop-blur-sm rounded-xl border border-gold/20 p-6">
                   <h2 className="text-xl font-bold text-gold mb-4 text-center">
                     {gameState.phase === 'dealing' ? 'Cards Being Dealt' : 'Game Complete'}
@@ -243,13 +229,13 @@ const PlayerGame: React.FC = () => {
                   <CardGrid 
                     andarCards={gameState.andarCards}
                     baharCards={gameState.baharCards}
-                    winningSide={gameState.gameWinner}
+                    winningSide={gameState.winner}
                   />
                   
-                  {gameState.phase === 'complete' && gameState.gameWinner && (
+                  {gameState.phase === 'completed' && gameState.winner && (
                     <div className="mt-6 text-center">
                       <div className="text-2xl font-bold text-gold mb-2">
-                        {gameState.gameWinner.toUpperCase()} WINS! 
+                        {gameState.winner.toUpperCase()} WINS! 
                       </div>
                       <div className="text-lg text-gray-300">
                         Game completed in {gameState.andarCards.length + gameState.baharCards.length} cards
@@ -273,14 +259,14 @@ const PlayerGame: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Timer:</span>
-                    <span className={`font-bold ${gameState.countdownTimer <= 10 ? 'text-red-500' : 'text-gold'}`}>
-                      {gameState.countdownTimer}s
+                    <span className={`font-bold ${gameState.countdown <= 10 ? 'text-red-500' : 'text-gold'}`}>
+                      {gameState.countdown}s
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Total Bets:</span>
                     <span className="font-semibold text-gold">
-                      ₹{(gameState.andarTotalBet + gameState.baharTotalBet).toLocaleString('en-IN')}
+                      ₹{(gameState.totalBets.andar + gameState.totalBets.bahar).toLocaleString('en-IN')}
                     </span>
                   </div>
                 </div>
@@ -288,8 +274,8 @@ const PlayerGame: React.FC = () => {
 
               {/* Betting Statistics */}
               <BettingStats
-                andarTotal={gameState.andarTotalBet}
-                baharTotal={gameState.baharTotalBet}
+                andarTotal={gameState.totalBets.andar}
+                baharTotal={gameState.totalBets.bahar}
                 userBets={{}}
                 currentRound={gameState.currentRound}
               />
@@ -299,42 +285,42 @@ const PlayerGame: React.FC = () => {
                 <h3 className="text-lg font-bold text-gold mb-4">Your Bets</h3>
                 
                 <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {gameState.playerRound1Bets.andar > 0 && (
+                  {gameState.round1Bets.andar > 0 && (
                     <div className="text-sm">
                       <div className="font-semibold text-gold">Round 1 - Andar</div>
                       <div className="text-gray-400 ml-2">
-                        ₹{gameState.playerRound1Bets.andar.toLocaleString('en-IN')}
+                        ₹{gameState.round1Bets.andar.toLocaleString('en-IN')}
                       </div>
                     </div>
                   )}
-                  {gameState.playerRound1Bets.bahar > 0 && (
+                  {gameState.round1Bets.bahar > 0 && (
                     <div className="text-sm">
                       <div className="font-semibold text-gold">Round 1 - Bahar</div>
                       <div className="text-gray-400 ml-2">
-                        ₹{gameState.playerRound1Bets.bahar.toLocaleString('en-IN')}
+                        ₹{gameState.round1Bets.bahar.toLocaleString('en-IN')}
                       </div>
                     </div>
                   )}
-                  {gameState.playerRound2Bets.andar > 0 && (
+                  {gameState.round2Bets.andar > 0 && (
                     <div className="text-sm">
                       <div className="font-semibold text-gold">Round 2 - Andar</div>
                       <div className="text-gray-400 ml-2">
-                        ₹{gameState.playerRound2Bets.andar.toLocaleString('en-IN')}
+                        ₹{gameState.round2Bets.andar.toLocaleString('en-IN')}
                       </div>
                     </div>
                   )}
-                  {gameState.playerRound2Bets.bahar > 0 && (
+                  {gameState.round2Bets.bahar > 0 && (
                     <div className="text-sm">
                       <div className="font-semibold text-gold">Round 2 - Bahar</div>
                       <div className="text-gray-400 ml-2">
-                        ₹{gameState.playerRound2Bets.bahar.toLocaleString('en-IN')}
+                        ₹{gameState.round2Bets.bahar.toLocaleString('en-IN')}
                       </div>
                     </div>
                   )}
-                  {gameState.playerRound1Bets.andar === 0 && 
-                   gameState.playerRound1Bets.bahar === 0 && 
-                   gameState.playerRound2Bets.andar === 0 && 
-                   gameState.playerRound2Bets.bahar === 0 && (
+                  {gameState.round1Bets.andar === 0 && 
+                   gameState.round1Bets.bahar === 0 && 
+                   gameState.round2Bets.andar === 0 && 
+                   gameState.round2Bets.bahar === 0 && (
                     <div className="text-gray-500 text-center">No bets placed yet</div>
                   )}
                 </div>

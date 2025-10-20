@@ -5,7 +5,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import type { Card } from '@/types/game';
 
 const OpeningCardSection: React.FC = () => {
-  const { gameState, setSelectedOpeningCard, phase, setPhase, setCountdown, setCurrentRound } = useGameState();
+  const { gameState, setSelectedOpeningCard, setPhase, setCountdown, setCurrentRound } = useGameState();
   const { sendWebSocketMessage } = useWebSocket();
   const { showNotification } = useNotification();
   const [showTimerPopup, setShowTimerPopup] = useState(false);
@@ -59,8 +59,6 @@ const OpeningCardSection: React.FC = () => {
     showNotification(`Round 1 started! ${customTime} seconds for betting!`, 'success');
   };
 
-  // Always show in admin, but indicate if not active
-  const isActive = phase === 'opening' || phase === 'idle';
 
   return (
     <div id="openingCardSection" className="game-section" style={{ padding: '20px' }}>

@@ -2,7 +2,7 @@ import React from 'react';
 import { QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
-import { GameStateProvider } from '../contexts/GameStateContext';
+import { AppProvider } from '../contexts/AppContext';
 import { WebSocketProvider } from '../contexts/WebSocketContext';
 import { NotificationProvider } from '../contexts/NotificationContext';
 import { queryClient } from '../lib/queryClient';
@@ -16,13 +16,13 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <GameStateProvider>
+        <AppProvider>
           <NotificationProvider>
             <WebSocketProvider>
               {children}
             </WebSocketProvider>
           </NotificationProvider>
-        </GameStateProvider>
+        </AppProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
