@@ -8,17 +8,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useGameState } from '../../contexts/GameStateContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
-import { useNotification } from '../NotificationSystem/NotificationSystem';
+import { useNotification } from '../../contexts/NotificationContext';
 import GameHeader from './GameHeader';
 import OpeningCardSection from './OpeningCardSection';
 import AndarBaharSection from './AndarBaharSection';
-import SettingsModal from '../SettingsModal/SettingsModal';
-import AdvancedBettingStats from '../BettingStats/AdvancedBettingStats';
-// MockBettingSimulation removed for live testing
-// import MockBettingSimulation from '../MockBettingSimulation/MockBettingSimulation';
 import { LoadingButton, LoadingOverlay } from '../LoadingSpinner';
 import type { GameSettings, StreamSettings } from '@/types/game';
-import './GameAdmin.css';
 
 const GameAdmin: React.FC = () => {
   const { showNotification } = useNotification();
@@ -155,7 +150,7 @@ const GameAdmin: React.FC = () => {
 
   return (
     <LoadingOverlay isLoading={isResettingGame} message="Resetting game...">
-      <div className="game-admin-container">
+      <div className="max-w-7xl mx-auto p-5 bg-gradient-to-br from-gray-900 via-purple-900 to-red-900 min-h-screen">
         {/* Mock Betting Simulation removed for live testing */}
         
         <GameHeader onSettingsClick={openSettings} />
@@ -169,86 +164,56 @@ const GameAdmin: React.FC = () => {
         {(gameState.phase === 'betting' || gameState.phase === 'dealing') && (
           <>
             {/* Round Control Panel with Bet Details */}
-            <div className="round-control-panel" style={{
-              background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.9) 0%, rgba(20, 20, 20, 0.9) 100%)',
-              border: '2px solid #ffd700',
-              borderRadius: '10px',
-              padding: '20px',
-              margin: '20px',
-              color: '#ffd700'
-            }}>
-              <h2 style={{ fontSize: '1.5rem', marginBottom: '15px', textAlign: 'center' }}>
+            <div className="bg-gradient-to-br from-gray-900 to-gray-800 border-2 border-gold rounded-xl p-5 m-5 text-gold">
+              <h2 className="text-2xl mb-4 text-center font-bold">
                 🎮 Game In Progress
               </h2>
               
               {/* Current Status */}
-              <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-                <div style={{ textAlign: 'center', minWidth: '100px' }}>
-                  <div style={{ fontSize: '0.9rem', color: '#aaa' }}>Round</div>
-                  <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{gameState.currentRound}</div>
+              <div className="flex justify-around mb-5 flex-wrap gap-4">
+                <div className="text-center min-w-[100px]">
+                  <div className="text-sm text-gray-400">Round</div>
+                  <div className="text-3xl font-bold">{gameState.currentRound}</div>
                 </div>
-                <div style={{ textAlign: 'center', minWidth: '100px' }}>
-                  <div style={{ fontSize: '0.9rem', color: '#aaa' }}>Timer</div>
-                  <div style={{ fontSize: '2rem', fontWeight: 'bold', color: gameState.countdownTimer <= 10 ? '#ff4444' : '#ffd700' }}>
+                <div className="text-center min-w-[100px]">
+                  <div className="text-sm text-gray-400">Timer</div>
+                  <div className={`text-3xl font-bold ${gameState.countdownTimer <= 10 ? 'text-red-500' : 'text-gold'}`}>
                     {gameState.countdownTimer}s
                   </div>
                 </div>
-                <div style={{ textAlign: 'center', minWidth: '120px' }}>
-                  <div style={{ fontSize: '0.9rem', color: '#aaa' }}>Opening Card</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+                <div className="text-center min-w-[120px]">
+                  <div className="text-sm text-gray-400">Opening Card</div>
+                  <div className="text-xl font-bold">
                     {gameState.selectedOpeningCard?.display || 'N/A'}
                   </div>
                 </div>
               </div>
               
               {/* Bet Distribution */}
-              <div style={{ 
-                background: 'rgba(255, 215, 0, 0.1)', 
-                padding: '20px', 
-                borderRadius: '8px',
-                marginBottom: '20px'
-              }}>
-                <h3 style={{ fontSize: '1.3rem', marginBottom: '15px', textAlign: 'center' }}>💰 Live Bet Distribution</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                  <div style={{ 
-                    background: 'rgba(165, 42, 42, 0.2)',
-                    padding: '15px',
-                    borderRadius: '8px',
-                    border: '2px solid #A52A2A'
-                  }}>
-                    <div style={{ color: '#A52A2A', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '8px' }}>🎴 ANDAR</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>₹{gameState.andarTotalBet.toLocaleString('en-IN')}</div>
+              <div className="bg-gold/10 p-5 rounded-lg mb-5">
+                <h3 className="text-xl mb-4 text-center font-bold">💰 Live Bet Distribution</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="bg-andar/20 p-4 rounded-lg border-2 border-andar">
+                    <div className="text-andar font-bold text-lg mb-2">🎴 ANDAR</div>
+                    <div className="text-2xl font-bold">₹{gameState.andarTotalBet.toLocaleString('en-IN')}</div>
                   </div>
-                  <div style={{ 
-                    background: 'rgba(1, 7, 59, 0.2)',
-                    padding: '15px',
-                    borderRadius: '8px',
-                    border: '2px solid #01073b'
-                  }}>
-                    <div style={{ color: '#4169E1', fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '8px' }}>🎴 BAHAR</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>₹{gameState.baharTotalBet.toLocaleString('en-IN')}</div>
+                  <div className="bg-bahar/20 p-4 rounded-lg border-2 border-bahar">
+                    <div className="text-blue-500 font-bold text-lg mb-2">🎴 BAHAR</div>
+                    <div className="text-2xl font-bold">₹{gameState.baharTotalBet.toLocaleString('en-IN')}</div>
                   </div>
                 </div>
               </div>
               
               {/* Round Progression Buttons */}
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <div className="flex gap-3 flex-wrap justify-center">
                 <button
                   onClick={startRound2}
                   disabled={gameState.currentRound !== 1}
-                  style={{
-                    background: gameState.currentRound === 1
-                      ? 'linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%)'
-                      : '#555',
-                    padding: '12px 24px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    color: '#fff',
-                    fontWeight: 'bold',
-                    cursor: gameState.currentRound === 1 ? 'pointer' : 'not-allowed',
-                    opacity: gameState.currentRound === 1 ? 1 : 0.5,
-                    fontSize: '1rem'
-                  }}
+                  className={`px-6 py-3 rounded-lg border-0 text-white font-bold text-base transition-all ${
+                    gameState.currentRound === 1
+                      ? 'bg-gradient-to-r from-purple-600 to-purple-700 cursor-pointer hover:from-purple-700 hover:to-purple-800'
+                      : 'bg-gray-600 cursor-not-allowed opacity-50'
+                  }`}
                 >
                   🎲 Start Round 2 Betting
                 </button>
@@ -256,19 +221,11 @@ const GameAdmin: React.FC = () => {
                 <button
                   onClick={startRound3}
                   disabled={gameState.currentRound !== 2}
-                  style={{
-                    background: gameState.currentRound === 2
-                      ? 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)'
-                      : '#555',
-                    padding: '12px 24px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    color: '#fff',
-                    fontWeight: 'bold',
-                    cursor: gameState.currentRound === 2 ? 'pointer' : 'not-allowed',
-                    opacity: gameState.currentRound === 2 ? 1 : 0.5,
-                    fontSize: '1rem'
-                  }}
+                  className={`px-6 py-3 rounded-lg border-0 text-white font-bold text-base transition-all ${
+                    gameState.currentRound === 2
+                      ? 'bg-gradient-to-r from-red-600 to-red-700 cursor-pointer hover:from-red-700 hover:to-red-800'
+                      : 'bg-gray-600 cursor-not-allowed opacity-50'
+                  }`}
                 >
                   🔥 Start Round 3 (Continuous Draw)
                 </button>
@@ -276,39 +233,20 @@ const GameAdmin: React.FC = () => {
                 <button
                   onClick={resetGame}
                   disabled={isResettingGame}
-                  style={{
-                    background: 'linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)',
-                    padding: '12px 24px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    color: '#fff',
-                    fontWeight: 'bold',
-                    cursor: isResettingGame ? 'not-allowed' : 'pointer',
-                    fontSize: '1rem',
-                    opacity: isResettingGame ? 0.6 : 1
-                  }}
+                  className={`px-6 py-3 rounded-lg border-0 text-white font-bold text-base transition-all ${
+                    isResettingGame
+                      ? 'bg-gray-600 cursor-not-allowed opacity-60'
+                      : 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-pointer hover:from-gray-600 hover:to-gray-700'
+                  }`}
                 >
                   {isResettingGame ? '⏳ Resetting...' : '🔄 Reset Game'}
                 </button>
               </div>
             </div>
 
-            {/* Advanced Betting Statistics */}
-            <AdvancedBettingStats
-              round1Bets={gameState.round1Bets}
-              round2Bets={gameState.round2Bets}
-              currentRound={gameState.currentRound as 1 | 2 | 3}
-              isGameActive={gameState.phase === 'betting' || gameState.phase === 'dealing'}
-            />
-
             {/* Card Dealing Section */}
             <AndarBaharSection />
           </>
-        )}
-
-        {/* Settings Modal */}
-        {showSettings && (
-          <SettingsModal onClose={() => setShowSettings(false)} />
         )}
       </div>
     </LoadingOverlay>

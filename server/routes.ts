@@ -27,9 +27,9 @@ const userBetRateLimits = new Map<string, BetRateLimit>();
 // Standardized game phases - matches frontend exactly
 type GamePhase = 'idle' | 'betting' | 'dealing' | 'complete';
 
-// Broadcast to all connected clients
+// Ensure consistent broadcast function with timestamp
 function broadcast(message: any, excludeClient?: WSClient) {
-  const messageStr = JSON.stringify(message);
+  const messageStr = JSON.stringify({...message, timestamp: Date.now()});
   clients.forEach(client => {
     if (client !== excludeClient && client.ws.readyState === WebSocket.OPEN) {
       client.ws.send(messageStr);
@@ -39,7 +39,7 @@ function broadcast(message: any, excludeClient?: WSClient) {
 
 // Broadcast to specific role
 function broadcastToRole(message: any, role: 'player' | 'admin') {
-  const messageStr = JSON.stringify(message);
+  const messageStr = JSON.stringify({...message, timestamp: Date.now()});
   clients.forEach(client => {
     if (client.role === role && client.ws.readyState === WebSocket.OPEN) {
       client.ws.send(messageStr);
@@ -174,15 +174,15 @@ async function transitionToRound2() {
     currentTimer: 30
   });
   
-  // Broadcast Round 2 start with locked R1 bets
+  // Broadcast round 2 start to all clients
   broadcast({
     type: 'start_round_2',
     data: {
       gameId: currentGameState.gameId,
-      timer: 30,
       round: 2,
-      round1Bets: currentGameState.round1Bets, // Show locked R1 bets
-      message: 'Round 2 betting open! Add more bets.'
+      timer: 30,
+      round1Bets: currentGameState.round1Bets,
+      message: 'Round 2 betting started!'
     }
   });
   
@@ -224,7 +224,7 @@ async function transitionToRound3() {
     currentTimer: 0
   });
   
-  // Broadcast Round 3 start with all locked bets
+  // Broadcast final draw start to all clients
   broadcast({
     type: 'start_final_draw',
     data: {
@@ -232,7 +232,7 @@ async function transitionToRound3() {
       round: 3,
       round1Bets: currentGameState.round1Bets,
       round2Bets: currentGameState.round2Bets,
-      message: 'Round 3: Continuous Draw! All bets locked. Dealing until match found.'
+      message: 'Round 3: Continuous draw started!'
     }
   });
 }
@@ -306,16 +306,15 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     }
   }
   
-  // Broadcast game complete to all
+  // Broadcast game completion to all clients
   broadcast({
     type: 'game_complete',
     data: {
-      winner,
-      winningCard,
-      round: currentGameState.currentRound,
-      payouts,
-      round1Bets: currentGameState.round1Bets,
-      round2Bets: currentGameState.round2Bets
+      winner: currentGameState.winner,
+      winningCard: currentGameState.winningCard,
+      andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+      baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
+      message: `Game completed! ${currentGameState.winner} wins!`
     }
   });
   
@@ -428,11 +427,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             currentGameState.gameId = newGame.gameId;
             
-            // Broadcast to all clients
-            broadcast({
+            // Broadcast game start to all clients
+            broadcast({ 
               type: 'opening_card_confirmed',
-              data: {
-                openingCard: currentGameState.openingCard,
+              data: { 
+                openingCard: currentGameState.openingCard, 
                 phase: 'betting',
                 round: 1,
                 gameId: currentGameState.gameId
@@ -601,15 +600,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }));
             }
             
-            // Broadcast updated betting stats to all
-            broadcast({
+            // Broadcast updated betting stats to all clients
+            broadcast({ 
               type: 'betting_stats',
               data: {
                 andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
                 baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
                 round1Bets: currentGameState.round1Bets,
-                round2Bets: currentGameState.round2Bets,
-                round: betRound
+                round2Bets: currentGameState.round2Bets
               }
             });
             break;
@@ -648,14 +646,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Check for winner
             const isWinner = checkWinner(card);
             
-            // Broadcast card dealt
-            broadcast({
-              type: 'card_dealt',
-              data: {
+            // Broadcast card dealing to all clients
+            broadcast({ 
+              type: 'card_dealt', 
+              data: { 
                 card: { display: card, value: card.replace(/[♠♥♦♣]/g, ''), suit: card.match(/[♠♥♦♣]/)?.[0] || '' },
                 side,
                 position,
-                isWinningCard: isWinner
+                isWinningCard: checkWinner(card)
               }
             });
             
@@ -735,10 +733,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               bettingLocked: false
             };
             
-            // Broadcast reset
+            // Broadcast game reset to all clients
             broadcast({
               type: 'game_reset',
-              data: { round: 1 }
+              data: {
+                message: 'Game has been reset. New game starting...'
+              }
             });
             break;
           

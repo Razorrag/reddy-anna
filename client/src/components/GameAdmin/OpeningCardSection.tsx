@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useGameState } from '../../contexts/GameStateContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
-import { useNotification } from '../NotificationSystem/NotificationSystem';
+import { useNotification } from '../../contexts/NotificationContext';
 import type { Card } from '@/types/game';
 
 const OpeningCardSection: React.FC = () => {

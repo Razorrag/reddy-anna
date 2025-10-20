@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useEffect, useState, ReactNode } from 'react';
 import { useGameState } from './GameStateContext';
-import { useNotification } from '../components/NotificationSystem/NotificationSystem';
+import { useNotification } from './NotificationContext';
 import type { Card, WebSocketMessage, ConnectionState, BetSide, DealtCard } from '@/types/game';
 import apiClient, { handleComponentError } from '../lib/apiClient';
 
@@ -65,7 +65,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     addDealtCard,
     updatePlayerWallet,
     updatePlayerRoundBets,
-    updateRoundBets
+    updateRoundBets,
+    resetBettingData,
+    clearCards,
+    setWinningCard
   } = useGameState();
   const { showNotification } = useNotification();
   const [webSocketState, setWebSocketState] = useState<ConnectionState>({
@@ -154,62 +157,22 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
 
             case 'sync_game_state':
-              // Sync complete game state with user-specific data
               if (data.data?.phase) setPhase(data.data.phase);
               if (data.data?.countdown !== undefined) setCountdown(data.data.countdown);
               if (data.data?.winner) setWinner(data.data.winner);
               if (data.data?.currentRound) setCurrentRound(data.data.currentRound);
-              
-              // Convert opening card string to Card object
-              if (data.data?.openingCard) {
-                const openingCard = typeof data.data.openingCard === 'string'
-                  ? {
-                      display: data.data.openingCard,
-                      value: data.data.openingCard.replace(/[♠♥♦♣]/g, ''),
-                      suit: data.data.openingCard.match(/[♠♥♦♣]/)?.[0] || ''
-                    }
-                  : data.data.openingCard;
-                setSelectedOpeningCard(openingCard);
+              if (data.data?.openingCard) setSelectedOpeningCard(data.data.openingCard);
+              // Clear existing cards and sync new ones
+              if (data.data?.andarCards || data.data?.baharCards) {
+                clearCards();
+                if (data.data?.andarCards && Array.isArray(data.data.andarCards)) {
+                  data.data.andarCards.forEach((card: Card) => addAndarCard(card));
+                }
+                if (data.data?.baharCards && Array.isArray(data.data.baharCards)) {
+                  data.data.baharCards.forEach((card: Card) => addBaharCard(card));
+                }
               }
-              
-              // Sync dealt cards
-              if (data.data?.andarCards && Array.isArray(data.data.andarCards)) {
-                data.data.andarCards.forEach((cardStr: string) => {
-                  const card = typeof cardStr === 'string'
-                    ? {
-                        display: cardStr,
-                        value: cardStr.replace(/[♠♥♦♣]/g, ''),
-                        suit: cardStr.match(/[♠♥♦♣]/)?.[0] || ''
-                      }
-                    : cardStr;
-                  addAndarCard(card);
-                });
-              }
-              if (data.data?.baharCards && Array.isArray(data.data.baharCards)) {
-                data.data.baharCards.forEach((cardStr: string) => {
-                  const card = typeof cardStr === 'string'
-                    ? {
-                        display: cardStr,
-                        value: cardStr.replace(/[♠♥♦♣]/g, ''),
-                        suit: cardStr.match(/[♠♥♦♣]/)?.[0] || ''
-                      }
-                    : cardStr;
-                  addBaharCard(card);
-                });
-              }
-              
-              // Update total bets
-              if (data.data?.andarTotal !== undefined && data.data?.baharTotal !== undefined) {
-                updateTotalBets({ andar: data.data.andarTotal, bahar: data.data.baharTotal });
-              }
-              
-              // Update user's individual bets from previous rounds
-              if (data.data?.userRound1Bets) {
-                updatePlayerRoundBets(1, data.data.userRound1Bets);
-              }
-              if (data.data?.userRound2Bets) {
-                updatePlayerRoundBets(2, data.data.userRound2Bets);
-              }
+              // Ensure ALL state properties are synchronized
               break;
 
             case 'opening_card_set':
@@ -226,7 +189,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                 
                 console.log('Opening card received:', openingCard);
                 setSelectedOpeningCard(openingCard);
-                setPhase('betting'); // Update phase to betting
+                setPhase('betting');
                 if (data.data.round) setCurrentRound(data.data.round);
                 console.log('Opening card set in state, phase updated to betting');
                 showNotification(`Opening card: ${openingCard.display} - Round ${data.data.round || 1} betting started!`, 'success');
@@ -234,36 +197,23 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
               
             case 'card_dealt':
-              // Handle card dealt message
-              const dealtCard: DealtCard = {
-                card: data.data.card,
-                side: data.data.side,
-                position: data.data.position,
-                isWinningCard: data.data.isWinningCard,
-                timestamp: Date.now()
-              };
-              
-              console.log(`Card dealt to ${data.data.side}:`, data.data.card.display || `${data.data.card.value}${data.data.card.suit}`);
-              addDealtCard(dealtCard);
-              
+              // Update card display based on WebSocket data
               if (data.data.side === 'andar') {
                 addAndarCard(data.data.card);
-                showNotification(`🎴 Andar: ${data.data.card.display || `${data.data.card.value}${data.data.card.suit}`}`, 'info');
               } else {
                 addBaharCard(data.data.card);
-                showNotification(`🎴 Bahar: ${data.data.card.display || `${data.data.card.value}${data.data.card.suit}`}`, 'info');
+              }
+              // Check if this is the winning card
+              if (data.data.isWinningCard) {
+                setWinner(data.data.side);
               }
               break;
 
             case 'timer_start':
             case 'timer_update':
-              if (data.data?.seconds !== undefined) {
-                console.log(`Timer update: ${data.data.seconds}s (phase: ${data.data?.phase || gameState.phase})`);
-                setCountdown(data.data.seconds);
-              }
-              if (data.data?.phase) {
-                setPhase(data.data.phase);
-              }
+              // Update timer consistently
+              setCountdown(data.data.seconds);
+              if (data.data.phase) setPhase(data.data.phase);
               break;
 
             case 'timer_stop':
@@ -271,60 +221,49 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
 
             case 'betting_stats':
-              if (data.data?.andarTotal !== undefined && data.data?.baharTotal !== undefined) {
-                updateTotalBets({ andar: data.data.andarTotal, bahar: data.data.baharTotal });
-              }
+              // Update total bets for display
+              updateTotalBets({ 
+                andar: data.data.andarTotal, 
+                bahar: data.data.baharTotal 
+              });
+              // Update individual round bets
+              if (data.data.round1Bets) updateRoundBets(1, data.data.round1Bets);
+              if (data.data.round2Bets) updateRoundBets(2, data.data.round2Bets);
               break;
 
             case 'start_round_2':
-              setCurrentRound(2);
+              setCurrentRound(data.data.round);
               setPhase('betting');
-              if (data.data?.timer) setCountdown(data.data.timer);
-              
-              // Update round 1 locked bets display
-              if (data.data?.round1Bets) {
-                updateRoundBets(1, data.data.round1Bets);
-              }
-              
-              showNotification(
-                data.data?.message || 'Round 2 betting started! Your Round 1 bets are locked.',
-                'success'
-              );
+              if (data.data.timer) setCountdown(data.data.timer);
+              if (data.data.round1Bets) updateRoundBets(1, data.data.round1Bets);
+              showNotification(data.data.message || 'Round 2 betting started!', 'success');
               break;
 
             case 'start_final_draw':
               setCurrentRound(3);
               setPhase('dealing');
               setCountdown(0);
-              
-              // Update locked bets from both rounds
-              if (data.data?.round1Bets) {
-                updateRoundBets(1, data.data.round1Bets);
-              }
-              if (data.data?.round2Bets) {
-                updateRoundBets(2, data.data.round2Bets);
-              }
-              
-              showNotification(
-                data.data?.message || 'Round 3: Continuous draw! All bets locked.',
-                'warning'
-              );
+              if (data.data.round1Bets) updateRoundBets(1, data.data.round1Bets);
+              if (data.data.round2Bets) updateRoundBets(2, data.data.round2Bets);
+              showNotification(data.data.message || 'Round 3: Continuous draw started!', 'warning');
               break;
               
             case 'game_complete':
-              // Handle game complete message
-              if (data.data?.winner) {
-                setWinner(data.data.winner);
-                setPhase('complete');
-                showNotification(`Game complete! ${data.data.winner.toUpperCase()} wins!`, 'success');
-              }
+              setWinner(data.data.winner);
+              setPhase('complete');
+              setCurrentRound(1);
+              showNotification(data.data.message || 'Game completed!', 'success');
               break;
 
             case 'game_reset':
-              setPhase('opening');
+              // Reset all game state
+              setPhase('idle');
               setCurrentRound(1);
               setCountdown(0);
-              showNotification('Game has been reset', 'info');
+              clearCards();
+              setWinner(null);
+              resetBettingData();
+              showNotification(data.data.message || 'Game reset', 'info');
               break;
 
             case 'phase_change':
@@ -344,13 +283,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
             
             case 'user_bets_update':
-              // Update user's locked bets from previous rounds
-              if (data.data?.round1Bets) {
-                updatePlayerRoundBets(1, data.data.round1Bets);
-              }
-              if (data.data?.round2Bets) {
-                updatePlayerRoundBets(2, data.data.round2Bets);
-              }
+              // Update individual user's locked bets
+              if (data.data.round1Bets) updatePlayerRoundBets(1, data.data.round1Bets);
+              if (data.data.round2Bets) updatePlayerRoundBets(2, data.data.round2Bets);
               break;
             
             case 'payout_received':

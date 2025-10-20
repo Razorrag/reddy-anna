@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { GameStateProvider } from '../contexts/GameStateContext';
 import { WebSocketProvider } from '../contexts/WebSocketContext';
-import { NotificationProvider } from '../components/NotificationSystem/NotificationSystem';
+import { NotificationProvider } from '../contexts/NotificationContext';
 import { queryClient } from '../lib/queryClient';
 
 interface AppProvidersProps {

@@ -183,6 +183,7 @@ interface GameStateContextType {
   updatePlayerRoundBets: (round: GameRound, bets: RoundBets) => void;
   clearCards: () => void;
   placeBet: (side: BetSide, amount: number) => void;
+  resetBettingData: () => void;
   phase: GamePhase;
 }
 
@@ -295,6 +296,14 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'CLEAR_CARDS' });
   };
 
+  const resetBettingData = () => {
+    dispatch({ type: 'UPDATE_TOTAL_BETS', payload: { andar: 0, bahar: 0 } });
+    dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round: 1, bets: { andar: 0, bahar: 0 } } });
+    dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round: 2, bets: { andar: 0, bahar: 0 } } });
+    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 1, bets: { andar: 0, bahar: 0 } } });
+    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 2, bets: { andar: 0, bahar: 0 } } });
+  };
+
   const placeBet = (side: BetSide, amount: number) => {
     // This function now only updates local state
     // The actual bet placement is handled by WebSocket messages
@@ -339,6 +348,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     updatePlayerRoundBets,
     clearCards,
     placeBet,
+    resetBettingData,
     phase: gameState.phase,
   };
 
