@@ -9,13 +9,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useGameState } from '../contexts/GameStateContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
-import LiveStreamSimulation from '../components/LiveStreamSimulation';
-import CardGrid from '../components/CardGrid';
+import LiveStreamSimulation from '@/components/LiveStreamSimulation';
+import CardGrid from '@/components/CardGrid';
 import { CircularTimer } from '../components/CircularTimer';
 import { PlayingCard } from '../components/PlayingCard';
 import BettingStats from '../components/BettingStats';
 import { LoadingButton, LoadingOverlay } from '../components/LoadingSpinner';
-import type { Card, BetSide } from '@/types/game';
+import type { BetSide } from '@/types/game';
 
 const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
@@ -23,8 +23,6 @@ const PlayerGame: React.FC = () => {
   
   const {
     gameState,
-    placeBet,
-    setPhase,
   } = useGameState();
 
   // Mock user data
@@ -186,7 +184,7 @@ const PlayerGame: React.FC = () => {
                           : 'bg-andar/20 text-andar border-2 border-andar/50 hover:bg-andar/30'
                       }`}
                     >
-                      🎴 ANDAR
+                      ANDAR
                     </button>
                     <button
                       onClick={() => handlePositionSelect('bahar')}
@@ -196,7 +194,7 @@ const PlayerGame: React.FC = () => {
                           : 'bg-bahar/20 text-blue-400 border-2 border-blue-400/50 hover:bg-bahar/30'
                       }`}
                     >
-                      🎴 BAHAR
+                      BAHAR
                     </button>
                   </div>
 
@@ -251,7 +249,7 @@ const PlayerGame: React.FC = () => {
                   {gameState.phase === 'complete' && gameState.gameWinner && (
                     <div className="mt-6 text-center">
                       <div className="text-2xl font-bold text-gold mb-2">
-                        🎉 {gameState.gameWinner.toUpperCase()} WINS! 🎉
+                        {gameState.gameWinner.toUpperCase()} WINS! 
                       </div>
                       <div className="text-lg text-gray-300">
                         Game completed in {gameState.andarCards.length + gameState.baharCards.length} cards

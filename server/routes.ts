@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage-supabase"; // Using Supabase for production
+import { storage } from "./storage"; // Using local memory storage for development
 import { insertBetSchema, insertGameHistorySchema } from "@shared/schema";
 import { z } from "zod";
 import { hashPassword, comparePassword, validatePassword, validateUsername } from "./lib/auth";

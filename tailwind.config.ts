@@ -1,116 +1,111 @@
-import type { Config } from "tailwindcss";
+// tailwind.config.ts
+import type { Config } from 'tailwindcss';
+import tailwindcssAnimate from "tailwindcss-animate";
+import typography from "@tailwindcss/typography";
 
 export default {
-  darkMode: ["class"],
-  content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
+  darkMode: "class",
+  content: [
+    "./index.html",
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
   theme: {
     extend: {
-      borderRadius: {
-        lg: ".5625rem", /* 9px */
-        md: ".375rem", /* 6px */
-        sm: ".1875rem", /* 3px */
-      },
       colors: {
-        // Flat / base colors (regular buttons)
-        background: "hsl(var(--background) / <alpha-value>)",
-        foreground: "hsl(var(--foreground) / <alpha-value>)",
-        border: "hsl(var(--border) / <alpha-value>)",
-        input: "hsl(var(--input) / <alpha-value>)",
-        card: {
-          DEFAULT: "hsl(var(--card) / <alpha-value>)",
-          foreground: "hsl(var(--card-foreground) / <alpha-value>)",
-          border: "hsl(var(--card-border) / <alpha-value>)",
-        },
-        popover: {
-          DEFAULT: "hsl(var(--popover) / <alpha-value>)",
-          foreground: "hsl(var(--popover-foreground) / <alpha-value>)",
-          border: "hsl(var(--popover-border) / <alpha-value>)",
-        },
-        primary: {
-          DEFAULT: "hsl(var(--primary) / <alpha-value>)",
-          foreground: "hsl(var(--primary-foreground) / <alpha-value>)",
-          border: "var(--primary-border)",
-        },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary) / <alpha-value>)",
-          foreground: "hsl(var(--secondary-foreground) / <alpha-value>)",
-          border: "var(--secondary-border)",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted) / <alpha-value>)",
-          foreground: "hsl(var(--muted-foreground) / <alpha-value>)",
-          border: "var(--muted-border)",
-        },
-        accent: {
-          DEFAULT: "hsl(var(--accent) / <alpha-value>)",
-          foreground: "hsl(var(--accent-foreground) / <alpha-value>)",
-          border: "var(--accent-border)",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive) / <alpha-value>)",
-          foreground: "hsl(var(--destructive-foreground) / <alpha-value>)",
-          border: "var(--destructive-border)",
-        },
-        ring: "hsl(var(--ring) / <alpha-value>)",
-        chart: {
-          "1": "hsl(var(--chart-1) / <alpha-value>)",
-          "2": "hsl(var(--chart-2) / <alpha-value>)",
-          "3": "hsl(var(--chart-3) / <alpha-value>)",
-          "4": "hsl(var(--chart-4) / <alpha-value>)",
-          "5": "hsl(var(--chart-5) / <alpha-value>)",
-        },
-        sidebar: {
-          ring: "hsl(var(--sidebar-ring) / <alpha-value>)",
-          DEFAULT: "hsl(var(--sidebar) / <alpha-value>)",
-          foreground: "hsl(var(--sidebar-foreground) / <alpha-value>)",
-          border: "hsl(var(--sidebar-border) / <alpha-value>)",
-        },
-        "sidebar-primary": {
-          DEFAULT: "hsl(var(--sidebar-primary) / <alpha-value>)",
-          foreground: "hsl(var(--sidebar-primary-foreground) / <alpha-value>)",
-          border: "var(--sidebar-primary-border)",
-        },
-        "sidebar-accent": {
-          DEFAULT: "hsl(var(--sidebar-accent) / <alpha-value>)",
-          foreground: "hsl(var(--sidebar-accent-foreground) / <alpha-value>)",
-          border: "var(--sidebar-accent-border)"
-        },
-        status: {
-          online: "rgb(34 197 94)",
-          away: "rgb(245 158 11)",
-          busy: "rgb(239 68 68)",
-          offline: "rgb(156 163 175)",
-        },
-        // Casino game colors
-        gold: "hsl(45 100% 51% / <alpha-value>)",
-        "gold-light": "hsl(45 90% 65% / <alpha-value>)",
-        "gold-muted": "hsl(45 35% 45% / <alpha-value>)",
-        andar: "hsl(10 80% 55% / <alpha-value>)",
-        bahar: "hsl(220 75% 55% / <alpha-value>)",
-        "casino-success": "hsl(142 76% 36% / <alpha-value>)",
-        "casino-warning": "hsl(38 92% 50% / <alpha-value>)",
-        "casino-error": "hsl(0 84% 60% / <alpha-value>)",
+        gold: '#FFD700',
       },
-      fontFamily: {
-        sans: ["var(--font-sans)"],
-        serif: ["var(--font-serif)"],
-        mono: ["var(--font-mono)"],
+      // Custom shadow utilities for casino-themed effects
+      boxShadow: {
+        'gold-glow': '0 0 15px rgba(255, 215, 0, 0.3)',
+        'card-shadow': '0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 8px rgba(255, 255, 255, 0.3)',
+        'card-shadow-hover': '0 8px 32px rgba(255, 215, 0, 0.5), inset 0 2px 8px rgba(255, 255, 255, 0.3)',
+        'timer-shadow': '0 0 30px rgba(255, 215, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3)',
+      },
+      // Custom gradient utilities
+      backgroundImage: {
+        'card-gradient': 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)',
+        'gold-gradient': 'linear-gradient(135deg, #ffd700 0%, #ffed4e 100%)',
+        'andar-gradient': 'linear-gradient(135deg, #A52A2A 0%, #8B0000 100%)',
+        'bahar-gradient': 'linear-gradient(135deg, #01073b 0%, #1E3A8A 100%)',
+        'admin-gradient': 'linear-gradient(135deg, #1a1a1a 0%, #2d1b69 50%, #8b0000 100%)',
+        'modal-gradient': 'linear-gradient(135deg, #1a1a1a 0%, #2d1b69 50%, #8b0000 100%)',
+      },
+      // Custom transition utilities
+      transitionProperty: {
+        'height': 'height',
+        'spacing': 'margin, padding',
+        'transform-opacity': 'transform, opacity',
+      },
+      // Custom animation utilities for real-time sync
+      animation: {
+        'pulse-gold': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'pulse-live': 'pulseLive 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'slide-in-right': 'slideInRight 0.3s ease-out',
+        'slide-in-up': 'slideInUp 0.3s ease-out',
+        'pulse-win': 'pulseWin 1s ease-in-out infinite',
+        'win-glow': 'winGlow 1s ease-in-out infinite',
       },
       keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
+        pulseLive: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.5' },
         },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
+        slideInRight: {
+          from: { transform: 'translateX(100%)', opacity: '0' },
+          to: { transform: 'translateX(0)', opacity: '1' },
+        },
+        slideInUp: {
+          from: { transform: 'translateY(100%)', opacity: '0' },
+          to: { transform: 'translateY(0)', opacity: '1' },
+        },
+        pulseWin: {
+          '0%, 100%': { boxShadow: '0 0 20px rgba(255, 215, 0, 0.9)' },
+          '50%': { boxShadow: '0 0 30px rgba(255, 215, 0, 1)' },
+        },
+        winGlow: {
+          '0%, 100%': { transform: 'scale(1)', boxShadow: '0 0 20px rgba(255, 215, 0, 0.9)' },
+          '50%': { transform: 'scale(1.1)', boxShadow: '0 0 30px rgba(255, 215, 0, 1)' },
         },
       },
-      animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
+      // Custom spacing scale for casino game elements
+      spacing: {
+        '1.25': '0.3125rem', // 5px
+        '2.5': '0.625rem',   // 10px
+        '3.75': '0.9375rem', // 15px
+        '7.5': '1.875rem',   // 30px
+        '8.75': '2.1875rem', // 35px
+        '10': '2.5rem',      // 40px
+        '11.25': '2.8125rem',// 45px
+        '12.5': '3.125rem',  // 50px
+        '13.75': '3.4375rem',// 55px
+        '15': '3.75rem',     // 60px
+        '16.25': '4.0625rem',// 65px
+        '17.5': '4.375rem',  // 70px
+        '18.75': '4.6875rem',// 75px
+        '20': '5rem',        // 80px
+        '22.5': '5.625rem',  // 90px
+        '25': '6.25rem',     // 100px
+        '30': '7.5rem',      // 120px
+        '35': '8.75rem',     // 140px
+        '40': '10rem',       // 160px
+        '50': '12.5rem',     // 200px
       },
+      // Custom border width for casino game elements
+      borderWidth: {
+        '3': '3px',
+        '5': '5px',
+        '8': '8px',
+      },
+      // Custom z-index for game elements
+      zIndex: {
+        '100': '100',
+        '500': '500',
+        '1000': '1000',
+      }
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
+  plugins: [
+    tailwindcssAnimate, 
+    typography
+  ],
 } satisfies Config;

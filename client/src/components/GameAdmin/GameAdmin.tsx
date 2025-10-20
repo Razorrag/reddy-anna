@@ -12,8 +12,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import GameHeader from './GameHeader';
 import OpeningCardSection from './OpeningCardSection';
 import AndarBaharSection from './AndarBaharSection';
-import { LoadingButton, LoadingOverlay } from '../LoadingSpinner';
-import type { GameSettings, StreamSettings } from '@/types/game';
+import { LoadingOverlay } from '../LoadingSpinner';
 
 const GameAdmin: React.FC = () => {
   const { showNotification } = useNotification();
@@ -26,41 +25,10 @@ const GameAdmin: React.FC = () => {
     setCurrentRound,
     setCountdown,
     resetGame: resetGameState,
-    updateTotalBets,
   } = useGameState();
   
-  // Note: Role validation is handled by ProtectedRoute in App.tsx
-  // In DEV mode, ProtectedRoute bypasses authentication for easier testing
-  
   // UI state (not game state)
-  const [showSettings, setShowSettings] = useState(false);
-  const [customTime, setCustomTime] = useState(30);
-  
-  // Loading states
   const [isResettingGame, setIsResettingGame] = useState(false);
-
-  // Game settings
-  const [gameSettings, setGameSettings] = useState<GameSettings>({
-    maxBetAmount: 50000,
-    minBetAmount: 1000,
-    timer: 30,
-    openingCard: null
-  });
-
-  // Stream settings
-  const [streamSettings, setStreamSettings] = useState<StreamSettings>({
-    streamType: 'video',
-    streamUrl: '/hero images/uhd_30fps.mp4',
-    rtmpUrl: 'rtmp://localhost:1935/live',
-    rtmpStreamKey: 'streamKey',
-    streamTitle: 'Andar Bahar Live',
-    streamStatus: 'live',
-    streamDescription: 'Live Andar Bahar Game',
-    streamQuality: 'auto',
-    streamDelay: 5,
-    backupStreamUrl: '',
-    embedCode: ''
-  });
 
   // Initialize phase to 'opening' on mount for admin
   useEffect(() => {
@@ -131,22 +99,9 @@ const GameAdmin: React.FC = () => {
 
   // Open settings modal
   const openSettings = useCallback(() => {
-    setShowSettings(true);
-    loadCurrentSettings();
-  }, []);
-
-  // Load current settings
-  const loadCurrentSettings = useCallback(() => {
-    const savedGameSettings = localStorage.getItem('gameSettings');
-    if (savedGameSettings) {
-      setGameSettings(JSON.parse(savedGameSettings));
-    }
-    
-    const savedStreamSettings = localStorage.getItem('streamSettings');
-    if (savedStreamSettings) {
-      setStreamSettings(JSON.parse(savedStreamSettings));
-    }
-  }, []);
+    // TODO: Implement settings modal
+    showNotification('Settings functionality coming soon', 'info');
+  }, [showNotification]);
 
   return (
     <LoadingOverlay isLoading={isResettingGame} message="Resetting game...">

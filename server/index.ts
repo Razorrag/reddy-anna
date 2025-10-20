@@ -11,8 +11,8 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { nms } from "./rtmp-server";
 
-// Validate required environment variables
-const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'SESSION_SECRET'];
+// Validate required environment variables (only SESSION_SECRET for local storage)
+const requiredEnvVars = ['SESSION_SECRET'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
@@ -22,8 +22,8 @@ if (missingEnvVars.length > 0) {
 }
 
 // Debug environment variables
-console.log('✅ SUPABASE_URL:', process.env.SUPABASE_URL);
 console.log('✅ NODE_ENV:', process.env.NODE_ENV);
+console.log('✅ Using local memory storage for development');
 console.log('✅ All required environment variables are set');
 
 const app = express();
