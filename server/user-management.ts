@@ -248,36 +248,10 @@ export const bulkUpdateUserStatus = async (
 };
 
 export const exportUserData = async (filters: UserFilters = {}): Promise<UserManagementResponse> => {
-  try {
-    // Get users with extended filters
-    const users = await getAllUsers({ ...filters, limit: 10000 });
-    
-    if (!users.success || !users.users) {
-      return { success: false, error: 'Failed to retrieve users for export' };
-    }
-
-    // Transform data for export
-    const exportData = users.users.map(user => ({
-      ID: user.id,
-      Name: user.name,
-      Email: user.email,
-      Mobile: user.mobile,
-      Balance: user.balance,
-      Status: user.status,
-      'Join Date': user.joinDate,
-      'Last Login': user.lastLogin,
-      'Referral Code': user.referralCode,
-      'Referred Users Count': user.referredUsers?.length || 0,
-      City: user.profile?.city || '',
-      State: user.profile?.state || '',
-      Country: user.profile?.country || ''
-    }));
-
-    return { success: true, users: exportData };
-  } catch (error) {
-    console.error('User export error:', error);
-    return { success: false, error: 'User export failed' };
-  }
+  return { 
+    success: false, 
+    error: 'User data export not implemented in Supabase version'
+  };
 };
 
 export const validateUserProfileUpdate = (updates: UserProfileUpdate): { isValid: boolean; errors: string[] } => {

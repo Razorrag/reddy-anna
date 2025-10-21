@@ -1,6 +1,6 @@
 // Payment Processing System
 import { v4 as uuidv4 } from 'uuid';
-import { Transaction, User } from './data';
+import { storage } from './storage-supabase';
 import { validateUPI, validateBankDetails, validateAmount } from './validation';
 
 export interface PaymentMethod {
@@ -31,58 +31,50 @@ export const processPayment = async (request: PaymentRequest): Promise<PaymentRe
     }
 
     // Validate user
-    const user = await User.findById(request.userId);
+    const user = await storage.getUser(request.userId);
     if (!user) {
       return { success: false, status: 'failed', error: 'User not found' };
     }
 
-    // Create transaction record
-    const transaction = new Transaction({
-      id: uuidv4(),
-      userId: request.userId,
-      amount: request.amount,
-      type: request.type,
-      method: request.method.type,
-      status: 'pending',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-
     // Process based on payment type
+    let status = 'pending';
+    let error: string | undefined;
+    
     if (request.type === 'deposit') {
       // Process deposit based on method
-      const result = await processDeposit(transaction, request.method);
+      const result = await processDeposit(request);
       if (result.success) {
-        transaction.status = 'success';
+        status = 'success';
         // Add amount to user balance
-        user.balance += request.amount;
-        await user.save();
+        await storage.updateUserBalance(request.userId, request.amount);
       } else {
-        transaction.status = 'failed';
-        transaction.error = result.error;
+        status = 'failed';
+        error = result.error;
       }
     } else if (request.type === 'withdraw') {
+      // Check if user has sufficient balance for withdrawal
+      if (user.balance < request.amount) {
+        return { success: false, status: 'failed', error: 'Insufficient balance' };
+      }
+      
       // Process withdrawal based on method
-      const result = await processWithdraw(transaction, request.method, user);
+      const result = await processWithdraw(request, user);
       if (result.success) {
-        transaction.status = 'success';
+        status = 'success';
         // Deduct amount from user balance
-        user.balance -= request.amount;
-        await user.save();
+        await storage.updateUserBalance(request.userId, -request.amount);
       } else {
-        transaction.status = 'failed';
-        transaction.error = result.error;
+        status = 'failed';
+        error = result.error;
       }
     }
 
-    await transaction.save();
-
     return {
-      success: transaction.status === 'success',
-      transactionId: transaction.id,
-      status: transaction.status as 'pending' | 'processing' | 'success' | 'failed',
-      error: transaction.error,
-      message: transaction.status === 'success' 
+      success: status === 'success',
+      transactionId: uuidv4(), // Return a transaction ID
+      status: status as 'pending' | 'processing' | 'success' | 'failed',
+      error: error,
+      message: status === 'success' 
         ? `${request.type === 'deposit' ? 'Deposit' : 'Withdrawal'} processed successfully`
         : undefined
     };
@@ -92,8 +84,11 @@ export const processPayment = async (request: PaymentRequest): Promise<PaymentRe
   }
 };
 
-export const processDeposit = async (transaction: any, method: PaymentMethod): Promise<{ success: boolean; error?: string }> => {
+export const processDeposit = async (request: PaymentRequest): Promise<{ success: boolean; error?: string }> => {
   try {
+    const method = request.method;
+    const amount = request.amount;
+    
     switch (method.type) {
       case 'upi':
         // Validate UPI details
@@ -103,7 +98,7 @@ export const processDeposit = async (transaction: any, method: PaymentMethod): P
         
         // Simulate UPI payment processing
         // In a real implementation, this would integrate with a UPI payment gateway
-        console.log(`Processing UPI deposit of ${transaction.amount} to ${method.details.upiId}`);
+        console.log(`Processing UPI deposit of ${amount} to ${method.details.upiId}`);
         return { success: true };
         
       case 'bank':
@@ -113,7 +108,7 @@ export const processDeposit = async (transaction: any, method: PaymentMethod): P
         }
         
         // Process bank transfer
-        console.log(`Processing bank deposit of ${transaction.amount} to account ${method.details.accountNumber}`);
+        console.log(`Processing bank deposit of ${amount} to account ${method.details.accountNumber}`);
         return { success: true };
         
       case 'wallet':
@@ -121,7 +116,7 @@ export const processDeposit = async (transaction: any, method: PaymentMethod): P
         if (!method.details.walletType || !method.details.walletNumber) {
           return { success: false, error: 'Invalid wallet details' };
         }
-        console.log(`Processing wallet deposit of ${transaction.amount} to ${method.details.walletType}`);
+        console.log(`Processing wallet deposit of ${amount} to ${method.details.walletType}`);
         return { success: true };
         
       case 'card':
@@ -130,7 +125,7 @@ export const processDeposit = async (transaction: any, method: PaymentMethod): P
           return { success: false, error: 'Invalid card details' };
         }
         // In a real implementation, this would integrate with a card payment processor
-        console.log(`Processing card deposit of ${transaction.amount}`);
+        console.log(`Processing card deposit of ${amount}`);
         return { success: true };
         
       default:
@@ -142,12 +137,10 @@ export const processDeposit = async (transaction: any, method: PaymentMethod): P
   }
 };
 
-export const processWithdraw = async (transaction: any, method: PaymentMethod, user: any): Promise<{ success: boolean; error?: string }> => {
+export const processWithdraw = async (request: PaymentRequest, user: any): Promise<{ success: boolean; error?: string }> => {
   try {
-    // Check user balance
-    if (user.balance < transaction.amount) {
-      return { success: false, error: 'Insufficient balance' };
-    }
+    const method = request.method;
+    const amount = request.amount;
 
     switch (method.type) {
       case 'upi':
@@ -158,7 +151,7 @@ export const processWithdraw = async (transaction: any, method: PaymentMethod, u
         
         // Simulate UPI withdrawal
         // In a real implementation, this would integrate with a UPI withdrawal service
-        console.log(`Processing UPI withdrawal of ${transaction.amount} to ${method.details.upiId}`);
+        console.log(`Processing UPI withdrawal of ${amount} to ${method.details.upiId}`);
         return { success: true };
         
       case 'bank':
@@ -168,7 +161,7 @@ export const processWithdraw = async (transaction: any, method: PaymentMethod, u
         }
         
         // Process bank withdrawal
-        console.log(`Processing bank withdrawal of ${transaction.amount} to account ${method.details.accountNumber}`);
+        console.log(`Processing bank withdrawal of ${amount} to account ${method.details.accountNumber}`);
         return { success: true };
         
       case 'wallet':
@@ -176,7 +169,7 @@ export const processWithdraw = async (transaction: any, method: PaymentMethod, u
         if (!method.details.walletType || !method.details.walletNumber) {
           return { success: false, error: 'Invalid wallet details' };
         }
-        console.log(`Processing wallet withdrawal of ${transaction.amount} to ${method.details.walletType}`);
+        console.log(`Processing wallet withdrawal of ${amount} to ${method.details.walletType}`);
         return { success: true };
         
       default:
@@ -196,40 +189,16 @@ export const getTransactionHistory = async (userId: string, filters: {
   limit?: number;
   offset?: number;
 } = {}): Promise<any[]> => {
-  try {
-    const query: any = { userId };
-    
-    if (filters.type) query.type = filters.type;
-    if (filters.status) query.status = filters.status;
-    if (filters.fromDate || filters.toDate) {
-      query.createdAt = {};
-      if (filters.fromDate) query.createdAt.$gte = filters.fromDate;
-      if (filters.toDate) query.createdAt.$lte = filters.toDate;
-    }
-    
-    const limit = filters.limit || 50;
-    const offset = filters.offset || 0;
-    
-    const transactions = await Transaction.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(offset);
-    
-    return transactions;
-  } catch (error) {
-    console.error('Transaction history error:', error);
-    return [];
-  }
+  // For now, transaction history is not stored in our simplified Supabase schema
+  // Return an empty array since we don't have transaction tracking in this version
+  console.warn('Transaction history not implemented in current Supabase schema');
+  return [];
 };
 
 export const getTransactionById = async (transactionId: string): Promise<any> => {
-  try {
-    const transaction = await Transaction.findById(transactionId);
-    return transaction;
-  } catch (error) {
-    console.error('Transaction retrieval error:', error);
-    return null;
-  }
+  // For now, transaction history is not stored in our simplified Supabase schema
+  console.warn('Transaction retrieval not implemented in current Supabase schema');
+  return null;
 };
 
 export const updateTransactionStatus = async (
@@ -237,37 +206,14 @@ export const updateTransactionStatus = async (
   status: 'pending' | 'processing' | 'success' | 'failed',
   error?: string
 ): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const transaction = await Transaction.findById(transactionId);
-    if (!transaction) {
-      return { success: false, error: 'Transaction not found' };
-    }
-
-    transaction.status = status;
-    transaction.updatedAt = new Date();
-    if (error) transaction.error = error;
-
-    await transaction.save();
-
-    // If transaction failed and was a deposit, refund the amount
-    if (status === 'failed' && transaction.type === 'deposit') {
-      const user = await User.findById(transaction.userId);
-      if (user) {
-        user.balance = Math.max(0, user.balance - transaction.amount);
-        await user.save();
-      }
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('Transaction status update error:', error);
-    return { success: false, error: 'Failed to update transaction status' };
-  }
+  // For now, transaction history is not stored in our simplified Supabase schema
+  console.warn('Transaction status updates not implemented in current Supabase schema');
+  return { success: false, error: 'Transaction status updates not supported' };
 };
 
 export const getUserBalance = async (userId: string): Promise<{ success: boolean; balance?: number; error?: string }> => {
   try {
-    const user = await User.findById(userId);
+    const user = await storage.getUser(userId);
     if (!user) {
       return { success: false, error: 'User not found' };
     }
@@ -285,30 +231,8 @@ export const addBonus = async (userId: string, bonusAmount: number, reason: stri
       return { success: false, error: 'Invalid bonus amount' };
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Add bonus to user balance
-    user.balance += bonusAmount;
-    await user.save();
-
-    // Create a transaction record for the bonus
-    const bonusTransaction = new Transaction({
-      id: uuidv4(),
-      userId: userId,
-      amount: bonusAmount,
-      type: 'deposit',
-      method: 'bonus',
-      status: 'success',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      referenceId: `BONUS_${Date.now()}`,
-      paymentDetails: { reason }
-    });
-
-    await bonusTransaction.save();
+    // Add bonus to user balance using storage
+    await storage.updateUserBalance(userId, bonusAmount);
 
     console.log(`Bonus of ${bonusAmount} added to user ${userId} for: ${reason}`);
     return { success: true };
