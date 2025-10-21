@@ -1,11 +1,11 @@
 # 🔍 COMPLETE GAME ANALYSIS - WHY NOTHING WORKS
 
 **Date**: October 21, 2025  
-**Status**: ✅ CRITICAL FIX APPLIED
+**Status**: ✅ CRITICAL FIX APPLIED (CORRECTED)
 
 ---
 
-## 🚨 CRITICAL BLOCKING ISSUE (FIXED)
+## 🚨 CRITICAL BLOCKING ISSUE (FIXED - CORRECTED)
 
 ### **Issue**: Database Column Name Mismatch - PGRST204 Error
 
@@ -21,14 +21,13 @@ Error creating game session: {
 
 **Root Cause Analysis**:
 
-1. **Database Schema** (`supabase_schema_unified.sql` lines 82-83):
-   - Has BOTH columns: `current_timer` and `currentTimer`
-   - `currentTimer` is the one Supabase expects
+1. **Actual Database Schema** (`SUPABASE_SCHEMA.sql` line 50):
+   - Uses: `current_timer INTEGER DEFAULT 0,` (snake_case) ✅
+   - Does NOT have `currentTimer` column
 
 2. **Backend Code** (`server/storage-supabase.ts`):
-   - Line 201: Was using `current_timer: session.currentTimer` ❌
-   - Line 264: Was using `current_timer` in updates ❌
-   - **FIXED**: Now uses `currentTimer` everywhere ✅
+   - Line 201: Uses `current_timer: session.currentTimer` ✅ CORRECT
+   - Line 264: Uses `current_timer` in updates ✅ CORRECT
 
 3. **Routes** (`server/routes.ts` line 302):
    - Correctly sends `currentTimer: timerDuration` ✅

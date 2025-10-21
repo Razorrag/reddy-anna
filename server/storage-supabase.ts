@@ -195,16 +195,17 @@ export class SupabaseStorage implements IStorage {
     const gameId = randomUUID();
     const now = new Date();
     const gameSession = {
-      game_id: gameId,
-      opening_card: session.openingCard || null,
+      gameId: gameId,
+      openingCard: session.openingCard || null,
       phase: session.phase || 'idle',
       currentTimer: session.currentTimer || 30,
       status: 'active',
       winner: null,
-      winning_card: null,
-      current_round: session.round || 1,
-      created_at: now,
-      updated_at: now,
+      winningCard: null,
+      currentRound: session.round || 1,
+      startedAt: now,
+      createdAt: now,
+      updatedAt: now,
     };
 
     const { data, error } = await supabaseServer
@@ -254,17 +255,17 @@ export class SupabaseStorage implements IStorage {
   }
 
   async updateGameSession(gameId: string, updates: Partial<GameSession>): Promise<void> {
-    // Convert camelCase to snake_case for database columns
+    // Use camelCase - Supabase JS client auto-converts to snake_case
     const dbUpdates: any = {
-      updated_at: new Date()
+      updatedAt: new Date()
     };
     
     if (updates.phase) dbUpdates.phase = updates.phase;
-    if (updates.round !== undefined) dbUpdates.current_round = updates.round;
+    if (updates.round !== undefined) dbUpdates.currentRound = updates.round;
     if (updates.currentTimer !== undefined) dbUpdates.currentTimer = updates.currentTimer;
-    if (updates.openingCard !== undefined) dbUpdates.opening_card = updates.openingCard;
+    if (updates.openingCard !== undefined) dbUpdates.openingCard = updates.openingCard;
     if (updates.winner !== undefined) dbUpdates.winner = updates.winner;
-    if (updates.winningCard !== undefined) dbUpdates.winning_card = updates.winningCard;
+    if (updates.winningCard !== undefined) dbUpdates.winningCard = updates.winningCard;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
 
     const { error } = await supabaseServer
