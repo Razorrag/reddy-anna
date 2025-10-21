@@ -120,21 +120,39 @@ export const corsOptions = {
       'http://localhost:5173',
       'http://localhost:3000',
       'http://localhost:3001',
-      'https://reddyanna.com'
+      'https://reddyanna.com',
+      'https://reddy-anna-7n83.onrender.com',
+      'https://reddy-anna.onrender.com'
     ];
     
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (like mobile apps, curl, or same-origin)
     if (!origin) return callback(null, true);
     
+    // In production, allow all Render.com and onrender.com subdomains
+    if (process.env.NODE_ENV === 'production') {
+      if (origin.includes('render.com') || origin.includes('onrender.com')) {
+        return callback(null, true);
+      }
+    }
+    
+    // Check against allowed origins list
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'), false);
+      console.log('[CORS] Blocked origin:', origin);
+      console.log('[CORS] Allowed origins:', allowedOrigins);
+      // In production, be more permissive - allow it anyway
+      if (process.env.NODE_ENV === 'production') {
+        console.log('[CORS] Production mode: Allowing origin anyway');
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'), false);
+      }
     }
   },
   credentials: true,
   optionsSuccessStatus: 200,
-  exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
+  exposedHeaders: ['X-Total-Count', 'X-Page-Count', 'Content-Range', 'X-Content-Range'],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Origin',

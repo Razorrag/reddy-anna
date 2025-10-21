@@ -309,6 +309,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             case 'notification':
               // Handle server notifications
               if (data.data?.message) {
+                // Check if this is a "No winner" notification
+                const isNoWinner = data.data.message.toLowerCase().includes('no winner');
+                
+                if (isNoWinner) {
+                  // Trigger no-winner transition overlay
+                  const event = new CustomEvent('no-winner-transition', {
+                    detail: {
+                      currentRound: gameState.currentRound,
+                      message: data.data.message
+                    }
+                  });
+                  window.dispatchEvent(event);
+                }
+                
                 showNotification(data.data.message, data.data.type || 'info');
               }
               break;

@@ -10,12 +10,15 @@
  * - Clean casino-themed UI matching player interface
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameState } from '../../contexts/GameStateContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
+import PersistentSidePanel from '../PersistentSidePanel';
+import RoundTransition from '../RoundTransition';
+import NoWinnerTransition from '../NoWinnerTransition';
 
 const AdminGamePanel: React.FC = () => {
   const { gameState, setPhase, resetGame: resetGameState } = useGameState();
@@ -23,16 +26,29 @@ const AdminGamePanel: React.FC = () => {
   const { showNotification } = useNotification();
   
   const [isResetting, setIsResetting] = useState(false);
+  const [showRoundTransition, setShowRoundTransition] = useState(false);
+  const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
+  const [previousRound, setPreviousRound] = useState(gameState.currentRound);
   
-  // Calculate betting percentages for current round
-  const currentRoundBets = gameState.currentRound === 1 ? gameState.round1Bets : gameState.round2Bets;
-  const totalCurrentBets = currentRoundBets.andar + currentRoundBets.bahar;
-  const currentAndarPercentage = totalCurrentBets > 0 ? (currentRoundBets.andar / totalCurrentBets) * 100 : 50;
-  const currentBaharPercentage = totalCurrentBets > 0 ? (currentRoundBets.bahar / totalCurrentBets) * 100 : 50;
-  
-  // Calculate total cumulative bets
-  const totalCumulativeAndar = gameState.round1Bets.andar + gameState.round2Bets.andar;
-  const totalCumulativeBahar = gameState.round1Bets.bahar + gameState.round2Bets.bahar;
+  // Detect round changes and trigger transition animation
+  useEffect(() => {
+    if (gameState.currentRound !== previousRound && gameState.currentRound > 1) {
+      setShowRoundTransition(true);
+      setPreviousRound(gameState.currentRound);
+    }
+  }, [gameState.currentRound, previousRound]);
+
+  // Listen for no-winner transition events
+  useEffect(() => {
+    const handleNoWinner = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('Admin: No winner event received:', customEvent.detail);
+      setShowNoWinnerTransition(true);
+    };
+
+    window.addEventListener('no-winner-transition', handleNoWinner);
+    return () => window.removeEventListener('no-winner-transition', handleNoWinner);
+  }, []);
   
   const handleResetGame = async () => {
     if (!window.confirm('🔄 Reset the entire game? This will clear all bets and restart.')) {
@@ -90,83 +106,18 @@ const AdminGamePanel: React.FC = () => {
                 />
               </div>
 
-              {/* RIGHT: Timer & Stats */}
-              <div className="col-span-1 space-y-4">
-                {/* Timer */}
-                <div className="bg-red-900/30 rounded-lg border-2 border-red-500 p-5 text-center">
-                  <div className="text-sm text-gray-400 mb-2">Betting Time</div>
-                  <div className="text-6xl font-bold text-red-400 animate-pulse">
-                    {gameState.countdownTimer}s
-                  </div>
-                  <div className="text-xs text-gray-400 mt-2">Round {gameState.currentRound}</div>
-                </div>
-
-                {/* Opening Card */}
-                <div className="bg-gradient-to-br from-gold/20 to-yellow-600/20 rounded-lg p-5 border-2 border-gold/50 text-center">
-                  <div className="text-sm text-gray-400 mb-2">Opening Card</div>
-                  <div className="text-5xl font-bold text-white">
-                    {gameState.selectedOpeningCard?.display || '--'}
-                  </div>
-                </div>
-
-                {/* Betting Stats - Show Current Round + Cumulative */}
-                <div className="space-y-3">
-                  {/* ANDAR BETS */}
-                  <div className="bg-red-900/30 rounded-lg p-4 border-2 border-red-500/50">
-                    <div className="text-sm text-gray-400 mb-1">ANDAR BETS</div>
-                    <div className="text-2xl font-bold text-red-400">
-                      ₹{currentRoundBets.andar.toLocaleString('en-IN')}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Round {gameState.currentRound}: {currentAndarPercentage.toFixed(1)}%
-                    </div>
-                    {gameState.currentRound >= 2 && (
-                      <div className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700">
-                        Total: ₹{totalCumulativeAndar.toLocaleString('en-IN')}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* BAHAR BETS */}
-                  <div className="bg-blue-900/30 rounded-lg p-4 border-2 border-blue-500/50">
-                    <div className="text-sm text-gray-400 mb-1">BAHAR BETS</div>
-                    <div className="text-2xl font-bold text-blue-400">
-                      ₹{currentRoundBets.bahar.toLocaleString('en-IN')}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Round {gameState.currentRound}: {currentBaharPercentage.toFixed(1)}%
-                    </div>
-                    {gameState.currentRound >= 2 && (
-                      <div className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700">
-                        Total: ₹{totalCumulativeBahar.toLocaleString('en-IN')}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Round 1 Stats (show when in Round 2+) */}
-                  {gameState.currentRound >= 2 && (
-                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
-                      <div className="text-xs text-gray-400 mb-2">📊 Round 1 Stats</div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-red-400">Andar:</span>
-                          <span className="text-white ml-1">₹{gameState.round1Bets.andar.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div>
-                          <span className="text-blue-400">Bahar:</span>
-                          <span className="text-white ml-1">₹{gameState.round1Bets.bahar.toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+              {/* RIGHT: Persistent Side Panel - ALWAYS VISIBLE */}
+              <div className="col-span-1">
+                <PersistentSidePanel />
               </div>
             </div>
           )}
 
           {/* STEP 3: Dealing Phase - Card Selection First */}
           {gameState.phase === 'dealing' && (
-            <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              {/* LEFT: Card Selection and Status */}
+              <div className="col-span-2 space-y-4">
               {/* Card Selection FIRST */}
               <CardDealingPanel 
                 round={gameState.currentRound}
@@ -191,33 +142,19 @@ const AdminGamePanel: React.FC = () => {
                 </div>
               </div>
 
-              {/* Cards Dealt Summary */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-blue-900/30 rounded-lg p-4 border border-blue-500/50">
-                  <div className="text-sm text-gray-400 mb-1">BAHAR CARDS</div>
-                  <div className="text-3xl font-bold text-blue-400">
-                    {gameState.baharCards.length}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {gameState.baharCards.map(c => c.display).join(', ') || 'None yet'}
-                  </div>
-                </div>
-                <div className="bg-red-900/30 rounded-lg p-4 border border-red-500/50">
-                  <div className="text-sm text-gray-400 mb-1">ANDAR CARDS</div>
-                  <div className="text-3xl font-bold text-red-400">
-                    {gameState.andarCards.length}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {gameState.andarCards.map(c => c.display).join(', ') || 'None yet'}
-                  </div>
-                </div>
+              </div>
+
+              {/* RIGHT: Persistent Side Panel - ALWAYS VISIBLE */}
+              <div className="col-span-1">
+                <PersistentSidePanel />
               </div>
             </div>
           )}
 
           {/* STEP 4: Game Complete - Show Winner */}
           {gameState.phase === 'complete' && gameState.gameWinner && (
-            <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2 space-y-4">
               <div className={`rounded-lg border-2 p-8 text-center ${
                 gameState.gameWinner === 'andar' 
                   ? 'bg-red-900/30 border-red-500' 
@@ -243,10 +180,38 @@ const AdminGamePanel: React.FC = () => {
               >
                 🎮 Start New Game
               </button>
+              </div>
+
+              {/* RIGHT: Persistent Side Panel - ALWAYS VISIBLE */}
+              <div className="col-span-1">
+                <PersistentSidePanel />
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* No Winner Transition - Shows before round transition */}
+      <NoWinnerTransition
+        show={showNoWinnerTransition}
+        currentRound={previousRound}
+        nextRound={gameState.currentRound}
+        onComplete={() => setShowNoWinnerTransition(false)}
+      />
+
+      {/* Round Transition Animation */}
+      <RoundTransition
+        show={showRoundTransition}
+        round={gameState.currentRound}
+        message={
+          gameState.currentRound === 2
+            ? 'Place additional bets!'
+            : gameState.currentRound === 3
+            ? 'Final Draw - No more betting!'
+            : ''
+        }
+        onComplete={() => setShowRoundTransition(false)}
+      />
     </div>
   );
 };

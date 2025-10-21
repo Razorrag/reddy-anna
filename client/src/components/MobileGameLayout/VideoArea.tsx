@@ -92,23 +92,25 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
       </div>
 
-      {/* Circular Timer Overlay - CENTER OF SCREEN */}
-      {(gameState.phase === 'betting' || gameState.phase === 'dealing') && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-30">
-          <div className={`relative ${isPulsing ? 'animate-pulse' : ''}`}>
-            {/* Large Circular Timer */}
-            <div className="relative w-32 h-32">
-              <svg className="transform -rotate-90 w-32 h-32">
-                {/* Background circle */}
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="58"
-                  stroke="rgba(0, 0, 0, 0.5)"
-                  strokeWidth="8"
-                  fill="rgba(0, 0, 0, 0.3)"
-                />
-                {/* Progress circle */}
+      {/* Circular Timer Overlay - CENTER OF SCREEN - ALWAYS VISIBLE */}
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-30">
+        <div className={`relative transition-all duration-300 ${
+          gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
+        }`}>
+          {/* Large Circular Timer */}
+          <div className="relative w-32 h-32">
+            <svg className="transform -rotate-90 w-32 h-32">
+              {/* Background circle */}
+              <circle
+                cx="64"
+                cy="64"
+                r="58"
+                stroke="rgba(0, 0, 0, 0.5)"
+                strokeWidth="8"
+                fill="rgba(0, 0, 0, 0.3)"
+              />
+              {/* Progress circle - only show during betting */}
+              {gameState.phase === 'betting' && (
                 <circle
                   cx="64"
                   cy="64"
@@ -120,17 +122,26 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
                   strokeDashoffset={`${2 * Math.PI * 58 * (1 - getTimerProgress())}`}
                   className="transition-all duration-1000 ease-linear"
                 />
-              </svg>
-              {/* Timer text */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-white font-bold text-4xl drop-shadow-lg">
-                  {localTimer}
-                </div>
+              )}
+            </svg>
+            {/* Timer text - ALWAYS VISIBLE */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-white font-bold text-4xl drop-shadow-lg">
+                {gameState.phase === 'betting' && localTimer > 0
+                  ? localTimer
+                  : gameState.phase === 'dealing'
+                  ? '🎴'
+                  : gameState.phase === 'complete'
+                  ? '✓'
+                  : gameState.phase === 'opening'
+                  ? '⏳'
+                  : '--'
+                }
               </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Phase Indicator with Round Number */}
       <div className="absolute top-4 left-4">

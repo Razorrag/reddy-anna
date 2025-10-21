@@ -320,8 +320,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               // Supabase returns snake_case, but TypeScript type uses camelCase
               currentGameState.gameId = (newGame as any).game_id || newGame.gameId;
               console.log('✅ Game session created with ID:', currentGameState.gameId);
-            } catch (error) {
-              console.error('⚠️ Error creating game session, using fallback ID:', error);
+            } catch (error: any) {
+              console.error('⚠️ Error creating game session in database:', {
+                message: error.message,
+                code: error.code,
+                hint: error.hint,
+                details: error.details,
+              });
+              console.warn('⚠️ Using fallback in-memory game ID - game will not persist to database');
               currentGameState.gameId = `game-${Date.now()}`;
             }
             

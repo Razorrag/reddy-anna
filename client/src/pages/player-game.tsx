@@ -11,6 +11,8 @@ import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
 import MobileGameLayout from '../components/MobileGameLayout/MobileGameLayout';
 import { GameHistoryModal } from '../components/GameHistoryModal';
+import RoundTransition from '../components/RoundTransition';
+import NoWinnerTransition from '../components/NoWinnerTransition';
 import type { BetSide } from '../types/game';
 
 const PlayerGame: React.FC = () => {
@@ -28,6 +30,9 @@ const PlayerGame: React.FC = () => {
   const [userBalance, setUserBalance] = useState(5000000); // ₹50 Lakhs test balance
   const [showChipSelector, setShowChipSelector] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showRoundTransition, setShowRoundTransition] = useState(false);
+  const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
+  const [previousRound, setPreviousRound] = useState(gameState.currentRound);
   const [userBets, setUserBets] = useState({
     round1: { andar: 0, bahar: 0 },
     round2: { andar: 0, bahar: 0 }
@@ -131,6 +136,26 @@ const PlayerGame: React.FC = () => {
     }
   }, [gameState.playerWallet, gameState.round1Bets, gameState.round2Bets]);
 
+  // Detect round changes and trigger transition animation
+  useEffect(() => {
+    if (gameState.currentRound !== previousRound && gameState.currentRound > 1) {
+      setShowRoundTransition(true);
+      setPreviousRound(gameState.currentRound);
+    }
+  }, [gameState.currentRound, previousRound]);
+
+  // Listen for no-winner transition events
+  useEffect(() => {
+    const handleNoWinner = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('No winner event received:', customEvent.detail);
+      setShowNoWinnerTransition(true);
+    };
+
+    window.addEventListener('no-winner-transition', handleNoWinner);
+    return () => window.removeEventListener('no-winner-transition', handleNoWinner);
+  }, []);
+
   // Mock history data
   const mockHistory = [
     { 
@@ -211,6 +236,28 @@ const PlayerGame: React.FC = () => {
         isOpen={showHistoryModal}
         onClose={() => setShowHistoryModal(false)}
         history={mockHistory}
+      />
+
+      {/* No Winner Transition - Shows before round transition */}
+      <NoWinnerTransition
+        show={showNoWinnerTransition}
+        currentRound={previousRound}
+        nextRound={gameState.currentRound}
+        onComplete={() => setShowNoWinnerTransition(false)}
+      />
+
+      {/* Round Transition Animation */}
+      <RoundTransition
+        show={showRoundTransition}
+        round={gameState.currentRound}
+        message={
+          gameState.currentRound === 2
+            ? 'Place additional bets!'
+            : gameState.currentRound === 3
+            ? 'Final Draw - No more betting!'
+            : ''
+        }
+        onComplete={() => setShowRoundTransition(false)}
       />
     </>
   );

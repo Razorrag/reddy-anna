@@ -215,18 +215,37 @@ export class SupabaseStorage implements IStorage {
       updated_at: now,
     };
 
-    const { data, error } = await supabaseServer
-      .from('game_sessions')
-      .insert(gameSession)
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabaseServer
+        .from('game_sessions')
+        .insert(gameSession)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error creating game session:', error);
+      if (error) {
+        console.error('❌ Supabase error creating game session:', {
+          message: error.message,
+          code: error.code,
+          hint: error.hint,
+          details: error.details,
+        });
+        throw error;
+      }
+
+      return data;
+    } catch (error: any) {
+      // Network or connection errors
+      if (error.message?.includes('fetch failed') || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        console.error('🔴 Network error connecting to Supabase:', {
+          message: error.message,
+          code: error.code,
+          cause: error.cause?.message,
+        });
+        console.warn('⚠️ Cannot reach Supabase database - check your internet connection');
+        console.warn('⚠️ Ensure Supabase URL is accessible:', process.env.SUPABASE_URL);
+      }
       throw error;
     }
-
-    return data;
   }
 
   async getCurrentGameSession(): Promise<GameSession | undefined> {
