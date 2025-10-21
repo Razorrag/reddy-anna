@@ -95,10 +95,10 @@ const HorizontalChipSelector: React.FC<HorizontalChipSelectorProps> = ({
   if (!isVisible) return null;
 
   return (
-    <div className="bg-gray-900/95 backdrop-blur-sm border-t border-b border-gray-800 py-3">
-      <div className="px-4">
+    <div className="bg-gray-900/95 backdrop-blur-sm border-t border-b border-gray-800 py-2">
+      <div className="px-3">
         {/* Scroll hint */}
-        <div className="text-center text-xs text-gray-500 mb-2">
+        <div className="text-center text-xs text-gray-500 mb-1">
           Swipe to select chip →
         </div>
         
@@ -106,7 +106,7 @@ const HorizontalChipSelector: React.FC<HorizontalChipSelectorProps> = ({
         <div
           ref={scrollContainerRef}
           className={`
-            flex gap-3 overflow-x-auto scrollbar-hide
+            flex gap-2 overflow-x-auto scrollbar-hide
             scroll-smooth cursor-grab active:cursor-grabbing
             ${isDragging ? 'scroll-behavior-auto' : 'scroll-behavior-smooth'}
           `}
@@ -141,7 +141,7 @@ const HorizontalChipSelector: React.FC<HorizontalChipSelectorProps> = ({
                   }
                 `}
               >
-                <div className="relative w-16 h-16 sm:w-20 sm:h-20">
+                <div className="relative w-12 h-12 sm:w-14 sm:h-14">
                   <img
                     src={`/coins/${amount}.png`}
                     alt={`₹${amount}`}
@@ -167,17 +167,17 @@ const HorizontalChipSelector: React.FC<HorizontalChipSelectorProps> = ({
                         : 'bg-gray-700 text-gray-500'
                     }
                   `}>
-                    <div className="text-xs sm:text-sm font-bold text-center">
+                    <div className="text-xs font-bold text-center">
                       ₹{amount >= 1000 ? `${amount/1000}k` : amount}
                     </div>
                   </div>
                   {/* Selection indicator */}
                   {isSelected && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse" />
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
                   )}
                 </div>
                 {/* Amount label */}
-                <div className="text-xs text-center mt-1 text-gray-400">
+                <div className="text-xs text-center mt-0.5 text-gray-400">
                   ₹{amount.toLocaleString('en-IN')}
                 </div>
               </button>
@@ -186,9 +186,9 @@ const HorizontalChipSelector: React.FC<HorizontalChipSelectorProps> = ({
         </div>
         
         {/* Selected chip display */}
-        <div className="text-center mt-3">
-          <span className="text-sm text-gray-400">Selected: </span>
-          <span className="text-sm font-bold text-yellow-400">
+        <div className="text-center mt-2">
+          <span className="text-xs text-gray-400">Selected: </span>
+          <span className="text-xs font-bold text-yellow-400">
             ₹{selectedAmount.toLocaleString('en-IN')}
           </span>
         </div>

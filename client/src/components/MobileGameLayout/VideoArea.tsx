@@ -71,59 +71,7 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
     <div className={`relative bg-black rounded-lg overflow-hidden ${className}`}>
       {/* Video Stream Placeholder */}
       <div className="relative aspect-video bg-gradient-to-br from-gray-900 to-black">
-        {/* Card Display Areas - Only show dealt cards, no labels or opening card */}
-        <div className="absolute inset-0 flex">
-          {/* Andar Side (Left) - Cards only */}
-          <div className="flex-1 flex flex-col items-center justify-center p-4">
-            <div className="flex flex-wrap gap-2 justify-center max-w-xs">
-              {gameState.andarCards.map((card, index) => (
-                <div
-                  key={`andar-${index}`}
-                  className="relative w-8 h-12 bg-white rounded shadow-lg border border-gray-300 flex items-center justify-center transform transition-all duration-300 hover:scale-110"
-                  style={{
-                    animation: 'slideInLeft 0.5s ease-out',
-                    animationDelay: `${index * 0.1}s`
-                  }}
-                >
-                  <div className={`text-xs font-bold ${card.color === 'red' ? 'text-red-600' : 'text-gray-800'}`}>
-                    {card.display}
-                  </div>
-                  {index === gameState.andarCards.length - 1 && gameState.gameWinner === 'andar' && (
-                    <div className="absolute -inset-1 bg-yellow-400 rounded animate-pulse" />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Center - Empty space (opening card moved to betting strip) */}
-          <div className="flex items-center justify-center">
-            {/* No opening card here anymore - moved to betting strip */}
-          </div>
-
-          {/* Bahar Side (Right) - Cards only */}
-          <div className="flex-1 flex flex-col items-center justify-center p-4">
-            <div className="flex flex-wrap gap-2 justify-center max-w-xs">
-              {gameState.baharCards.map((card, index) => (
-                <div
-                  key={`bahar-${index}`}
-                  className="relative w-8 h-12 bg-white rounded shadow-lg border border-gray-300 flex items-center justify-center transform transition-all duration-300 hover:scale-110"
-                  style={{
-                    animation: 'slideInRight 0.5s ease-out',
-                    animationDelay: `${index * 0.1}s`
-                  }}
-                >
-                  <div className={`text-xs font-bold ${card.color === 'red' ? 'text-red-600' : 'text-gray-800'}`}>
-                    {card.display}
-                  </div>
-                  {index === gameState.baharCards.length - 1 && gameState.gameWinner === 'bahar' && (
-                    <div className="absolute -inset-1 bg-yellow-400 rounded animate-pulse" />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        {/* Video/Stream area - cards moved to betting buttons */}
 
         {/* Game Status Overlay */}
         {gameState.phase === 'idle' && (
@@ -153,38 +101,38 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
       </div>
 
-      {/* Circular Timer Overlay */}
+      {/* Circular Timer Overlay - CENTER OF SCREEN */}
       {(gameState.phase === 'betting' || gameState.phase === 'dealing') && (
-        <div className="absolute top-4 right-4 pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-30">
           <div className={`relative ${isPulsing ? 'animate-pulse' : ''}`}>
-            {/* Simple Circular Timer */}
-            <div className="relative w-20 h-20">
-              <svg className="transform -rotate-90 w-20 h-20">
+            {/* Large Circular Timer */}
+            <div className="relative w-32 h-32">
+              <svg className="transform -rotate-90 w-32 h-32">
                 {/* Background circle */}
                 <circle
-                  cx="40"
-                  cy="40"
-                  r="36"
-                  stroke="rgba(0, 0, 0, 0.3)"
-                  strokeWidth="6"
-                  fill="none"
+                  cx="64"
+                  cy="64"
+                  r="58"
+                  stroke="rgba(0, 0, 0, 0.5)"
+                  strokeWidth="8"
+                  fill="rgba(0, 0, 0, 0.3)"
                 />
                 {/* Progress circle */}
                 <circle
-                  cx="40"
-                  cy="40"
-                  r="36"
+                  cx="64"
+                  cy="64"
+                  r="58"
                   stroke={getTimerColor()}
-                  strokeWidth="6"
+                  strokeWidth="8"
                   fill="none"
-                  strokeDasharray={`${2 * Math.PI * 36}`}
-                  strokeDashoffset={`${2 * Math.PI * 36 * (1 - getTimerProgress())}`}
+                  strokeDasharray={`${2 * Math.PI * 58}`}
+                  strokeDashoffset={`${2 * Math.PI * 58 * (1 - getTimerProgress())}`}
                   className="transition-all duration-1000 ease-linear"
                 />
               </svg>
               {/* Timer text */}
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-white font-bold text-lg">
+                <div className="text-white font-bold text-4xl drop-shadow-lg">
                   {localTimer}
                 </div>
               </div>
@@ -193,9 +141,12 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
         </div>
       )}
 
-      {/* Phase Indicator */}
+      {/* Phase Indicator with Round Number */}
       <div className="absolute top-4 left-4">
-        <div className="bg-black/80 px-3 py-2 rounded-lg border border-gray-700 backdrop-blur-sm">
+        <div className="bg-black/80 px-3 py-2 rounded-lg border border-yellow-400 backdrop-blur-sm">
+          <div className="text-yellow-400 text-lg font-bold">
+            ROUND {gameState.currentRound}
+          </div>
           <div className="text-white text-sm font-semibold">
             {getPhaseText()}
           </div>

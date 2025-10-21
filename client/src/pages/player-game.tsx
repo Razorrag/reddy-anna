@@ -25,7 +25,7 @@ const PlayerGame: React.FC = () => {
   const [selectedBetAmount, setSelectedBetAmount] = useState(2500);
   const [selectedPosition, setSelectedPosition] = useState<BetSide | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
-  const [userBalance, setUserBalance] = useState(50000); // Mock balance
+  const [userBalance, setUserBalance] = useState(5000000); // ₹50 Lakhs test balance
   const [showChipSelector, setShowChipSelector] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [userBets, setUserBets] = useState({

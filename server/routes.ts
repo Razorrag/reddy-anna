@@ -365,6 +365,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const betSide = message.data.side;
             const betRound = currentGameState.currentRound;
             
+            // Skip database operations for anonymous users
+            const isAnonymous = client.userId === 'anonymous';
+            
             // Rate limiting
             const now = Date.now();
             const userLimit = userBetRateLimits.get(client.userId);
@@ -418,13 +421,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            const currentUser = await storage.getUserById(client.userId);
-            if (!currentUser || currentUser.balance < betAmount) {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Insufficient balance' }
-              }));
-              break;
+            // Skip balance check for anonymous users (testing only)
+            if (!isAnonymous) {
+              const currentUser = await storage.getUserById(client.userId);
+              if (!currentUser || currentUser.balance < betAmount) {
+                ws.send(JSON.stringify({
+                  type: 'error',
+                  data: { message: 'Insufficient balance' }
+                }));
+                break;
+              }
             }
             
             if (!currentGameState.userBets.has(client.userId)) {
@@ -434,14 +440,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
             }
             
-            await storage.createBet({
-              userId: client.userId,
-              gameId: currentGameState.gameId,
-              round: betRound,
-              side: betSide,
-              amount: betAmount,
-              status: 'pending'
-            });
+            // Only save to database for non-anonymous users
+            if (!isAnonymous) {
+              await storage.createBet({
+                userId: client.userId,
+                gameId: currentGameState.gameId,
+                round: betRound,
+                side: betSide,
+                amount: betAmount,
+                status: 'pending'
+              });
+              
+              await storage.updateUserBalance(client.userId, -betAmount);
+            }
             
             const userBet = currentGameState.userBets.get(client.userId)!;
             if (betRound === 1) {
@@ -452,24 +463,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
               currentGameState.round2Bets[betSide as 'andar' | 'bahar'] += betAmount;
             }
             
-            await storage.updateUserBalance(client.userId, -betAmount);
-            
-            const updatedUser = await storage.getUserById(client.userId);
-            if (updatedUser) {
-              ws.send(JSON.stringify({
-                type: 'balance_update',
-                data: { balance: updatedUser.balance }
-              }));
-              
-              ws.send(JSON.stringify({
-                type: 'user_bets_update',
-                data: {
-                  round1Bets: userBet.round1,
-                  round2Bets: userBet.round2,
-                  currentRound: betRound
-                }
-              }));
+            let updatedBalance = betAmount; // For anonymous
+            if (!isAnonymous) {
+              const updatedUser = await storage.getUserById(client.userId);
+              if (updatedUser) {
+                updatedBalance = updatedUser.balance;
+                ws.send(JSON.stringify({
+                  type: 'balance_update',
+                  data: { balance: updatedUser.balance }
+                }));
+              }
             }
+              
+            ws.send(JSON.stringify({
+              type: 'user_bets_update',
+              data: {
+                round1Bets: userBet.round1,
+                round2Bets: userBet.round2,
+                currentRound: betRound
+              }
+            }));
             
             broadcast({ 
               type: 'betting_stats',
@@ -486,38 +499,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
           case 'deal_card':
             // Admin privileges removed for development - anyone can deal cards
             
-            const card = message.data.card?.display || message.data.card;
+            const cardData = message.data.card;
+            const cardDisplay = cardData?.display || cardData; // For database (string)
             const side = message.data.side;
             const position = message.data.position || (side === 'bahar' ? currentGameState.baharCards.length + 1 : currentGameState.andarCards.length + 1);
             
+            // Store the display string in state for winner checking
             if (side === 'andar') {
-              currentGameState.andarCards.push(card);
+              currentGameState.andarCards.push(cardDisplay);
             } else {
-              currentGameState.baharCards.push(card);
+              currentGameState.baharCards.push(cardDisplay);
             }
             
-            await storage.createDealtCard({
-              gameId: currentGameState.gameId,
-              card,
-              side,
-              position,
-              isWinningCard: false
-            });
+            // Only save to database if gameId exists (skip for testing)
+            if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+              try {
+                await storage.createDealtCard({
+                  gameId: currentGameState.gameId,
+                  card: cardDisplay,
+                  side,
+                  position,
+                  isWinningCard: false
+                });
+              } catch (error) {
+                console.log('⚠️ Skipping dealt card database save (test mode)');
+              }
+            }
             
-            const isWinner = checkWinner(card);
+            const isWinner = checkWinner(cardDisplay);
             
-            // Send properly formatted card object
+            // Broadcast the FULL card object back (as received from admin)
             broadcast({ 
               type: 'card_dealt', 
               data: { 
-                card: {
-                  id: card,
-                  display: card,
-                  value: card.replace(/[♠♥♦♣]/g, ''),
-                  suit: card.match(/[♠♥♦♣]/)?.[0] || '',
-                  color: (card.match(/[♥♦]/) ? 'red' : 'black') as 'red' | 'black',
-                  rank: card.replace(/[♠♥♦♣]/g, '')
-                },
+                card: cardData, // Send full Card object, not reconstructed
                 side,
                 position,
                 isWinningCard: isWinner
@@ -525,12 +540,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             if (isWinner) {
-              await completeGame(side as 'andar' | 'bahar', card);
+              console.log('✅ Winner found! Completing game...');
+              await completeGame(side as 'andar' | 'bahar', cardDisplay);
             } else {
+              console.log(`🎴 No winner yet. Andar: ${currentGameState.andarCards.length}, Bahar: ${currentGameState.baharCards.length}, Round: ${currentGameState.currentRound}`);
+              
               const roundComplete = (currentGameState.currentRound === 1 && currentGameState.andarCards.length === 1 && currentGameState.baharCards.length === 1) ||
                                    (currentGameState.currentRound === 2 && currentGameState.andarCards.length === 2 && currentGameState.baharCards.length === 2);
               
               if (roundComplete) {
+                console.log(`🔄 Round ${currentGameState.currentRound} complete! Auto-transitioning in 2 seconds...`);
+                
+                // Notify players
+                broadcast({
+                  type: 'notification',
+                  data: {
+                    message: `No winner in Round ${currentGameState.currentRound}. Starting Round ${currentGameState.currentRound + 1} in 2 seconds...`,
+                    type: 'info'
+                  }
+                });
+                
                 if (currentGameState.currentRound === 1) {
                   setTimeout(() => transitionToRound2(), 2000);
                 } else if (currentGameState.currentRound === 2) {

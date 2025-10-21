@@ -77,7 +77,7 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
           onPositionSelect={onPositionSelect}
           onPlaceBet={onPlaceBet}
           isPlacingBet={isPlacingBet}
-          className="px-4 py-3"
+          className="px-4 py-2"
         />
 
         {/* Horizontal Chip Selector - Toggleable swipeable chip selection */}
@@ -99,14 +99,14 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
           onRebet={onRebet}
           onHistoryClick={onHistoryClick}
           onShowChipSelector={onShowChipSelector}
-          className="px-4 py-3"
+          className="px-4 py-2"
         />
 
         {/* Card History Row - Recent results */}
         <CardHistory
           gameState={gameState}
           onHistoryClick={onHistoryClick}
-          className="px-4 py-2"
+          className="px-4 py-1"
         />
 
         {/* Progress Bar - Bottom indicator */}

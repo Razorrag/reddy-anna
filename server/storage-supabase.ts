@@ -455,8 +455,13 @@ export class SupabaseStorage implements IStorage {
       .from('dealt_cards')
       .insert({
         id: randomUUID(),
-        ...card,
-        createdAt: new Date()
+        game_id: card.gameId,
+        card: card.card,
+        side: card.side,
+        position: card.position,
+        is_winning_card: card.isWinningCard || false,
+        dealt_at: new Date(),
+        created_at: new Date()
       })
       .select()
       .single();

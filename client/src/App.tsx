@@ -25,12 +25,15 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/admin-login" component={AdminLogin} />
       
-      {/* Player Routes - Now publicly accessible */}
+      {/* Player Game Routes */}
       <Route path="/game" component={PlayerGame} />
+      <Route path="/play" component={PlayerGame} />
       
-      {/* Admin Routes - Now publicly accessible */}
+      {/* Admin Routes */}
       <Route path="/admin" component={Admin} />
       <Route path="/admin-game" component={AdminGame} />
+      <Route path="/game-admin" component={AdminGame} />
+      <Route path="/admin-control" component={AdminGame} />
       <Route path="/user-admin" component={UserAdmin} />
       <Route path="/backend-settings" component={BackendSettings} />
       

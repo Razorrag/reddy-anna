@@ -27,14 +27,14 @@ const ControlsRow: React.FC<ControlsRowProps> = ({
   className = ''
 }) => {
   return (
-    <div className={`flex items-center justify-between gap-3 ${className}`}>
+    <div className={`flex items-center justify-between gap-2 ${className}`}>
       {/* History Button */}
       <button
         onClick={onHistoryClick}
-        className="w-14 h-14 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95"
+        className="w-11 h-11 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95"
       >
         <svg 
-          className="w-5 h-5 text-gray-400 mb-1" 
+          className="w-4 h-4 text-gray-400" 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"
@@ -48,10 +48,10 @@ const ControlsRow: React.FC<ControlsRowProps> = ({
       <button
         onClick={onUndoBet}
         disabled={isPlacingBet}
-        className="w-14 h-14 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-11 h-11 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <svg 
-          className="w-5 h-5 text-gray-400 mb-1" 
+          className="w-4 h-4 text-gray-400" 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"
@@ -64,27 +64,27 @@ const ControlsRow: React.FC<ControlsRowProps> = ({
       {/* Select Chip Button (Prominent) */}
       <button
         onClick={onShowChipSelector}
-        className="flex-1 max-w-32 h-14 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center border-2 border-yellow-400 shadow-lg hover:shadow-yellow-500/25 transition-all duration-200 active:scale-95"
+        className="flex-1 max-w-28 h-11 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center border-2 border-yellow-400 shadow-lg hover:shadow-yellow-500/25 transition-all duration-200 active:scale-95"
       >
         {selectedBetAmount > 0 ? (
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-yellow-700 rounded-full flex items-center justify-center">
+          <div className="flex items-center gap-1">
+            <div className="w-5 h-5 bg-yellow-700 rounded-full flex items-center justify-center">
               <span className="text-yellow-900 text-xs font-bold">₹</span>
             </div>
-            <span className="text-yellow-900 font-bold">
-              {selectedBetAmount.toLocaleString('en-IN')}
+            <span className="text-yellow-900 font-bold text-sm">
+              {selectedBetAmount >= 1000 ? `${selectedBetAmount/1000}k` : selectedBetAmount}
             </span>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <svg 
-              className="w-5 h-5 text-yellow-900" 
+              className="w-4 h-4 text-yellow-900" 
               fill="currentColor" 
               viewBox="0 0 20 20"
             >
               <circle cx="10" cy="10" r="8" />
             </svg>
-            <span className="text-yellow-900 font-bold">Select Chip</span>
+            <span className="text-yellow-900 font-bold text-sm">Select Chip</span>
           </div>
         )}
       </button>
@@ -93,10 +93,10 @@ const ControlsRow: React.FC<ControlsRowProps> = ({
       <button
         onClick={onRebet}
         disabled={isPlacingBet}
-        className="w-14 h-14 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-11 h-11 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <svg 
-          className="w-5 h-5 text-gray-400 mb-1" 
+          className="w-4 h-4 text-gray-400" 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"

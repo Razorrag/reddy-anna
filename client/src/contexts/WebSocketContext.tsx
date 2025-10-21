@@ -225,15 +225,18 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
               
             case 'card_dealt':
-              // Update card display based on WebSocket data
+              console.log('🎴 Card dealt:', data.data);
               if (data.data.side === 'andar') {
                 addAndarCard(data.data.card);
+                console.log('✅ Added to Andar:', data.data.card);
               } else {
                 addBaharCard(data.data.card);
+                console.log('✅ Added to Bahar:', data.data.card);
               }
-              // Check if this is the winning card
+              
+              // Check if it's a winning card
               if (data.data.isWinningCard) {
-                setWinner(data.data.side);
+                showNotification(`${data.data.side.toUpperCase()} wins with ${data.data.card.display}!`, 'success');
               }
               break;
 
@@ -255,29 +258,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                 bahar: data.data.baharTotal 
               });
               // Update individual round bets
-              if (data.data.round1Bets) updateRoundBets(1, data.data.round1Bets);
-              if (data.data.round2Bets) updateRoundBets(2, data.data.round2Bets);
-              break;
-
-            case 'start_round_2':
-              setCurrentRound(data.data.round);
-              setPhase('betting');
-              if (data.data.timer) setCountdown(data.data.timer);
-              if (data.data.round1Bets) updateRoundBets(1, data.data.round1Bets);
-              showNotification(data.data.message || 'Round 2 betting started!', 'success');
-              break;
-
-            case 'start_final_draw':
-              setCurrentRound(3);
-              setPhase('dealing');
-              setCountdown(0);
-              if (data.data.round1Bets) updateRoundBets(1, data.data.round1Bets);
-              if (data.data.round2Bets) updateRoundBets(2, data.data.round2Bets);
-              showNotification(data.data.message || 'Round 3: Continuous draw started!', 'warning');
-              break;
-              
-            case 'game_complete':
-              setWinner(data.data.winner);
               setPhase('complete');
               setCurrentRound(1);
               showNotification(data.data.message || 'Game completed!', 'success');
@@ -298,8 +278,34 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               if (data.data?.phase) {
                 setPhase(data.data.phase);
               }
+              if (data.data?.round) {
+                setCurrentRound(data.data.round);
+              }
               if (data.data?.message) {
                 showNotification(data.data.message, 'info');
+              }
+              break;
+
+            case 'start_round_2':
+              console.log('🔄 Round 2 transition:', data.data);
+              setCurrentRound(2);
+              setPhase('betting');
+              if (data.data.timer) setCountdown(data.data.timer);
+              showNotification(data.data.message || 'Round 2 betting started!', 'success');
+              break;
+
+            case 'start_final_draw':
+              console.log('🔄 Round 3 transition:', data.data);
+              setCurrentRound(3);
+              setPhase('dealing');
+              setCountdown(0);
+              showNotification('Round 3: Final Draw! Admin will deal until match.', 'info');
+              break;
+
+            case 'notification':
+              // Handle server notifications
+              if (data.data?.message) {
+                showNotification(data.data.message, data.data.type || 'info');
               }
               break;
 
