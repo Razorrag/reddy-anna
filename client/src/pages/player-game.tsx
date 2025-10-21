@@ -33,10 +33,10 @@ const PlayerGame: React.FC = () => {
     round2: { andar: 0, bahar: 0 }
   });
 
-  // Available bet amounts - matching available coin images
-  const betAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
+  // Available bet amounts - matching schema limits (1000-50000)
+  const betAmounts = [1000, 2500, 5000, 10000, 20000, 30000, 40000, 50000];
 
-  // Place bet handler
+  // Update the handlePlaceBet function to properly use WebSocket
   const handlePlaceBet = useCallback(async (position: BetSide) => {
     if (selectedBetAmount === 0) {
       showNotification('Please select a chip first', 'error');
@@ -53,7 +53,6 @@ const PlayerGame: React.FC = () => {
       return;
     }
 
-    // Check if betting is locked (timer ended but waiting for admin to deal)
     if (gameState.bettingLocked) {
       showNotification('Betting period has ended. Waiting for cards to be dealt.', 'error');
       return;
@@ -62,23 +61,10 @@ const PlayerGame: React.FC = () => {
     setIsPlacingBet(true);
 
     try {
-      // Use WebSocket to place bet (this will sync with backend)
+      // Use WebSocket to place bet
       await placeBetWebSocket(position, selectedBetAmount);
 
-      // Update local balance (optimistic)
-      setUserBalance(prev => prev - selectedBetAmount);
-
-      // Update local user bets
-      const currentRound = gameState.currentRound;
-      setUserBets(prev => ({
-        ...prev,
-        [`round${currentRound}`]: {
-          ...prev[`round${currentRound}` as keyof typeof prev],
-          [position]: prev[`round${currentRound}` as keyof typeof prev][position] + selectedBetAmount
-        }
-      }));
-
-      showNotification(`Round ${currentRound} bet placed: ₹${selectedBetAmount} on ${position}`, 'success');
+      showNotification(`Bet placed: ₹${selectedBetAmount} on ${position}`, 'success');
     } catch (error) {
       showNotification('Failed to place bet', 'error');
     } finally {

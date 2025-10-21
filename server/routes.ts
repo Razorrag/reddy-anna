@@ -225,7 +225,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         switch (message.type) {
           case 'authenticate':
-          case 'connection':
             client = {
               ws,
               userId: message.data?.userId || 'anonymous',
@@ -233,17 +232,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               wallet: message.data?.wallet || 0,
             };
             clients.add(client);
-            
+
             ws.send(JSON.stringify({
               type: 'authenticated',
               data: { userId: client.userId, role: client.role, wallet: client.wallet }
             }));
-            
-            const userBets = currentGameState.userBets.get(client.userId) || {
-              round1: { andar: 0, bahar: 0 },
-              round2: { andar: 0, bahar: 0 }
-            };
-            
+
+            // Send current game state to new client
             const openingCardForSync = currentGameState.openingCard ? {
               id: currentGameState.openingCard,
               display: currentGameState.openingCard,
@@ -253,6 +248,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               rank: currentGameState.openingCard?.replace(/[♠♥♦♣]/g, '') || ''
             } : null;
 
+            const userBets = currentGameState.userBets.get(client.userId) || {
+              round1: { andar: 0, bahar: 0 },
+              round2: { andar: 0, bahar: 0 }
+            };
+
             ws.send(JSON.stringify({
               type: 'sync_game_state',
               data: {
@@ -261,16 +261,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 phase: currentGameState.phase,
                 currentRound: currentGameState.currentRound,
                 countdown: currentGameState.timer,
-                andarCards: currentGameState.andarCards,
-                baharCards: currentGameState.baharCards,
+                andarCards: currentGameState.andarCards.map(card => ({
+                  id: card,
+                  display: card,
+                  value: card?.replace(/[♠♥♦♣]/g, '') || '',
+                  suit: card?.match(/[♠♥♦♣]/)?.[0] || '',
+                  color: (card?.match(/[♥♦]/) ? 'red' : 'black') as 'red' | 'black',
+                  rank: card?.replace(/[♠♥♦♣]/g, '') || ''
+                })),
+                baharCards: currentGameState.baharCards.map(card => ({
+                  id: card,
+                  display: card,
+                  value: card?.replace(/[♠♥♦♣]/g, '') || '',
+                  suit: card?.match(/[♠♥♦♣]/)?.[0] || '',
+                  color: (card?.match(/[♥♦]/) ? 'red' : 'black') as 'red' | 'black',
+                  rank: card?.replace(/[♠♥♦♣]/g, '') || ''
+                })),
                 winner: currentGameState.winner,
                 winningCard: currentGameState.winningCard,
                 andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
                 baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
                 round1Bets: currentGameState.round1Bets,
                 round2Bets: currentGameState.round2Bets,
-                userRound1Bets: userBets.round1,
-                userRound2Bets: userBets.round2,
                 bettingLocked: currentGameState.bettingLocked
               }
             }));
@@ -494,10 +506,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             const isWinner = checkWinner(card);
             
+            // Send properly formatted card object
             broadcast({ 
               type: 'card_dealt', 
               data: { 
-                card: { display: card, value: card.replace(/[♠♥♦♣]/g, ''), suit: card.match(/[♠♥♦♣]/)?.[0] || '' },
+                card: {
+                  id: card,
+                  display: card,
+                  value: card.replace(/[♠♥♦♣]/g, ''),
+                  suit: card.match(/[♠♥♦♣]/)?.[0] || '',
+                  color: (card.match(/[♥♦]/) ? 'red' : 'black') as 'red' | 'black',
+                  rank: card.replace(/[♠♥♦♣]/g, '')
+                },
                 side,
                 position,
                 isWinningCard: isWinner

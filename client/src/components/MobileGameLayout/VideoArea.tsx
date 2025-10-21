@@ -17,34 +17,20 @@ interface VideoAreaProps {
 }
 
 const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
-  const { gameState, setCountdown } = useGameState();
-  const [localTimer, setLocalTimer] = useState(gameState.countdownTimer);
+  const { gameState } = useGameState();
+  
+  // Use the gameState.timer directly
+  const localTimer = gameState.countdownTimer;
   const [isPulsing, setIsPulsing] = useState(false);
 
-  // Sync local timer with game state
+  // Handle pulse effect when less than 5 seconds
   useEffect(() => {
-    setLocalTimer(gameState.countdownTimer);
-  }, [gameState.countdownTimer]);
-
-  // Handle countdown logic
-  useEffect(() => {
-    if (gameState.phase === 'betting' && localTimer > 0) {
-      const timer = setTimeout(() => {
-        const newTime = localTimer - 1;
-        setLocalTimer(newTime);
-        setCountdown(newTime);
-        
-        // Trigger pulse effect when less than 5 seconds
-        if (newTime <= 5 && newTime > 0) {
-          setIsPulsing(true);
-        } else {
-          setIsPulsing(false);
-        }
-      }, 1000);
-
-      return () => clearTimeout(timer);
+    if (localTimer <= 5 && localTimer > 0) {
+      setIsPulsing(true);
+    } else {
+      setIsPulsing(false);
     }
-  }, [localTimer, gameState.phase, setCountdown]);
+  }, [localTimer]);
 
   // Get timer color based on phase
   const getTimerColor = () => {
@@ -85,11 +71,10 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
     <div className={`relative bg-black rounded-lg overflow-hidden ${className}`}>
       {/* Video Stream Placeholder */}
       <div className="relative aspect-video bg-gradient-to-br from-gray-900 to-black">
-        {/* Card Display Areas */}
+        {/* Card Display Areas - Only show dealt cards, no labels or opening card */}
         <div className="absolute inset-0 flex">
-          {/* Andar Side (Left) */}
+          {/* Andar Side (Left) - Cards only */}
           <div className="flex-1 flex flex-col items-center justify-center p-4">
-            <div className="text-red-400 text-sm font-bold mb-2">ANDAR</div>
             <div className="flex flex-wrap gap-2 justify-center max-w-xs">
               {gameState.andarCards.map((card, index) => (
                 <div
@@ -111,37 +96,13 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
             </div>
           </div>
 
-          {/* Center - Opening Card */}
+          {/* Center - Empty space (opening card moved to betting strip) */}
           <div className="flex items-center justify-center">
-            {gameState.selectedOpeningCard ? (
-              <div className="relative">
-                <div className={`
-                  w-16 h-24 rounded-lg shadow-2xl border-2 flex flex-col items-center justify-center
-                  transform transition-all duration-300 hover:scale-105
-                  ${gameState.selectedOpeningCard.color === 'red' 
-                    ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-400' 
-                    : 'bg-gradient-to-br from-gray-50 to-gray-100 border-gray-400'
-                  }
-                `}>
-                  <div className={`text-lg font-bold ${gameState.selectedOpeningCard.color === 'red' ? 'text-red-600' : 'text-gray-800'}`}>
-                    {gameState.selectedOpeningCard.display}
-                  </div>
-                  <div className={`text-xs font-semibold ${gameState.selectedOpeningCard.color === 'red' ? 'text-red-500' : 'text-gray-600'}`}>
-                    {gameState.selectedOpeningCard.suit?.toUpperCase()}
-                  </div>
-                </div>
-                <div className="absolute -inset-2 bg-yellow-400/30 rounded-lg blur-sm animate-pulse" />
-              </div>
-            ) : (
-              <div className="w-16 h-24 bg-gray-800 rounded-lg border-2 border-gray-600 flex items-center justify-center">
-                <div className="text-gray-400 text-2xl font-bold">?</div>
-              </div>
-            )}
+            {/* No opening card here anymore - moved to betting strip */}
           </div>
 
-          {/* Bahar Side (Right) */}
+          {/* Bahar Side (Right) - Cards only */}
           <div className="flex-1 flex flex-col items-center justify-center p-4">
-            <div className="text-blue-400 text-sm font-bold mb-2">BAHAR</div>
             <div className="flex flex-wrap gap-2 justify-center max-w-xs">
               {gameState.baharCards.map((card, index) => (
                 <div

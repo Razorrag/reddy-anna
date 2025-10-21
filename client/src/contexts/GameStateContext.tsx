@@ -216,7 +216,7 @@ const GameStateContext = createContext<GameStateContextType | undefined>(undefin
 export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [gameState, dispatch] = useReducer(gameReducer, initialState);
 
-  // Initialize from localStorage or auth
+  // Initialize from localStorage or auth with improved error handling
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
@@ -225,15 +225,37 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         dispatch({
           type: 'SET_USER_DATA',
           payload: {
-            userId: parsedUser.userId,
-            username: parsedUser.username,
-            wallet: parsedUser.wallet
+            userId: parsedUser.id || parsedUser.userId,
+            username: parsedUser.username || parsedUser.name,
+            wallet: parsedUser.wallet || parsedUser.balance || 50000 // default balance
           }
         });
-        dispatch({ type: 'SET_USER_ROLE', payload: parsedUser.role || 'player' });
+        dispatch({
+          type: 'SET_USER_ROLE',
+          payload: parsedUser.role || parsedUser.userRole || 'player'
+        });
       } catch (e) {
-        console.error('Failed to parse user data from localStorage');
+        console.error('Failed to parse user data from localStorage', e);
+        // Initialize with default values
+        dispatch({
+          type: 'SET_USER_DATA',
+          payload: {
+            userId: 'guest',
+            username: 'Guest Player',
+            wallet: 50000
+          }
+        });
       }
+    } else {
+      // Initialize with default guest user
+      dispatch({
+        type: 'SET_USER_DATA',
+        payload: {
+          userId: 'guest',
+          username: 'Guest Player',
+          wallet: 50000
+        }
+      });
     }
   }, []);
 

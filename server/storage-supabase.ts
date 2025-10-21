@@ -194,18 +194,25 @@ export class SupabaseStorage implements IStorage {
   async createGameSession(session: InsertGameSession): Promise<GameSession> {
     const gameId = randomUUID();
     const now = new Date();
+    // Use snake_case column names to match database schema exactly
     const gameSession = {
-      gameId: gameId,
-      openingCard: session.openingCard || null,
+      game_id: gameId,
+      opening_card: session.openingCard || null,
       phase: session.phase || 'idle',
-      currentTimer: session.currentTimer || 30,
+      current_timer: session.currentTimer || 30,
+      current_round: session.round || 1,
+      andar_cards: [],
+      bahar_cards: [],
       status: 'active',
       winner: null,
-      winningCard: null,
-      currentRound: session.round || 1,
-      startedAt: now,
-      createdAt: now,
-      updatedAt: now,
+      winning_card: null,
+      winning_round: null,
+      total_andar_bets: 0,
+      total_bahar_bets: 0,
+      total_payouts: 0,
+      started_at: now,
+      created_at: now,
+      updated_at: now,
     };
 
     const { data, error } = await supabaseServer
@@ -255,17 +262,18 @@ export class SupabaseStorage implements IStorage {
   }
 
   async updateGameSession(gameId: string, updates: Partial<GameSession>): Promise<void> {
-    // Use camelCase - Supabase JS client auto-converts to snake_case
+    // Use snake_case to match database schema exactly
     const dbUpdates: any = {
-      updatedAt: new Date()
+      updated_at: new Date()
     };
     
     if (updates.phase) dbUpdates.phase = updates.phase;
-    if (updates.round !== undefined) dbUpdates.currentRound = updates.round;
-    if (updates.currentTimer !== undefined) dbUpdates.currentTimer = updates.currentTimer;
-    if (updates.openingCard !== undefined) dbUpdates.openingCard = updates.openingCard;
+    if (updates.round !== undefined) dbUpdates.current_round = updates.round;
+    if (updates.currentTimer !== undefined) dbUpdates.current_timer = updates.currentTimer;
+    if (updates.openingCard !== undefined) dbUpdates.opening_card = updates.openingCard;
     if (updates.winner !== undefined) dbUpdates.winner = updates.winner;
-    if (updates.winningCard !== undefined) dbUpdates.winningCard = updates.winningCard;
+    if (updates.winningCard !== undefined) dbUpdates.winning_card = updates.winningCard;
+    if (updates.winningRound !== undefined) dbUpdates.winning_round = updates.winningRound;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
 
     const { error } = await supabaseServer

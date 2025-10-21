@@ -75,6 +75,46 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   });
   const [reconnectTimeout, setReconnectTimeout] = useState<NodeJS.Timeout | null>(null);
 
+  // Add this function to handle token-based authentication
+  const authenticateUser = useCallback(() => {
+    const ws = (window as any).gameWebSocket;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      const token = localStorage.getItem('token');
+      const userData = localStorage.getItem('user');
+
+      if (token && userData) {
+        try {
+          const user = JSON.parse(userData);
+          ws.send(JSON.stringify({
+            type: 'authenticate',
+            data: {
+              userId: user.id,
+              username: user.username,
+              role: user.role || 'player',
+              token: token
+            },
+            timestamp: Date.now()
+          }));
+          console.log('Authentication message sent with token');
+        } catch (error) {
+          console.error('Authentication error:', error);
+        }
+      } else {
+        // Fallback for testing
+        ws.send(JSON.stringify({
+          type: 'authenticate',
+          data: {
+            userId: 'anonymous',
+            username: 'anonymous',
+            role: 'player'
+          },
+          timestamp: Date.now()
+        }));
+        console.log('Fallback authentication message sent');
+      }
+    }
+  }, []);
+
   const connectWebSocket = useCallback(() => {
     if (typeof window === 'undefined') return; // Skip on server
     
@@ -111,25 +151,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           setReconnectTimeout(null);
         }
         
-        // Send authentication message
-        const userData = localStorage.getItem('user');
-        if (userData) {
-          try {
-            const user = JSON.parse(userData);
-            ws.send(JSON.stringify({
-              type: 'authenticate',
-              data: {
-                userId: user.id,
-                username: user.username,
-                role: user.role || 'player'
-              },
-              timestamp: Date.now()
-            }));
-            console.log('Authentication message sent');
-          } catch (error) {
-            console.error('Failed to parse user data for authentication:', error);
-          }
-        }
+        // Send authentication message with proper token handling
+        authenticateUser();
         
         showNotification('Connected to game server', 'success');
       };
@@ -419,7 +442,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }));
       showNotification('Failed to initialize WebSocket connection', 'error');
     }
-  }, [setPhase, setCountdown, setWinner, addAndarCard, addBaharCard, setSelectedOpeningCard, updateTotalBets, setCurrentRound, addDealtCard, showNotification, reconnectTimeout]);
+  }, [authenticateUser, setPhase, setCountdown, setWinner, addAndarCard, addBaharCard, setSelectedOpeningCard, updateTotalBets, setCurrentRound, addDealtCard, showNotification, reconnectTimeout]);
 
   const disconnectWebSocket = useCallback(() => {
     const ws = (window as any).gameWebSocket;
