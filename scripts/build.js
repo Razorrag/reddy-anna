@@ -17,6 +17,16 @@ try {
     rmSync(distDir, { recursive: true, force: true });
   }
 
+  // Verify PostCSS config exists in client directory
+  const postcssConfigPath = join(rootDir, 'client', 'postcss.config.js');
+  if (!existsSync(postcssConfigPath)) {
+    console.error('❌ ERROR: postcss.config.js not found in client directory!');
+    console.error('   This will cause CSS to not be processed in production.');
+    console.error('   Expected location:', postcssConfigPath);
+    throw new Error('Missing postcss.config.js in client directory');
+  }
+  console.log('✅ PostCSS config found in client directory');
+
   // Install client dependencies
   console.log('📦 Installing client dependencies...');
   execSync('npm install --production=false', {
