@@ -62,28 +62,6 @@ const BettingStrip: React.FC<BettingStripProps> = ({
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
-      {/* Round Indicator and Payout Info */}
-      <div className="flex items-center justify-between px-2 py-1 bg-gradient-to-r from-purple-900/50 to-blue-900/50 rounded-lg border border-purple-500/30">
-        <div className="flex items-center gap-2">
-          <div className="text-yellow-400 text-sm font-bold">
-            Round {gameState.currentRound}
-          </div>
-          {gameState.phase === 'betting' && (
-            <div className="text-green-400 text-xs animate-pulse">
-              Betting Open
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-3 text-xs">
-          <div className="text-yellow-200">
-            Andar: <span className="text-yellow-400 font-bold">{getPayoutMultiplier('andar')}</span>
-          </div>
-          <div className="text-blue-200">
-            Bahar: <span className="text-blue-400 font-bold">{getPayoutMultiplier('bahar')}</span>
-          </div>
-        </div>
-      </div>
-
       {/* Main Betting Strip */}
       <div className="flex gap-2">
         {/* Andar Section */}

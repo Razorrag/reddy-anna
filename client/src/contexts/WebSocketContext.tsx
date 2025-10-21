@@ -158,7 +158,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               if (data.data?.countdown !== undefined) setCountdown(data.data.countdown);
               if (data.data?.winner) setWinner(data.data.winner);
               if (data.data?.currentRound) setCurrentRound(data.data.currentRound);
-              if (data.data?.openingCard) setSelectedOpeningCard(data.data.openingCard);
+              if (data.data?.openingCard) {
+                console.log('Syncing opening card:', data.data.openingCard);
+                setSelectedOpeningCard(data.data.openingCard);
+              }
               // Clear existing cards and sync new ones
               if (data.data?.andarCards || data.data?.baharCards) {
                 clearCards();
@@ -178,16 +181,21 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                 // Convert string to Card object if needed
                 const openingCard = typeof data.data.openingCard === 'string'
                   ? {
+                      id: data.data.openingCard,
                       display: data.data.openingCard,
                       value: data.data.openingCard.replace(/[♠♥♦♣]/g, ''),
-                      suit: data.data.openingCard.match(/[♠♥♦♣]/)?.[0] || ''
+                      suit: data.data.openingCard.match(/[♠♥♦♣]/)?.[0] || '',
+                      color: (data.data.openingCard.match(/[♥♦]/) ? 'red' : 'black') as 'red' | 'black',
+                      rank: data.data.openingCard.replace(/[♠♥♦♣]/g, '')
                     }
                   : data.data.openingCard;
                 
                 console.log('Opening card received:', openingCard);
+                console.log('Setting opening card via setSelectedOpeningCard...');
                 setSelectedOpeningCard(openingCard);
                 setPhase('betting');
                 if (data.data.round) setCurrentRound(data.data.round);
+                if (data.data.timer !== undefined) setCountdown(data.data.timer);
                 console.log('Opening card set in state, phase updated to betting');
                 showNotification(`Opening card: ${openingCard.display} - Round ${data.data.round || 1} betting started!`, 'success');
               }

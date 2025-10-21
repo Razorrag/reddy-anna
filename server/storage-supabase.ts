@@ -198,7 +198,7 @@ export class SupabaseStorage implements IStorage {
       game_id: gameId,
       opening_card: session.openingCard || null,
       phase: session.phase || 'idle',
-      current_timer: session.currentTimer || 30,
+      currentTimer: session.currentTimer || 30,
       status: 'active',
       winner: null,
       winning_card: null,
@@ -261,7 +261,7 @@ export class SupabaseStorage implements IStorage {
     
     if (updates.phase) dbUpdates.phase = updates.phase;
     if (updates.round !== undefined) dbUpdates.current_round = updates.round;
-    if (updates.currentTimer !== undefined) dbUpdates.current_timer = updates.currentTimer;
+    if (updates.currentTimer !== undefined) dbUpdates.currentTimer = updates.currentTimer;
     if (updates.openingCard !== undefined) dbUpdates.opening_card = updates.openingCard;
     if (updates.winner !== undefined) dbUpdates.winner = updates.winner;
     if (updates.winningCard !== undefined) dbUpdates.winning_card = updates.winningCard;

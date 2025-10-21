@@ -244,11 +244,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
               round2: { andar: 0, bahar: 0 }
             };
             
+            const openingCardForSync = currentGameState.openingCard ? {
+              id: currentGameState.openingCard,
+              display: currentGameState.openingCard,
+              value: currentGameState.openingCard?.replace(/[♠♥♦♣]/g, '') || '',
+              suit: currentGameState.openingCard?.match(/[♠♥♦♣]/)?.[0] || '',
+              color: (currentGameState.openingCard?.match(/[♥♦]/) ? 'red' : 'black') as 'red' | 'black',
+              rank: currentGameState.openingCard?.replace(/[♠♥♦♣]/g, '') || ''
+            } : null;
+
             ws.send(JSON.stringify({
               type: 'sync_game_state',
               data: {
                 gameId: currentGameState.gameId,
-                openingCard: currentGameState.openingCard,
+                openingCard: openingCardForSync,
                 phase: currentGameState.phase,
                 currentRound: currentGameState.currentRound,
                 countdown: currentGameState.timer,
@@ -284,25 +293,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentGameState.userBets = new Map<string, UserBets>();
             currentGameState.bettingLocked = false;
             
+            const timerDuration = message.data.timer || 30;
+            
             const newGame = await storage.createGameSession({
               openingCard: currentGameState.openingCard,
               phase: 'betting',
               round: 1,
-              currentTimer: message.data.timer || 30
+              currentTimer: timerDuration
             });
             currentGameState.gameId = newGame.gameId;
             
             broadcast({ 
               type: 'opening_card_confirmed',
               data: { 
-                openingCard: currentGameState.openingCard, 
+                openingCard: {
+                  id: currentGameState.openingCard,
+                  display: currentGameState.openingCard,
+                  value: currentGameState.openingCard?.replace(/[♠♥♦♣]/g, '') || '',
+                  suit: currentGameState.openingCard?.match(/[♠♥♦♣]/)?.[0] || '',
+                  color: (currentGameState.openingCard?.match(/[♥♦]/) ? 'red' : 'black') as 'red' | 'black',
+                  rank: currentGameState.openingCard?.replace(/[♠♥♦♣]/g, '') || ''
+                },
                 phase: 'betting',
                 round: 1,
+                timer: timerDuration,
                 gameId: currentGameState.gameId
               }
             });
-            
-            const timerDuration = message.data.timer || 30;
             startTimer(timerDuration, async () => {
               currentGameState.phase = 'dealing';
               currentGameState.bettingLocked = true;
