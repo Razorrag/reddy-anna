@@ -23,29 +23,34 @@ export default function Login() {
     setError('');
 
     try {
+      console.log('Sending login request for:', formData.email); // Debug log
+      
       // Make real API call to login endpoint
       const response = await apiClient.post<any>('/auth/login', {
-        email: formData.email,
+        email: formData.email,  // Make sure this is the email/username used at registration
         password: formData.password
       });
+
+      console.log('Login response:', response); // Debug log
 
       // Store user data in localStorage for WebSocket authentication
       const userData = {
         id: response.user?.id || response.id,
         username: response.user?.username || response.username,
+        email: response.user?.email || formData.email,  // Store email
         balance: response.user?.balance || response.balance || 10000,
-        role: 'player' // Regular user role
+        role: response.user?.role || 'player'
       };
 
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userRole', 'player');
+      localStorage.setItem('userRole', userData.role);
 
       // Redirect to player game after successful login
       window.location.href = '/game';
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Invalid username or password');
+      setError(err.message || 'Invalid email or password');
     } finally {
       setIsLoading(false);
     }

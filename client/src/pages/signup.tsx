@@ -46,13 +46,19 @@ export default function Signup() {
     }
 
     try {
+      console.log('Sending registration request for:', formData.email); // Debug log
+      
       // Make real API call to signup endpoint
+      // Ensure we're sending the right fields expected by backend
       const response = await apiClient.post<any>('/auth/register', {
         name: formData.name,
-        email: formData.email,
+        email: formData.email,        // This will be used as both username and email
         password: formData.password,
-        mobile: formData.mobile
+        mobile: formData.mobile,
+        username: formData.email      // Also send as username for consistency
       });
+
+      console.log('Registration response:', response); // Debug log
 
       // Show success message
       setSuccess(true);
@@ -62,8 +68,9 @@ export default function Signup() {
       const userData = {
         id: response.user?.id || response.id,
         username: response.user?.username || response.username,
+        email: response.user?.email || formData.email,  // Store email separately
         balance: response.user?.balance || response.balance || 10000,
-        role: 'player'
+        role: response.user?.role || 'player'
       };
 
       localStorage.setItem('user', JSON.stringify(userData));

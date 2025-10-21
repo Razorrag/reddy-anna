@@ -6,10 +6,9 @@ class ApiClient {
   private defaultHeaders: Record<string, string>;
 
   constructor() {
-    // Use the full URL from the .env file
-    // In dev, this will be 'http://localhost:5000/api'
-    // In production, this will be '/api'
-    this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
+    // Use relative path for Vite proxy to work correctly
+    // The Vite proxy will forward /api requests to the backend
+    this.baseURL = '/api';
     
     this.defaultHeaders = {
       'Content-Type': 'application/json',

@@ -24,8 +24,12 @@ export default function AdminLogin() {
 
     try {
       // Make real API call to admin login endpoint
+      const email = formData.username.includes('@') 
+        ? formData.username 
+        : `${formData.username}@example.com`;
+      
       const response = await apiClient.post<any>('/auth/admin/login', {
-        email: formData.username + '@reddyanna.com', // Generate email from username
+        email: email,
         password: formData.password
       });
 

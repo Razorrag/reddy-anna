@@ -79,15 +79,17 @@ export class SupabaseStorage implements IStorage {
     return data;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
+  async getUserByUsername(identifier: string): Promise<User | undefined> {
     const { data, error } = await supabaseServer
       .from('users')
       .select('*')
-      .eq('username', username)
+      .or(`email.eq.${identifier},username.eq.${identifier}`)  // Search in both fields
       .single();
 
     if (error) {
-      console.error('Error getting user by username:', error);
+      console.error('Error getting user by identifier:', error);
+      // Log more details for debugging:
+      console.log('Searching for identifier:', identifier);
       return undefined;
     }
 
@@ -112,17 +114,17 @@ export class SupabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
     
-    // Create user object with only the fields that exist in Supabase schema
+    // Create user object ensuring email field is properly set
     const user = {
       id,
       username: insertUser.username,
       password_hash: insertUser.password, // Map password to password_hash
-      email: insertUser.username, // Use username as email for now
-      full_name: insertUser.username,
-      phone: '',
+      email: (insertUser as any).email || insertUser.username, // Use email if provided, else username
+      full_name: (insertUser as any).name || insertUser.username,
+      phone: (insertUser as any).mobile || '', // Use mobile from registration
       role: 'player',
       status: 'active',
-      balance: 1000000,
+      balance: 1000000, // Default balance
       total_winnings: 0,
       total_losses: 0,
       games_played: 0,

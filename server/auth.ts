@@ -109,38 +109,58 @@ export const registerUser = async (userData: {
 export const loginUser = async (email: string, password: string): Promise<AuthResult> => {
   try {
     // Sanitize inputs
-    const sanitizedEmail = sanitizeInput(email).toLowerCase();
+    const sanitizedEmail = sanitizeInput(email).toLowerCase().trim();
 
     if (!sanitizedEmail || !password) {
+      console.log('Login validation failed: missing email or password');
       return { success: false, error: 'Email and password are required' };
     }
 
-    // Find user by email using Supabase storage
+    console.log('Login attempt for identifier:', sanitizedEmail); // Debug log
+
+    // Find user by email using Supabase storage - this now supports both email and username search
     const user = await storage.getUserByUsername(sanitizedEmail);
+    
+    console.log('User lookup result:', user ? 'User found' : 'User not found');
     if (!user) {
+      console.log('Failed login attempt for identifier:', sanitizedEmail);
       return { success: false, error: 'User not found' };
     }
 
+    console.log('User found, attempting password validation for user ID:', user.id); // Debug log
+
     // Verify password - handle both password and password_hash fields
     const passwordToCheck = (user as any).password_hash || (user as any).password;
+    if (!passwordToCheck) {
+      console.log('No password found for user:', user.id);
+      return { success: false, error: 'Invalid credentials' };
+    }
+    
     const isValid = await validatePassword(password, passwordToCheck);
     if (!isValid) {
+      console.log('Invalid password for user:', user.id);
       return { success: false, error: 'Invalid password' };
     }
+
+    console.log('Successful login for user:', user.id);
+    
+    // Update last login
+    await storage.updateUser(user.id, { last_login: new Date().toISOString() });
 
     // Generate JWT token
     const token = generateToken({
       id: user.id,
       username: user.username,
-      role: 'player'
+      role: (user as any).role || 'player'
     });
 
     // Format response (remove sensitive data)
     const userResponse = {
       id: user.id,
       username: user.username,
+      email: (user as any).email, // Include email in response
       balance: user.balance,
-      role: 'player' // <-- ADD THIS LINE
+      role: (user as any).role || 'player'
     };
 
     return { success: true, user: userResponse, token };
