@@ -122,7 +122,7 @@ export default function UserAdmin() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-purple-900/20 to-red-900/20 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-4">
       {/* Breadcrumb */}
       <Breadcrumb 
         items={[

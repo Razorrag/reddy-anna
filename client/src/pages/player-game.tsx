@@ -20,15 +20,15 @@ const PlayerGame: React.FC = () => {
   const user = { id: 'player-1', username: 'Player' };
   
   // Local state
-  const [selectedBetAmount, setSelectedBetAmount] = useState(1000);
+  const [selectedBetAmount, setSelectedBetAmount] = useState(2500);
   const [selectedPosition, setSelectedPosition] = useState<BetSide | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
   const [userBalance, setUserBalance] = useState(50000); // Mock balance
   const [showChipSelector, setShowChipSelector] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
-  // Available bet amounts
-  const betAmounts = [1000, 5000, 10000, 20000, 50000];
+  // Available bet amounts - matching available coin images
+  const betAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
 
   // Place bet handler
   const handlePlaceBet = useCallback(async (position: BetSide) => {

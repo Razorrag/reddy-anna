@@ -2,6 +2,9 @@ import { Switch, Route } from "wouter";
 import Index from "@/pages/index.tsx";
 import PlayerGame from "@/pages/player-game.tsx";
 import Admin from "@/pages/admin.tsx";
+import AdminGame from "@/pages/admin-game.tsx";
+import UserAdmin from "@/pages/user-admin.tsx";
+import BackendSettings from "@/pages/backend-settings.tsx";
 import AdminLogin from "@/pages/admin-login.tsx";
 import Login from "@/pages/login.tsx";
 import Signup from "@/pages/signup.tsx";
@@ -22,40 +25,14 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/admin-login" component={AdminLogin} />
       
-      {/* Protected Player Routes - Single unified game page */}
-      <Route path="/game">
-        {() => (
-          <ProtectedRoute component={PlayerGame}>
-            <PlayerGame />
-          </ProtectedRoute>
-        )}
-      </Route>
+      {/* Player Routes - Now publicly accessible */}
+      <Route path="/game" component={PlayerGame} />
       
-      {/* Protected Admin Routes - Single consolidated admin interface */}
-      <Route path="/admin">
-        {() => (
-          <ProtectedRoute component={Admin} role="admin">
-            <Admin />
-          </ProtectedRoute>
-        )}
-      </Route>
-      
-      {/* Legacy admin routes - redirect to main admin */}
-      <Route path="/admin-game">
-        {() => (
-          <ProtectedRoute component={Admin} role="admin">
-            <Admin />
-          </ProtectedRoute>
-        )}
-      </Route>
-      
-      <Route path="/user-admin">
-        {() => (
-          <ProtectedRoute component={Admin} role="admin">
-            <Admin />
-          </ProtectedRoute>
-        )}
-      </Route>
+      {/* Admin Routes - Now publicly accessible */}
+      <Route path="/admin" component={Admin} />
+      <Route path="/admin-game" component={AdminGame} />
+      <Route path="/user-admin" component={UserAdmin} />
+      <Route path="/backend-settings" component={BackendSettings} />
       
       <Route path="/unauthorized" component={Unauthorized} />
       <Route component={NotFound} />

@@ -42,7 +42,7 @@ export default function Admin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-purple-900/20 to-red-900/20 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-4">
       {/* Breadcrumb */}
       <Breadcrumb 
         items={[
@@ -69,6 +69,12 @@ export default function Admin() {
               <Button variant="outline" className="border-gold/30 text-gold hover:bg-gold/10">
                 <Users className="w-5 h-5 mr-2" />
                 User Admin
+              </Button>
+            </Link>
+            <Link href="/backend-settings">
+              <Button variant="outline" className="border-gold/30 text-gold hover:bg-gold/10">
+                <Settings className="w-5 h-5 mr-2" />
+                Backend Settings
               </Button>
             </Link>
             <Link href="/">

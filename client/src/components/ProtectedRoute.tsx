@@ -1,21 +1,20 @@
 import React from 'react';
-import { Redirect } from 'wouter';
 import { useApp } from '../contexts/AppContext';
 
 interface ProtectedRouteProps {
   component?: React.ComponentType<any>;
-  role?: 'admin' | 'user' | string[];
-  redirectTo?: string;
   children?: React.ReactNode;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   component: Component, 
-  role,
-  redirectTo = '/login',
   children 
 }) => {
   const { state } = useApp();
+  
+  // TEMPORARY: DISABLE AUTHENTICATION FOR DEVELOPMENT
+  // Comment out the authentication checks to allow direct access to protected routes
+  // This allows access to /game and /admin without login
   
   // Show loading while checking authentication
   if (!state.authChecked) {
@@ -26,6 +25,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
   
+  // AUTHENTICATION CHECKS DISABLED FOR DEVELOPMENT
+  // The following checks are commented out to bypass authentication
+  
+  /*
   // Check if user is authenticated
   if (!state.isAuthenticated) {
     // Redirect to appropriate login based on required role
@@ -49,7 +52,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       }
     }
   }
+  */
   
+  // Always return the children/component without authentication checks
   return children ? <>{children}</> : Component ? <Component /> : null;
 };
 

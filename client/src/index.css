@@ -34,20 +34,27 @@ button, input, select, textarea {
   animation: slideUp 0.3s ease-out;
 }
 
-/* Exact Color Scheme Implementation */
+/* Violet and Blue Gradient Theme */
 :root {
   --yellow-accent: #FFD100;
-  --andar-red: #B71C1C;
-  --bahar-navy: #0B2340;
-  --bg-dark: #0B0B0B;
-  --bg-medium: #1A1A1A;
-  --bg-light: #2A2A2A;
+  --andar-red: #8B5CF6;
+  --bahar-navy: #3B82F6;
+  --bg-dark: #1E1B4B;
+  --bg-medium: #312E81;
+  --bg-light: #4C1D95;
   --text-primary: #FFFFFF;
-  --text-secondary: #B0B0B0;
+  --text-secondary: #E0E7FF;
   --success-green: #10B981;
   --error-red: #EF4444;
   --warning-orange: #F59E0B;
-  --border-gray: #374151;
+  --border-gray: #6366F1;
+  --violet-primary: #8B5CF6;
+  --violet-secondary: #A78BFA;
+  --blue-primary: #3B82F6;
+  --blue-secondary: #60A5FA;
+  --purple-gradient: linear-gradient(135deg, #8B5CF6, #3B82F6);
+  --violet-gradient: linear-gradient(135deg, #1E1B4B, #312E81, #4C1D95);
+  --blue-gradient: linear-gradient(135deg, #3B82F6, #1D4ED8);
 }
 
 /* Custom utility classes for exact colors */
@@ -199,6 +206,56 @@ button, input, select, textarea {
   border-radius: 12px;
 }
 
+/* Game Admin Header Styles */
+.game-admin-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 209, 0, 0.3);
+  margin-bottom: 20px;
+}
+
+.game-admin-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--yellow-accent);
+  text-align: center;
+  margin: 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  letter-spacing: 1px;
+}
+
+.game-admin-subtitle {
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--yellow-accent);
+  text-align: center;
+  margin: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  opacity: 0.9;
+}
+
+.settings-icon-btn {
+  background: rgba(255, 209, 0, 0.1);
+  border: 1px solid rgba(255, 209, 0, 0.3);
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--yellow-accent);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.settings-icon-btn:hover {
+  background: rgba(255, 209, 0, 0.2);
+  border-color: var(--yellow-accent);
+  transform: scale(1.05);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .btn-gold {
@@ -209,5 +266,18 @@ button, input, select, textarea {
   .confetti-piece {
     width: 8px;
     height: 8px;
+  }
+  
+  .game-admin-title {
+    font-size: 2rem;
+  }
+  
+  .game-admin-subtitle {
+    font-size: 1rem;
+  }
+  
+  .game-admin-header {
+    padding: 15px;
+    gap: 8px;
   }
 }

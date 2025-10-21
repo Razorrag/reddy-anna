@@ -25,7 +25,7 @@ export default function Index() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900">
       {/* Navigation Header */}
       <Navigation isScrolled={isScrolled} />
       
@@ -46,7 +46,7 @@ export default function Index() {
       <GameRules />
 
       {/* Features Section */}
-      <section className="py-20 bg-gradient-to-br from-gray-900 to-black">
+      <section className="py-20 bg-gradient-to-br from-violet-800/50 via-blue-800/50 to-indigo-800/50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-4xl font-bold text-center text-gold mb-12">Why Choose Reddy Anna?</h2>
           

@@ -52,17 +52,45 @@ const ChipSelector: React.FC<ChipSelectorProps> = ({
                 onClick={() => onChipSelect(amount)}
                 disabled={!canAfford}
                 className={`
-                  relative rounded-full p-4 transition-all duration-200 transform
+                  relative transition-all duration-200 transform
                   ${isSelected 
-                    ? 'bg-yellow-500 text-black scale-110 shadow-lg shadow-yellow-500/50' 
+                    ? 'scale-110 shadow-lg shadow-yellow-500/50' 
                     : canAfford 
-                      ? 'bg-gradient-to-br from-yellow-600 to-yellow-700 text-white hover:scale-105 hover:shadow-lg'
-                      : 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
+                      ? 'hover:scale-105 hover:shadow-lg'
+                      : 'opacity-50 cursor-not-allowed'
                   }
                 `}
               >
-                <div className="text-lg font-bold">
-                  ₹{amount.toLocaleString('en-IN')}
+                <div className="relative">
+                  <img
+                    src={`/coins/${amount}.png`}
+                    alt={`₹${amount}`}
+                    className={`
+                      w-full h-auto rounded-full
+                      ${!canAfford ? 'grayscale' : ''}
+                    `}
+                    onError={(e) => {
+                      // Fallback to styled div if image not found
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const fallback = target.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
+                  />
+                  {/* Fallback styled chip */}
+                  <div className={`
+                    hidden rounded-full p-4 items-center justify-center
+                    ${isSelected 
+                      ? 'bg-yellow-500 text-black' 
+                      : canAfford 
+                        ? 'bg-gradient-to-br from-yellow-600 to-yellow-700 text-white'
+                        : 'bg-gray-700 text-gray-500'
+                    }
+                  `}>
+                    <div className="text-lg font-bold">
+                      ₹{amount.toLocaleString('en-IN')}
+                    </div>
+                  </div>
                 </div>
                 {isSelected && (
                   <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white" />

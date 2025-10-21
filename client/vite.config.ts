@@ -18,17 +18,31 @@ export default defineConfig({
     host: true,
     port: 3000,
     proxy: {
-      // Proxy API requests to backend
+      // CRITICAL: Proxy ALL API requests to backend
       '/api': {
-        target: 'http://127.0.0.1:5000',
+        target: 'http://localhost:5000',
         changeOrigin: true,
         secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('PROXYING API REQUEST:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('PROXYING API RESPONSE:', proxyRes.statusCode, req.url);
+          });
+        }
       },
-      // Proxy WebSocket connections to backend
+      // CRITICAL: Proxy WebSocket connections to backend  
       '/ws': {
-        target: 'ws://127.0.0.1:5000',
+        target: 'http://localhost:5000',
         ws: true,
         changeOrigin: true,
+        secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('proxyReqWs', (proxyReq, req, socket, options, head) => {
+            console.log('PROXYING WS CONNECTION:', req.url);
+          });
+        }
       },
     },
   },

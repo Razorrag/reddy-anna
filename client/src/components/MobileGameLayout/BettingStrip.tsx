@@ -62,39 +62,6 @@ const BettingStrip: React.FC<BettingStripProps> = ({
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
-      {/* Round Information */}
-      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
-        <div className="flex justify-between items-center">
-          <div className="text-yellow-400 font-semibold">
-            Round {gameState.currentRound}
-            {gameState.currentRound === 3 && <span className="text-orange-400 ml-2">Final Draw</span>}
-          </div>
-          <div className="text-gray-300 text-sm">
-            {gameState.bettingLocked && (
-              <span className="text-red-400 font-semibold">Betting Locked</span>
-            )}
-          </div>
-        </div>
-        
-        {/* Round-specific bet totals */}
-        <div className="grid grid-cols-2 gap-4 mt-2">
-          <div className="text-center">
-            <div className="text-red-400 text-xs">Andar Total</div>
-            <div className="text-white font-bold">₹{currentRoundBets.andar.toLocaleString('en-IN')}</div>
-            {currentPlayerBets.andar > 0 && (
-              <div className="text-yellow-300 text-xs">Your: ₹{currentPlayerBets.andar.toLocaleString('en-IN')}</div>
-            )}
-          </div>
-          <div className="text-center">
-            <div className="text-blue-400 text-xs">Bahar Total</div>
-            <div className="text-white font-bold">₹{currentRoundBets.bahar.toLocaleString('en-IN')}</div>
-            {currentPlayerBets.bahar > 0 && (
-              <div className="text-yellow-300 text-xs">Your: ₹{currentPlayerBets.bahar.toLocaleString('en-IN')}</div>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Main Betting Strip */}
       <div className="flex gap-2">
         {/* Andar Section */}
@@ -181,17 +148,6 @@ const BettingStrip: React.FC<BettingStripProps> = ({
         </button>
       </div>
 
-      {/* Investment Summary */}
-      {(currentPlayerBets.andar > 0 || currentPlayerBets.bahar > 0) && (
-        <div className="bg-gray-800/30 rounded-lg p-2 border border-gray-700">
-          <div className="text-center text-gray-300 text-sm">
-            Your Total Investment: 
-            <span className="text-yellow-400 font-bold ml-2">
-              ₹{(currentPlayerBets.andar + currentPlayerBets.bahar).toLocaleString('en-IN')}
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

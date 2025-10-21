@@ -138,15 +138,6 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
                 </div>
               </div>
             </div>
-            
-            {/* Round indicator */}
-            <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2">
-              <div className="bg-black/80 px-2 py-1 rounded-full border border-yellow-500/50">
-                <span className="text-yellow-400 text-xs font-bold">
-                  R{gameState.currentRound}
-                </span>
-              </div>
-            </div>
           </div>
         </div>
       )}

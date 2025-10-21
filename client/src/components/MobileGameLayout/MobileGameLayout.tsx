@@ -13,7 +13,7 @@ import ControlsRow from './ControlsRow.tsx';
 import CardHistory from './CardHistory.tsx';
 import ChipSelector from './ChipSelector.tsx';
 import ProgressBar from './ProgressBar.tsx';
-import type { GameState } from '../GameLogic/GameLogic';
+import type { GameState } from '../../types/game';
 import type { BetSide } from '../../types/game';
 
 interface MobileGameLayoutProps {
@@ -67,13 +67,11 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
 
         {/* Video Area - 65-70% screen height with overlays */}
         <VideoArea 
-          gameState={gameState}
           className="flex-1 relative"
         />
 
         {/* Betting Strip - Andar/Opening Card/Bahar */}
         <BettingStrip
-          gameState={gameState}
           selectedPosition={selectedPosition}
           selectedBetAmount={selectedBetAmount}
           onPositionSelect={onPositionSelect}

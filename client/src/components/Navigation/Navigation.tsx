@@ -85,42 +85,24 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
 
   const renderAuthLinks = () => (
     <>
-      {state.isAuthenticated ? (
-        <>
-          <Link 
-            to="/game" 
-            className={getButtonClass('primary')}
-          >
-            Play Game
-          </Link>
-          {state.user?.role === 'admin' && (
-            <Link 
-              to="/admin" 
-              className={getButtonClass('secondary')}
-            >
-              Admin Panel
-            </Link>
-          )}
-          <span className="text-white">
-            Welcome, {state.user?.name || 'Player'}
-          </span>
-        </>
-      ) : (
-        <>
-          <Link 
-            to="/login" 
-            className={getButtonClass('primary')}
-          >
-            Login
-          </Link>
-          <Link 
-            to="/signup" 
-            className={getButtonClass('secondary')}
-          >
-            Sign Up
-          </Link>
-        </>
-      )}
+      <Link 
+        to="/game" 
+        className={getButtonClass('primary')}
+      >
+        Play Game
+      </Link>
+      <Link 
+        to="/login" 
+        className={getButtonClass('secondary')}
+      >
+        Login
+      </Link>
+      <Link 
+        to="/signup" 
+        className={getButtonClass('secondary')}
+      >
+        Sign Up
+      </Link>
     </>
   );
 

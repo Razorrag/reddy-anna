@@ -6,8 +6,8 @@ class ApiClient {
   private defaultHeaders: Record<string, string>;
 
   constructor() {
-    // Use relative path for Vite proxy to work correctly
-    // The Vite proxy will forward /api requests to the backend
+    // CRITICAL: Use RELATIVE path so proxy works
+    // This will make requests to /api which gets proxied to backend
     this.baseURL = '/api';
     
     this.defaultHeaders = {
@@ -15,13 +15,17 @@ class ApiClient {
     };
     
     console.log(`API Client initialized with baseURL: ${this.baseURL}`);
+    console.log(`This should proxy to: http://localhost:5000/api`);
   }
 
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // CRITICAL: Use relative URL so proxy works
     const url = `${this.baseURL}${endpoint}`;
+    
+    console.log(`Making request to: ${url}`); // DEBUG LOG
     
     const config: RequestInit = {
       headers: {
@@ -35,12 +39,18 @@ class ApiClient {
     try {
       const response = await fetch(url, config);
       
+      console.log(`Response status: ${response.status} for ${url}`); // DEBUG LOG
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        const errorMsg = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+        console.error(`API Error: ${errorMsg}`); // DEBUG LOG
+        throw new Error(errorMsg);
       }
 
-      return await response.json();
+      const data = await response.json();
+      console.log(`Response data:`, data); // DEBUG LOG
+      return data;
     } catch (error) {
       console.error(`API Error (${endpoint}):`, error);
       throw error;
@@ -48,17 +58,19 @@ class ApiClient {
   }
 
   async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
-    const url = new URL(`${this.baseURL}${endpoint}`, window.location.origin);
+    let url = `${this.baseURL}${endpoint}`;
     
     if (params) {
+      const searchParams = new URLSearchParams();
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          url.searchParams.append(key, String(value));
+          searchParams.append(key, String(value));
         }
       });
+      url += '?' + searchParams.toString();
     }
 
-    return this.request<T>(endpoint + url.search, {
+    return this.request<T>(url, {
       method: 'GET',
     });
   }
@@ -95,48 +107,17 @@ class ApiClient {
     return this.get('/game/current');
   }
 
-  // Betting is done via WebSocket, not REST API
-  // The placeBet method has been removed as it should not exist
-
   async getGameHistory() {
     return this.get('/game/history');
-  }
-
-  async getUserStats() {
-    return this.get('/user/stats');
   }
 
   async getUserBalance() {
     return this.get('/user/balance');
   }
 
-  // Admin methods
-  async startGame() {
-    return this.post('/admin/game/start');
-  }
-
-  async stopGame() {
-    return this.post('/admin/game/stop');
-  }
-
-  async resetGame() {
-    return this.post('/admin/game/reset');
-  }
-
-  async getUsers(filters?: { status?: string; search?: string }) {
-    return this.get('/admin/users', filters);
-  }
-
-  async updateUserStatus(userId: string, status: 'active' | 'suspended' | 'banned') {
-    return this.patch(`/admin/users/${userId}/status`, { status });
-  }
-
-  async getBettingStats() {
-    return this.get('/admin/stats/betting');
-  }
-
   // Auth methods
   async login(credentials: { email: string; password: string }) {
+    console.log('Sending login request to backend:', credentials); // DEBUG LOG
     return this.post('/auth/login', credentials);
   }
 
@@ -145,6 +126,7 @@ class ApiClient {
   }
 
   async register(userData: { name: string; email: string; mobile: string; password: string }) {
+    console.log('Sending registration request to backend:', userData); // DEBUG LOG
     return this.post('/auth/register', userData);
   }
 
@@ -156,7 +138,6 @@ class ApiClient {
 // Create singleton instance
 export const apiClient = new ApiClient();
 
-// Export types
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
