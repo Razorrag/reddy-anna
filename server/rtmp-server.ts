@@ -11,7 +11,8 @@ const config = {
   },
   http: {
     port: parseInt(process.env.RTMP_HTTP_PORT || '8000'),
-    allow_origin: '*'
+    allow_origin: '*',
+    mediaroot: './media'
   },
   relay: {
     ffmpeg: '/usr/local/bin/ffmpeg',
@@ -19,7 +20,7 @@ const config = {
       {
         app: process.env.RTMP_APP_NAME || 'live',
         mode: 'push',
-        edge: `ws://localhost:${process.env.RTMP_HTTP_PORT || '8001'}/live`
+        edge: `rtmp://localhost:${parseInt(process.env.RTMP_SERVER_PORT || '1935')}/live`
       }
     ]
   }

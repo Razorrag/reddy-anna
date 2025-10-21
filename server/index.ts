@@ -40,9 +40,27 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// CORS configuration
+// CORS configuration - Support multiple origins for development and production
+const allowedOrigins = [
+  process.env.CORS_ORIGIN || 'http://localhost:3000',
+  'https://reddy-anna-7n83.onrender.com',
+  'https://reddy-anna.onrender.com',
+  'http://localhost:5173', // Vite dev server
+  'http://localhost:3000'
+];
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true, // Allow cookies/session
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

@@ -83,7 +83,10 @@ let currentGameState = {
   round2Bets: { andar: 0, bahar: 0 },
   userBets: new Map<string, UserBets>(),
   timerInterval: null as NodeJS.Timeout | null,
-  bettingLocked: false
+  bettingLocked: false,
+  // Pre-selected cards (saved during betting, revealed after timer)
+  preSelectedBaharCard: null as any,
+  preSelectedAndarCard: null as any
 };
 
 // WebSocket broadcast functions
@@ -343,19 +346,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
               currentGameState.phase = 'dealing';
               currentGameState.bettingLocked = true;
               
-              await storage.updateGameSession(currentGameState.gameId, {
-                phase: 'dealing',
-                round: 1
-              });
+              try {
+                if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+                  await storage.updateGameSession(currentGameState.gameId, {
+                    phase: 'dealing',
+                    round: 1
+                  });
+                }
+              } catch (error) {
+                console.error('\u26a0\ufe0f Error updating game session:', error);
+              }
               
               broadcast({
                 type: 'phase_change',
                 data: { 
                   phase: 'dealing', 
                   round: 1,
-                  message: 'Round 1 betting closed. Admin will deal cards.' 
+                  message: 'Round 1 betting closed. Revealing cards in 2 seconds...' 
                 }
               });
+              
+              // Auto-reveal pre-selected cards after 2 seconds
+              setTimeout(async () => {
+                if (currentGameState.preSelectedBaharCard && currentGameState.preSelectedAndarCard) {
+                  console.log('\ud83c\udfb4 Auto-revealing pre-selected cards...');
+                  
+                  // Deal Bahar card
+                  const baharCard = currentGameState.preSelectedBaharCard;
+                  const baharDisplay = baharCard.display || baharCard;
+                  currentGameState.baharCards.push(baharDisplay);
+                  
+                  broadcast({
+                    type: 'card_dealt',
+                    data: {
+                      card: baharCard,
+                      side: 'bahar',
+                      position: currentGameState.baharCards.length,
+                      isWinningCard: false
+                    }
+                  });
+                  
+                  // Wait 800ms then deal Andar card
+                  setTimeout(async () => {
+                    const andarCard = currentGameState.preSelectedAndarCard;
+                    const andarDisplay = andarCard.display || andarCard;
+                    currentGameState.andarCards.push(andarDisplay);
+                    
+                    broadcast({
+                      type: 'card_dealt',
+                      data: {
+                        card: andarCard,
+                        side: 'andar',
+                        position: currentGameState.andarCards.length,
+                        isWinningCard: false
+                      }
+                    });
+                    
+                    // Check for winner
+                    const baharWinner = checkWinner(baharDisplay);
+                    const andarWinner = checkWinner(andarDisplay);
+                    
+                    if (baharWinner) {
+                      await completeGame('bahar', baharDisplay);
+                    } else if (andarWinner) {
+                      await completeGame('andar', andarDisplay);
+                    } else {
+                      // No winner, check if round is complete
+                      console.log('\ud83c\udfb4 No winner yet. Andar: 1, Bahar: 1, Round: 1');
+                      console.log('\ud83d\udd04 Round 1 complete! Auto-transitioning to Round 2 in 2 seconds...');
+                      
+                      broadcast({
+                        type: 'notification',
+                        data: {
+                          message: 'No winner in Round 1. Starting Round 2 in 2 seconds...',
+                          type: 'info'
+                        }
+                      });
+                      
+                      setTimeout(() => transitionToRound2(), 2000);
+                    }
+                    
+                    // Clear pre-selected cards
+                    currentGameState.preSelectedBaharCard = null;
+                    currentGameState.preSelectedAndarCard = null;
+                  }, 800);
+                }
+              }, 2000);
             });
             
             broadcast({
@@ -502,6 +578,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             break;
           
+          case 'save_cards':
+            // Admin pre-selects cards during betting phase
+            console.log('💾 Admin pre-selected cards:', message.data);
+            currentGameState.preSelectedBaharCard = message.data.baharCard;
+            currentGameState.preSelectedAndarCard = message.data.andarCard;
+            
+            // Notify admin that cards are saved
+            ws.send(JSON.stringify({
+              type: 'cards_saved',
+              data: {
+                message: 'Cards saved! They will be revealed when timer expires.',
+                baharCard: message.data.baharCard?.display,
+                andarCard: message.data.andarCard?.display
+              }
+            }));
+            break;
+          
           case 'card_dealt':
           case 'deal_card':
             // Admin privileges removed for development - anyone can deal cards
@@ -614,7 +707,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               round2Bets: { andar: 0, bahar: 0 },
               userBets: new Map<string, UserBets>(),
               timerInterval: null,
-              bettingLocked: false
+              bettingLocked: false,
+              preSelectedBaharCard: null,
+              preSelectedAndarCard: null
             };
             
             broadcast({
@@ -1169,9 +1264,76 @@ async function transitionToRound2() {
       data: { 
         phase: 'dealing', 
         round: 2,
-        message: 'Round 2 betting closed. Admin will deal cards.' 
+        message: 'Round 2 betting closed. Revealing cards in 2 seconds...' 
       }
     });
+    
+    // Auto-reveal pre-selected cards after 2 seconds (Round 2)
+    setTimeout(async () => {
+      if (currentGameState.preSelectedBaharCard && currentGameState.preSelectedAndarCard) {
+        console.log('🎴 Auto-revealing Round 2 pre-selected cards...');
+        
+        // Deal Bahar card
+        const baharCard = currentGameState.preSelectedBaharCard;
+        const baharDisplay = baharCard.display || baharCard;
+        currentGameState.baharCards.push(baharDisplay);
+        
+        broadcast({
+          type: 'card_dealt',
+          data: {
+            card: baharCard,
+            side: 'bahar',
+            position: currentGameState.baharCards.length,
+            isWinningCard: false
+          }
+        });
+        
+        // Wait 800ms then deal Andar card
+        setTimeout(async () => {
+          const andarCard = currentGameState.preSelectedAndarCard;
+          const andarDisplay = andarCard.display || andarCard;
+          currentGameState.andarCards.push(andarDisplay);
+          
+          broadcast({
+            type: 'card_dealt',
+            data: {
+              card: andarCard,
+              side: 'andar',
+              position: currentGameState.andarCards.length,
+              isWinningCard: false
+            }
+          });
+          
+          // Check for winner
+          const baharWinner = checkWinner(baharDisplay);
+          const andarWinner = checkWinner(andarDisplay);
+          
+          if (baharWinner) {
+            await completeGame('bahar', baharDisplay);
+          } else if (andarWinner) {
+            await completeGame('andar', andarDisplay);
+          } else {
+            // No winner, transition to Round 3
+            console.log('🎴 No winner yet. Andar: 2, Bahar: 2, Round: 2');
+            console.log('🔄 Round 2 complete! Auto-transitioning to Round 3 in 2 seconds...');
+            
+            broadcast({
+              type: 'notification',
+              data: {
+                message: 'No winner in Round 2. Starting Round 3 in 2 seconds...',
+                type: 'info'
+              }
+            });
+            
+            setTimeout(() => transitionToRound3(), 2000);
+          }
+          
+          // Clear pre-selected cards
+          currentGameState.preSelectedBaharCard = null;
+          currentGameState.preSelectedAndarCard = null;
+        }, 800);
+      }
+    }, 2000);
   });
 }
 

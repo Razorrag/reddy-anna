@@ -32,8 +32,11 @@ const getWebSocketUrl = (): string => {
   if (typeof window !== 'undefined') {
     // Check if we are in development mode
     if (import.meta.env.DEV) {
-      // Use the .env variable, default to ws://localhost:5000/ws
-      return import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:5000/ws';
+      // In development, use the Vite dev server host with WebSocket proxy
+      // Vite runs on localhost:3000 and proxies /ws to localhost:5000
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host; // This will be localhost:3000 in dev
+      return `${protocol}//${host}/ws`;
     }
     
     // In production, use the relative host
@@ -130,10 +133,11 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       // Use the dynamic URL function
       const wsUrl = getWebSocketUrl();
+      console.log('🔌 Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('WebSocket connected successfully');
+        console.log('✅ WebSocket connected successfully to:', wsUrl);
         setConnectionState({
           connected: true,
           connecting: false,

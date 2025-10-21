@@ -13,11 +13,11 @@ interface CardDealingPanelProps {
 
 const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
   // round, // Not used in component anymore
-  phase,
+  // phase, // Not used in current implementation
   andarCards,
   baharCards
 }) => {
-  const { dealCard } = useWebSocket();
+  const { sendWebSocketMessage } = useWebSocket();
   const { showNotification } = useNotification();
   
   const [selectedBaharCard, setSelectedBaharCard] = useState<Card | null>(null);
@@ -62,7 +62,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
     }
   };
 
-  const handleDealCards = async () => {
+  const handleSaveCards = async () => {
     if (!selectedBaharCard || !selectedAndarCard) {
       showNotification('Please select both Bahar and Andar cards!', 'error');
       return;
@@ -71,23 +71,22 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
     setDealingInProgress(true);
 
     try {
-      // Deal Bahar card first
-      await dealCard(selectedBaharCard, 'bahar', baharCards.length + 1);
+      // Send save_cards message to backend
+      sendWebSocketMessage({
+        type: 'save_cards',
+        data: {
+          baharCard: selectedBaharCard,
+          andarCard: selectedAndarCard
+        }
+      });
       
-      // Wait 800ms, then deal Andar card
-      setTimeout(async () => {
-        await dealCard(selectedAndarCard, 'andar', andarCards.length + 1);
-        
-        showNotification('✅ Cards dealt successfully!', 'success');
-        
-        // Reset selections
-        setSelectedBaharCard(null);
-        setSelectedAndarCard(null);
-        setDealingInProgress(false);
-      }, 800);
+      showNotification('✅ Cards saved! Will reveal when timer expires.', 'success');
+      
+      // Keep selections visible but disable further changes
+      setDealingInProgress(false);
       
     } catch (error) {
-      showNotification('Failed to deal cards', 'error');
+      showNotification('Failed to save cards', 'error');
       setDealingInProgress(false);
     }
   };
@@ -184,11 +183,11 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
           ↩️ Clear
         </button>
         <button
-          onClick={handleDealCards}
+          onClick={handleSaveCards}
           disabled={!selectedBaharCard || !selectedAndarCard || dealingInProgress}
           className="flex-[2] px-6 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-lg text-base font-bold"
         >
-          {dealingInProgress ? '⏳ Dealing...' : phase === 'betting' ? '💾 Save & Wait for Timer' : '🎴 Show Cards to Players'}
+          {dealingInProgress ? '⏳ Saving...' : '💾 Save & Wait for Timer'}
         </button>
       </div>
       
