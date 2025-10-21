@@ -139,7 +139,8 @@ export const loginUser = async (email: string, password: string): Promise<AuthRe
     const userResponse = {
       id: user.id,
       username: user.username,
-      balance: user.balance
+      balance: user.balance,
+      role: 'player' // <-- ADD THIS LINE
     };
 
     return { success: true, user: userResponse, token };
@@ -170,9 +171,8 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
 
     console.log('Admin found:', { 
       id: admin.id, 
-      email: admin.email, 
       username: admin.username,
-      role: admin.role,
+      role: (admin as any).role,
       hasPasswordHash: !!(admin as any).password_hash,
       hasPassword: !!(admin as any).password
     });
@@ -188,18 +188,22 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
       return { success: false, error: 'Invalid password' };
     }
 
+    // Get the actual role from the database
+    const adminRole = (admin as any).role || 'admin';
+
     // Generate JWT token
     const token = generateToken({
       id: admin.id,
       username: admin.username,
-      role: 'admin'
+      role: adminRole
     });
 
     // Format response (remove sensitive data)
     const adminResponse = {
       id: admin.id,
       username: admin.username,
-      balance: admin.balance
+      balance: admin.balance,
+      role: adminRole // <-- ADD THIS LINE
     };
 
     console.log('Admin login successful for:', admin.username);

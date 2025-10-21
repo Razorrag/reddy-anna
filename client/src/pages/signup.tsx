@@ -11,10 +11,10 @@ import { apiClient } from "@/lib/api-client";
 export default function Signup() {
   const [formData, setFormData] = useState({
     name: '',
-    username: '',
+    email: '',
+    mobile: '',
     password: '',
-    confirmPassword: '',
-    phone: ''
+    confirmPassword: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -49,9 +49,9 @@ export default function Signup() {
       // Make real API call to signup endpoint
       const response = await apiClient.post<any>('/auth/register', {
         name: formData.name,
-        email: formData.username + '@reddyanna.com', // Generate email from username
+        email: formData.email,
         password: formData.password,
-        mobile: formData.phone
+        mobile: formData.mobile
       });
 
       // Show success message
@@ -139,36 +139,37 @@ export default function Signup() {
               />
             </div>
 
-            {/* Username Field */}
+            {/* Email Field */}
             <div className="space-y-2">
-              <Label htmlFor="username" className="text-gold font-semibold">
-                Username
+              <Label htmlFor="email" className="text-gold font-semibold">
+                Email
               </Label>
               <Input
-                id="username"
-                name="username"
-                type="text"
-                placeholder="Enter your username"
-                value={formData.username}
+                id="email"
+                name="email"
+                type="email"
+                placeholder="Enter your email"
+                value={formData.email}
                 onChange={handleChange}
                 className="bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold"
                 required
               />
             </div>
 
-            {/* Phone Field */}
+            {/* Mobile Field */}
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-gold font-semibold">
-                Phone Number
+              <Label htmlFor="mobile" className="text-gold font-semibold">
+                Mobile Number
               </Label>
               <Input
-                id="phone"
-                name="phone"
+                id="mobile"
+                name="mobile"
                 type="tel"
-                placeholder="Enter your phone number"
-                value={formData.phone}
+                placeholder="Enter your mobile number"
+                value={formData.mobile}
                 onChange={handleChange}
                 className="bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold"
+                required
               />
             </div>
 

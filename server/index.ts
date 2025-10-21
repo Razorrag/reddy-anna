@@ -11,13 +11,23 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { nms } from "./rtmp-server";
 
-// Validate required environment variables (only SESSION_SECRET for local storage)
-const requiredEnvVars = ['SESSION_SECRET'];
+// Validate all required environment variables
+const requiredEnvVars = [
+  'SESSION_SECRET',
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_KEY',
+  'JWT_SECRET', // Critical for signing tokens
+  'JWT_EXPIRES_IN',
+  'PORT',
+  'CORS_ORIGIN'
+];
+
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
   console.error('❌ Missing required environment variables:', missingEnvVars.join(', '));
   console.error('Please set these variables in your .env file');
+  console.error('Server cannot start without these critical configuration values.');
   process.exit(1);
 }
 

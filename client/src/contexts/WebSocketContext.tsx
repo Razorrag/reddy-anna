@@ -28,13 +28,17 @@ interface WebSocketContextType {
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
 
-// Fixed URL function to use proxy in development
 const getWebSocketUrl = (): string => {
   if (typeof window !== 'undefined') {
-    // In development, use the same host (proxy will forward to backend)
-    // In production, use the actual WebSocket URL
+    // Check if we are in development mode
+    if (import.meta.env.DEV) {
+      // Use the .env variable, default to ws://localhost:5000/ws
+      return import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:5000/ws';
+    }
+    
+    // In production, use the relative host
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host; // Uses current host (localhost:3000 in dev)
+    const host = window.location.host;
     return `${protocol}//${host}/ws`;
   }
   // Server environment

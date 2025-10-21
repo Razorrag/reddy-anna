@@ -5,11 +5,17 @@ class ApiClient {
   private baseURL: string;
   private defaultHeaders: Record<string, string>;
 
-  constructor(baseURL: string = '/api') {
-    this.baseURL = baseURL;
+  constructor() {
+    // Use the full URL from the .env file
+    // In dev, this will be 'http://localhost:5000/api'
+    // In production, this will be '/api'
+    this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
+    
     this.defaultHeaders = {
       'Content-Type': 'application/json',
     };
+    
+    console.log(`API Client initialized with baseURL: ${this.baseURL}`);
   }
 
   private async request<T>(
@@ -87,12 +93,11 @@ class ApiClient {
 
   // Game-specific methods
   async getGameState() {
-    return this.get('/game/state');
+    return this.get('/game/current');
   }
 
-  async placeBet(data: { side: 'andar' | 'bahar'; amount: number }) {
-    return this.post('/game/bet', data);
-  }
+  // Betting is done via WebSocket, not REST API
+  // The placeBet method has been removed as it should not exist
 
   async getGameHistory() {
     return this.get('/game/history');
@@ -132,7 +137,7 @@ class ApiClient {
   }
 
   // Auth methods
-  async login(credentials: { username: string; password: string }) {
+  async login(credentials: { email: string; password: string }) {
     return this.post('/auth/login', credentials);
   }
 
@@ -140,7 +145,7 @@ class ApiClient {
     return this.post('/auth/logout');
   }
 
-  async register(userData: { username: string; email: string; password: string }) {
+  async register(userData: { name: string; email: string; mobile: string; password: string }) {
     return this.post('/auth/register', userData);
   }
 
