@@ -5,7 +5,7 @@ class ApiClient {
   private baseURL: string;
   private defaultHeaders: Record<string, string>;
 
-  constructor(baseURL: string = '') {
+  constructor(baseURL: string = '/api') {
     this.baseURL = baseURL;
     this.defaultHeaders = {
       'Content-Type': 'application/json',
@@ -23,6 +23,7 @@ class ApiClient {
         ...this.defaultHeaders,
         ...options.headers,
       },
+      credentials: 'include', // Important for session cookies
       ...options,
     };
 

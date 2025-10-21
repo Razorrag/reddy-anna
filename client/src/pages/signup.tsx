@@ -47,9 +47,11 @@ export default function Signup() {
 
     try {
       // Make real API call to signup endpoint
-      const response = await apiClient.post<any>('/auth/signup', {
-        username: formData.username,
-        password: formData.password
+      const response = await apiClient.post<any>('/auth/register', {
+        name: formData.name,
+        email: formData.username + '@reddyanna.com', // Generate email from username
+        password: formData.password,
+        mobile: formData.phone
       });
 
       // Show success message
@@ -58,9 +60,9 @@ export default function Signup() {
 
       // Store user data and redirect to player game
       const userData = {
-        id: response.id,
-        username: response.username,
-        balance: response.balance || 10000,
+        id: response.user?.id || response.id,
+        username: response.user?.username || response.username,
+        balance: response.user?.balance || response.balance || 10000,
         role: 'player'
       };
 

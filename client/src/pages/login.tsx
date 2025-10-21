@@ -25,15 +25,15 @@ export default function Login() {
     try {
       // Make real API call to login endpoint
       const response = await apiClient.post<any>('/auth/login', {
-        username: formData.username,
+        email: formData.username + '@reddyanna.com', // Generate email from username
         password: formData.password
       });
 
       // Store user data in localStorage for WebSocket authentication
       const userData = {
-        id: response.id,
-        username: response.username,
-        balance: response.balance || 10000,
+        id: response.user?.id || response.id,
+        username: response.user?.username || response.username,
+        balance: response.user?.balance || response.balance || 10000,
         role: 'player' // Regular user role
       };
 

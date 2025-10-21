@@ -111,7 +111,32 @@ export class SupabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user = { ...insertUser, id, balance: 1000000 }; // Default balance
+    
+    // Create user object with only the fields that exist in Supabase schema
+    const user = {
+      id,
+      username: insertUser.username,
+      password_hash: insertUser.password, // Map password to password_hash
+      email: insertUser.username, // Use username as email for now
+      full_name: insertUser.username,
+      phone: '',
+      role: 'player',
+      status: 'active',
+      balance: 1000000,
+      total_winnings: 0,
+      total_losses: 0,
+      games_played: 0,
+      games_won: 0,
+      email_verified: false,
+      phone_verified: false,
+      two_factor_enabled: false,
+      referral_code: null,
+      referred_by: null,
+      avatar_url: null,
+      last_login: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
     const { data, error } = await supabaseServer
       .from('users')

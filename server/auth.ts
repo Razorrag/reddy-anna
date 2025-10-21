@@ -121,8 +121,9 @@ export const loginUser = async (email: string, password: string): Promise<AuthRe
       return { success: false, error: 'User not found' };
     }
 
-    // Verify password
-    const isValid = await validatePassword(password, user.password);
+    // Verify password - handle both password and password_hash fields
+    const passwordToCheck = (user as any).password_hash || (user as any).password;
+    const isValid = await validatePassword(password, passwordToCheck);
     if (!isValid) {
       return { success: false, error: 'Invalid password' };
     }
@@ -154,6 +155,8 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
     // Sanitize inputs
     const sanitizedEmail = sanitizeInput(email).toLowerCase();
 
+    console.log('Admin login attempt:', { sanitizedEmail, passwordProvided: !!password });
+
     if (!sanitizedEmail || !password) {
       return { success: false, error: 'Email and password are required' };
     }
@@ -161,11 +164,26 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
     // Find admin by email using Supabase storage
     const admin = await storage.getUserByUsername(sanitizedEmail);
     if (!admin) {
+      console.log('Admin not found for email:', sanitizedEmail);
       return { success: false, error: 'Admin not found' };
     }
 
-    // Verify password
-    const isValid = await validatePassword(password, admin.password);
+    console.log('Admin found:', { 
+      id: admin.id, 
+      email: admin.email, 
+      username: admin.username,
+      role: admin.role,
+      hasPasswordHash: !!(admin as any).password_hash,
+      hasPassword: !!(admin as any).password
+    });
+
+    // Verify password - handle both password and password_hash fields
+    const passwordToCheck = (admin as any).password_hash || (admin as any).password;
+    console.log('Password to check exists:', !!passwordToCheck);
+    
+    const isValid = await validatePassword(password, passwordToCheck);
+    console.log('Password validation result:', isValid);
+    
     if (!isValid) {
       return { success: false, error: 'Invalid password' };
     }
@@ -184,6 +202,7 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
       balance: admin.balance
     };
 
+    console.log('Admin login successful for:', admin.username);
     return { success: true, admin: adminResponse, token };
   } catch (error) {
     console.error('Admin login error:', error);

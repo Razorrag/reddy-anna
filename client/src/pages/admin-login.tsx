@@ -23,28 +23,18 @@ export default function AdminLogin() {
     setError('');
 
     try {
-      // Make real API call to login endpoint
-      const response = await apiClient.post<any>('/api/auth/login', {
-        username: formData.username,
+      // Make real API call to admin login endpoint
+      const response = await apiClient.post<any>('/auth/admin/login', {
+        email: formData.username + '@reddyanna.com', // Generate email from username
         password: formData.password
       });
 
-      // Verify admin credentials (you should check role from backend)
-      // For now, we'll check if username contains 'admin'
-      const isAdmin = formData.username.toLowerCase().includes('admin');
-
-      if (!isAdmin) {
-        setError('Invalid admin credentials. Admin access only.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Set admin user data in localStorage
+      // Set admin user data in localStorage from backend response
       const adminUser = {
-        id: response.id,
-        username: response.username,
-        role: 'admin', // Critical: Set role as admin
-        balance: response.balance || 0
+        id: response.admin?.id || response.id,
+        username: response.admin?.username || response.username,
+        role: 'admin', // Backend should verify this
+        balance: response.admin?.balance || response.balance || 0
       };
       
       localStorage.setItem('user', JSON.stringify(adminUser));
