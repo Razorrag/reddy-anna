@@ -33,3 +33,181 @@ button, input, select, textarea {
 .animate-slide-up {
   animation: slideUp 0.3s ease-out;
 }
+
+/* Exact Color Scheme Implementation */
+:root {
+  --yellow-accent: #FFD100;
+  --andar-red: #B71C1C;
+  --bahar-navy: #0B2340;
+  --bg-dark: #0B0B0B;
+  --bg-medium: #1A1A1A;
+  --bg-light: #2A2A2A;
+  --text-primary: #FFFFFF;
+  --text-secondary: #B0B0B0;
+  --success-green: #10B981;
+  --error-red: #EF4444;
+  --warning-orange: #F59E0B;
+  --border-gray: #374151;
+}
+
+/* Custom utility classes for exact colors */
+.bg-gold {
+  background-color: var(--yellow-accent);
+}
+
+.text-gold {
+  color: var(--yellow-accent);
+}
+
+.border-gold {
+  border-color: var(--yellow-accent);
+}
+
+.bg-andar-red {
+  background-color: var(--andar-red);
+}
+
+.bg-bahar-navy {
+  background-color: var(--bahar-navy);
+}
+
+.bg-dark {
+  background-color: var(--bg-dark);
+}
+
+/* Enhanced animations */
+@keyframes pulse-gold {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 209, 0, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(255, 209, 0, 0);
+  }
+}
+
+.animate-pulse-gold {
+  animation: pulse-gold 2s infinite;
+}
+
+@keyframes card-flip {
+  0% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(90deg);
+  }
+  100% {
+    transform: rotateY(0deg);
+  }
+}
+
+.animate-card-flip {
+  animation: card-flip 0.6s ease-in-out;
+}
+
+@keyframes chip-fly {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fly-x), var(--fly-y)) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.animate-chip-fly {
+  animation: chip-fly 0.8s ease-out forwards;
+}
+
+/* Confetti animation */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-100vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+.confetti-piece {
+  position: fixed;
+  width: 10px;
+  height: 10px;
+  animation: confetti-fall 3s linear forwards;
+  z-index: 9999;
+}
+
+/* Timer animations */
+@keyframes timer-urgent {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.timer-urgent {
+  animation: timer-urgent 1s infinite;
+  color: var(--error-red);
+}
+
+/* Smooth transitions */
+.transition-all-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced button styles */
+.btn-gold {
+  background: linear-gradient(135deg, var(--yellow-accent), #FFA500);
+  color: var(--bg-dark);
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 209, 0, 0.3);
+}
+
+.btn-gold:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 209, 0, 0.4);
+}
+
+.btn-andar {
+  background: linear-gradient(135deg, var(--andar-red), #D32F2F);
+  color: white;
+}
+
+.btn-bahar {
+  background: linear-gradient(135deg, var(--bahar-navy), #1E3A8A);
+  color: white;
+}
+
+/* Card styles */
+.card-glow {
+  box-shadow: 0 0 20px rgba(255, 209, 0, 0.5);
+  border: 2px solid var(--yellow-accent);
+}
+
+/* Betting area styles */
+.betting-area {
+  background: linear-gradient(135deg, var(--bg-dark), var(--bg-medium));
+  border: 1px solid var(--border-gray);
+  border-radius: 12px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .btn-gold {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+  
+  .confetti-piece {
+    width: 8px;
+    height: 8px;
+  }
+}

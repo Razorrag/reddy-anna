@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { GameState, PlayerBets, initializeGameState } from '../components/GameLogic/GameLogic';
+import { GameState, initializeGameState } from '@/components/GameLogic/GameLogic';
+import type { RoundBets } from '../types/game';
 import { storage } from '../lib/utils';
+
+// Define PlayerBets interface (extends UserBets with currentBet)
+interface PlayerBets {
+  round1: RoundBets;
+  round2: RoundBets;
+  currentBet: number;
+}
 
 // Define context state type
 interface AppState {

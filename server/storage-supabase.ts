@@ -147,6 +147,22 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
+  async updateUser(userId: string, updates: any): Promise<User> {
+    const { data, error } = await supabaseServer
+      .from('users')
+      .update(updates)
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating user:', error);
+      throw new Error('Failed to update user');
+    }
+
+    return data;
+  }
+
   // Game session operations
   async createGameSession(session: InsertGameSession): Promise<GameSession> {
     const gameId = randomUUID();

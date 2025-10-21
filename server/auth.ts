@@ -1,4 +1,4 @@
-// Enhanced Authentication System
+// 🔐 UNIFIED SUPABASE AUTHENTICATION SYSTEM
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
@@ -51,6 +51,7 @@ export const generateReferralCode = (): string => {
   return result;
 };
 
+// 🎯 REGISTER USER WITH SUPABASE
 export const registerUser = async (userData: {
   name: string;
   email: string;
@@ -86,17 +87,15 @@ export const registerUser = async (userData: {
     // Generate JWT token
     const token = generateToken({
       id: newUser.id,
-      email: newUser.username,
-      role: 'user'
+      username: newUser.username,
+      role: 'player'
     });
 
     // Format response (remove sensitive data)
     const userResponse = {
       id: newUser.id,
       username: newUser.username,
-      balance: newUser.balance,
-      createdAt: newUser.created_at,
-      updatedAt: newUser.updated_at
+      balance: newUser.balance
     };
 
     return { success: true, user: userResponse, token };
@@ -106,6 +105,7 @@ export const registerUser = async (userData: {
   }
 };
 
+// 🔑 LOGIN USER WITH SUPABASE
 export const loginUser = async (email: string, password: string): Promise<AuthResult> => {
   try {
     // Sanitize inputs
@@ -130,17 +130,15 @@ export const loginUser = async (email: string, password: string): Promise<AuthRe
     // Generate JWT token
     const token = generateToken({
       id: user.id,
-      email: user.username,
-      role: 'user'
+      username: user.username,
+      role: 'player'
     });
 
     // Format response (remove sensitive data)
     const userResponse = {
       id: user.id,
       username: user.username,
-      balance: user.balance,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at
+      balance: user.balance
     };
 
     return { success: true, user: userResponse, token };
@@ -150,6 +148,7 @@ export const loginUser = async (email: string, password: string): Promise<AuthRe
   }
 };
 
+// 👑 LOGIN ADMIN WITH SUPABASE
 export const loginAdmin = async (email: string, password: string): Promise<AuthResult> => {
   try {
     // Sanitize inputs
@@ -160,10 +159,8 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
     }
 
     // Find admin by email using Supabase storage
-    // For now, we'll just look for a specific admin user, but in a real implementation,
-    // you might want to have a separate admin table in Supabase
     const admin = await storage.getUserByUsername(sanitizedEmail);
-    if (!admin || !admin.username.includes('admin')) {
+    if (!admin) {
       return { success: false, error: 'Admin not found' };
     }
 
@@ -176,7 +173,7 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
     // Generate JWT token
     const token = generateToken({
       id: admin.id,
-      email: admin.username,
+      username: admin.username,
       role: 'admin'
     });
 
@@ -184,9 +181,7 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
     const adminResponse = {
       id: admin.id,
       username: admin.username,
-      balance: admin.balance,
-      createdAt: admin.created_at,
-      updatedAt: admin.updated_at
+      balance: admin.balance
     };
 
     return { success: true, admin: adminResponse, token };
@@ -196,6 +191,7 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
   }
 };
 
+// 🔄 REFRESH TOKEN
 export const refreshToken = async (token: string): Promise<AuthResult> => {
   try {
     // Verify the existing token
@@ -205,11 +201,7 @@ export const refreshToken = async (token: string): Promise<AuthResult> => {
     }
 
     // Find user based on role using Supabase storage
-    let userOrAdmin;
-    if (decoded.role === 'user' || decoded.role === 'admin') {
-      userOrAdmin = await storage.getUser(decoded.id);
-    }
-
+    const userOrAdmin = await storage.getUser(decoded.id);
     if (!userOrAdmin) {
       return { success: false, error: 'User not found' };
     }
@@ -217,7 +209,7 @@ export const refreshToken = async (token: string): Promise<AuthResult> => {
     // Generate new token
     const newToken = generateToken({
       id: userOrAdmin.id,
-      email: userOrAdmin.username,
+      username: userOrAdmin.username,
       role: decoded.role
     });
 
@@ -228,22 +220,7 @@ export const refreshToken = async (token: string): Promise<AuthResult> => {
   }
 };
 
-export const changePassword = async (
-  userId: string, 
-  currentPassword: string, 
-  newPassword: string
-): Promise<AuthResult> => {
-  throw new Error('changePassword function not implemented in Supabase version');
-};
-
-export const forgotPassword = async (email: string): Promise<AuthResult> => {
-  throw new Error('forgotPassword function not implemented in Supabase version');
-};
-
-export const resetPassword = async (token: string, newPassword: string): Promise<AuthResult> => {
-  throw new Error('resetPassword function not implemented in Supabase version');
-};
-
+// 🔐 AUTHENTICATION MIDDLEWARE
 export const authenticateToken = (token: string): { valid: boolean; user?: any; error?: string } => {
   try {
     const decoded = verifyToken(token);
@@ -257,6 +234,30 @@ export const authenticateToken = (token: string): { valid: boolean; user?: any; 
   }
 };
 
+// 🛡️ REQUIRE AUTH MIDDLEWARE
+export const requireAuth = (req: any, res: any, next: any) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Access denied. No token provided.'
+    });
+  }
+
+  const authResult = authenticateToken(token);
+  if (!authResult.valid) {
+    return res.status(401).json({
+      success: false,
+      error: authResult.error
+    });
+  }
+
+  req.user = authResult.user;
+  next();
+};
+
+// 👑 REQUIRE ROLE MIDDLEWARE
 export const requireRole = (roles: string[]) => {
   return (req: any, res: any, next: any) => {
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -288,24 +289,126 @@ export const requireRole = (roles: string[]) => {
   };
 };
 
-export const requireAuth = (req: any, res: any, next: any) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  
-  if (!token) {
-    return res.status(401).json({
-      success: false,
-      error: 'Access denied. No token provided.'
-    });
-  }
+// 🔍 GET USER BY ID
+export const getUserById = async (userId: string) => {
+  try {
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return null;
+    }
 
-  const authResult = authenticateToken(token);
-  if (!authResult.valid) {
-    return res.status(401).json({
-      success: false,
-      error: authResult.error
-    });
+    // Remove sensitive data
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  } catch (error) {
+    console.error('Get user error:', error);
+    return null;
   }
+};
 
-  req.user = authResult.user;
-  next();
+// 📝 UPDATE USER PROFILE
+export const updateUserProfile = async (userId: string, updates: any) => {
+  try {
+    const updatedUser = await storage.updateUser(userId, updates);
+    if (!updatedUser) {
+      return { success: false, error: 'User not found' };
+    }
+
+    // Remove sensitive data
+    const { password, ...userWithoutPassword } = updatedUser;
+    return { success: true, user: userWithoutPassword };
+  } catch (error) {
+    console.error('Update user error:', error);
+    return { success: false, error: 'Profile update failed' };
+  }
+};
+
+// 🚪 LOGOUT USER
+export const logoutUser = async (token: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    // In a real implementation, you might want to:
+    // 1. Add the token to a blacklist
+    // 2. Remove the session from database
+    // 3. Clear any cached user data
+    
+    // For now, we'll just verify the token is valid
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return { success: false, error: 'Invalid token' };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Logout error:', error);
+    return { success: false, error: 'Logout failed' };
+  }
+};
+
+// 📊 VALIDATE SESSION
+export const validateSession = async (token: string): Promise<{ valid: boolean; user?: any; error?: string }> => {
+  try {
+    const authResult = authenticateToken(token);
+    if (!authResult.valid) {
+      return { valid: false, error: authResult.error };
+    }
+
+    // Check if user still exists in database
+    const user = await getUserById(authResult.user.id);
+    if (!user) {
+      return { valid: false, error: 'User not found' };
+    }
+
+    return { valid: true, user };
+  } catch (error) {
+    console.error('Session validation error:', error);
+    return { valid: false, error: 'Session validation failed' };
+  }
+};
+
+// 🔧 PASSWORD RESET (Placeholder for future implementation)
+export const forgotPassword = async (email: string): Promise<AuthResult> => {
+  // TODO: Implement password reset functionality
+  // 1. Generate reset token
+  // 2. Send email with reset link
+  // 3. Store reset token in database
+  return { success: false, error: 'Password reset not implemented yet' };
+};
+
+export const resetPassword = async (token: string, newPassword: string): Promise<AuthResult> => {
+  // TODO: Implement password reset functionality
+  // 1. Verify reset token
+  // 2. Update password in database
+  // 3. Invalidate reset token
+  return { success: false, error: 'Password reset not implemented yet' };
+};
+
+export const changePassword = async (
+  userId: string, 
+  currentPassword: string, 
+  newPassword: string
+): Promise<AuthResult> => {
+  try {
+    // Get user from database
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    // Verify current password
+    const isValid = await validatePassword(currentPassword, user.password);
+    if (!isValid) {
+      return { success: false, error: 'Current password is incorrect' };
+    }
+
+    // Hash new password
+    const hashedNewPassword = await hashPassword(newPassword);
+
+    // Update password in database
+    await storage.updateUser(userId, { password: hashedNewPassword });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Change password error:', error);
+    return { success: false, error: 'Password change failed' };
+  }
 };

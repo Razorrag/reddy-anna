@@ -288,8 +288,57 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               }
               break;
 
+            case 'betting_locked':
+              // Handle betting locked state
+              if (data.data?.locked !== undefined) {
+                // This would be handled by GameStateContext
+                console.log('Betting locked state:', data.data.locked);
+                if (data.data.locked) {
+                  showNotification('Betting locked for this round', 'warning');
+                }
+              }
+              break;
+
+            case 'round_complete':
+              // Handle round completion
+              if (data.data?.round && data.data?.winner) {
+                showNotification(`Round ${data.data.round} complete! ${data.data.winner} wins!`, 'info');
+              }
+              break;
+
+            case 'card_animation':
+              // Handle card animation triggers
+              if (data.data?.card && data.data?.target) {
+                console.log('Card animation triggered:', data.data);
+                // This would trigger animations in the UI
+              }
+              break;
+
+            case 'confetti_trigger':
+              // Handle confetti animation for wins
+              console.log('Confetti animation triggered');
+              // This would trigger confetti animation
+              break;
+
+            case 'haptic_feedback':
+              // Handle haptic feedback for mobile devices
+              if (data.data?.type && 'vibrate' in navigator) {
+                const pattern = data.data.type === 'win' ? [200, 100, 200] : [100];
+                navigator.vibrate(pattern);
+              }
+              break;
+
+            case 'accessibility_update':
+              // Handle accessibility announcements
+              if (data.data?.message && 'speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(data.data.message);
+                speechSynthesis.speak(utterance);
+              }
+              break;
+
             case 'error':
               showNotification(data.data?.message || 'An error occurred', 'error');
+              console.error('WebSocket error received:', data.data);
               break;
               
             default:

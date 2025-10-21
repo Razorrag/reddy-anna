@@ -24,7 +24,7 @@ export default function Login() {
 
     try {
       // Make real API call to login endpoint
-      const response = await apiClient.post<any>('/api/auth/login', {
+      const response = await apiClient.post<any>('/auth/login', {
         username: formData.username,
         password: formData.password
       });

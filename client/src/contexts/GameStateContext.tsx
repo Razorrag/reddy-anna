@@ -6,8 +6,7 @@ import type {
   GameWinner,
   BetSide,
   RoundBets,
-  DealtCard,
-  GameHistoryEntry
+  DealtCard
 } from '@/types/game';
 
 // Enhanced GameState interface using shared types
@@ -26,6 +25,7 @@ interface GameState {
   currentRound: GameRound;
   countdownTimer: number;
   isGameActive: boolean;
+  bettingLocked: boolean;
   
   // Winner state
   gameWinner: GameWinner;
@@ -61,6 +61,7 @@ type GameStateAction =
   | { type: 'SET_WINNER'; payload: GameWinner }
   | { type: 'RESET_GAME' }
   | { type: 'SET_GAME_ACTIVE'; payload: boolean }
+  | { type: 'SET_BETTING_LOCKED'; payload: boolean }
   | { type: 'SET_CURRENT_ROUND'; payload: GameRound }
   | { type: 'UPDATE_TOTAL_BETS'; payload: { andar: number; bahar: number } }
   | { type: 'UPDATE_PLAYER_WALLET'; payload: number }
@@ -81,6 +82,7 @@ const initialState: GameState = {
   currentRound: 1,
   countdownTimer: 0,
   isGameActive: false,
+  bettingLocked: false,
   gameWinner: null,
   winningCard: null,
   andarTotalBet: 0,
@@ -123,6 +125,8 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
       };
     case 'SET_GAME_ACTIVE':
       return { ...state, isGameActive: action.payload };
+    case 'SET_BETTING_LOCKED':
+      return { ...state, bettingLocked: action.payload };
     case 'SET_CURRENT_ROUND':
       return { ...state, currentRound: action.payload };
     case 'UPDATE_TOTAL_BETS':
@@ -173,6 +177,7 @@ interface GameStateContextType {
   setWinner: (winner: GameWinner) => void;
   resetGame: () => void;
   setGameActive: (active: boolean) => void;
+  setBettingLocked: (locked: boolean) => void;
   setCurrentRound: (round: GameRound) => void;
   updateTotalBets: (bets: RoundBets) => void;
   updatePlayerWallet: (wallet: number) => void;
@@ -252,6 +257,10 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const setGameActive = (active: boolean) => {
     dispatch({ type: 'SET_GAME_ACTIVE', payload: active });
+  };
+
+  const setBettingLocked = (locked: boolean) => {
+    dispatch({ type: 'SET_BETTING_LOCKED', payload: locked });
   };
 
   const setCurrentRound = (round: GameRound) => {
@@ -338,6 +347,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     setWinner,
     resetGame,
     setGameActive,
+    setBettingLocked,
     setCurrentRound,
     updateTotalBets,
     updatePlayerWallet,

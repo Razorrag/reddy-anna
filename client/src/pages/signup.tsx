@@ -47,7 +47,7 @@ export default function Signup() {
 
     try {
       // Make real API call to signup endpoint
-      const response = await apiClient.post<any>('/api/auth/signup', {
+      const response = await apiClient.post<any>('/auth/signup', {
         username: formData.username,
         password: formData.password
       });
