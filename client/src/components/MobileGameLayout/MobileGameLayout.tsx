@@ -11,7 +11,7 @@ import VideoArea from './VideoArea.tsx';
 import BettingStrip from './BettingStrip.tsx';
 import ControlsRow from './ControlsRow.tsx';
 import CardHistory from './CardHistory.tsx';
-import ChipSelector from './ChipSelector.tsx';
+import HorizontalChipSelector from './HorizontalChipSelector.tsx';
 import ProgressBar from './ProgressBar.tsx';
 import type { GameState } from '../../types/game';
 import type { BetSide } from '../../types/game';
@@ -80,6 +80,17 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
           className="px-4 py-3"
         />
 
+        {/* Horizontal Chip Selector - Toggleable swipeable chip selection */}
+        {showChipSelector && (
+          <HorizontalChipSelector
+            betAmounts={betAmounts}
+            selectedAmount={selectedBetAmount}
+            userBalance={userBalance}
+            onChipSelect={onChipSelect}
+            isVisible={true}
+          />
+        )}
+
         {/* Controls Row - History, Undo, Select Chip, Rebet */}
         <ControlsRow
           selectedBetAmount={selectedBetAmount}
@@ -103,17 +114,6 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
           gameState={gameState}
           className="h-1"
         />
-
-        {/* Chip Selector Bottom Sheet */}
-        {showChipSelector && (
-          <ChipSelector
-            betAmounts={betAmounts}
-            selectedAmount={selectedBetAmount}
-            userBalance={userBalance}
-            onChipSelect={onChipSelect}
-            onClose={() => onShowChipSelector()}
-          />
-        )}
       </div>
     </div>
   );

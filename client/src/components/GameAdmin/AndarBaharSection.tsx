@@ -15,12 +15,37 @@ const AndarBaharSection = () => {
   const suits = ['♠', '♥', '♦', '♣'];
   const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
   
+  // Helper function to convert suit symbol to proper suit name
+  const getSuitName = (suit: string): 'hearts' | 'diamonds' | 'clubs' | 'spades' => {
+    switch (suit) {
+      case '♥': return 'hearts';
+      case '♦': return 'diamonds';
+      case '♣': return 'clubs';
+      case '♠': return 'spades';
+      default: return 'spades';
+    }
+  };
+
+  // Helper function to get card value
+  const getCardValue = (rank: string): number => {
+    switch (rank) {
+      case 'A': return 1;
+      case 'J': return 11;
+      case 'Q': return 12;
+      case 'K': return 13;
+      default: return parseInt(rank);
+    }
+  };
+  
   // Create card grid
   const cardGrid = suits.flatMap(suit => 
     ranks.map(rank => ({
       display: `${rank}${suit}`,
-      suit,
-      value: rank,
+      suit: getSuitName(suit),
+      rank,
+      value: getCardValue(rank),
+      color: (suit === '♥' || suit === '♦') ? 'red' : 'black',
+      id: `${rank}${suit}`
     }))
   );
 
@@ -52,20 +77,31 @@ const AndarBaharSection = () => {
   const handleShowCards = () => {
     if (!selectedBaharCard || !selectedAndarCard) return;
     
+    // Create proper Card objects
+    const baharCard: Card = {
+      id: selectedBaharCard,
+      display: selectedBaharCard,
+      suit: getSuitName(selectedBaharCard.slice(-1)),
+      rank: selectedBaharCard.slice(0, -1),
+      value: getCardValue(selectedBaharCard.slice(0, -1)),
+      color: (selectedBaharCard.slice(-1) === '♥' || selectedBaharCard.slice(-1) === '♦') ? 'red' : 'black'
+    };
+    
+    const andarCard: Card = {
+      id: selectedAndarCard,
+      display: selectedAndarCard,
+      suit: getSuitName(selectedAndarCard.slice(-1)),
+      rank: selectedAndarCard.slice(0, -1),
+      value: getCardValue(selectedAndarCard.slice(0, -1)),
+      color: (selectedAndarCard.slice(-1) === '♥' || selectedAndarCard.slice(-1) === '♦') ? 'red' : 'black'
+    };
+    
     // Deal Bahar card first
-    dealCard(
-      { display: selectedBaharCard, suit: selectedBaharCard.slice(-1), value: selectedBaharCard.slice(0, -1) },
-      'bahar',
-      cardPosition
-    );
+    dealCard(baharCard, 'bahar', cardPosition);
     
     // Deal Andar card second
     setTimeout(() => {
-      dealCard(
-        { display: selectedAndarCard, suit: selectedAndarCard.slice(-1), value: selectedAndarCard.slice(0, -1) },
-        'andar',
-        cardPosition + 1
-      );
+      dealCard(andarCard, 'andar', cardPosition + 1);
     }, 500);
     
     // Reset selections
@@ -73,6 +109,24 @@ const AndarBaharSection = () => {
     setSelectedBaharCard(null);
     setSelectedAndarCard(null);
     setShowDealButton(false);
+  };
+
+  // Handle Round 3 continuous draw (deal one card at a time)
+  const handleContinuousDraw = (card: any, side: 'bahar' | 'andar') => {
+    const fullCard: Card = {
+      id: card.id || card.display,
+      display: card.display,
+      suit: card.suit,
+      rank: card.rank,
+      value: card.value,
+      color: card.color
+    };
+    
+    dealCard(
+      fullCard,
+      side,
+      side === 'bahar' ? gameState.baharCards.length + 1 : gameState.andarCards.length + 1
+    );
   };
   
   const handleUndoSelection = () => {

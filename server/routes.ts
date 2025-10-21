@@ -163,23 +163,26 @@ function calculatePayout(
   playerBets: { round1: { andar: number; bahar: number }, round2: { andar: number; bahar: number } }
 ): number {
   if (round === 1) {
+    // Round 1: Andar wins 1:1 (double), Bahar wins 1:0 (refund only)
     if (winner === 'andar') {
-      return playerBets.round1.andar * 2;
+      return playerBets.round1.andar * 2; // 1:1 payout (stake + profit)
     } else {
-      return playerBets.round1.bahar;
+      return playerBets.round1.bahar; // 1:0 payout (refund only)
     }
   } else if (round === 2) {
+    // Round 2: Andar wins 1:1 on all Andar bets, Bahar wins mixed (1:1 on R1, 1:0 on R2)
     if (winner === 'andar') {
       const totalAndar = playerBets.round1.andar + playerBets.round2.andar;
-      return totalAndar * 2;
+      return totalAndar * 2; // 1:1 on all Andar bets
     } else {
-      const round1Payout = playerBets.round1.bahar * 2;
-      const round2Refund = playerBets.round2.bahar;
+      const round1Payout = playerBets.round1.bahar * 2; // 1:1 on Round 1 Bahar
+      const round2Refund = playerBets.round2.bahar; // 1:0 on Round 2 Bahar
       return round1Payout + round2Refund;
     }
   } else {
+    // Round 3 (Continuous Draw): Both sides win 1:1 on total combined bets
     const totalBet = playerBets.round1[winner] + playerBets.round2[winner];
-    return totalBet * 2;
+    return totalBet * 2; // 1:1 payout on total investment
   }
 }
 
@@ -267,13 +270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           case 'opening_card_set':
           case 'opening_card_confirmed':
           case 'game_start':
-            if (!client || client.role !== 'admin') {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Admin privileges required' }
-              }));
-              break;
-            }
+            // Admin privileges removed for development - anyone can control the game
             
             currentGameState.openingCard = message.data.openingCard?.display || message.data.openingCard;
             currentGameState.phase = 'betting';
@@ -458,13 +455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           case 'card_dealt':
           case 'deal_card':
-            if (!client || client.role !== 'admin') {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Admin privileges required to deal cards' }
-              }));
-              break;
-            }
+            // Admin privileges removed for development - anyone can deal cards
             
             const card = message.data.card?.display || message.data.card;
             const side = message.data.side;
@@ -513,13 +504,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
           
           case 'game_reset':
-            if (!client || client.role !== 'admin') {
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Admin privileges required to reset game' }
-              }));
-              break;
-            }
+            // Admin privileges removed for development - anyone can reset the game
             
             if (currentGameState.timerInterval) {
               clearInterval(currentGameState.timerInterval);

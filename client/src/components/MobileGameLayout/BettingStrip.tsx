@@ -1,4 +1,4 @@
-/**
+ /**
  * BettingStrip - Andar/Opening Card/Bahar betting interface
  * 
  * Three-segment horizontal betting strip with Andar (left),
@@ -62,6 +62,28 @@ const BettingStrip: React.FC<BettingStripProps> = ({
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
+      {/* Round Indicator and Payout Info */}
+      <div className="flex items-center justify-between px-2 py-1 bg-gradient-to-r from-purple-900/50 to-blue-900/50 rounded-lg border border-purple-500/30">
+        <div className="flex items-center gap-2">
+          <div className="text-yellow-400 text-sm font-bold">
+            Round {gameState.currentRound}
+          </div>
+          {gameState.phase === 'betting' && (
+            <div className="text-green-400 text-xs animate-pulse">
+              Betting Open
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          <div className="text-yellow-200">
+            Andar: <span className="text-yellow-400 font-bold">{getPayoutMultiplier('andar')}</span>
+          </div>
+          <div className="text-blue-200">
+            Bahar: <span className="text-blue-400 font-bold">{getPayoutMultiplier('bahar')}</span>
+          </div>
+        </div>
+      </div>
+
       {/* Main Betting Strip */}
       <div className="flex gap-2">
         {/* Andar Section */}
@@ -69,8 +91,8 @@ const BettingStrip: React.FC<BettingStripProps> = ({
           onClick={() => handleBetClick('andar')}
           disabled={isBettingDisabled}
           className={`
-            flex-1 bg-gradient-to-b from-red-600 to-red-700 rounded-lg p-4 
-            border-2 transition-all duration-200 active:scale-95
+            flex-1 bg-gradient-to-b from-red-600 to-red-700 rounded-lg p-3 
+            border-2 transition-all duration-200 active:scale-95 relative
             ${selectedPosition === 'andar' 
               ? 'border-yellow-400 shadow-lg shadow-yellow-400/50' 
               : 'border-red-500/50'
@@ -81,38 +103,72 @@ const BettingStrip: React.FC<BettingStripProps> = ({
             }
           `}
         >
-          <div className="text-center">
-            <div className="text-white font-bold text-lg mb-1">ANDAR</div>
-            <div className="text-yellow-300 text-sm font-semibold">{getPayoutMultiplier('andar')}</div>
-            <div className="text-white text-xs mt-2">
-              Total: ₹{currentRoundBets.andar.toLocaleString('en-IN')}
-            </div>
-            {currentPlayerBets.andar > 0 && (
-              <div className="text-yellow-200 text-xs">
-                You: ₹{currentPlayerBets.andar.toLocaleString('en-IN')}
+          <div className="flex items-center justify-between h-full">
+            {/* Left side - Text and bet info */}
+            <div className="flex-1 text-left pr-2">
+              <div className="text-white font-bold text-sm mb-2">ANDAR</div>
+              
+              {/* Show bet amounts */}
+              <div>
+                <div className="text-white text-xs">
+                  Total: ₹{currentRoundBets.andar.toLocaleString('en-IN')}
+                </div>
+                {currentPlayerBets.andar > 0 && (
+                  <div className="text-yellow-200 text-xs">
+                    You: ₹{currentPlayerBets.andar.toLocaleString('en-IN')}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+
+            {/* Right side - Card */}
+            <div className="flex-shrink-0">
+              {gameState.selectedOpeningCard ? (
+                <div className="relative w-12 h-16">
+                  {/* Card with enhanced styling */}
+                  <div className={`
+                    absolute inset-0 rounded-lg shadow-2xl border-2 
+                    transform transition-all duration-300 hover:scale-105
+                    ${gameState.selectedOpeningCard.color === 'red' 
+                      ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-400' 
+                      : 'bg-gradient-to-br from-gray-50 to-gray-100 border-gray-400'
+                    }
+                  `}>
+                    {/* Card content */}
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <div className={`
+                        text-lg font-bold
+                        ${gameState.selectedOpeningCard.color === 'red' ? 'text-red-600' : 'text-gray-800'}
+                      `}>
+                        {gameState.selectedOpeningCard.display}
+                      </div>
+                      <div className={`
+                        text-xs font-semibold
+                        ${gameState.selectedOpeningCard.color === 'red' ? 'text-red-500' : 'text-gray-600'}
+                      `}>
+                        {gameState.selectedOpeningCard.suit?.toUpperCase()}
+                      </div>
+                    </div>
+                    {/* Shine effect */}
+                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent rounded-lg" />
+                  </div>
+                  {/* Glow effect */}
+                  <div className="absolute -inset-1 bg-yellow-400/30 rounded-lg blur-sm animate-pulse" />
+                </div>
+              ) : (
+                <div className="w-12 h-16 flex items-center justify-center">
+                  <div className="text-red-200 text-2xl font-bold">?</div>
+                </div>
+              )}
+            </div>
           </div>
         </button>
 
-        {/* Opening Card Section */}
-        <div className="flex-1 bg-gradient-to-b from-gray-800 to-gray-900 rounded-lg p-4 border-2 border-gray-600/50">
-          <div className="flex justify-center items-center h-full">
-            {gameState.selectedOpeningCard ? (
-              <div className="text-center">
-                <div className="text-yellow-400 text-xs font-semibold mb-2">Opening Card</div>
-                <div className="bg-white rounded-lg p-3 shadow-lg border-2 border-yellow-500/50">
-                  <div className="text-2xl font-bold text-black">
-                    {gameState.selectedOpeningCard.display}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center">
-                <div className="text-gray-400 text-sm">Waiting for</div>
-                <div className="text-gray-400 text-sm">Opening Card</div>
-              </div>
-            )}
+        {/* Small Opening Card Label Section */}
+        <div className="w-16 bg-gradient-to-b from-gray-800 to-gray-900 rounded-lg p-2 border-2 border-gray-600/50 flex flex-col justify-center">
+          <div className="text-center">
+            <div className="text-yellow-400 text-xs font-semibold">Opening</div>
+            <div className="text-yellow-400 text-xs font-semibold">Card</div>
           </div>
         </div>
 
@@ -121,8 +177,8 @@ const BettingStrip: React.FC<BettingStripProps> = ({
           onClick={() => handleBetClick('bahar')}
           disabled={isBettingDisabled}
           className={`
-            flex-1 bg-gradient-to-b from-blue-900 to-blue-950 rounded-lg p-4 
-            border-2 transition-all duration-200 active:scale-95
+            flex-1 bg-gradient-to-b from-blue-900 to-blue-950 rounded-lg p-3 
+            border-2 transition-all duration-200 active:scale-95 relative
             ${selectedPosition === 'bahar' 
               ? 'border-yellow-400 shadow-lg shadow-yellow-400/50' 
               : 'border-blue-700/50'
@@ -133,17 +189,64 @@ const BettingStrip: React.FC<BettingStripProps> = ({
             }
           `}
         >
-          <div className="text-center">
-            <div className="text-white font-bold text-lg mb-1">BAHAR</div>
-            <div className="text-yellow-300 text-sm font-semibold">{getPayoutMultiplier('bahar')}</div>
-            <div className="text-white text-xs mt-2">
-              Total: ₹{currentRoundBets.bahar.toLocaleString('en-IN')}
+          <div className="flex items-center justify-between h-full">
+            {/* Left side - Card */}
+            <div className="flex-shrink-0">
+              {gameState.selectedOpeningCard ? (
+                <div className="relative w-12 h-16">
+                  {/* Card with enhanced styling */}
+                  <div className={`
+                    absolute inset-0 rounded-lg shadow-2xl border-2 
+                    transform transition-all duration-300 hover:scale-105
+                    ${gameState.selectedOpeningCard.color === 'red' 
+                      ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-400' 
+                      : 'bg-gradient-to-br from-gray-50 to-gray-100 border-gray-400'
+                    }
+                  `}>
+                    {/* Card content */}
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <div className={`
+                        text-lg font-bold
+                        ${gameState.selectedOpeningCard.color === 'red' ? 'text-red-600' : 'text-gray-800'}
+                      `}>
+                        {gameState.selectedOpeningCard.display}
+                      </div>
+                      <div className={`
+                        text-xs font-semibold
+                        ${gameState.selectedOpeningCard.color === 'red' ? 'text-red-500' : 'text-gray-600'}
+                      `}>
+                        {gameState.selectedOpeningCard.suit?.toUpperCase()}
+                      </div>
+                    </div>
+                    {/* Shine effect */}
+                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent rounded-lg" />
+                  </div>
+                  {/* Glow effect */}
+                  <div className="absolute -inset-1 bg-yellow-400/30 rounded-lg blur-sm animate-pulse" />
+                </div>
+              ) : (
+                <div className="w-12 h-16 flex items-center justify-center">
+                  <div className="text-blue-200 text-2xl font-bold">?</div>
+                </div>
+              )}
             </div>
-            {currentPlayerBets.bahar > 0 && (
-              <div className="text-yellow-200 text-xs">
-                You: ₹{currentPlayerBets.bahar.toLocaleString('en-IN')}
+
+            {/* Right side - Text and bet info */}
+            <div className="flex-1 text-right pl-2">
+              <div className="text-white font-bold text-sm mb-2">BAHAR</div>
+              
+              {/* Show bet amounts */}
+              <div>
+                <div className="text-white text-xs">
+                  Total: ₹{currentRoundBets.bahar.toLocaleString('en-IN')}
+                </div>
+                {currentPlayerBets.bahar > 0 && (
+                  <div className="text-yellow-200 text-xs">
+                    You: ₹{currentPlayerBets.bahar.toLocaleString('en-IN')}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </button>
       </div>

@@ -6,38 +6,52 @@ import type {
   GameWinner,
   BetSide,
   RoundBets,
-  DealtCard
+  DealtCard,
+  Bet,
+  GameHistoryEntry
 } from '@/types/game';
 
 // Enhanced GameState interface using shared types
 interface GameState {
   // Game identification
+  id: string;
   gameId: string;
+  
+  // Game status
+  status: 'waiting' | 'betting' | 'dealing' | 'revealing' | 'completed';
   
   // Card state
   selectedOpeningCard: Card | null;
   andarCards: Card[];
   baharCards: Card[];
   dealtCards: DealtCard[];
+  andarCard?: Card;
+  baharCard?: Card;
   
   // Game flow
   phase: GamePhase;
   currentRound: GameRound;
+  timeRemaining: number;
   countdownTimer: number;
   isGameActive: boolean;
   bettingLocked: boolean;
   
   // Winner state
   gameWinner: GameWinner;
+  winningSide?: 'andar' | 'bahar';
   winningCard: Card | null;
   
   // Betting state - total from all players
   andarTotalBet: number;
   baharTotalBet: number;
+  bets: Bet[];
   
   // Round-specific total bets
   round1Bets: RoundBets;
   round2Bets: RoundBets;
+  
+  // Game history
+  history: GameHistoryEntry[];
   
   // User-specific data
   userId: string | null;
@@ -73,13 +87,16 @@ type GameStateAction =
   | { type: 'CLEAR_CARDS' };
 
 const initialState: GameState = {
+  id: '',
   gameId: '',
+  status: 'waiting',
   selectedOpeningCard: null,
   andarCards: [],
   baharCards: [],
   dealtCards: [],
   phase: 'idle',
   currentRound: 1,
+  timeRemaining: 0,
   countdownTimer: 0,
   isGameActive: false,
   bettingLocked: false,
@@ -87,8 +104,10 @@ const initialState: GameState = {
   winningCard: null,
   andarTotalBet: 0,
   baharTotalBet: 0,
+  bets: [],
   round1Bets: { andar: 0, bahar: 0 },
   round2Bets: { andar: 0, bahar: 0 },
+  history: [],
   userId: null,
   username: null,
   userRole: 'player',

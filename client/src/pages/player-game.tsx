@@ -5,8 +5,9 @@
  * Uses the new MobileGameLayout for a unified mobile-first design.
  */
 
-import React, { useState, useCallback } from 'react';
-import { useGame } from '../contexts/GameContext';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useGameState } from '../contexts/GameStateContext';
+import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
 import MobileGameLayout from '../components/MobileGameLayout/MobileGameLayout';
 import { GameHistoryModal } from '../components/GameHistoryModal';
@@ -14,7 +15,8 @@ import type { BetSide } from '../types/game';
 
 const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
-  const { gameState, placeBet } = useGame();
+  const { gameState, placeBet, updatePlayerWallet } = useGameState();
+  const { placeBet: placeBetWebSocket } = useWebSocket();
 
   // Mock user data
   const user = { id: 'player-1', username: 'Player' };
@@ -26,6 +28,10 @@ const PlayerGame: React.FC = () => {
   const [userBalance, setUserBalance] = useState(50000); // Mock balance
   const [showChipSelector, setShowChipSelector] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [userBets, setUserBets] = useState({
+    round1: { andar: 0, bahar: 0 },
+    round2: { andar: 0, bahar: 0 }
+  });
 
   // Available bet amounts - matching available coin images
   const betAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
@@ -43,26 +49,42 @@ const PlayerGame: React.FC = () => {
     }
 
     if (gameState.phase !== 'betting') {
-      showNotification('Betting is not open', 'error');
+      showNotification(`Betting is not open - Current phase: ${gameState.phase}`, 'error');
+      return;
+    }
+
+    // Check if betting is locked (timer ended but waiting for admin to deal)
+    if (gameState.bettingLocked) {
+      showNotification('Betting period has ended. Waiting for cards to be dealt.', 'error');
       return;
     }
 
     setIsPlacingBet(true);
 
     try {
-      // Use the game context placeBet function
-      placeBet(position, selectedBetAmount);
+      // Use WebSocket to place bet (this will sync with backend)
+      await placeBetWebSocket(position, selectedBetAmount);
 
       // Update local balance (optimistic)
       setUserBalance(prev => prev - selectedBetAmount);
 
-      showNotification(`Bet placed: ₹${selectedBetAmount} on ${position}`, 'success');
+      // Update local user bets
+      const currentRound = gameState.currentRound;
+      setUserBets(prev => ({
+        ...prev,
+        [`round${currentRound}`]: {
+          ...prev[`round${currentRound}` as keyof typeof prev],
+          [position]: prev[`round${currentRound}` as keyof typeof prev][position] + selectedBetAmount
+        }
+      }));
+
+      showNotification(`Round ${currentRound} bet placed: ₹${selectedBetAmount} on ${position}`, 'success');
     } catch (error) {
       showNotification('Failed to place bet', 'error');
     } finally {
       setIsPlacingBet(false);
     }
-  }, [selectedBetAmount, userBalance, gameState, placeBet, showNotification]);
+  }, [selectedBetAmount, userBalance, gameState, placeBetWebSocket, showNotification]);
 
   // Handle bet position selection
   const handlePositionSelect = useCallback((position: BetSide) => {
@@ -76,8 +98,14 @@ const PlayerGame: React.FC = () => {
   // Handle chip selection
   const handleChipSelect = useCallback((amount: number) => {
     setSelectedBetAmount(amount);
+    // Close the selector when a chip is selected
     setShowChipSelector(false);
   }, []);
+
+  // Handle show chip selector toggle
+  const handleShowChipSelector = useCallback(() => {
+    setShowChipSelector(!showChipSelector);
+  }, [showChipSelector]);
 
   // Handle undo bet
   const handleUndoBet = useCallback(() => {
@@ -100,6 +128,22 @@ const PlayerGame: React.FC = () => {
   const handleHistoryClick = useCallback(() => {
     setShowHistoryModal(true);
   }, []);
+
+  // Listen for game state changes to update local state
+  useEffect(() => {
+    // Update user balance when game state changes (handled by WebSocket context)
+    if (gameState.playerWallet !== undefined) {
+      setUserBalance(gameState.playerWallet);
+    }
+    
+    // Update user bets when round bets change
+    if (gameState.round1Bets) {
+      setUserBets(prev => ({ ...prev, round1: gameState.round1Bets }));
+    }
+    if (gameState.round2Bets) {
+      setUserBets(prev => ({ ...prev, round2: gameState.round2Bets }));
+    }
+  }, [gameState.playerWallet, gameState.round1Bets, gameState.round2Bets]);
 
   // Mock history data
   const mockHistory = [
@@ -171,7 +215,7 @@ const PlayerGame: React.FC = () => {
         onRebet={handleRebet}
         onWalletClick={handleWalletClick}
         onHistoryClick={handleHistoryClick}
-        onShowChipSelector={() => setShowChipSelector(true)}
+        onShowChipSelector={handleShowChipSelector}
         showChipSelector={showChipSelector}
         isPlacingBet={isPlacingBet}
       />

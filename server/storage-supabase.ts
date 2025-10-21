@@ -195,14 +195,14 @@ export class SupabaseStorage implements IStorage {
     const gameId = randomUUID();
     const now = new Date();
     const gameSession = {
-      gameId,
-      openingCard: session.openingCard || null,
+      game_id: gameId,
+      opening_card: session.openingCard || null,
       phase: session.phase || 'idle',
-      currentTimer: session.currentTimer || 30,
+      current_timer: session.currentTimer || 30,
       status: 'active',
       winner: null,
-      winningCard: null,
-      round: session.round || 1,
+      winning_card: null,
+      current_round: session.round || 1,
       created_at: now,
       updated_at: now,
     };
@@ -254,9 +254,22 @@ export class SupabaseStorage implements IStorage {
   }
 
   async updateGameSession(gameId: string, updates: Partial<GameSession>): Promise<void> {
+    // Convert camelCase to snake_case for database columns
+    const dbUpdates: any = {
+      updated_at: new Date()
+    };
+    
+    if (updates.phase) dbUpdates.phase = updates.phase;
+    if (updates.round !== undefined) dbUpdates.current_round = updates.round;
+    if (updates.currentTimer !== undefined) dbUpdates.current_timer = updates.currentTimer;
+    if (updates.openingCard !== undefined) dbUpdates.opening_card = updates.openingCard;
+    if (updates.winner !== undefined) dbUpdates.winner = updates.winner;
+    if (updates.winningCard !== undefined) dbUpdates.winning_card = updates.winningCard;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+
     const { error } = await supabaseServer
       .from('game_sessions')
-      .update({ ...updates, updated_at: new Date() })
+      .update(dbUpdates)
       .eq('game_id', gameId);
 
     if (error) {

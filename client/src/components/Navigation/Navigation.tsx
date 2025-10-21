@@ -92,6 +92,12 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
         Play Game
       </Link>
       <Link 
+        to="/admin-game" 
+        className={getButtonClass('secondary')}
+      >
+        Admin Control
+      </Link>
+      <Link 
         to="/login" 
         className={getButtonClass('secondary')}
       >
