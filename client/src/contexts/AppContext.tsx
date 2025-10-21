@@ -184,16 +184,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Check authentication status on app load
   useEffect(() => {
     const checkAuth = async () => {
-      const token = storage.get<string>('token');
-      if (token) {
+      // Check for authentication using the same keys as login/signup pages
+      const isLoggedIn = storage.get<string>('isLoggedIn');
+      const userData = storage.get<string>('user');
+      
+      if (isLoggedIn === 'true' && userData) {
         try {
-          // This would be an API call to verify token
-          // const userData = await verifyTokenAPI(token);
-          // dispatch({ type: 'SET_USER', payload: userData });
+          // Parse user data from localStorage
+          const user = JSON.parse(userData);
+          dispatch({ type: 'SET_USER', payload: user });
           dispatch({ type: 'SET_AUTH_STATUS', payload: { isAuthenticated: true, authChecked: true } });
         } catch (error) {
+          console.error('Failed to parse user data:', error);
           dispatch({ type: 'SET_AUTH_STATUS', payload: { isAuthenticated: false, authChecked: true } });
-          storage.remove('token');
+          // Clear invalid data
+          storage.remove('isLoggedIn');
+          storage.remove('user');
+          storage.remove('userRole');
         }
       } else {
         dispatch({ type: 'SET_AUTH_STATUS', payload: { isAuthenticated: false, authChecked: true } });

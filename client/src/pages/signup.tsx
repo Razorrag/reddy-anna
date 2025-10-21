@@ -70,7 +70,7 @@ export default function Signup() {
 
       // Redirect after 1 second to show success message
       setTimeout(() => {
-        window.location.href = '/player-game';
+        window.location.href = '/game';
       }, 1000);
     } catch (err: any) {
       console.error('Signup error:', err);

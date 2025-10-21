@@ -26,7 +26,7 @@ const HeroSection: React.FC = () => {
         
         <div className="flex flex-col sm:flex-row justify-center gap-4">
           <Link 
-            to="/player-game" 
+            to="/game"
             className={getButtonClass('primary')}
           >
             Start Playing

@@ -1,5 +1,5 @@
 // User Management System
-import { User, GameHistory } from './data';
+import { storage } from './storage-supabase';
 import { validateMobileNumber, validateEmail, sanitizeInput } from './validation';
 
 export interface UserProfileUpdate {
@@ -43,12 +43,12 @@ export interface UserFilters {
 
 export const updateUserProfile = async (userId: string, updates: UserProfileUpdate): Promise<UserManagementResponse> => {
   try {
-    const user = await User.findById(userId);
+    const user = await storage.getUser(userId);
     if (!user) {
       return { success: false, error: 'User not found' };
     }
 
-    // Validate email if provided
+    // For Supabase, we can only update the username (which is email in our schema)
     if (updates.email) {
       const sanitizedEmail = sanitizeInput(updates.email).toLowerCase();
       if (!validateEmail(sanitizedEmail)) {
@@ -56,45 +56,28 @@ export const updateUserProfile = async (userId: string, updates: UserProfileUpda
       }
       
       // Check if email is already taken by another user
-      const existingUser = await User.findOne({ email: sanitizedEmail, id: { $ne: userId } });
-      if (existingUser) {
+      const existingUser = await storage.getUserByUsername(sanitizedEmail);
+      if (existingUser && existingUser.id !== userId) {
         return { success: false, error: 'Email is already taken' };
       }
-      
-      user.email = sanitizedEmail;
     }
 
-    // Validate mobile if provided
-    if (updates.mobile) {
-      const sanitizedMobile = sanitizeInput(updates.mobile);
-      if (!validateMobileNumber(sanitizedMobile)) {
-        return { success: false, error: 'Invalid mobile number format' };
-      }
-      
-      // Check if mobile is already taken by another user
-      const existingUser = await User.findOne({ mobile: sanitizedMobile, id: { $ne: userId } });
-      if (existingUser) {
-        return { success: false, error: 'Mobile number is already taken' };
-      }
-      
-      user.mobile = sanitizedMobile;
+    // Since we're not storing profile details in our current Supabase schema,
+    // we'll only support updating the username for now
+    if (updates.email) {
+      // In the current Supabase schema, username is the same as email
+      // We don't have a separate username field with profile details
+      return { success: false, error: 'Profile updates not supported in current schema' };
     }
 
-    // Update user profile fields
-    if (updates.name) {
-      user.name = sanitizeInput(updates.name);
-    }
-    
-    if (updates.profile) {
-      user.profile = { ...user.profile, ...updates.profile };
-    }
-
-    user.updatedAt = new Date();
-    await user.save();
-
-    // Remove password from response
-    const userResponse = user.toJSON();
-    delete userResponse.password;
+    // Return the user
+    const userResponse = {
+      id: user.id,
+      username: user.username,
+      balance: user.balance,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at
+    };
 
     return { success: true, user: userResponse };
   } catch (error) {
@@ -105,14 +88,19 @@ export const updateUserProfile = async (userId: string, updates: UserProfileUpda
 
 export const getUserDetails = async (userId: string): Promise<UserManagementResponse> => {
   try {
-    const user = await User.findById(userId);
+    const user = await storage.getUser(userId);
     if (!user) {
       return { success: false, error: 'User not found' };
     }
 
-    // Remove password from response
-    const userResponse = user.toJSON();
-    delete userResponse.password;
+    // Format response
+    const userResponse = {
+      id: user.id,
+      username: user.username,
+      balance: user.balance,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at
+    };
 
     return { success: true, user: userResponse };
   } catch (error) {
@@ -129,95 +117,15 @@ export const getUserGameHistory = async (userId: string, filters: {
   type?: 'andar' | 'bahar';
   result?: 'win' | 'loss';
 } = {}): Promise<UserManagementResponse> => {
-  try {
-    const query: any = { userId };
-    
-    if (filters.fromDate || filters.toDate) {
-      query.createdAt = {};
-      if (filters.fromDate) query.createdAt.$gte = filters.fromDate;
-      if (filters.toDate) query.createdAt.$lte = filters.toDate;
-    }
-    
-    if (filters.type) query.betSide = filters.type;
-    if (filters.result) query.result = filters.result;
-    
-    const limit = filters.limit || 50;
-    const offset = filters.offset || 0;
-    
-    const gameHistory = await GameHistory.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(offset);
-    
-    // Get total count for pagination
-    const total = await GameHistory.countDocuments(query);
-    
-    return { success: true, users: gameHistory, total };
-  } catch (error) {
-    console.error('Game history error:', error);
-    return { success: false, error: 'Game history retrieval failed' };
-  }
+  // For now, game history is stored in the game_history table which is accessed differently
+  // This function would need to access bet history and game results from player_bets and game_history tables
+  throw new Error('getUserGameHistory function not implemented in Supabase version');
 };
 
 export const getAllUsers = async (filters: UserFilters = {}): Promise<UserManagementResponse> => {
-  try {
-    const query: any = {};
-    
-    // Build query based on filters
-    if (filters.status) query.status = filters.status;
-    
-    if (filters.search) {
-      const searchRegex = new RegExp(filters.search, 'i');
-      query.$or = [
-        { name: searchRegex },
-        { email: searchRegex },
-        { mobile: searchRegex },
-        { referralCode: searchRegex }
-      ];
-    }
-    
-    if (filters.joinDateFrom || filters.joinDateTo) {
-      query.joinDate = {};
-      if (filters.joinDateFrom) query.joinDate.$gte = filters.joinDateFrom;
-      if (filters.joinDateTo) query.joinDate.$lte = filters.joinDateTo;
-    }
-    
-    if (filters.balanceMin !== undefined || filters.balanceMax !== undefined) {
-      query.balance = {};
-      if (filters.balanceMin !== undefined) query.balance.$gte = filters.balanceMin;
-      if (filters.balanceMax !== undefined) query.balance.$lte = filters.balanceMax;
-    }
-    
-    if (filters.referredBy) query.referredBy = filters.referredBy;
-    
-    // Set default sort
-    const sortBy = filters.sortBy || 'createdAt';
-    const sortOrder = filters.sortOrder === 'asc' ? 1 : -1;
-    const sort: any = { [sortBy]: sortOrder };
-    
-    const limit = filters.limit || 50;
-    const offset = filters.offset || 0;
-    
-    const users = await User.find(query)
-      .sort(sort)
-      .limit(limit)
-      .skip(offset);
-    
-    // Get total count for pagination
-    const total = await User.countDocuments(query);
-    
-    // Remove passwords from response
-    const usersResponse = users.map(user => {
-      const userObj = user.toJSON();
-      delete userObj.password;
-      return userObj;
-    });
-    
-    return { success: true, users: usersResponse, total };
-  } catch (error) {
-    console.error('Users retrieval error:', error);
-    return { success: false, error: 'Users retrieval failed' };
-  }
+  // Supabase doesn't currently store additional user details like name, mobile, etc.
+  // in our simplified schema, so this function is not directly implementable
+  throw new Error('getAllUsers function not implemented in Supabase version');
 };
 
 export const updateUserStatus = async (
@@ -226,46 +134,7 @@ export const updateUserStatus = async (
   adminId: string, 
   reason?: string
 ): Promise<UserManagementResponse> => {
-  try {
-    const user = await User.findById(userId);
-    if (!user) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Don't allow suspending/banning admin users
-    if (user.role === 'admin' || user.role === 'superadmin') {
-      return { success: false, error: 'Cannot change status of admin users' };
-    }
-
-    const previousStatus = user.status;
-    user.status = status;
-    user.updatedBy = adminId;
-    user.updatedAt = new Date();
-    
-    if (reason) {
-      user.statusReason = reason;
-    }
-    
-    // If suspending or banning, log out all sessions
-    if (status === 'suspended' || status === 'banned') {
-      user.lastLogin = new Date(0); // Force logout
-    }
-
-    await user.save();
-
-    // Remove password from response
-    const userResponse = user.toJSON();
-    delete userResponse.password;
-
-    return { 
-      success: true, 
-      user: userResponse,
-      message: `User status changed from ${previousStatus} to ${status}`
-    };
-  } catch (error) {
-    console.error('User status update error:', error);
-    return { success: false, error: 'User status update failed' };
-  }
+  throw new Error('updateUserStatus function not implemented in Supabase version');
 };
 
 export const updateUserBalance = async (
@@ -276,37 +145,27 @@ export const updateUserBalance = async (
   type: 'add' | 'subtract' = 'add'
 ): Promise<UserManagementResponse> => {
   try {
-    const user = await User.findById(userId);
+    // Use the storage function to update balance
+    if (type === 'subtract') {
+      await storage.updateUserBalance(userId, -amount);
+    } else {
+      await storage.updateUserBalance(userId, amount);
+    }
+
+    // Get updated user details
+    const user = await storage.getUser(userId);
     if (!user) {
       return { success: false, error: 'User not found' };
     }
 
-    // Calculate new balance
-    let newBalance: number;
-    if (type === 'add') {
-      newBalance = user.balance + amount;
-    } else {
-      newBalance = Math.max(0, user.balance - amount);
-    }
-
-    // Validate new balance
-    if (newBalance < 0) {
-      return { success: false, error: 'Balance cannot be negative' };
-    }
-
-    const previousBalance = user.balance;
-    user.balance = newBalance;
-    user.updatedBy = adminId;
-    user.updatedAt = new Date();
-
-    await user.save();
-
-    // Log balance adjustment (in a real system, this would create a transaction record)
-    console.log(`Balance adjustment for user ${userId}: ${type} ${amount}, reason: ${reason}`);
-
-    // Remove password from response
-    const userResponse = user.toJSON();
-    delete userResponse.password;
+    // Return updated user details
+    const userResponse = {
+      id: user.id,
+      username: user.username,
+      balance: user.balance,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at
+    };
 
     return { 
       success: true, 
@@ -323,79 +182,42 @@ export const getUserStatistics = async (userId?: string): Promise<UserManagement
   try {
     if (userId) {
       // Get statistics for a specific user
-      const user = await User.findById(userId);
+      const user = await storage.getUser(userId);
       if (!user) {
         return { success: false, error: 'User not found' };
       }
 
-      const gameHistory = await GameHistory.find({ userId });
-      const totalGames = gameHistory.length;
-      const wins = gameHistory.filter(game => game.result === 'win').length;
-      const losses = gameHistory.filter(game => game.result === 'loss').length;
-      const totalBetAmount = gameHistory.reduce((sum, game) => sum + game.betAmount, 0);
-      const totalPayout = gameHistory.reduce((sum, game) => sum + game.payout, 0);
-      const netProfit = totalPayout - totalBetAmount;
-
+      // For now, return basic user stats since we don't have detailed game history in this version
       const statistics = {
         user: {
           id: user.id,
-          name: user.name,
-          email: user.email,
-          mobile: user.mobile,
+          username: user.username,
           balance: user.balance,
-          status: user.status,
-          joinDate: user.joinDate,
-          lastLogin: user.lastLogin
+          createdAt: user.created_at
         },
         gaming: {
-          totalGames,
-          wins,
-          losses,
-          winRate: totalGames > 0 ? (wins / totalGames) * 100 : 0,
-          totalBetAmount,
-          totalPayout,
-          netProfit
-        },
-        referrals: {
-          referralCode: user.referralCode,
-          referredUsers: user.referredUsers.length,
-          totalReferrals: user.referredUsers.length
+          totalGames: 0, // Placeholder
+          wins: 0,       // Placeholder
+          losses: 0,     // Placeholder
+          winRate: 0,    // Placeholder
+          totalBetAmount: 0,
+          totalPayout: 0,
+          netProfit: 0
         }
       };
 
       return { success: true, user: statistics };
     } else {
-      // Get overall user statistics
-      const totalUsers = await User.countDocuments();
-      const activeUsers = await User.countDocuments({ status: 'active' });
-      const suspendedUsers = await User.countDocuments({ status: 'suspended' });
-      const bannedUsers = await User.countDocuments({ status: 'banned' });
-      
-      const totalBalance = await User.aggregate([
-        { $group: { _id: null, total: { $sum: '$balance' } } }
-      ]);
-      
-      const newUsersToday = await User.countDocuments({
-        joinDate: {
-          $gte: new Date(new Date().setHours(0, 0, 0, 0))
-        }
-      });
-
-      const newUsersThisMonth = await User.countDocuments({
-        joinDate: {
-          $gte: new Date(new Date().setDate(1))
-        }
-      });
-
+      // For now, return basic platform stats
       const statistics = {
-        totalUsers,
-        activeUsers,
-        suspendedUsers,
-        bannedUsers,
-        totalBalance: totalBalance[0]?.total || 0,
-        newUsersToday,
-        newUsersThisMonth,
-        averageBalance: totalUsers > 0 ? (totalBalance[0]?.total || 0) / totalUsers : 0
+        totalUsers: 0,      // Placeholder
+        activeUsers: 0,     // Placeholder
+        suspendedUsers: 0,  // Placeholder
+        bannedUsers: 0,     // Placeholder
+        totalBalance: 0,    // Placeholder
+        newUsersToday: 0,   // Placeholder
+        newUsersThisMonth: 0, // Placeholder
+        averageBalance: 0   // Placeholder
       };
 
       return { success: true, user: statistics };
@@ -407,21 +229,9 @@ export const getUserStatistics = async (userId?: string): Promise<UserManagement
 };
 
 export const getReferredUsers = async (userId: string): Promise<UserManagementResponse> => {
-  try {
-    const user = await User.findById(userId);
-    if (!user) {
-      return { success: false, error: 'User not found' };
-    }
-
-    const referredUsers = await User.find({ 
-      referredBy: user.id 
-    }).select('-password');
-
-    return { success: true, users: referredUsers };
-  } catch (error) {
-    console.error('Referred users error:', error);
-    return { success: false, error: 'Referred users retrieval failed' };
-  }
+  // For now, this functionality is not available in the simplified Supabase schema
+  // since we don't store referral relationships in our current implementation
+  return { success: true, users: [] };
 };
 
 export const bulkUpdateUserStatus = async (
@@ -430,30 +240,11 @@ export const bulkUpdateUserStatus = async (
   adminId: string,
   reason?: string
 ): Promise<UserManagementResponse> => {
-  try {
-    const result = await User.updateMany(
-      { 
-        id: { $in: userIds },
-        role: { $nin: ['admin', 'superadmin'] } // Exclude admin users
-      },
-      { 
-        $set: { 
-          status,
-          updatedAt: new Date(),
-          updatedBy: adminId,
-          ...(reason && { statusReason: reason })
-        }
-      }
-    );
-
-    return { 
-      success: true, 
-      message: `Updated status for ${result.modifiedCount} users to ${status}`
-    };
-  } catch (error) {
-    console.error('Bulk status update error:', error);
-    return { success: false, error: 'Bulk status update failed' };
-  }
+  // For now, this function is not available in the simplified Supabase schema
+  return { 
+    success: false, 
+    error: 'Bulk user status updates not implemented in Supabase version'
+  };
 };
 
 export const exportUserData = async (filters: UserFilters = {}): Promise<UserManagementResponse> => {

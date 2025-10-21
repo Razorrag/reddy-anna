@@ -2,7 +2,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
-import { User, Admin } from './data';
+import { storage } from './storage-supabase';
 import { validateMobileNumber, validateEmail, validateUserData, sanitizeInput, validatePassword as validatePasswordFormat } from './validation';
 
 export interface AuthResult {
@@ -68,72 +68,36 @@ export const registerUser = async (userData: {
       return { success: false, error: 'Validation failed', errors: validation.errors };
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ 
-      $or: [{ email: sanitizedData.email }, { mobile: sanitizedData.mobile }] 
-    });
+    // Check if user already exists (using Supabase)
+    const existingUser = await storage.getUserByUsername(sanitizedData.email);
     if (existingUser) {
-      return { success: false, error: 'User already exists with this email or mobile' };
-    }
-
-    // Handle referral code if provided
-    let referredBy = null;
-    if (sanitizedData.referralCode) {
-      const referrer = await User.findOne({ referralCode: sanitizedData.referralCode });
-      if (referrer) {
-        referredBy = referrer.id;
-      }
+      return { success: false, error: 'User already exists with this email' };
     }
 
     // Hash password
     const hashedPassword = await hashPassword(sanitizedData.password);
-
-    // Create new user
-    const newUser = new User({
-      id: uuidv4(),
-      name: sanitizedData.name,
-      email: sanitizedData.email,
-      mobile: sanitizedData.mobile,
-      password: hashedPassword,
-      balance: 100, // Starting balance
-      referralCode: generateReferralCode(),
-      referredBy: referredBy,
-      joinDate: new Date(),
-      lastLogin: new Date(),
-      status: 'active',
-      profile: {
-        address: '',
-        city: '',
-        state: '',
-        pincode: '',
-        country: 'India',
-        dateOfBirth: null,
-        gender: '',
-        profilePicture: ''
-      }
+    
+    // Create new user using Supabase storage
+    const newUser = await storage.createUser({
+      username: sanitizedData.email,
+      password: hashedPassword
     });
-
-    await newUser.save();
-
-    // Update referrer's referred users list if referral was used
-    if (referredBy) {
-      const referrer = await User.findById(referredBy);
-      if (referrer) {
-        referrer.referredUsers.push(newUser.id);
-        await referrer.save();
-      }
-    }
 
     // Generate JWT token
     const token = generateToken({
       id: newUser.id,
-      email: newUser.email,
+      email: newUser.username,
       role: 'user'
     });
 
-    // Remove password from response
-    const userResponse = newUser.toJSON();
-    delete userResponse.password;
+    // Format response (remove sensitive data)
+    const userResponse = {
+      id: newUser.id,
+      username: newUser.username,
+      balance: newUser.balance,
+      createdAt: newUser.created_at,
+      updatedAt: newUser.updated_at
+    };
 
     return { success: true, user: userResponse, token };
   } catch (error) {
@@ -151,15 +115,10 @@ export const loginUser = async (email: string, password: string): Promise<AuthRe
       return { success: false, error: 'Email and password are required' };
     }
 
-    // Find user by email
-    const user = await User.findOne({ email: sanitizedEmail });
+    // Find user by email using Supabase storage
+    const user = await storage.getUserByUsername(sanitizedEmail);
     if (!user) {
       return { success: false, error: 'User not found' };
-    }
-
-    // Check if user is active
-    if (user.status !== 'active') {
-      return { success: false, error: 'Account is not active' };
     }
 
     // Verify password
@@ -168,20 +127,21 @@ export const loginUser = async (email: string, password: string): Promise<AuthRe
       return { success: false, error: 'Invalid password' };
     }
 
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
-
     // Generate JWT token
     const token = generateToken({
       id: user.id,
-      email: user.email,
+      email: user.username,
       role: 'user'
     });
 
-    // Remove password from response
-    const userResponse = user.toJSON();
-    delete userResponse.password;
+    // Format response (remove sensitive data)
+    const userResponse = {
+      id: user.id,
+      username: user.username,
+      balance: user.balance,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at
+    };
 
     return { success: true, user: userResponse, token };
   } catch (error) {
@@ -199,15 +159,12 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
       return { success: false, error: 'Email and password are required' };
     }
 
-    // Find admin by email
-    const admin = await Admin.findOne({ email: sanitizedEmail });
-    if (!admin) {
+    // Find admin by email using Supabase storage
+    // For now, we'll just look for a specific admin user, but in a real implementation,
+    // you might want to have a separate admin table in Supabase
+    const admin = await storage.getUserByUsername(sanitizedEmail);
+    if (!admin || !admin.username.includes('admin')) {
       return { success: false, error: 'Admin not found' };
-    }
-
-    // Check if admin is active
-    if (admin.status !== 'active') {
-      return { success: false, error: 'Admin account is not active' };
     }
 
     // Verify password
@@ -216,20 +173,21 @@ export const loginAdmin = async (email: string, password: string): Promise<AuthR
       return { success: false, error: 'Invalid password' };
     }
 
-    // Update last login
-    admin.lastLogin = new Date();
-    await admin.save();
-
     // Generate JWT token
     const token = generateToken({
       id: admin.id,
-      email: admin.email,
-      role: admin.role
+      email: admin.username,
+      role: 'admin'
     });
 
-    // Remove password from response
-    const adminResponse = admin.toJSON();
-    delete adminResponse.password;
+    // Format response (remove sensitive data)
+    const adminResponse = {
+      id: admin.id,
+      username: admin.username,
+      balance: admin.balance,
+      createdAt: admin.created_at,
+      updatedAt: admin.updated_at
+    };
 
     return { success: true, admin: adminResponse, token };
   } catch (error) {
@@ -246,27 +204,20 @@ export const refreshToken = async (token: string): Promise<AuthResult> => {
       return { success: false, error: 'Invalid token' };
     }
 
-    // Find user/admin based on role
+    // Find user based on role using Supabase storage
     let userOrAdmin;
-    if (decoded.role === 'user') {
-      userOrAdmin = await User.findById(decoded.id);
-    } else if (decoded.role === 'admin' || decoded.role === 'superadmin') {
-      userOrAdmin = await Admin.findById(decoded.id);
+    if (decoded.role === 'user' || decoded.role === 'admin') {
+      userOrAdmin = await storage.getUser(decoded.id);
     }
 
     if (!userOrAdmin) {
       return { success: false, error: 'User not found' };
     }
 
-    // Check if account is still active
-    if (userOrAdmin.status !== 'active') {
-      return { success: false, error: 'Account is not active' };
-    }
-
     // Generate new token
     const newToken = generateToken({
       id: userOrAdmin.id,
-      email: userOrAdmin.email,
+      email: userOrAdmin.username,
       role: decoded.role
     });
 
@@ -282,109 +233,15 @@ export const changePassword = async (
   currentPassword: string, 
   newPassword: string
 ): Promise<AuthResult> => {
-  try {
-    // Find user
-    const user = await User.findById(userId);
-    if (!user) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Verify current password
-    const isValid = await validatePassword(currentPassword, user.password);
-    if (!isValid) {
-      return { success: false, error: 'Current password is incorrect' };
-    }
-
-    // Validate new password
-    if (!validatePasswordFormat(newPassword)) {
-      return { 
-        success: false, 
-        error: 'New password must be at least 8 characters with uppercase, lowercase, and number' 
-      };
-    }
-
-    // Hash new password
-    const hashedNewPassword = await hashPassword(newPassword);
-
-    // Update password
-    user.password = hashedNewPassword;
-    user.updatedAt = new Date();
-    await user.save();
-
-    return { success: true };
-  } catch (error) {
-    console.error('Password change error:', error);
-    return { success: false, error: 'Password change failed' };
-  }
+  throw new Error('changePassword function not implemented in Supabase version');
 };
 
 export const forgotPassword = async (email: string): Promise<AuthResult> => {
-  try {
-    // Sanitize email
-    const sanitizedEmail = sanitizeInput(email).toLowerCase();
-
-    // Find user
-    const user = await User.findOne({ email: sanitizedEmail });
-    if (!user) {
-      // Don't reveal if user exists for security
-      return { success: true, error: 'If an account exists with this email, a password reset link has been sent' };
-    }
-
-    // Generate reset token (in a real implementation, this would be sent via email)
-    const resetToken = generateToken({
-      id: user.id,
-      email: user.email,
-      type: 'password_reset'
-    });
-
-    // In a real implementation, send email with reset link
-    console.log(`Password reset token for ${user.email}: ${resetToken}`);
-
-    return { 
-      success: true, 
-      error: 'If an account exists with this email, a password reset link has been sent' 
-    };
-  } catch (error) {
-    console.error('Forgot password error:', error);
-    return { success: false, error: 'Password reset request failed' };
-  }
+  throw new Error('forgotPassword function not implemented in Supabase version');
 };
 
 export const resetPassword = async (token: string, newPassword: string): Promise<AuthResult> => {
-  try {
-    // Verify reset token
-    const decoded = verifyToken(token);
-    if (!decoded || decoded.type !== 'password_reset') {
-      return { success: false, error: 'Invalid or expired reset token' };
-    }
-
-    // Find user
-    const user = await User.findById(decoded.id);
-    if (!user) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Validate new password
-    if (!validatePasswordFormat(newPassword)) {
-      return { 
-        success: false, 
-        error: 'Password must be at least 8 characters with uppercase, lowercase, and number' 
-      };
-    }
-
-    // Hash new password
-    const hashedNewPassword = await hashPassword(newPassword);
-
-    // Update password
-    user.password = hashedNewPassword;
-    user.updatedAt = new Date();
-    await user.save();
-
-    return { success: true };
-  } catch (error) {
-    console.error('Reset password error:', error);
-    return { success: false, error: 'Password reset failed' };
-  }
+  throw new Error('resetPassword function not implemented in Supabase version');
 };
 
 export const authenticateToken = (token: string): { valid: boolean; user?: any; error?: string } => {
