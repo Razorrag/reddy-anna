@@ -307,13 +307,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             const timerDuration = message.data.timer || 30;
             
-            const newGame = await storage.createGameSession({
-              openingCard: currentGameState.openingCard,
-              phase: 'betting',
-              round: 1,
-              currentTimer: timerDuration
-            });
-            currentGameState.gameId = newGame.gameId;
+            try {
+              const newGame = await storage.createGameSession({
+                openingCard: currentGameState.openingCard,
+                phase: 'betting',
+                round: 1,
+                currentTimer: timerDuration
+              });
+              // Supabase returns snake_case, but TypeScript type uses camelCase
+              currentGameState.gameId = (newGame as any).game_id || newGame.gameId;
+              console.log('✅ Game session created with ID:', currentGameState.gameId);
+            } catch (error) {
+              console.error('⚠️ Error creating game session, using fallback ID:', error);
+              currentGameState.gameId = `game-${Date.now()}`;
+            }
             
             broadcast({ 
               type: 'opening_card_confirmed',
@@ -514,6 +521,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Only save to database if gameId exists (skip for testing)
             if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
               try {
+                console.log(`💾 Saving dealt card to DB: gameId=${currentGameState.gameId}, card=${cardDisplay}, side=${side}`);
                 await storage.createDealtCard({
                   gameId: currentGameState.gameId,
                   card: cardDisplay,
@@ -521,9 +529,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   position,
                   isWinningCard: false
                 });
+                console.log('✅ Dealt card saved successfully');
               } catch (error) {
-                console.log('⚠️ Skipping dealt card database save (test mode)');
+                console.error('❌ Error saving dealt card:', error);
+                console.log('⚠️ Continuing game without database save');
               }
+            } else {
+              console.log(`⚠️ Skipping dealt card database save (gameId: ${currentGameState.gameId})`);
             }
             
             const isWinner = checkWinner(cardDisplay);
@@ -541,7 +553,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             if (isWinner) {
               console.log('✅ Winner found! Completing game...');
-              await completeGame(side as 'andar' | 'bahar', cardDisplay);
+              try {
+                await completeGame(side as 'andar' | 'bahar', cardDisplay);
+              } catch (error) {
+                console.error('❌ Error completing game:', error);
+                broadcast({
+                  type: 'error',
+                  data: {
+                    message: 'Error completing game. Please contact admin.',
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                  }
+                });
+              }
             } else {
               console.log(`🎴 No winner yet. Andar: ${currentGameState.andarCards.length}, Bahar: ${currentGameState.baharCards.length}, Round: ${currentGameState.currentRound}`);
               
@@ -1101,11 +1124,18 @@ async function transitionToRound2() {
   currentGameState.phase = 'betting';
   currentGameState.bettingLocked = false;
   
-  await storage.updateGameSession(currentGameState.gameId, {
-    phase: 'betting',
-    round: 2,
-    currentTimer: 30
-  });
+  // Only update database if not in test mode
+  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+    try {
+      await storage.updateGameSession(currentGameState.gameId, {
+        phase: 'betting',
+        round: 2,
+        currentTimer: 30
+      });
+    } catch (error) {
+      console.error('⚠️ Error updating game session for Round 2:', error);
+    }
+  }
   
   broadcast({
     type: 'start_round_2',
@@ -1122,10 +1152,17 @@ async function transitionToRound2() {
     currentGameState.phase = 'dealing';
     currentGameState.bettingLocked = true;
     
-    await storage.updateGameSession(currentGameState.gameId, {
-      phase: 'dealing',
-      round: 2
-    });
+    // Only update database if not in test mode
+    if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+      try {
+        await storage.updateGameSession(currentGameState.gameId, {
+          phase: 'dealing',
+          round: 2
+        });
+      } catch (error) {
+        console.error('⚠️ Error updating game session for Round 2 dealing:', error);
+      }
+    }
     
     broadcast({
       type: 'phase_change',
@@ -1146,11 +1183,18 @@ async function transitionToRound3() {
   currentGameState.bettingLocked = true;
   currentGameState.timer = 0;
   
-  await storage.updateGameSession(currentGameState.gameId, {
-    phase: 'dealing',
-    round: 3,
-    currentTimer: 0
-  });
+  // Only update database if not in test mode
+  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+    try {
+      await storage.updateGameSession(currentGameState.gameId, {
+        phase: 'dealing',
+        round: 3,
+        currentTimer: 0
+      });
+    } catch (error) {
+      console.error('⚠️ Error updating game session for Round 3:', error);
+    }
+  }
   
   broadcast({
     type: 'start_final_draw',
@@ -1177,13 +1221,20 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     currentGameState.timerInterval = null;
   }
   
-  await storage.updateGameSession(currentGameState.gameId, {
-    phase: 'complete',
-    winner,
-    winningCard,
-    winningRound: currentGameState.currentRound,
-    status: 'completed'
-  });
+  // Only update database if not in test mode
+  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+    try {
+      await storage.updateGameSession(currentGameState.gameId, {
+        phase: 'complete',
+        winner,
+        winningCard,
+        winningRound: currentGameState.currentRound,
+        status: 'completed'
+      });
+    } catch (error) {
+      console.error('⚠️ Error updating game session:', error);
+    }
+  }
   
   const payouts: Record<string, number> = {};
   
@@ -1191,34 +1242,46 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     const payout = calculatePayout(currentGameState.currentRound, winner, bets);
     payouts[userId] = payout;
     
-    if (payout > 0) {
-      await storage.updateUserBalance(userId, payout);
-      await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, winner, 'won');
-    } else {
-      const loserSide = winner === 'andar' ? 'bahar' : 'andar';
-      await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, loserSide, 'lost');
+    // Only update database if not in test mode
+    if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+      try {
+        if (payout > 0) {
+          await storage.updateUserBalance(userId, payout);
+          await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, winner, 'won');
+        } else {
+          const loserSide = winner === 'andar' ? 'bahar' : 'andar';
+          await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, loserSide, 'lost');
+        }
+      } catch (error) {
+        console.error(`⚠️ Error updating bet status for user ${userId}:`, error);
+      }
     }
     
-    const updatedUser = await storage.getUserById(userId);
-    if (updatedUser) {
-      clients.forEach(client => {
-        if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
-          client.ws.send(JSON.stringify({
-            type: 'balance_update',
-            data: { balance: updatedUser.balance }
-          }));
-          
-          client.ws.send(JSON.stringify({
-            type: 'payout_received',
-            data: {
-              amount: payout,
-              winner,
-              round: currentGameState.currentRound,
-              yourBets: bets
-            }
-          }));
-        }
-      });
+    // Send payout notifications to clients
+    try {
+      const updatedUser = await storage.getUserById(userId);
+      if (updatedUser) {
+        clients.forEach(client => {
+          if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+            client.ws.send(JSON.stringify({
+              type: 'balance_update',
+              data: { balance: updatedUser.balance }
+            }));
+            
+            client.ws.send(JSON.stringify({
+              type: 'payout_received',
+              data: {
+                amount: payout,
+                winner,
+                round: currentGameState.currentRound,
+                yourBets: bets
+              }
+            }));
+          }
+        });
+      }
+    } catch (error) {
+      console.error(`⚠️ Error sending payout notification to user ${userId}:`, error);
     }
   }
   
@@ -1233,12 +1296,19 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     }
   });
   
-  await storage.saveGameHistory({
-    gameId: currentGameState.gameId,
-    openingCard: currentGameState.openingCard!,
-    winner,
-    winningCard,
-    totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
-    round: currentGameState.currentRound
-  });
+  // Only save to database if not in test mode
+  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+    try {
+      await storage.saveGameHistory({
+        gameId: currentGameState.gameId,
+        openingCard: currentGameState.openingCard!,
+        winner,
+        winningCard,
+        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
+        round: currentGameState.currentRound
+      });
+    } catch (error) {
+      console.error('⚠️ Error saving game history:', error);
+    }
+  }
 }

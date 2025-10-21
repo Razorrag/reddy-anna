@@ -379,7 +379,11 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
             case 'error':
               showNotification(data.data?.message || 'An error occurred', 'error');
-              console.error('WebSocket error received:', data.data);
+              console.error('WebSocket error received:', {
+                message: data.data?.message,
+                error: data.data?.error,
+                fullData: data.data
+              });
               break;
               
             default:

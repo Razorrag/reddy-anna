@@ -24,10 +24,15 @@ const AdminGamePanel: React.FC = () => {
   
   const [isResetting, setIsResetting] = useState(false);
   
-  // Calculate betting percentages
-  const totalBets = gameState.andarTotalBet + gameState.baharTotalBet;
-  const andarPercentage = totalBets > 0 ? (gameState.andarTotalBet / totalBets) * 100 : 50;
-  const baharPercentage = totalBets > 0 ? (gameState.baharTotalBet / totalBets) * 100 : 50;
+  // Calculate betting percentages for current round
+  const currentRoundBets = gameState.currentRound === 1 ? gameState.round1Bets : gameState.round2Bets;
+  const totalCurrentBets = currentRoundBets.andar + currentRoundBets.bahar;
+  const currentAndarPercentage = totalCurrentBets > 0 ? (currentRoundBets.andar / totalCurrentBets) * 100 : 50;
+  const currentBaharPercentage = totalCurrentBets > 0 ? (currentRoundBets.bahar / totalCurrentBets) * 100 : 50;
+  
+  // Calculate total cumulative bets
+  const totalCumulativeAndar = gameState.round1Bets.andar + gameState.round2Bets.andar;
+  const totalCumulativeBahar = gameState.round1Bets.bahar + gameState.round2Bets.bahar;
   
   const handleResetGame = async () => {
     if (!window.confirm('🔄 Reset the entire game? This will clear all bets and restart.')) {
@@ -104,26 +109,56 @@ const AdminGamePanel: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Betting Stats */}
+                {/* Betting Stats - Show Current Round + Cumulative */}
                 <div className="space-y-3">
+                  {/* ANDAR BETS */}
                   <div className="bg-red-900/30 rounded-lg p-4 border-2 border-red-500/50">
                     <div className="text-sm text-gray-400 mb-1">ANDAR BETS</div>
                     <div className="text-2xl font-bold text-red-400">
-                      ₹{gameState.andarTotalBet.toLocaleString('en-IN')}
+                      ₹{currentRoundBets.andar.toLocaleString('en-IN')}
                     </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      {andarPercentage.toFixed(1)}% of total
+                    <div className="text-xs text-gray-500 mt-1">
+                      Round {gameState.currentRound}: {currentAndarPercentage.toFixed(1)}%
                     </div>
+                    {gameState.currentRound >= 2 && (
+                      <div className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700">
+                        Total: ₹{totalCumulativeAndar.toLocaleString('en-IN')}
+                      </div>
+                    )}
                   </div>
+                  
+                  {/* BAHAR BETS */}
                   <div className="bg-blue-900/30 rounded-lg p-4 border-2 border-blue-500/50">
                     <div className="text-sm text-gray-400 mb-1">BAHAR BETS</div>
                     <div className="text-2xl font-bold text-blue-400">
-                      ₹{gameState.baharTotalBet.toLocaleString('en-IN')}
+                      ₹{currentRoundBets.bahar.toLocaleString('en-IN')}
                     </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      {baharPercentage.toFixed(1)}% of total
+                    <div className="text-xs text-gray-500 mt-1">
+                      Round {gameState.currentRound}: {currentBaharPercentage.toFixed(1)}%
                     </div>
+                    {gameState.currentRound >= 2 && (
+                      <div className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700">
+                        Total: ₹{totalCumulativeBahar.toLocaleString('en-IN')}
+                      </div>
+                    )}
                   </div>
+                  
+                  {/* Round 1 Stats (show when in Round 2+) */}
+                  {gameState.currentRound >= 2 && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
+                      <div className="text-xs text-gray-400 mb-2">📊 Round 1 Stats</div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-red-400">Andar:</span>
+                          <span className="text-white ml-1">₹{gameState.round1Bets.andar.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div>
+                          <span className="text-blue-400">Bahar:</span>
+                          <span className="text-white ml-1">₹{gameState.round1Bets.bahar.toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

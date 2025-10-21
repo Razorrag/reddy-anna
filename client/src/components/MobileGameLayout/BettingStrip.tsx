@@ -104,16 +104,21 @@ const BettingStrip: React.FC<BettingStripProps> = ({
               </div>
             </div>
 
-            {/* Right side - Dealt Cards (Only show when dealing or timer = 0) */}
+            {/* Right side - Latest Dealt Card (Only show when dealing or timer = 0) */}
             <div className="flex-shrink-0 flex flex-col items-center justify-center gap-1">
               {(gameState.phase === 'dealing' || gameState.phase === 'complete' || gameState.countdownTimer === 0) && gameState.andarCards.length > 0 ? (
-                gameState.andarCards.map((card, index) => (
-                  <div key={`andar-card-${index}`} className="flex flex-col items-center">
-                    <div className={`text-base font-bold ${card.color === 'red' ? 'text-red-300' : 'text-yellow-300'}`}>
-                      {card.display}
-                    </div>
+                <div className="flex flex-col items-center animate-bounce-in">
+                  {/* Show only the LATEST card */}
+                  <div className={`text-2xl font-bold transition-all duration-300 ${gameState.andarCards[gameState.andarCards.length - 1].color === 'red' ? 'text-red-300' : 'text-yellow-300'}`}>
+                    {gameState.andarCards[gameState.andarCards.length - 1].display}
                   </div>
-                ))
+                  {/* Card count indicator */}
+                  {gameState.andarCards.length > 1 && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      ({gameState.andarCards.length})
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="text-gray-400 text-xs">-</div>
               )}
@@ -169,16 +174,21 @@ const BettingStrip: React.FC<BettingStripProps> = ({
           `}
         >
           <div className="flex items-center justify-between h-full">
-            {/* Left side - Dealt Cards (Only show when dealing or timer = 0) */}
+            {/* Left side - Latest Dealt Card (Only show when dealing or timer = 0) */}
             <div className="flex-shrink-0 flex flex-col items-center justify-center gap-1">
               {(gameState.phase === 'dealing' || gameState.phase === 'complete' || gameState.countdownTimer === 0) && gameState.baharCards.length > 0 ? (
-                gameState.baharCards.map((card, index) => (
-                  <div key={`bahar-card-${index}`} className="flex flex-col items-center">
-                    <div className={`text-base font-bold ${card.color === 'red' ? 'text-red-300' : 'text-yellow-300'}`}>
-                      {card.display}
-                    </div>
+                <div className="flex flex-col items-center animate-bounce-in">
+                  {/* Show only the LATEST card */}
+                  <div className={`text-2xl font-bold transition-all duration-300 ${gameState.baharCards[gameState.baharCards.length - 1].color === 'red' ? 'text-red-300' : 'text-yellow-300'}`}>
+                    {gameState.baharCards[gameState.baharCards.length - 1].display}
                   </div>
-                ))
+                  {/* Card count indicator */}
+                  {gameState.baharCards.length > 1 && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      ({gameState.baharCards.length})
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="text-gray-400 text-xs">-</div>
               )}

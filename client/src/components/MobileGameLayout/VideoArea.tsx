@@ -86,16 +86,7 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
           </div>
         )}
 
-        {/* Dealing Animation */}
-        {gameState.phase === 'dealing' && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 pointer-events-none z-25">
-            <div className="bg-black/80 px-4 py-2 rounded-lg border border-yellow-400 backdrop-blur-sm">
-              <div className="text-yellow-400 text-sm font-bold">
-                {gameState.currentRound === 3 ? 'Final Draw' : `Round ${gameState.currentRound} - Dealing`}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Dealing Animation - Removed duplicate, using left badge instead */}
 
         {/* Overlay Gradient for better text visibility */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
