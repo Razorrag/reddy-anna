@@ -12,8 +12,8 @@ interface CardDealingPanelProps {
 }
 
 const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
-  // round, // Not used in component anymore
-  // phase, // Not used in current implementation
+  round,
+  phase,
   andarCards,
   baharCards
 }) => {
@@ -23,6 +23,18 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
   const [selectedBaharCard, setSelectedBaharCard] = useState<Card | null>(null);
   const [selectedAndarCard, setSelectedAndarCard] = useState<Card | null>(null);
   const [dealingInProgress, setDealingInProgress] = useState(false);
+  const [previousRound, setPreviousRound] = useState(round);
+
+  // Clear selections when round changes
+  React.useEffect(() => {
+    if (round !== previousRound) {
+      console.log(`🔄 Round changed from ${previousRound} to ${round} - clearing card selections`);
+      setSelectedBaharCard(null);
+      setSelectedAndarCard(null);
+      setDealingInProgress(false);
+      setPreviousRound(round);
+    }
+  }, [round, previousRound]);
 
   // Generate card deck
   const suits = [
@@ -88,6 +100,60 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
     } catch (error) {
       showNotification('Failed to save cards', 'error');
       setDealingInProgress(false);
+    }
+  };
+
+  const handleRevealCards = async () => {
+    if (!selectedBaharCard || !selectedAndarCard) {
+      showNotification('Please select both Bahar and Andar cards!', 'error');
+      return;
+    }
+
+    setDealingInProgress(true);
+
+    try {
+      // Send reveal_cards message to backend
+      sendWebSocketMessage({
+        type: 'reveal_cards',
+        data: {
+          baharCard: selectedBaharCard,
+          andarCard: selectedAndarCard
+        }
+      });
+      
+      showNotification('🎬 Revealing cards to players...', 'success');
+      
+      // Clear selections after reveal
+      setTimeout(() => {
+        setSelectedBaharCard(null);
+        setSelectedAndarCard(null);
+        setDealingInProgress(false);
+      }, 1000);
+      
+    } catch (error) {
+      showNotification('Failed to reveal cards', 'error');
+      setDealingInProgress(false);
+    }
+  };
+
+  const handleDealSingleCard = async (card: Card, side: 'andar' | 'bahar') => {
+    if (round !== 3) {
+      showNotification('Single card dealing only in Round 3!', 'error');
+      return;
+    }
+
+    try {
+      sendWebSocketMessage({
+        type: 'deal_single_card',
+        data: {
+          card,
+          side
+        }
+      });
+      
+      showNotification(`Dealt ${card.display} to ${side}`, 'info');
+    } catch (error) {
+      showNotification('Failed to deal card', 'error');
     }
   };
 
@@ -173,7 +239,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
         ))}
       </div>
       
-      {/* Action Buttons */}
+      {/* Action Buttons - Phase Aware */}
       <div className="flex gap-3">
         <button
           onClick={handleUndo}
@@ -182,13 +248,32 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
         >
           ↩️ Clear
         </button>
-        <button
-          onClick={handleSaveCards}
-          disabled={!selectedBaharCard || !selectedAndarCard || dealingInProgress}
-          className="flex-[2] px-6 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-lg text-base font-bold"
-        >
-          {dealingInProgress ? '⏳ Saving...' : '💾 Save & Wait for Timer'}
-        </button>
+        
+        {phase === 'betting' && round < 3 && (
+          <button
+            onClick={handleSaveCards}
+            disabled={!selectedBaharCard || !selectedAndarCard || dealingInProgress}
+            className="flex-[2] px-6 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-lg text-base font-bold"
+          >
+            {dealingInProgress ? '⏳ Saving...' : '💾 Save & Wait for Timer'}
+          </button>
+        )}
+        
+        {phase === 'dealing' && round < 3 && (
+          <button
+            onClick={handleRevealCards}
+            disabled={!selectedBaharCard || !selectedAndarCard || dealingInProgress}
+            className="flex-[2] px-6 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-lg text-base font-bold"
+          >
+            {dealingInProgress ? '⏳ Revealing...' : '🎬 Show Cards to Players'}
+          </button>
+        )}
+        
+        {round === 3 && (
+          <div className="flex-[2] text-center text-sm text-gray-400">
+            Click cards below to deal one at a time (alternating Bahar → Andar)
+          </div>
+        )}
       </div>
       
       {/* Dealt Cards Display */}

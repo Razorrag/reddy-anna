@@ -155,6 +155,12 @@ export class SupabaseStorage implements IStorage {
   }
 
   async updateUserBalance(userId: string, amountChange: number): Promise<void> {
+    // Skip database update for anonymous users
+    if (userId === 'anonymous') {
+      console.log('⚠️ Skipping balance update for anonymous user');
+      return;
+    }
+    
     // Get current balance
     const user = await this.getUserById(userId);
     if (!user) {
@@ -416,11 +422,17 @@ export class SupabaseStorage implements IStorage {
   }
 
   async updateBetStatusByGameUser(gameId: string, userId: string, side: string, status: string): Promise<void> {
+    // Skip database update for anonymous users
+    if (userId === 'anonymous') {
+      console.log('⚠️ Skipping bet status update for anonymous user');
+      return;
+    }
+    
     const { error } = await supabaseServer
       .from('player_bets')
-      .update({ status, updatedAt: new Date() })
-      .eq('gameId', gameId)
-      .eq('userId', userId)
+      .update({ status, updated_at: new Date() }) // Use snake_case
+      .eq('game_id', gameId) // Use snake_case
+      .eq('user_id', userId) // Use snake_case
       .eq('side', side);
 
     if (error) {
@@ -562,12 +574,18 @@ export class SupabaseStorage implements IStorage {
   }
 
   async saveGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry> {
+    // Convert camelCase to snake_case for Supabase
     const { data, error } = await supabaseServer
       .from('game_history')
       .insert({
         id: randomUUID(),
-        ...history,
-        createdAt: new Date()
+        game_id: history.gameId,
+        opening_card: history.openingCard,
+        winner: history.winner,
+        winning_card: history.winningCard,
+        total_cards: history.totalCards,
+        round: history.round,
+        created_at: new Date()
       })
       .select()
       .single();

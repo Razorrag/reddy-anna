@@ -64,7 +64,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     updatePlayerRoundBets,
     updateRoundBets,
     resetBettingData,
-    clearCards
+    clearCards,
+    resetGame,
+    setBettingLocked
   } = useGameState();
   const { showNotification } = useNotification();
   const [connectionState, setConnectionState] = useState<ConnectionState>({
@@ -261,19 +263,48 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                 andar: data.data.andarTotal, 
                 bahar: data.data.baharTotal 
               });
-              // Update individual round bets
+              break;
+
+            case 'game_complete':
+              console.log('🎉 Game complete:', data.data);
               setPhase('complete');
-              setCurrentRound(1);
-              showNotification(data.data.message || 'Game completed!', 'success');
+              setWinner(data.data.winner);
+              
+              // Show detailed completion message
+              const completionMessage = `
+                ${data.data.message}
+                
+                ${data.data.payoutMessage}
+                
+                Round: ${data.data.round}
+                Winning Card: ${data.data.winningCard}
+                
+                Total Bets:
+                Andar: ₹${data.data.andarTotal}
+                Bahar: ₹${data.data.baharTotal}
+                
+                Game will restart in 5 seconds...
+              `;
+              
+              showNotification(completionMessage, 'success');
+              
+              // Trigger confetti or celebration animation
+              const celebrationEvent = new CustomEvent('game-complete-celebration', {
+                detail: {
+                  winner: data.data.winner,
+                  winningCard: data.data.winningCard,
+                  round: data.data.round,
+                  payoutMessage: data.data.payoutMessage
+                }
+              });
+              window.dispatchEvent(celebrationEvent);
               break;
 
             case 'game_reset':
-              // Reset all game state
-              setPhase('idle');
-              setCurrentRound(1);
-              setCountdown(0);
-              clearCards();
-              setWinner(null);
+              // Reset all game state - use resetGame() to fully reset
+              console.log('🔄 Game reset received:', data.data);
+              resetGame(); // This resets to initialState (phase: 'idle', round: 1, etc.)
+              clearCards(); // This now also clears opening card and winning card
               resetBettingData();
               showNotification(data.data.message || 'Game reset', 'info');
               break;
@@ -294,7 +325,11 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               console.log('🔄 Round 2 transition:', data.data);
               setCurrentRound(2);
               setPhase('betting');
-              if (data.data.timer) setCountdown(data.data.timer);
+              setBettingLocked(false);
+              if (data.data.timer) {
+                setCountdown(data.data.timer);
+                console.log('✅ Round 2 timer set to:', data.data.timer);
+              }
               showNotification(data.data.message || 'Round 2 betting started!', 'success');
               break;
 
@@ -302,6 +337,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               console.log('🔄 Round 3 transition:', data.data);
               setCurrentRound(3);
               setPhase('dealing');
+              setBettingLocked(true);
               setCountdown(0);
               showNotification('Round 3: Final Draw! Admin will deal until match.', 'info');
               break;
@@ -404,6 +440,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               });
               break;
               
+            case 'cards_saved':
+              // Admin received confirmation that cards are saved
+              console.log('✅ Cards saved confirmation:', data.data);
+              showNotification(data.data.message || 'Cards saved successfully!', 'success');
+              break;
+
             default:
               console.log('Unknown message type:', data.type);
           }

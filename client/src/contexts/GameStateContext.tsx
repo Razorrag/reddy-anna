@@ -178,7 +178,14 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
       }
       return state;
     case 'CLEAR_CARDS':
-      return { ...state, andarCards: [], baharCards: [], dealtCards: [] };
+      return { 
+        ...state, 
+        selectedOpeningCard: null,  // ✅ Now clears opening card
+        andarCards: [], 
+        baharCards: [], 
+        dealtCards: [],
+        winningCard: null  // ✅ Now clears winning card
+      };
     default:
       return state;
   }

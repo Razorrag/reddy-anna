@@ -19,9 +19,10 @@ import CardDealingPanel from './CardDealingPanel';
 import PersistentSidePanel from '../PersistentSidePanel';
 import RoundTransition from '../RoundTransition';
 import NoWinnerTransition from '../NoWinnerTransition';
+import WinnerCelebration from '../WinnerCelebration';
 
 const AdminGamePanel: React.FC = () => {
-  const { gameState, setPhase, resetGame: resetGameState } = useGameState();
+  const { gameState } = useGameState();
   const { sendWebSocketMessage } = useWebSocket();
   const { showNotification } = useNotification();
   
@@ -29,6 +30,8 @@ const AdminGamePanel: React.FC = () => {
   const [showRoundTransition, setShowRoundTransition] = useState(false);
   const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
+  const [showWinnerCelebration, setShowWinnerCelebration] = useState(false);
+  const [celebrationData, setCelebrationData] = useState<any>(null);
   
   // Detect round changes and trigger transition animation
   useEffect(() => {
@@ -49,6 +52,24 @@ const AdminGamePanel: React.FC = () => {
     window.addEventListener('no-winner-transition', handleNoWinner);
     return () => window.removeEventListener('no-winner-transition', handleNoWinner);
   }, []);
+
+  // Listen for game complete celebration events
+  useEffect(() => {
+    const handleGameComplete = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('Admin: Game complete celebration:', customEvent.detail);
+      setCelebrationData(customEvent.detail);
+      setShowWinnerCelebration(true);
+    };
+
+    window.addEventListener('game-complete-celebration', handleGameComplete);
+    return () => window.removeEventListener('game-complete-celebration', handleGameComplete);
+  }, []);
+
+  const handleCelebrationComplete = () => {
+    setShowWinnerCelebration(false);
+    setCelebrationData(null);
+  };
   
   const handleResetGame = async () => {
     if (!window.confirm('🔄 Reset the entire game? This will clear all bets and restart.')) {
@@ -57,16 +78,13 @@ const AdminGamePanel: React.FC = () => {
     
     setIsResetting(true);
     
-    // Reset game state
-    resetGameState();
-    setPhase('idle');
-    
-    // Notify backend
+    // Notify backend - backend will broadcast to all clients including this one
     sendWebSocketMessage({
       type: 'game_reset',
       data: { gameId: gameState.gameId }
     });
     
+    console.log('🔄 Admin reset initiated - waiting for backend broadcast');
     showNotification('🔄 Game reset successfully', 'success');
     setTimeout(() => setIsResetting(false), 1000);
   };
@@ -79,6 +97,7 @@ const AdminGamePanel: React.FC = () => {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gold">🎰 Admin Control Panel</h1>
             <span className="text-sm px-3 py-1 bg-gold/20 text-gold rounded-lg font-bold">Round {gameState.currentRound}</span>
+            <span className="text-xs px-2 py-1 bg-purple-600/30 text-purple-300 rounded">Phase: {gameState.phase}</span>
           </div>
           <button onClick={handleResetGame} disabled={isResetting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg font-semibold">
             {isResetting ? '⏳ Resetting...' : '🔄 Reset Game'}
@@ -212,6 +231,17 @@ const AdminGamePanel: React.FC = () => {
         }
         onComplete={() => setShowRoundTransition(false)}
       />
+
+      {/* Winner Celebration - Shows when game completes */}
+      {showWinnerCelebration && celebrationData && (
+        <WinnerCelebration
+          winner={celebrationData.winner}
+          winningCard={celebrationData.winningCard}
+          payoutMessage={celebrationData.payoutMessage}
+          round={celebrationData.round}
+          onComplete={handleCelebrationComplete}
+        />
+      )}
     </div>
   );
 };

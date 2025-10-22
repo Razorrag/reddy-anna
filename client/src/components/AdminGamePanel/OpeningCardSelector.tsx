@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameState } from '../../contexts/GameStateContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -12,6 +12,15 @@ const OpeningCardSelector: React.FC = () => {
   const [selectedCard, setSelectedCard] = useState<Card | null>(gameState.selectedOpeningCard);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [timerDuration, setTimerDuration] = useState(30);
+
+  // Sync local state with game state (important for reset functionality)
+  useEffect(() => {
+    if (gameState.selectedOpeningCard === null && selectedCard !== null) {
+      // Game was reset, clear local selection
+      setSelectedCard(null);
+      setShowConfirmModal(false);
+    }
+  }, [gameState.selectedOpeningCard, selectedCard]);
 
   // Generate all 52 cards
   const suits = [
@@ -52,14 +61,6 @@ const OpeningCardSelector: React.FC = () => {
     setSelectedCard(card);
     setSelectedOpeningCard(card);
     showNotification(`Selected: ${card.display}`, 'info');
-  };
-
-  const handleConfirm = () => {
-    if (!selectedCard) {
-      showNotification('Please select an opening card first!', 'error');
-      return;
-    }
-    setShowConfirmModal(true);
   };
 
   const handleStartGame = () => {

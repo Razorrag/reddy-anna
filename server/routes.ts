@@ -601,6 +601,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }));
             break;
           
+          case 'reveal_cards':
+            // Admin manually reveals cards after timer expired (no pre-selection)
+            if (currentGameState.phase !== 'dealing') {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Can only reveal cards in dealing phase' }
+              }));
+              break;
+            }
+            
+            console.log('🎬 Admin manually revealing cards:', message.data);
+            
+            const revealBaharCard = message.data.baharCard;
+            const revealAndarCard = message.data.andarCard;
+            const revealBaharDisplay = revealBaharCard.display || revealBaharCard;
+            const revealAndarDisplay = revealAndarCard.display || revealAndarCard;
+            
+            // Deal Bahar card first
+            currentGameState.baharCards.push(revealBaharDisplay);
+            
+            broadcast({
+              type: 'card_dealt',
+              data: {
+                card: revealBaharCard,
+                side: 'bahar',
+                position: currentGameState.baharCards.length,
+                isWinningCard: false
+              }
+            });
+            
+            // Wait 800ms then deal Andar card
+            setTimeout(async () => {
+              currentGameState.andarCards.push(revealAndarDisplay);
+              
+              broadcast({
+                type: 'card_dealt',
+                data: {
+                  card: revealAndarCard,
+                  side: 'andar',
+                  position: currentGameState.andarCards.length,
+                  isWinningCard: false
+                }
+              });
+              
+              // Check for winner
+              const baharWinner = checkWinner(revealBaharDisplay);
+              const andarWinner = checkWinner(revealAndarDisplay);
+              
+              if (baharWinner) {
+                await completeGame('bahar', revealBaharDisplay);
+              } else if (andarWinner) {
+                await completeGame('andar', revealAndarDisplay);
+              } else {
+                // No winner, transition to next round
+                console.log(`🎴 No winner in Round ${currentGameState.currentRound}`);
+                
+                broadcast({
+                  type: 'notification',
+                  data: {
+                    message: `No winner in Round ${currentGameState.currentRound}. Starting Round ${currentGameState.currentRound + 1} in 2 seconds...`,
+                    type: 'info'
+                  }
+                });
+                
+                if (currentGameState.currentRound === 1) {
+                  setTimeout(() => transitionToRound2(), 2000);
+                } else if (currentGameState.currentRound === 2) {
+                  setTimeout(() => transitionToRound3(), 2000);
+                }
+              }
+            }, 800);
+            break;
+          
+          case 'deal_single_card':
+            // Round 3 only - continuous dealing one card at a time
+            if (currentGameState.currentRound !== 3) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Single card dealing only allowed in Round 3' }
+              }));
+              break;
+            }
+            
+            const singleCard = message.data.card;
+            const singleSide = message.data.side;
+            const singleCardDisplay = singleCard.display || singleCard;
+            
+            console.log(`🎴 Round 3: Dealing ${singleCardDisplay} to ${singleSide}`);
+            
+            if (singleSide === 'bahar') {
+              currentGameState.baharCards.push(singleCardDisplay);
+            } else {
+              currentGameState.andarCards.push(singleCardDisplay);
+            }
+            
+            broadcast({
+              type: 'card_dealt',
+              data: {
+                card: singleCard,
+                side: singleSide,
+                position: singleSide === 'bahar' ? currentGameState.baharCards.length : currentGameState.andarCards.length,
+                isWinningCard: false
+              }
+            });
+            
+            // Check for winner
+            const singleIsWinner = checkWinner(singleCardDisplay);
+            if (singleIsWinner) {
+              console.log(`✅ Round 3 winner found: ${singleSide}`);
+              await completeGame(singleSide as 'andar' | 'bahar', singleCardDisplay);
+            }
+            break;
+          
           case 'card_dealt':
           case 'deal_card':
             // Admin privileges removed for development - anyone can deal cards
@@ -721,7 +834,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             broadcast({
               type: 'game_reset',
               data: {
-                message: 'Game has been reset. New game starting...'
+                message: 'Game has been reset. New game starting...',
+                gameState: {
+                  gameId: currentGameState.gameId,
+                  phase: 'idle',
+                  currentRound: 1,
+                  timer: 0,
+                  openingCard: null,
+                  andarCards: [],
+                  baharCards: [],
+                  winner: null,
+                  winningCard: null
+                }
               }
             });
             break;
@@ -1225,6 +1349,11 @@ async function transitionToRound2() {
   currentGameState.phase = 'betting';
   currentGameState.bettingLocked = false;
   
+  // IMPORTANT: Clear pre-selected cards from Round 1
+  currentGameState.preSelectedBaharCard = null;
+  currentGameState.preSelectedAndarCard = null;
+  console.log('✅ Cleared pre-selected cards for Round 2');
+  
   // Only update database if not in test mode
   if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
     try {
@@ -1453,14 +1582,34 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     }
   }
   
+  // Determine payout message based on winner and round
+  let payoutMessage = '';
+  if (currentGameState.currentRound === 1) {
+    if (winner === 'andar') {
+      payoutMessage = 'Andar wins! Payout: 1:1 (Double money) 💰';
+    } else {
+      payoutMessage = 'Bahar wins! Payout: 1:0 (Refund only) 💵';
+    }
+  } else if (currentGameState.currentRound === 2) {
+    if (winner === 'andar') {
+      payoutMessage = 'Andar wins! Payout: 1:1 on ALL bets (R1+R2) 💰💰';
+    } else {
+      payoutMessage = 'Bahar wins! R1 bets: 1:1, R2 bets: 1:0 (Refund) 💵';
+    }
+  } else {
+    payoutMessage = 'Winner! Payout: 1:1 on ALL bets (Both sides) 💰💰💰';
+  }
+  
   broadcast({
     type: 'game_complete',
     data: {
       winner: currentGameState.winner,
       winningCard: currentGameState.winningCard,
+      round: currentGameState.currentRound,
       andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
       baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
-      message: `Game completed! ${currentGameState.winner} wins!`
+      payoutMessage,
+      message: `🎉 Game Complete! ${winner.toUpperCase()} WINS with ${winningCard}!`
     }
   });
   
@@ -1479,4 +1628,47 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       console.error('⚠️ Error saving game history:', error);
     }
   }
+  
+  // Auto-restart: Reset to idle after 5 seconds
+  console.log('⏰ Auto-restarting game in 5 seconds...');
+  setTimeout(() => {
+    console.log('🔄 Auto-restart: Resetting game to idle state');
+    
+    // Reset game state
+    currentGameState.phase = 'idle';
+    currentGameState.currentRound = 1;
+    currentGameState.openingCard = null;
+    currentGameState.andarCards = [];
+    currentGameState.baharCards = [];
+    currentGameState.winner = null;
+    currentGameState.winningCard = null;
+    currentGameState.round1Bets = { andar: 0, bahar: 0 };
+    currentGameState.round2Bets = { andar: 0, bahar: 0 };
+    currentGameState.userBets = new Map();
+    currentGameState.bettingLocked = false;
+    currentGameState.timer = 0;
+    currentGameState.preSelectedBaharCard = null;
+    currentGameState.preSelectedAndarCard = null;
+    
+    // Broadcast reset to all clients
+    broadcast({
+      type: 'game_reset',
+      data: {
+        message: '🔄 Game reset. Ready for new game!',
+        gameState: {
+          gameId: currentGameState.gameId,
+          phase: 'idle',
+          currentRound: 1,
+          timer: 0,
+          openingCard: null,
+          andarCards: [],
+          baharCards: [],
+          winner: null,
+          winningCard: null
+        }
+      }
+    });
+    
+    console.log('✅ Game auto-restarted successfully');
+  }, 5000);
 }
