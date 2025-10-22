@@ -122,7 +122,8 @@ export const corsOptions = {
       'http://localhost:3001',
       'https://reddyanna.com',
       'https://reddy-anna-7n83.onrender.com',
-      'https://reddy-anna.onrender.com'
+      'https://reddy-anna.onrender.com',
+      'http://91.108.110.72:5000'
     ];
     
     // Allow requests with no origin (like mobile apps, curl, or same-origin)
