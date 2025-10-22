@@ -217,22 +217,6 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
         </div>
       )}
 
-      {/* Connection Status Indicator */}
-      <div className="absolute bottom-4 left-4">
-        <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <span className="text-green-400 text-xs">Connected</span>
-        </div>
-      </div>
-
-      {/* Viewer Count (placeholder) */}
-      <div className="absolute bottom-4 right-4">
-        <div className="bg-black/60 px-2 py-1 rounded-full border border-gray-700">
-          <span className="text-gray-300 text-xs">
-            👁️ 127 watching
-          </span>
-        </div>
-      </div>
     </div>
   );
 };

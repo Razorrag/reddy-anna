@@ -165,8 +165,8 @@ export function validateBetAmount(amount: number): { isValid: boolean; error?: s
     return { isValid: false, error: 'Minimum bet is ₹1,000' };
   }
   
-  if (amount > 50000) {
-    return { isValid: false, error: 'Maximum bet is ₹50,000' };
+  if (amount > 100000) {
+    return { isValid: false, error: 'Maximum bet is ₹1,00,000' };
   }
   
   return { isValid: true };

@@ -618,7 +618,7 @@ export class SupabaseStorage implements IStorage {
     // Default values - you might want to store these in a settings table
     return {
       minBet: 1000,
-      maxBet: 50000,
+      maxBet: 100000,
       timerDuration: 30
     };
   }

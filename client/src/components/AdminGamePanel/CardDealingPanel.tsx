@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useGameState } from '../../contexts/GameStateContext';
 import type { Card, GamePhase, GameRound } from '@/types/game';
 
 interface CardDealingPanelProps {
@@ -14,16 +15,22 @@ interface CardDealingPanelProps {
 const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
   round,
   phase,
+  openingCard,
   andarCards,
   baharCards
 }) => {
   const { sendWebSocketMessage } = useWebSocket();
   const { showNotification } = useNotification();
+  const { gameState } = useGameState();
   
   const [selectedBaharCard, setSelectedBaharCard] = useState<Card | null>(null);
   const [selectedAndarCard, setSelectedAndarCard] = useState<Card | null>(null);
   const [dealingInProgress, setDealingInProgress] = useState(false);
   const [previousRound, setPreviousRound] = useState(round);
+  
+  // Round 3 specific state
+  const [round3SelectedCard, setRound3SelectedCard] = useState<Card | null>(null);
+  const [round3NextSide, setRound3NextSide] = useState<'bahar' | 'andar'>('bahar');
 
   // Clear selections when round changes
   React.useEffect(() => {
@@ -60,6 +67,14 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
   const handleQuickCardSelect = (card: Card) => {
     if (dealingInProgress) return;
     
+    // Round 3: Single card selection
+    if (round === 3) {
+      setRound3SelectedCard(card);
+      showNotification(`Selected ${card.display} for ${round3NextSide}`, 'info');
+      return;
+    }
+    
+    // Rounds 1 & 2: Pair selection
     if (!selectedBaharCard) {
       setSelectedBaharCard(card);
       showNotification(`Bahar: ${card.display}`, 'info');
@@ -157,6 +172,33 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
     }
   };
 
+  const handleShowRound3Card = async () => {
+    if (!round3SelectedCard) {
+      showNotification('Please select a card first!', 'error');
+      return;
+    }
+
+    setDealingInProgress(true);
+
+    try {
+      await handleDealSingleCard(round3SelectedCard, round3NextSide);
+      
+      // Alternate sides for next card (Bahar → Andar → Bahar → Andar...)
+      setRound3NextSide(round3NextSide === 'bahar' ? 'andar' : 'bahar');
+      
+      // Clear selection
+      setRound3SelectedCard(null);
+      
+      setTimeout(() => {
+        setDealingInProgress(false);
+      }, 500);
+      
+    } catch (error) {
+      showNotification('Failed to show card', 'error');
+      setDealingInProgress(false);
+    }
+  };
+
   const handleUndo = () => {
     if (selectedAndarCard) {
       setSelectedAndarCard(null);
@@ -172,12 +214,26 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
       {/* Dealing Instructions */}
       <div className="bg-blue-900/30 border-2 border-blue-500/50 rounded-lg p-3 mb-3">
         <div className="text-sm text-gray-300 text-center font-medium">
-          1️⃣ Select BAHAR card → 2️⃣ Select ANDAR card → 3️⃣ Click Deal
+          {round === 3 
+            ? `🔥 Round 3: Select card → Click "Show Card" → Alternates ${round3NextSide === 'bahar' ? 'Bahar → Andar' : 'Andar → Bahar'}`
+            : '1️⃣ Select BAHAR card → 2️⃣ Select ANDAR card → 3️⃣ Click Deal'
+          }
         </div>
       </div>
       
-      {/* Current Selection */}
-      {(selectedBaharCard || selectedAndarCard) && (
+      {/* Round 3 Selected Card Display */}
+      {round === 3 && round3SelectedCard && (
+        <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 border-2 border-purple-500/50 rounded-lg p-4 mb-3 text-center">
+          <div className="text-sm text-gray-400 mb-1">Selected for {round3NextSide === 'bahar' ? 'BAHAR' : 'ANDAR'}</div>
+          <div className={`text-5xl font-bold ${round3SelectedCard.color === 'red' ? 'text-red-500' : 'text-white'}`}>
+            {round3SelectedCard.display}
+          </div>
+          <div className="text-xs text-gray-400 mt-2">Click "Show Card" to reveal to players</div>
+        </div>
+      )}
+      
+      {/* Current Selection (Rounds 1 & 2) */}
+      {round < 3 && (selectedBaharCard || selectedAndarCard) && (
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div className="bg-blue-900/30 rounded-lg p-3 border-2 border-blue-500/50 text-center">
             <div className="text-sm text-gray-400 mb-1">Bahar</div>
@@ -210,27 +266,49 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
               {allCards
                 .filter(card => card.suit === suit.name)
                 .map(card => {
-                  const isSelected = selectedBaharCard?.id === card.id || selectedAndarCard?.id === card.id;
+                  const isSelected = round === 3 
+                    ? round3SelectedCard?.id === card.id
+                    : (selectedBaharCard?.id === card.id || selectedAndarCard?.id === card.id);
+                  const isUsed = gameState.usedCards.some(usedCard => usedCard.id === card.id);
+                  const isDisabled = dealingInProgress || isUsed;
+                  
                   return (
                     <button
                       key={card.id}
-                      onClick={() => handleQuickCardSelect(card)}
-                      disabled={dealingInProgress}
+                      onClick={() => !isUsed && handleQuickCardSelect(card)}
+                      disabled={isDisabled}
                       className={`
-                        w-[calc(100%/13-0.25rem)] min-w-[45px] h-[55px] rounded text-sm font-bold transition-all
+                        w-[calc(100%/13-0.25rem)] min-w-[45px] h-[55px] rounded text-sm font-bold transition-all duration-300
                         ${isSelected
-                          ? 'bg-gradient-to-br from-gold to-yellow-500 text-black border-2 border-white scale-105 relative z-10'
-                          : 'bg-black hover:bg-gray-900 border-2 border-gold/50 hover:border-gold'
+                          ? 'bg-gradient-to-br from-gold to-yellow-500 text-black border-2 border-white scale-105 relative z-10 shadow-lg shadow-gold/50 animate-pulse-subtle'
+                          : isUsed
+                          ? 'bg-gray-800/50 border-2 border-gray-600 opacity-40 cursor-not-allowed line-through'
+                          : 'bg-black hover:bg-gray-900 border-2 border-gold/50 hover:border-gold hover:scale-105'
                         }
                         ${isSelected 
                           ? '' 
+                          : isUsed
+                          ? 'text-gray-600'
                           : (card.color === 'red' ? 'text-red-400' : 'text-yellow-400')
                         }
-                        ${dealingInProgress ? 'opacity-50 cursor-not-allowed' : ''}
+                        ${dealingInProgress && !isUsed ? 'opacity-50 cursor-not-allowed' : ''}
                       `}
-                      title={`${card.rank} of ${card.suit}`}
+                      title={
+                        isUsed 
+                          ? '❌ Card already used in this game' 
+                          : dealingInProgress 
+                          ? 'Dealing in progress' 
+                          : `${card.rank} of ${card.suit}`
+                      }
                     >
-                      {card.display}
+                      {isUsed ? (
+                        <span className="relative">
+                          {card.display}
+                          <span className="absolute inset-0 flex items-center justify-center text-red-500 text-xs">✗</span>
+                        </span>
+                      ) : (
+                        card.display
+                      )}
                     </button>
                   );
                 })}
@@ -270,9 +348,15 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
         )}
         
         {round === 3 && (
-          <div className="flex-[2] text-center text-sm text-gray-400">
-            Click cards below to deal one at a time (alternating Bahar → Andar)
-          </div>
+          <>
+            <button
+              onClick={handleShowRound3Card}
+              disabled={!round3SelectedCard || dealingInProgress}
+              className="flex-[2] px-6 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-lg text-base font-bold"
+            >
+              {dealingInProgress ? '⏳ Showing...' : `🎬 Show Card to ${round3NextSide === 'bahar' ? 'BAHAR' : 'ANDAR'}`}
+            </button>
+          </>
         )}
       </div>
       
@@ -326,6 +410,30 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
         .custom-scrollbar::-webkit-scrollbar-thumb {
           background: rgba(255, 215, 0, 0.5);
           border-radius: 3px;
+        }
+        
+        @keyframes pulse-subtle {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.85; }
+        }
+        
+        .animate-pulse-subtle {
+          animation: pulse-subtle 2s ease-in-out infinite;
+        }
+        
+        .line-through {
+          position: relative;
+        }
+        
+        .line-through::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 10%;
+          right: 10%;
+          height: 2px;
+          background: rgba(239, 68, 68, 0.6);
+          transform: translateY(-50%) rotate(-15deg);
         }
       `}</style>
     </div>

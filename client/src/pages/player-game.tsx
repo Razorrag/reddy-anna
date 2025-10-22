@@ -11,6 +11,7 @@ import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
 import MobileGameLayout from '../components/MobileGameLayout/MobileGameLayout';
 import { GameHistoryModal } from '../components/GameHistoryModal';
+import { WalletModal } from '../components/WalletModal';
 import RoundTransition from '../components/RoundTransition';
 import NoWinnerTransition from '../components/NoWinnerTransition';
 import type { BetSide } from '../types/game';
@@ -30,6 +31,7 @@ const PlayerGame: React.FC = () => {
   const [userBalance, setUserBalance] = useState(5000000); // ₹50 Lakhs test balance
   const [showChipSelector, setShowChipSelector] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
   const [showRoundTransition, setShowRoundTransition] = useState(false);
   const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
@@ -38,8 +40,8 @@ const PlayerGame: React.FC = () => {
     round2: { andar: 0, bahar: 0 }
   });
 
-  // Available bet amounts - matching schema limits (1000-50000)
-  const betAmounts = [1000, 2500, 5000, 10000, 20000, 30000, 40000, 50000];
+  // Available bet amounts - matching schema limits (1000-100000)
+  const betAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
 
   // Update the handlePlaceBet function to properly use WebSocket
   const handlePlaceBet = useCallback(async (position: BetSide) => {
@@ -112,8 +114,26 @@ const PlayerGame: React.FC = () => {
 
   // Handle wallet click
   const handleWalletClick = useCallback(() => {
-    showNotification('Wallet feature coming soon', 'info');
-  }, [showNotification]);
+    setShowWalletModal(true);
+  }, []);
+
+  // Handle deposit
+  const handleDeposit = useCallback((amount: number) => {
+    setUserBalance(prev => prev + amount);
+    updatePlayerWallet(userBalance + amount);
+    showNotification(`Successfully deposited ₹${amount.toLocaleString('en-IN')}`, 'success');
+  }, [userBalance, updatePlayerWallet, showNotification]);
+
+  // Handle withdraw
+  const handleWithdraw = useCallback((amount: number) => {
+    if (amount > userBalance) {
+      showNotification('Insufficient balance', 'error');
+      return;
+    }
+    setUserBalance(prev => prev - amount);
+    updatePlayerWallet(userBalance - amount);
+    showNotification(`Successfully withdrew ₹${amount.toLocaleString('en-IN')}`, 'success');
+  }, [userBalance, updatePlayerWallet, showNotification]);
 
   // Handle history click
   const handleHistoryClick = useCallback(() => {
@@ -236,6 +256,15 @@ const PlayerGame: React.FC = () => {
         isOpen={showHistoryModal}
         onClose={() => setShowHistoryModal(false)}
         history={mockHistory}
+      />
+
+      {/* Wallet Modal */}
+      <WalletModal
+        isOpen={showWalletModal}
+        onClose={() => setShowWalletModal(false)}
+        userBalance={userBalance}
+        onDeposit={handleDeposit}
+        onWithdraw={handleWithdraw}
       />
 
       {/* No Winner Transition - Shows before round transition */}

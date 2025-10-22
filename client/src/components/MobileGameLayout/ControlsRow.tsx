@@ -27,11 +27,11 @@ const ControlsRow: React.FC<ControlsRowProps> = ({
   className = ''
 }) => {
   return (
-    <div className={`flex items-center justify-between gap-2 ${className}`}>
+    <div className={`flex items-center ${className}`}>
       {/* History Button */}
       <button
         onClick={onHistoryClick}
-        className="w-11 h-11 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95"
+        className="flex-1 h-11 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95"
       >
         <svg 
           className="w-4 h-4 text-gray-400" 
@@ -48,7 +48,7 @@ const ControlsRow: React.FC<ControlsRowProps> = ({
       <button
         onClick={onUndoBet}
         disabled={isPlacingBet}
-        className="w-11 h-11 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex-1 h-11 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <svg 
           className="w-4 h-4 text-gray-400" 
@@ -64,7 +64,7 @@ const ControlsRow: React.FC<ControlsRowProps> = ({
       {/* Select Chip Button (Prominent) */}
       <button
         onClick={onShowChipSelector}
-        className="flex-1 max-w-28 h-11 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center border-2 border-yellow-400 shadow-lg hover:shadow-yellow-500/25 transition-all duration-200 active:scale-95"
+        className="flex-1 h-11 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center border-2 border-yellow-400 shadow-lg hover:shadow-yellow-500/25 transition-all duration-200 active:scale-95"
       >
         {selectedBetAmount > 0 ? (
           <div className="flex items-center gap-1">
@@ -93,7 +93,7 @@ const ControlsRow: React.FC<ControlsRowProps> = ({
       <button
         onClick={onRebet}
         disabled={isPlacingBet}
-        className="w-11 h-11 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex-1 h-11 bg-gray-800 rounded-lg flex flex-col items-center justify-center border border-gray-700 hover:border-yellow-500/50 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <svg 
           className="w-4 h-4 text-gray-400" 

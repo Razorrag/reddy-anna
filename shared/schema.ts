@@ -103,7 +103,7 @@ export const insertBetSchema = createInsertSchema(playerBets).omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
-  amount: z.number().min(1000).max(50000), // Bet limits
+  amount: z.number().min(1000).max(100000), // Bet limits
   round: z.number().min(1).max(3), // Added: round number
 });
 

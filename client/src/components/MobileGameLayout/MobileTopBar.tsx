@@ -11,7 +11,6 @@
 
 import React from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
-import { useWebSocket } from '@/contexts/WebSocketContext';
 
 interface MobileTopBarProps {
   className?: string;
@@ -27,7 +26,6 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
   gameState: propsGameState
 }) => {
   const { gameState: contextGameState } = useGameState();
-  const { connectionState } = useWebSocket();
   
   // Use props gameState if provided, otherwise use context
   const gameState = propsGameState || contextGameState;
@@ -66,12 +64,6 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
                 ₹{userBalance.toLocaleString('en-IN')}
               </span>
             </button>
-
-            {/* Viewer Count */}
-            <div className="flex items-center space-x-1 bg-gray-800 rounded-full px-2 py-1">
-              <span className="text-gray-400 text-xs">👁️</span>
-              <span className="text-gray-300 text-xs font-semibold">127</span>
-            </div>
           </div>
         </div>
       </div>

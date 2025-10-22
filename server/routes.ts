@@ -478,10 +478,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             
             // Validation
-            if (!betAmount || betAmount < 1000 || betAmount > 50000) {
+            if (!betAmount || betAmount < 1000 || betAmount > 100000) {
               ws.send(JSON.stringify({
                 type: 'error',
-                data: { message: `Invalid bet amount. Must be between ₹1,000 and ₹50,000` }
+                data: { message: `Invalid bet amount. Must be between ₹1,000 and ₹1,00,000` }
               }));
               break;
             }

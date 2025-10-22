@@ -25,6 +25,7 @@ interface GameState {
   andarCards: Card[];
   baharCards: Card[];
   dealtCards: DealtCard[];
+  usedCards: Card[]; // Track all cards used in the game
   andarCard?: Card;
   baharCard?: Card;
   
@@ -70,6 +71,7 @@ type GameStateAction =
   | { type: 'ADD_ANDAR_CARD'; payload: Card }
   | { type: 'ADD_BAHAR_CARD'; payload: Card }
   | { type: 'ADD_DEALT_CARD'; payload: DealtCard }
+  | { type: 'ADD_USED_CARD'; payload: Card }
   | { type: 'SET_PHASE'; payload: GamePhase }
   | { type: 'SET_COUNTDOWN'; payload: number }
   | { type: 'SET_WINNER'; payload: GameWinner }
@@ -94,6 +96,7 @@ const initialState: GameState = {
   andarCards: [],
   baharCards: [],
   dealtCards: [],
+  usedCards: [],
   phase: 'idle',
   currentRound: 1,
   timeRemaining: 0,
@@ -121,13 +124,38 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
     case 'SET_GAME_ID':
       return { ...state, gameId: action.payload };
     case 'SET_OPENING_CARD':
-      return { ...state, selectedOpeningCard: action.payload };
+      // Add opening card to usedCards if not already there
+      const isOpeningCardUsed = state.usedCards.some(c => c.id === action.payload.id);
+      return { 
+        ...state, 
+        selectedOpeningCard: action.payload,
+        usedCards: isOpeningCardUsed ? state.usedCards : [...state.usedCards, action.payload]
+      };
     case 'ADD_ANDAR_CARD':
-      return { ...state, andarCards: [...state.andarCards, action.payload] };
+      // Add to usedCards if not already there
+      const isAndarCardUsed = state.usedCards.some(c => c.id === action.payload.id);
+      return { 
+        ...state, 
+        andarCards: [...state.andarCards, action.payload],
+        usedCards: isAndarCardUsed ? state.usedCards : [...state.usedCards, action.payload]
+      };
     case 'ADD_BAHAR_CARD':
-      return { ...state, baharCards: [...state.baharCards, action.payload] };
+      // Add to usedCards if not already there
+      const isBaharCardUsed = state.usedCards.some(c => c.id === action.payload.id);
+      return { 
+        ...state, 
+        baharCards: [...state.baharCards, action.payload],
+        usedCards: isBaharCardUsed ? state.usedCards : [...state.usedCards, action.payload]
+      };
     case 'ADD_DEALT_CARD':
       return { ...state, dealtCards: [...state.dealtCards, action.payload] };
+    case 'ADD_USED_CARD':
+      // Add card to usedCards if not already there
+      const isCardAlreadyUsed = state.usedCards.some(c => c.id === action.payload.id);
+      return {
+        ...state,
+        usedCards: isCardAlreadyUsed ? state.usedCards : [...state.usedCards, action.payload]
+      };
     case 'SET_PHASE':
       return { ...state, phase: action.payload };
     case 'SET_COUNTDOWN':
@@ -141,6 +169,7 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         username: state.username,
         playerWallet: state.playerWallet,
         userRole: state.userRole,
+        usedCards: [], // Clear used cards on game reset
       };
     case 'SET_GAME_ACTIVE':
       return { ...state, isGameActive: action.payload };
@@ -184,7 +213,8 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         andarCards: [], 
         baharCards: [], 
         dealtCards: [],
-        winningCard: null  // ✅ Now clears winning card
+        winningCard: null,  // ✅ Now clears winning card
+        usedCards: [] // Clear used cards tracking
       };
     default:
       return state;
@@ -198,6 +228,7 @@ interface GameStateContextType {
   addAndarCard: (card: Card) => void;
   addBaharCard: (card: Card) => void;
   addDealtCard: (card: DealtCard) => void;
+  addUsedCard: (card: Card) => void;
   setPhase: (phase: GamePhase) => void;
   setCountdown: (time: number) => void;
   setWinner: (winner: GameWinner) => void;
@@ -285,6 +316,10 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const addDealtCard = (card: DealtCard) => {
     dispatch({ type: 'ADD_DEALT_CARD', payload: card });
+  };
+
+  const addUsedCard = (card: Card) => {
+    dispatch({ type: 'ADD_USED_CARD', payload: card });
   };
 
   const setPhase = (phase: GamePhase) => {
@@ -390,6 +425,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     addAndarCard,
     addBaharCard,
     addDealtCard,
+    addUsedCard,
     setPhase,
     setCountdown,
     setWinner,

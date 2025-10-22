@@ -69,7 +69,7 @@ const BackendSettings: React.FC = () => {
   
   // Game Settings State
   const [gameSettings, setGameSettings] = useState({
-    settingsMaxBetAmount: 50000,
+    settingsMaxBetAmount: 100000,
     settingsMinBetAmount: 1000,
     gameTimer: 30,
     openingCard: 'A♠'

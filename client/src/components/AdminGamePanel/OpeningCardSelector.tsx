@@ -117,26 +117,44 @@ const OpeningCardSelector: React.FC = () => {
             <div className="flex flex-wrap gap-1">
               {allCards
                 .filter(card => card.suit === suit.name)
-                .map(card => (
-                  <button
-                    key={card.id}
-                    onClick={() => handleCardSelect(card)}
-                    className={`
-                      w-[calc(100%/13-0.25rem)] min-w-[45px] h-[55px] rounded text-sm font-bold transition-all
-                      ${selectedCard?.id === card.id
-                        ? 'bg-gradient-to-br from-gold to-yellow-500 text-black border-2 border-white scale-105 relative z-10'
-                        : 'bg-black hover:bg-gray-900 border-2 border-gold/50 hover:border-gold'
-                      }
-                      ${selectedCard?.id === card.id 
-                        ? '' 
-                        : (card.color === 'red' ? 'text-red-400' : 'text-yellow-400')
-                      }
-                    `}
-                    title={`${card.rank} of ${card.suit}`}
-                  >
-                    {card.display}
-                  </button>
-                ))}
+                .map(card => {
+                  const isCurrentlySelected = selectedCard?.id === card.id;
+                  const isUsed = gameState.usedCards.some(usedCard => usedCard.id === card.id);
+                  const isDisabled = isUsed;
+                  
+                  return (
+                    <button
+                      key={card.id}
+                      onClick={() => !isUsed && handleCardSelect(card)}
+                      disabled={isDisabled}
+                      className={`
+                        w-[calc(100%/13-0.25rem)] min-w-[45px] h-[55px] rounded text-sm font-bold transition-all duration-300
+                        ${isCurrentlySelected
+                          ? 'bg-gradient-to-br from-gold to-yellow-500 text-black border-2 border-white scale-105 relative z-10 shadow-lg shadow-gold/50 animate-pulse-subtle'
+                          : isUsed
+                          ? 'bg-gray-800/50 border-2 border-gray-600 opacity-40 cursor-not-allowed line-through'
+                          : 'bg-black hover:bg-gray-900 border-2 border-gold/50 hover:border-gold hover:scale-105'
+                        }
+                        ${isCurrentlySelected 
+                          ? '' 
+                          : isUsed
+                          ? 'text-gray-600'
+                          : (card.color === 'red' ? 'text-red-400' : 'text-yellow-400')
+                        }
+                      `}
+                      title={isUsed ? '❌ Card already used in this game' : `${card.rank} of ${card.suit}`}
+                    >
+                      {isUsed ? (
+                        <span className="relative">
+                          {card.display}
+                          <span className="absolute inset-0 flex items-center justify-center text-red-500 text-xs">✗</span>
+                        </span>
+                      ) : (
+                        card.display
+                      )}
+                    </button>
+                  );
+                })}
             </div>
           </div>
         ))}
@@ -222,6 +240,30 @@ const OpeningCardSelector: React.FC = () => {
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: rgba(255, 215, 0, 0.7);
+        }
+        
+        @keyframes pulse-subtle {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.85; }
+        }
+        
+        .animate-pulse-subtle {
+          animation: pulse-subtle 2s ease-in-out infinite;
+        }
+        
+        .line-through {
+          position: relative;
+        }
+        
+        .line-through::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 10%;
+          right: 10%;
+          height: 2px;
+          background: rgba(239, 68, 68, 0.6);
+          transform: translateY(-50%) rotate(-15deg);
         }
       `}</style>
     </div>
