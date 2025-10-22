@@ -15,7 +15,7 @@ class ApiClient {
     };
     
     console.log(`API Client initialized with baseURL: ${this.baseURL}`);
-    console.log(`This should proxy to: http://localhost:5000/api`);
+    console.log(`Requests will be made to: ${window.location.origin}${this.baseURL}`);
   }
 
   private async request<T>(

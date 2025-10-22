@@ -34,19 +34,30 @@ export function VideoStream({
         hlsUrl = streamUrl
           .replace('rtmp://', 'http://')
           .replace(':1935', ':8000') + '.m3u8';
+      } else if (streamUrl.startsWith('/stream/')) {
+        // For production, use the current domain with proxy
+        hlsUrl = window.location.origin + streamUrl;
       }
+      
+      console.log('🎥 Initializing HLS stream:', hlsUrl);
       
       if (Hls.isSupported()) {
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: true,
-          backBufferLength: 90
+          backBufferLength: 90,
+          debug: true,
+          maxBufferLength: 30,
+          maxMaxBufferLength: 600,
+          maxBufferSize: 60 * 1000 * 1000,
+          maxBufferHole: 0.5
         });
         
         hls.loadSource(hlsUrl);
         hls.attachMedia(video);
         
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          console.log('✅ HLS manifest parsed successfully');
           video.play().catch(err => {
             console.error('Error playing video:', err);
             setStreamError(true);
@@ -54,10 +65,18 @@ export function VideoStream({
         });
         
         hls.on(Hls.Events.ERROR, (event, data) => {
-          console.error('HLS error:', event, data);
+          console.error('❌ HLS error:', event, data);
           if (data.fatal) {
             setStreamError(true);
           }
+        });
+        
+        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+          console.log('✅ HLS media attached');
+        });
+        
+        hls.on(Hls.Events.LEVEL_LOADED, () => {
+          console.log('✅ HLS level loaded');
         });
         
         // Store HLS instance for cleanup
@@ -68,6 +87,7 @@ export function VideoStream({
         };
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         // Native HLS support (Safari)
+        console.log('🍎 Using native HLS support');
         video.src = hlsUrl;
         video.play().catch(err => {
           console.error('Error playing video:', err);

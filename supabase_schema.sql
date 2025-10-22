@@ -524,4 +524,42 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Stream settings table for streaming configuration
+CREATE TABLE IF NOT EXISTS stream_settings (
+    id SERIAL PRIMARY KEY,
+    setting_key VARCHAR(255) UNIQUE NOT NULL,
+    setting_value TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes for stream_settings
+CREATE INDEX IF NOT EXISTS idx_stream_settings_key ON stream_settings(setting_key);
+
+-- Create trigger for stream_settings updated_at
+CREATE TRIGGER update_stream_settings_updated_at BEFORE UPDATE ON stream_settings
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Insert default stream settings
+INSERT INTO stream_settings (setting_key, setting_value) VALUES
+('rtmp_port', '1935'),
+('hls_port', '8000'),
+('stream_path', '/live/stream'),
+('hls_fragment_time', '4'),
+('hls_list_size', '6'),
+('hls_window_size', '60'),
+('enable_adaptive_bitrate', 'false'),
+('max_viewers', '1000'),
+('stream_quality', '720p'),
+('enable_recording', 'false'),
+('recording_path', '/recordings'),
+('stream_title', 'Reddy Anna Andar Bahar Live'),
+('stream_description', 'Live Andar Bahar Game Stream')
+ON CONFLICT (setting_key) DO NOTHING;
+
+-- Grant permissions for stream_settings
+GRANT ALL ON stream_settings TO authenticated;
+GRANT ALL ON stream_settings TO service_role;
+GRANT SELECT ON stream_settings TO anon;
+
 COMMIT;

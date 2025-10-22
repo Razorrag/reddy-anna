@@ -85,6 +85,44 @@ app.use(cors({
 
 log('✅ CORS configured');
 
+// Security headers middleware
+app.use((req, res, next) => {
+  // Only set COOP on HTTPS or localhost
+  const isSecure = req.protocol === 'https' || req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+  
+  if (isSecure) {
+    // Cross-Origin-Opener-Policy: Isolate browsing context
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    
+    // Origin-Agent-Cluster: Request origin-keyed agent cluster
+    res.setHeader('Origin-Agent-Cluster', '?1');
+  }
+  
+  // Security headers that work on HTTP and HTTPS
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  
+  // CSP for production
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: blob: https:; " +
+      "font-src 'self' data:; " +
+      "connect-src 'self' ws: wss:; " +
+      "media-src 'self' blob:; " +
+      "frame-src 'self';"
+    );
+  }
+  
+  next();
+});
+
+log('✅ Security headers configured');
+
 // Session middleware configuration
 const MemoryStoreSession = MemoryStore(session);
 
@@ -140,20 +178,57 @@ app.use((req, res, next) => {
   // Start RTMP server
   nms.run();
 
-  // Serve HLS stream files through main port
+  // Serve HLS stream files through main port with proper headers
   app.use('/stream', express.static(path.join(process.cwd(), 'media'), {
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.m3u8')) {
         res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Headers', 'Range');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Length');
       } else if (filePath.endsWith('.ts')) {
         res.setHeader('Content-Type', 'video/mp2t');
         res.setHeader('Cache-Control', 'public, max-age=3600');
         res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Headers', 'Range');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Length');
       }
     }
   }));
+
+  // Proxy HLS streams from port 8000 to main port 5000
+  app.use('/stream-live', async (req, res) => {
+    try {
+      const targetUrl = `http://localhost:8000${req.originalUrl.replace('/stream-live', '/stream')}`;
+      console.log(`Proxying HLS request: ${req.originalUrl} -> ${targetUrl}`);
+      
+      const response = await fetch(targetUrl);
+      
+      if (!response.ok) {
+        console.error(`HLS proxy error: ${response.status} ${response.statusText}`);
+        return res.status(response.status).send('Stream not available');
+      }
+      
+      // Copy headers
+      response.headers.forEach((value, key) => {
+        res.setHeader(key, value);
+      });
+      
+      // Add CORS headers
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Headers', 'Range');
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Length');
+      
+      // Copy body
+      const buffer = await response.arrayBuffer();
+      res.send(Buffer.from(buffer));
+      
+    } catch (error) {
+      console.error('HLS proxy error:', error);
+      res.status(502).send('Stream proxy error');
+    }
+  });
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
