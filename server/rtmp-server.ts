@@ -14,13 +14,15 @@ const config = {
     allow_origin: '*',
     mediaroot: './media'
   },
-  relay: {
-    ffmpeg: '/usr/local/bin/ffmpeg',
+  trans: {
+    ffmpeg: process.env.FFMPEG_PATH || '/usr/bin/ffmpeg',
     tasks: [
       {
         app: process.env.RTMP_APP_NAME || 'live',
-        mode: 'push',
-        edge: `rtmp://localhost:${parseInt(process.env.RTMP_SERVER_PORT || '1935')}/live`
+        hls: true,
+        hlsFlags: '[hls_time=2:hls_list_size=3:hls_flags=delete_segments]',
+        hlsKeep: true, // Keep segments for short replay buffer
+        dash: false
       }
     ]
   }
@@ -28,47 +30,77 @@ const config = {
 
 export const nms = new NodeMediaServer(config);
 
-nms.on('preConnect', (id: string, args: any) => {
-  console.log('[NodeEvent on preConnect]', `id=${id} args=${JSON.stringify(args)}`);
+// Track stream status
+let isStreamLive = false;
+let currentStreamPath = '';
+
+export const getStreamStatus = () => ({
+  isLive: isStreamLive,
+  streamPath: currentStreamPath
+});
+
+nms.on('preConnect', (id: any, args: any) => {
+  const sessionId = typeof id === 'string' ? id : id?.id || 'unknown';
+  console.log('[NodeEvent on preConnect]', `id=${sessionId} args=${JSON.stringify(args)}`);
   // You can deny connection based on user's role or other conditions
   // let session = nms.getSession(id);
   // session.reject();
 });
 
-nms.on('postConnect', (id: string, args: any) => {
-  console.log('[NodeEvent on postConnect]', `id=${id} args=${JSON.stringify(args)}`);
+nms.on('postConnect', (id: any, args: any) => {
+  const sessionId = typeof id === 'string' ? id : id?.id || 'unknown';
+  console.log('[NodeEvent on postConnect]', `id=${sessionId} args=${JSON.stringify(args)}`);
 });
 
-nms.on('doneConnect', (id: string, args: any) => {
-  console.log('[NodeEvent on doneConnect]', `id=${id} args=${JSON.stringify(args)}`);
+nms.on('doneConnect', (id: any, args: any) => {
+  const sessionId = typeof id === 'string' ? id : id?.id || 'unknown';
+  console.log('[NodeEvent on doneConnect]', `id=${sessionId} args=${JSON.stringify(args)}`);
 });
 
-nms.on('prePublish', (id: string, StreamPath: string, args: any) => {
-  console.log('[NodeEvent on prePublish]', `id=${id} StreamPath=${StreamPath} args=${JSON.stringify(args)}`);
+nms.on('prePublish', (id: any, StreamPath: any, args: any) => {
+  const sessionId = typeof id === 'string' ? id : id?.id || 'unknown';
+  const streamPath = StreamPath || 'unknown';
+  console.log('[NodeEvent on prePublish]', `id=${sessionId} StreamPath=${streamPath} args=${JSON.stringify(args)}`);
   // You can deny publishing based on stream key or other conditions
   // let session = nms.getSession(id);
   // session.reject();
 });
 
-nms.on('postPublish', (id: string, StreamPath: string, args: any) => {
-  console.log('[NodeEvent on postPublish]', `id=${id} StreamPath=${StreamPath} args=${JSON.stringify(args)}`);
+nms.on('postPublish', (id: any, StreamPath: any, args: any) => {
+  const sessionId = typeof id === 'string' ? id : id?.id || 'unknown';
+  const streamPath = StreamPath || '/live/stream';
+  console.log('[NodeEvent on postPublish]', `id=${sessionId} StreamPath=${streamPath} args=${JSON.stringify(args)}`);
+  isStreamLive = true;
+  currentStreamPath = streamPath;
+  console.log('🔴 STREAM STARTED:', streamPath);
 });
 
-nms.on('donePublish', (id: string, StreamPath: string, args: any) => {
-  console.log('[NodeEvent on donePublish]', `id=${id} StreamPath=${StreamPath} args=${JSON.stringify(args)}`);
+nms.on('donePublish', (id: any, StreamPath: any, args: any) => {
+  const sessionId = typeof id === 'string' ? id : id?.id || 'unknown';
+  const streamPath = StreamPath || currentStreamPath;
+  console.log('[NodeEvent on donePublish]', `id=${sessionId} StreamPath=${streamPath} args=${JSON.stringify(args)}`);
+  isStreamLive = false;
+  currentStreamPath = '';
+  console.log('⚫ STREAM ENDED:', streamPath);
 });
 
-nms.on('prePlay', (id: string, StreamPath: string, args: any) => {
-  console.log('[NodeEvent on prePlay]', `id=${id} StreamPath=${StreamPath} args=${JSON.stringify(args)}`);
+nms.on('prePlay', (id: any, StreamPath: any, args: any) => {
+  const sessionId = typeof id === 'string' ? id : id?.id || 'unknown';
+  const streamPath = StreamPath || 'unknown';
+  console.log('[NodeEvent on prePlay]', `id=${sessionId} StreamPath=${streamPath} args=${JSON.stringify(args)}`);
   // You can deny playing based on user's role or other conditions
   // let session = nms.getSession(id);
   // session.reject();
 });
 
-nms.on('postPlay', (id: string, StreamPath: string, args: any) => {
-  console.log('[NodeEvent on postPlay]', `id=${id} StreamPath=${StreamPath} args=${JSON.stringify(args)}`);
+nms.on('postPlay', (id: any, StreamPath: any, args: any) => {
+  const sessionId = typeof id === 'string' ? id : id?.id || 'unknown';
+  const streamPath = StreamPath || 'unknown';
+  console.log('[NodeEvent on postPlay]', `id=${sessionId} StreamPath=${streamPath} args=${JSON.stringify(args)}`);
 });
 
-nms.on('donePlay', (id: string, StreamPath: string, args: any) => {
-  console.log('[NodeEvent on donePlay]', `id=${id} StreamPath=${StreamPath} args=${JSON.stringify(args)}`);
+nms.on('donePlay', (id: any, StreamPath: any, args: any) => {
+  const sessionId = typeof id === 'string' ? id : id?.id || 'unknown';
+  const streamPath = StreamPath || 'unknown';
+  console.log('[NodeEvent on donePlay]', `id=${sessionId} StreamPath=${streamPath} args=${JSON.stringify(args)}`);
 });

@@ -1337,6 +1337,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to get balance" });
     }
   });
+
+  // Stream Settings API Endpoints
+  app.get("/api/game/stream-settings", async (req, res) => {
+    try {
+      const settings = await storage.getStreamSettings();
+      
+      // Convert array to object for easier frontend consumption
+      const settingsObj = settings.reduce((acc, setting) => {
+        acc[setting.settingKey] = setting.settingValue;
+        return acc;
+      }, {} as Record<string, string>);
+
+      res.json({
+        streamUrl: settingsObj.stream_url || '/stream/live/stream.m3u8',
+        streamType: settingsObj.stream_type || 'rtmp',
+        streamTitle: settingsObj.stream_title || 'Andar Bahar Live',
+        streamStatus: settingsObj.stream_status || 'offline',
+        streamDescription: settingsObj.stream_description || 'Live Andar Bahar game streaming',
+        rtmpUrl: settingsObj.rtmp_url || 'rtmp://localhost:1935/live',
+        rtmpStreamKey: settingsObj.rtmp_stream_key || ''
+      });
+    } catch (error) {
+      console.error('Error fetching stream settings:', error);
+      res.status(500).json({ error: 'Failed to fetch stream settings' });
+    }
+  });
+
+  app.post("/api/game/stream-settings", async (req, res) => {
+    try {
+      const { 
+        streamUrl, 
+        streamType, 
+        streamTitle, 
+        streamStatus, 
+        streamDescription,
+        rtmpUrl, 
+        rtmpStreamKey 
+      } = req.body;
+
+      // Update each setting if provided
+      if (streamUrl !== undefined) await storage.updateStreamSetting('stream_url', streamUrl);
+      if (streamType !== undefined) await storage.updateStreamSetting('stream_type', streamType);
+      if (streamTitle !== undefined) await storage.updateStreamSetting('stream_title', streamTitle);
+      if (streamStatus !== undefined) await storage.updateStreamSetting('stream_status', streamStatus);
+      if (streamDescription !== undefined) await storage.updateStreamSetting('stream_description', streamDescription);
+      if (rtmpUrl !== undefined) await storage.updateStreamSetting('rtmp_url', rtmpUrl);
+      if (rtmpStreamKey !== undefined) await storage.updateStreamSetting('rtmp_stream_key', rtmpStreamKey);
+
+      res.json({ success: true, message: 'Stream settings updated successfully' });
+    } catch (error) {
+      console.error('Error updating stream settings:', error);
+      res.status(500).json({ error: 'Failed to update stream settings' });
+    }
+  });
   
   return httpServer;
 }

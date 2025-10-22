@@ -7,9 +7,10 @@ import { WebSocketServer } from "ws";
 import session from 'express-session';
 import MemoryStore from 'memorystore';
 import cors from 'cors';
+import path from 'path';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { nms } from "./rtmp-server";
+import { nms, getStreamStatus } from "./rtmp-server";
 
 // Validate all required environment variables
 const requiredEnvVars = [
@@ -139,6 +140,21 @@ app.use((req, res, next) => {
   // Start RTMP server
   nms.run();
 
+  // Serve HLS stream files through main port
+  app.use('/stream', express.static(path.join(process.cwd(), 'media'), {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.m3u8')) {
+        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      } else if (filePath.endsWith('.ts')) {
+        res.setHeader('Content-Type', 'video/mp2t');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      }
+    }
+  }));
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -147,13 +163,15 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // Stream status endpoints
+  // Stream status endpoint - returns actual RTMP server status
   app.get('/api/game/stream-status', (req, res) => {
-    // Return current stream status
+    const status = getStreamStatus();
     res.json({
       success: true,
-      streamStatus: 'live', // or 'offline' based on actual stream status
-      viewers: 1234
+      streamStatus: status.isLive ? 'live' : 'offline',
+      streamPath: status.streamPath,
+      hlsUrl: status.isLive ? '/stream/live/stream.m3u8' : null,
+      viewers: 0 // TODO: Implement viewer counting
     });
   });
 

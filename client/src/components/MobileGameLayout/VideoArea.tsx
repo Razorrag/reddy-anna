@@ -11,6 +11,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
+import { VideoStream } from '../VideoStream';
 
 interface VideoAreaProps {
   className?: string;
@@ -22,6 +23,26 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
   // Use the gameState.timer directly
   const localTimer = gameState.countdownTimer;
   const [isPulsing, setIsPulsing] = useState(false);
+  
+  // Stream settings state
+  const [streamUrl, setStreamUrl] = useState<string>('/stream/live/stream.m3u8');
+  const [streamType, setStreamType] = useState<'video' | 'rtmp' | 'embed'>('rtmp');
+  const [streamTitle, setStreamTitle] = useState<string>('Andar Bahar Live');
+
+  // Fetch stream settings from backend
+  useEffect(() => {
+    fetch('/api/game/stream-settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.streamUrl) setStreamUrl(data.streamUrl);
+        if (data.streamType) setStreamType(data.streamType);
+        if (data.streamTitle) setStreamTitle(data.streamTitle);
+      })
+      .catch(err => {
+        console.error('Failed to load stream settings:', err);
+        // Keep defaults on error
+      });
+  }, []);
 
   // Handle pulse effect when less than 5 seconds
   useEffect(() => {
@@ -69,13 +90,18 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
 
   return (
     <div className={`relative bg-black rounded-lg overflow-hidden ${className}`}>
-      {/* Video Stream Placeholder */}
-      <div className="relative aspect-video bg-gradient-to-br from-gray-900 to-black">
-        {/* Video/Stream area - cards moved to betting buttons */}
+      {/* Live Video Stream */}
+      <div className="relative aspect-video">
+        <VideoStream 
+          streamUrl={streamUrl}
+          streamType={streamType}
+          isLive={gameState.phase !== 'idle'}
+          title={streamTitle}
+        />
 
         {/* Game Status Overlay */}
         {gameState.phase === 'idle' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
             <div className="text-center">
               <div className="text-gray-400 text-lg mb-2">Live Stream</div>
               <div className="text-gray-500 text-sm">Game ID: {gameState.gameId || 'Waiting...'}</div>
