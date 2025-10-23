@@ -79,18 +79,7 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
           title={streamTitle}
         />
 
-        {/* Game Status Overlay */}
-        {gameState.phase === 'idle' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
-            <div className="text-center">
-              <div className="text-gray-400 text-lg mb-2">Live Stream</div>
-              <div className="text-gray-500 text-sm">Game ID: {gameState.gameId || 'Waiting...'}</div>
-              <div className="text-yellow-400 text-sm mt-4 animate-pulse">
-                Waiting for game to start...
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Game Status Overlay - Removed to keep video clean */}
 
         {/* Dealing Animation - Removed duplicate, using left badge instead */}
 

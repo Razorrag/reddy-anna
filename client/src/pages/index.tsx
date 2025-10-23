@@ -5,7 +5,7 @@ import { Users, Trophy, Zap } from "lucide-react";
 // Import new components
 import Navigation from "@/components/Navigation/Navigation";
 import LanguageSelector from "@/components/LanguageSelector/LanguageSelector";
-import ImageSlider from "@/components/ImageSlider/ImageSlider";
+import { VideoStream } from "@/components/VideoStream";
 import About from "@/components/About/About";
 import GameRules from "@/components/GameRules/GameRules";
 import Contact from "@/components/Contact/Contact";
@@ -34,9 +34,44 @@ export default function Index() {
         <LanguageSelector />
       </div>
 
-      {/* Hero Section with Image Slider */}
-      <section id="hero">
-        <ImageSlider />
+      {/* Hero Section with Live Stream */}
+      <section id="hero" className="relative h-screen">
+        <div className="absolute inset-0">
+          <VideoStream 
+            isLive={true}
+            title="Reddy Anna Live Stream"
+            viewerCount={1234}
+          />
+        </div>
+        
+        {/* Stream Overlay Content */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center max-w-4xl mx-auto px-4">
+            <h1 className="text-6xl md:text-8xl font-bold text-gold mb-6 drop-shadow-2xl">
+              REDDY ANNA
+            </h1>
+            <p className="text-xl md:text-2xl text-white/90 mb-8 font-light">
+              Live Andar Bahar Gaming Experience
+            </p>
+            <div className="flex flex-col sm:flex-row gap-6 justify-center items-center pointer-events-auto">
+              <a
+                href="/game"
+                className="bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-gold-light hover:to-yellow-500 text-lg px-8 py-4 rounded-full font-semibold shadow-2xl hover:shadow-gold/30 transition-all duration-300 inline-flex items-center"
+              >
+                <svg className="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                </svg>
+                Play Now
+              </a>
+              <a
+                href="/login"
+                className="border-2 border-gold text-gold hover:bg-gold hover:text-black text-lg px-8 py-4 rounded-full font-semibold transition-all duration-300 inline-block"
+              >
+                Sign In
+              </a>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* About Section */}
