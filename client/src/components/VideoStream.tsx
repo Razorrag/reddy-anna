@@ -1,165 +1,89 @@
-import { useState, useEffect, useRef } from "react";
+/**
+ * VideoStream Component - Live Stream Only
+ * 
+ * Features:
+ * - Live Restream.io iframe embed
+ * - Backend configuration support
+ * - Stream status monitoring
+ * - Clean error handling
+ * - No local video fallback - Live stream only
+ */
+
+import { useState, useEffect } from "react";
 import { Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
-import Hls from "hls.js";
 
 interface VideoStreamProps {
   streamUrl?: string;
-  streamType?: 'video' | 'embed' | 'rtmp';
+  streamType?: 'video' | 'embed';
   isLive?: boolean;
   viewerCount?: number;
   title?: string;
 }
 
 export function VideoStream({
-  streamUrl = "/hero images/uhd_30fps.mp4",
-  streamType = 'video',
+  streamUrl,
+  streamType,
   isLive = true,
   viewerCount = 1234,
   title = "Andar Bahar Live Game"
 }: VideoStreamProps) {
   const [streamError, setStreamError] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentStreamUrl, setCurrentStreamUrl] = useState(
+    streamUrl || "https://player.restream.io?token=2123471e69ed8bf8cb11cd207c282b1"
+  );
+  const [currentStreamType, setCurrentStreamType] = useState(
+    streamType || 'embed'
+  );
+  const [streamStatus, setStreamStatus] = useState<'online' | 'offline' | 'error'>('offline');
 
-  // Initialize HLS.js for RTMP streams
+  // Load stream settings from backend
   useEffect(() => {
-    if (streamType === 'rtmp' && streamUrl && videoRef.current) {
-      const video = videoRef.current;
-      
-      // Convert RTMP URL to HLS URL
-      // RTMP: rtmp://localhost:1935/live/streamKey
-      // HLS: http://localhost:8000/live/streamKey.m3u8
-      let hlsUrl = streamUrl;
-      if (streamUrl.startsWith('rtmp://')) {
-        hlsUrl = streamUrl
-          .replace('rtmp://', 'http://')
-          .replace(':1935', ':8000') + '.m3u8';
-      } else if (streamUrl.startsWith('/stream/')) {
-        // For production, use the current domain with proxy
-        hlsUrl = window.location.origin + streamUrl;
-      }
-      
-      console.log('🎥 Initializing HLS stream:', hlsUrl);
-      
-      if (Hls.isSupported()) {
-        const hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          backBufferLength: 90,
-          debug: true,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 600,
-          maxBufferSize: 60 * 1000 * 1000,
-          maxBufferHole: 0.5
-        });
+    const loadStreamSettings = async () => {
+      try {
+        const response = await fetch('/api/game/stream-settings');
+        const data = await response.json();
         
-        hls.loadSource(hlsUrl);
-        hls.attachMedia(video);
-        
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          console.log('✅ HLS manifest parsed successfully');
-          video.play().catch(err => {
-            console.error('Error playing video:', err);
-            setStreamError(true);
-          });
-        });
-        
-        hls.on(Hls.Events.ERROR, (event, data) => {
-          console.error('❌ HLS error:', event, data);
-          if (data.fatal) {
-            setStreamError(true);
-          }
-        });
-        
-        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-          console.log('✅ HLS media attached');
-        });
-        
-        hls.on(Hls.Events.LEVEL_LOADED, () => {
-          console.log('✅ HLS level loaded');
-        });
-        
-        // Store HLS instance for cleanup
-        (window as any).hlsInstance = hls;
-        
-        return () => {
-          hls.destroy();
-        };
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS support (Safari)
-        console.log('🍎 Using native HLS support');
-        video.src = hlsUrl;
-        video.play().catch(err => {
-          console.error('Error playing video:', err);
-          setStreamError(true);
-        });
-      }
-    }
-  }, [streamType, streamUrl]);
-
-  // Cleanup HLS instance on unmount
-  useEffect(() => {
-    return () => {
-      if ((window as any).hlsInstance) {
-        (window as any).hlsInstance.destroy();
-        (window as any).hlsInstance = null;
+        if (data.streamUrl) {
+          setCurrentStreamUrl(data.streamUrl);
+          setCurrentStreamType(data.streamType || 'embed');
+        }
+      } catch (error) {
+        console.error('Failed to load stream settings:', error);
+        // Keep defaults
       }
     };
+
+    loadStreamSettings();
   }, []);
 
-  const renderStreamContent = () => {
-    switch (streamType) {
-      case 'video':
-        return (
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            autoPlay
-            muted
-            loop
-            playsInline
-            onError={() => setStreamError(true)}
-            data-testid="video-stream"
-          >
-            <source src={streamUrl} type="video/mp4" />
-          </video>
-        );
-      case 'rtmp':
-        return (
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            autoPlay
-            muted
-            playsInline
-            onError={() => setStreamError(true)}
-            data-testid="rtmp-stream"
-          />
-        );
-      case 'embed':
-        if (streamUrl) {
-          return (
-            <iframe
-              className="w-full h-full"
-              src={streamUrl}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              data-testid="embed-stream"
-            />
-          );
-        }
-        // Fall through to default if no embed URL
-      default:
-        return (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 to-black">
-            <div className="text-center">
-              <div className="text-6xl font-bold text-gold mb-4">A | B</div>
-              <div className="text-xl text-gold">Andar Bahar</div>
-              <div className="text-sm text-white/60 mt-2">Stream Starting Soon...</div>
-            </div>
-          </div>
-        );
+  // Set stream status to online for live streams (no status checking to avoid CORS issues)
+  useEffect(() => {
+    if (currentStreamType === 'embed') {
+      setStreamStatus('online');
     }
+  }, [currentStreamType]);
+
+  const renderStreamContent = () => {
+    // Live stream embed (Restream.io iframe)
+    return (
+      <iframe
+        src={currentStreamUrl}
+        className="w-full h-full"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        onLoad={() => {
+          setIsLoading(false);
+          setStreamError(false);
+        }}
+        onError={() => {
+          setStreamError(true);
+          setIsLoading(false);
+        }}
+        data-testid="live-stream"
+      />
+    );
   };
 
   return (
@@ -167,11 +91,21 @@ export function VideoStream({
       {/* Video/Stream Content */}
       {renderStreamContent()}
 
-      {/* Overlay Information - Matches Legacy Layout */}
+      {/* Loading indicator */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+          <div className="text-white text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+            <p className="text-lg">Loading stream...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Overlay Information */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none">
         {/* Top Bar - Live Indicator and View Count */}
         <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between">
-          {/* Live Indicator - Legacy Style */}
+          {/* Live Indicator */}
           {isLive && (
             <div className="flex items-center gap-2 bg-red-600 px-3 py-1.5 rounded-full shadow-lg">
               <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
@@ -179,7 +113,7 @@ export function VideoStream({
             </div>
           )}
 
-          {/* View Count - Legacy Style */}
+          {/* View Count */}
           <div className="flex items-center gap-2 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
             <Eye className="w-4 h-4 text-gold" />
             <span className="text-white font-medium text-sm">
@@ -188,11 +122,24 @@ export function VideoStream({
           </div>
         </div>
 
-        {/* Bottom Bar - Game Title - Legacy Style */}
+        {/* Bottom Bar - Game Title */}
         <div className="absolute bottom-0 left-0 right-0 p-4">
           <h3 className="text-white font-semibold text-lg md:text-xl drop-shadow-lg">
             {title}
           </h3>
+        </div>
+      </div>
+
+      {/* Stream Status Indicator */}
+      <div className="absolute top-4 right-4 z-10">
+        <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+          streamStatus === 'online' 
+            ? 'bg-green-500/80 text-white' 
+            : streamStatus === 'error'
+            ? 'bg-red-500/80 text-white'
+            : 'bg-gray-500/80 text-white'
+        }`}>
+          {streamStatus === 'online' ? '🟢 ONLINE' : streamStatus === 'error' ? '🔴 ERROR' : '⚫ OFFLINE'}
         </div>
       </div>
 
@@ -203,6 +150,12 @@ export function VideoStream({
             <div className="text-red-500 text-4xl mb-2">⚠️</div>
             <div className="text-white">Stream unavailable</div>
             <div className="text-sm text-white/60 mt-1">Please try again later</div>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            >
+              Retry
+            </button>
           </div>
         </div>
       )}

@@ -20,6 +20,7 @@ import PersistentSidePanel from '../PersistentSidePanel';
 import RoundTransition from '../RoundTransition';
 import NoWinnerTransition from '../NoWinnerTransition';
 import WinnerCelebration from '../WinnerCelebration';
+import StreamSettingsPanel from './StreamSettingsPanel';
 
 const AdminGamePanel: React.FC = () => {
   const { gameState } = useGameState();
@@ -32,6 +33,7 @@ const AdminGamePanel: React.FC = () => {
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
   const [showWinnerCelebration, setShowWinnerCelebration] = useState(false);
   const [celebrationData, setCelebrationData] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'game' | 'stream'>('game');
   
   // Detect round changes and trigger transition animation
   useEffect(() => {
@@ -93,23 +95,52 @@ const AdminGamePanel: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-3">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-gray-800/90 rounded-lg border-2 border-gold/30 p-4 mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gold">🎰 Admin Control Panel</h1>
-            <span className="text-sm px-3 py-1 bg-gold/20 text-gold rounded-lg font-bold">Round {gameState.currentRound}</span>
-            <span className="text-xs px-2 py-1 bg-purple-600/30 text-purple-300 rounded">Phase: {gameState.phase}</span>
+        <div className="bg-gray-800/90 rounded-lg border-2 border-gold/30 p-4 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gold">🎰 Admin Control Panel</h1>
+              <span className="text-sm px-3 py-1 bg-gold/20 text-gold rounded-lg font-bold">Round {gameState.currentRound}</span>
+              <span className="text-xs px-2 py-1 bg-purple-600/30 text-purple-300 rounded">Phase: {gameState.phase}</span>
+            </div>
+            <button onClick={handleResetGame} disabled={isResetting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg font-semibold">
+              {isResetting ? '⏳ Resetting...' : '🔄 Reset Game'}
+            </button>
           </div>
-          <button onClick={handleResetGame} disabled={isResetting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg font-semibold">
-            {isResetting ? '⏳ Resetting...' : '🔄 Reset Game'}
-          </button>
+          
+          {/* Tab Navigation */}
+          <div className="flex gap-2 border-t border-gray-700 pt-3">
+            <button
+              onClick={() => setActiveTab('game')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'game'
+                  ? 'bg-gold text-gray-900'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              🎮 Game Control
+            </button>
+            <button
+              onClick={() => setActiveTab('stream')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'stream'
+                  ? 'bg-gold text-gray-900'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              🎥 Stream Settings
+            </button>
+          </div>
         </div>
 
-        {/* Simple Linear Flow */}
-        <div className="space-y-4">
-          {/* STEP 1: Opening Card Selection (Only at start) */}
-          {(gameState.phase === 'idle' || gameState.phase === 'opening') && (
-            <OpeningCardSelector />
-          )}
+        {/* Tab Content */}
+        {activeTab === 'stream' ? (
+          <StreamSettingsPanel />
+        ) : (
+          <div className="space-y-4">
+            {/* STEP 1: Opening Card Selection (Only at start) */}
+            {(gameState.phase === 'idle' || gameState.phase === 'opening') && (
+              <OpeningCardSelector />
+            )}
 
           {/* STEP 2: Betting Phase - Efficient Grid Layout */}
           {gameState.phase === 'betting' && (
@@ -207,7 +238,8 @@ const AdminGamePanel: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* No Winner Transition - Shows before round transition */}

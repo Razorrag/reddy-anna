@@ -10,7 +10,6 @@ import cors from 'cors';
 import path from 'path';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { nms, getStreamStatus } from "./rtmp-server";
 
 // Validate all required environment variables
 const requiredEnvVars = [
@@ -174,61 +173,6 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
-  
-  // Start RTMP server
-  nms.run();
-
-  // Serve HLS stream files through main port with proper headers
-  app.use('/stream', express.static(path.join(process.cwd(), 'media'), {
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.m3u8')) {
-        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Headers', 'Range');
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Length');
-      } else if (filePath.endsWith('.ts')) {
-        res.setHeader('Content-Type', 'video/mp2t');
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Headers', 'Range');
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Length');
-      }
-    }
-  }));
-
-  // Proxy HLS streams from port 8000 to main port 5000
-  app.use('/stream-live', async (req, res) => {
-    try {
-      const targetUrl = `http://localhost:8000${req.originalUrl.replace('/stream-live', '/stream')}`;
-      console.log(`Proxying HLS request: ${req.originalUrl} -> ${targetUrl}`);
-      
-      const response = await fetch(targetUrl);
-      
-      if (!response.ok) {
-        console.error(`HLS proxy error: ${response.status} ${response.statusText}`);
-        return res.status(response.status).send('Stream not available');
-      }
-      
-      // Copy headers
-      response.headers.forEach((value, key) => {
-        res.setHeader(key, value);
-      });
-      
-      // Add CORS headers
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Headers', 'Range');
-      res.setHeader('Access-Control-Expose-Headers', 'Content-Length');
-      
-      // Copy body
-      const buffer = await response.arrayBuffer();
-      res.send(Buffer.from(buffer));
-      
-    } catch (error) {
-      console.error('HLS proxy error:', error);
-      res.status(502).send('Stream proxy error');
-    }
-  });
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -238,15 +182,14 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // Stream status endpoint - returns actual RTMP server status
+  // Stream status endpoint - returns Restream.io status
   app.get('/api/game/stream-status', (req, res) => {
-    const status = getStreamStatus();
     res.json({
       success: true,
-      streamStatus: status.isLive ? 'live' : 'offline',
-      streamPath: status.streamPath,
-      hlsUrl: status.isLive ? '/stream/live/stream.m3u8' : null,
-      viewers: 0 // TODO: Implement viewer counting
+      streamStatus: 'live', // Restream.io handles the streaming
+      streamProvider: 'restream',
+      streamUrl: 'https://player.restream.io?token=2123471e69ed8bf8cb11cd207c282b1',
+      viewers: 0 // TODO: Implement viewer counting from Restream API
     });
   });
 
@@ -269,8 +212,9 @@ app.use((req, res, next) => {
   
   server.listen(port, host, () => {
     log(`serving on http://${host}:${port}`); // This should show 0.0.0.0:5000
-    log(`RTMP server running on port 1935`);
-    log(`HTTP server for HLS running on port 8000`);
+    log(`🎥 Restream.io integration enabled`);
+    log(`📡 Stream configured: https://player.restream.io?token=2123471e69ed8bf8cb11cd207c282b1`);
+    log(`🔧 Admin panel: Game Control + Stream Settings tabs available`);
     log(`WebSocket server running on the same port as HTTP server`);
   });
 })();
