@@ -113,7 +113,7 @@ app.use((req, res, next) => {
       "font-src 'self' data:; " +
       "connect-src 'self' ws: wss:; " +
       "media-src 'self' blob:; " +
-      "frame-src 'self';"
+      "frame-src 'self' https://player.restream.io;"
     );
   }
   
