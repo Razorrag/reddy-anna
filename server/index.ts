@@ -99,7 +99,7 @@ app.use((req, res, next) => {
   
   // Security headers that work on HTTP and HTTPS
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Frame-Options', 'ALLOW-FROM https://player.restream.io');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   
   // CSP for production
@@ -108,7 +108,7 @@ app.use((req, res, next) => {
       'Content-Security-Policy',
       "default-src 'self'; " +
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-      "style-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "img-src 'self' data: blob: https:; " +
       "font-src 'self' data:; " +
       "connect-src 'self' ws: wss:; " +

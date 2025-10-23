@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import Breadcrumb from "@/components/Breadcrumb";
 import { Settings, GamepadIcon, Users, BarChart3 } from "lucide-react";
-import BackendSettings from '../components/GameAdmin/BackendSettings';
+import SimpleStreamSettings from '../components/AdminGamePanel/SimpleStreamSettings';
 
 export default function BackendSettingsPage() {
   return (
@@ -52,7 +52,9 @@ export default function BackendSettingsPage() {
         </div>
       </div>
       
-      <BackendSettings />
+      <div className="max-w-7xl mx-auto p-6">
+        <SimpleStreamSettings />
+      </div>
     </div>
   );
 }

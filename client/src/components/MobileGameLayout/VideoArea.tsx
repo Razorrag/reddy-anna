@@ -24,25 +24,7 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
   const localTimer = gameState.countdownTimer;
   const [isPulsing, setIsPulsing] = useState(false);
   
-  // Stream settings state
-  const [streamUrl, setStreamUrl] = useState<string>('/stream/live/stream.m3u8');
-  const [streamType, setStreamType] = useState<'video' | 'rtmp' | 'embed'>('rtmp');
-  const [streamTitle, setStreamTitle] = useState<string>('Andar Bahar Live');
-
-  // Fetch stream settings from backend
-  useEffect(() => {
-    fetch('/api/game/stream-settings')
-      .then(res => res.json())
-      .then(data => {
-        if (data.streamUrl) setStreamUrl(data.streamUrl);
-        if (data.streamType) setStreamType(data.streamType);
-        if (data.streamTitle) setStreamTitle(data.streamTitle);
-      })
-      .catch(err => {
-        console.error('Failed to load stream settings:', err);
-        // Keep defaults on error
-      });
-  }, []);
+  const streamTitle = 'Andar Bahar Live';
 
   // Handle pulse effect when less than 5 seconds
   useEffect(() => {
@@ -93,8 +75,6 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
       {/* Live Video Stream */}
       <div className="relative aspect-video">
         <VideoStream 
-          streamUrl={streamUrl}
-          streamType={streamType}
           isLive={gameState.phase !== 'idle'}
           title={streamTitle}
         />

@@ -666,17 +666,32 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
 
-    return data || [];
+    // Convert snake_case from database to camelCase for TypeScript interface
+    return (data || []).map((setting: any) => ({
+      settingKey: setting.setting_key,
+      settingValue: setting.setting_value,
+      description: setting.description
+    }));
   }
 
   async updateStreamSetting(key: string, value: string): Promise<void> {
+    console.log(`🔄 Updating stream setting: ${key} = ${value}`);
+    
     const { error } = await supabaseServer
       .from('stream_settings')
-      .upsert({ setting_key: key, setting_value: value });
+      .upsert({ 
+        setting_key: key, 
+        setting_value: value,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'setting_key'
+      });
 
     if (error) {
-      console.error('Error updating stream setting:', error);
+      console.error('❌ Error updating stream setting:', error);
       throw error;
+    } else {
+      console.log(`✅ Successfully saved to database: ${key} = ${value}`);
     }
   }
 }

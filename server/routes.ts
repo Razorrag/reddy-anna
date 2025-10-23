@@ -1335,7 +1335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stream Settings API Endpoints - Enhanced for Restream.io
+  // Stream Settings API Endpoints - Simplified RTMP Only
   app.get("/api/game/stream-settings", async (req, res) => {
     try {
       const settings = await storage.getStreamSettings();
@@ -1347,32 +1347,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }, {} as Record<string, string>);
 
       res.json({
-        // Core stream settings
-        streamUrl: settingsObj.stream_url || 'https://player.restream.io?token=2123471e69ed8bf8cb11cd207c282b1',
-        streamType: settingsObj.stream_type || 'embed',
-        streamTitle: settingsObj.stream_title || 'Andar Bahar Live - Powered by Restream',
-        streamProvider: settingsObj.stream_provider || 'restream',
-        streamStatus: settingsObj.stream_status || 'offline',
-        streamDescription: settingsObj.stream_description || 'Live Andar Bahar game streaming',
-        
-        // Restream.io specific settings
-        restreamEmbedToken: settingsObj.restream_embed_token || '2123471e69ed8bf8cb11cd207c282b1',
-        restreamRtmpUrl: settingsObj.restream_rtmp_url || 'rtmps://live.restream.io:1937/live',
-        restreamStreamKey: settingsObj.restream_stream_key || 're_10541509_eventd4960ba1734c49369fc0d114295801a0',
-        restreamBackupUrl: settingsObj.restream_backup_url || 'https://player.restream.io?token=2123471e69ed8bf8cb11cd207c282b1',
-        
-        // Fallback settings
-        enableFallback: settingsObj.enable_fallback === 'true',
-        fallbackUrl: settingsObj.fallback_url || '/hero-images/uhd_30fps.mp4',
-        
-        // Legacy RTMP settings (for backward compatibility)
-        rtmpUrl: settingsObj.rtmp_url || 'rtmps://live.restream.io:1937/live',
-        rtmpStreamKey: settingsObj.rtmp_stream_key || 're_10541509_eventd4960ba1734c49369fc0d114295801a0',
-        
-        // Stream monitoring
-        streamViewers: settingsObj.stream_viewers || '0',
-        streamBitrate: settingsObj.stream_bitrate || '0',
-        lastStreamCheck: settingsObj.last_stream_check || new Date().toISOString()
+        // Only RTMP settings - no hardcoded fallbacks
+        restreamRtmpUrl: settingsObj.restream_rtmp_url || '',
+        restreamStreamKey: settingsObj.restream_stream_key || '',
+        streamTitle: settingsObj.stream_title || 'Andar Bahar Live',
+        streamStatus: settingsObj.stream_status || 'offline'
       });
     } catch (error) {
       console.error('Error fetching stream settings:', error);
@@ -1383,43 +1362,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/game/stream-settings", async (req, res) => {
     try {
       const { 
-        streamUrl, 
-        streamType, 
-        streamTitle, 
-        streamProvider,
-        streamStatus, 
-        streamDescription,
-        restreamEmbedToken,
         restreamRtmpUrl,
         restreamStreamKey,
-        restreamBackupUrl,
-        enableFallback,
-        fallbackUrl,
-        rtmpUrl, 
-        rtmpStreamKey
+        streamTitle
       } = req.body;
 
-      // Update core stream settings
-      if (streamUrl !== undefined) await storage.updateStreamSetting('stream_url', streamUrl);
-      if (streamType !== undefined) await storage.updateStreamSetting('stream_type', streamType);
-      if (streamTitle !== undefined) await storage.updateStreamSetting('stream_title', streamTitle);
-      if (streamProvider !== undefined) await storage.updateStreamSetting('stream_provider', streamProvider);
-      if (streamStatus !== undefined) await storage.updateStreamSetting('stream_status', streamStatus);
-      if (streamDescription !== undefined) await storage.updateStreamSetting('stream_description', streamDescription);
-
-      // Update Restream.io specific settings
-      if (restreamEmbedToken !== undefined) await storage.updateStreamSetting('restream_embed_token', restreamEmbedToken);
+      // Update only RTMP settings
       if (restreamRtmpUrl !== undefined) await storage.updateStreamSetting('restream_rtmp_url', restreamRtmpUrl);
       if (restreamStreamKey !== undefined) await storage.updateStreamSetting('restream_stream_key', restreamStreamKey);
-      if (restreamBackupUrl !== undefined) await storage.updateStreamSetting('restream_backup_url', restreamBackupUrl);
-
-      // Update fallback settings
-      if (enableFallback !== undefined) await storage.updateStreamSetting('enable_fallback', enableFallback.toString());
-      if (fallbackUrl !== undefined) await storage.updateStreamSetting('fallback_url', fallbackUrl);
-
-      // Update legacy RTMP settings (for backward compatibility)
-      if (rtmpUrl !== undefined) await storage.updateStreamSetting('rtmp_url', rtmpUrl);
-      if (rtmpStreamKey !== undefined) await storage.updateStreamSetting('rtmp_stream_key', rtmpStreamKey);
+      if (streamTitle !== undefined) await storage.updateStreamSetting('stream_title', streamTitle);
 
       // Update monitoring data
       await storage.updateStreamSetting('last_stream_check', new Date().toISOString());
@@ -1438,17 +1389,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stream Status Update Endpoint (for monitoring)
   app.post("/api/game/stream-status", async (req, res) => {
     try {
-      const { 
-        streamStatus, 
-        streamViewers, 
-        streamBitrate 
-      } = req.body;
+      const { streamStatus } = req.body;
 
-      // Update stream monitoring data
+      // Update stream status only
       if (streamStatus !== undefined) await storage.updateStreamSetting('stream_status', streamStatus);
-      if (streamViewers !== undefined) await storage.updateStreamSetting('stream_viewers', streamViewers.toString());
-      if (streamBitrate !== undefined) await storage.updateStreamSetting('stream_bitrate', streamBitrate.toString());
-      
       await storage.updateStreamSetting('last_stream_check', new Date().toISOString());
 
       res.json({ 
@@ -1462,6 +1406,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Stream Status Check Endpoint (for monitoring live status)
+  app.get("/api/game/stream-status-check", async (req, res) => {
+    try {
+      const settings = await storage.getStreamSettings();
+      const settingsObj = settings.reduce((acc, setting) => {
+        acc[setting.settingKey] = setting.settingValue;
+        return acc;
+      }, {} as Record<string, string>);
+
+      const lastCheck = settingsObj.last_stream_check;
+      const currentStatus = settingsObj.stream_status || 'offline';
+      
+      // If no check in last 5 minutes, assume offline
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const isStale = lastCheck && new Date(lastCheck) < fiveMinutesAgo;
+      
+      if (isStale && currentStatus === 'live') {
+        // Auto-update to offline if stale
+        await storage.updateStreamSetting('stream_status', 'offline');
+        await storage.updateStreamSetting('last_stream_check', new Date().toISOString());
+      }
+
+      res.json({
+        status: isStale && currentStatus === 'live' ? 'offline' : currentStatus,
+        lastCheck,
+        isStale,
+        viewers: settingsObj.stream_viewers || '0',
+        bitrate: settingsObj.stream_bitrate || '0'
+      });
+    } catch (error) {
+      console.error('Error checking stream status:', error);
+      res.status(500).json({ error: 'Failed to check stream status' });
+    }
+  });
+
   return httpServer;
 }
 

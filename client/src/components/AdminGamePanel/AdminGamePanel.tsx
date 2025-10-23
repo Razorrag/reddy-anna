@@ -20,7 +20,7 @@ import PersistentSidePanel from '../PersistentSidePanel';
 import RoundTransition from '../RoundTransition';
 import NoWinnerTransition from '../NoWinnerTransition';
 import WinnerCelebration from '../WinnerCelebration';
-import StreamSettingsPanel from './StreamSettingsPanel';
+import SimpleStreamSettings from './SimpleStreamSettings';
 
 const AdminGamePanel: React.FC = () => {
   const { gameState } = useGameState();
@@ -134,7 +134,7 @@ const AdminGamePanel: React.FC = () => {
 
         {/* Tab Content */}
         {activeTab === 'stream' ? (
-          <StreamSettingsPanel />
+          <SimpleStreamSettings />
         ) : (
           <div className="space-y-4">
             {/* STEP 1: Opening Card Selection (Only at start) */}
