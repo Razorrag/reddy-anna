@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '../../lib/utils';
-import { useApp } from '../../contexts/AppContext';
 import { getNavigationClass, getButtonClass } from '../../lib/theme-utils';
 
 interface NavigationProps {
@@ -18,7 +17,6 @@ const NAV_SECTIONS = [
 const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('');
-  const { state } = useApp();
   const [location] = useLocation();
 
   // Handle scroll to update active section
@@ -92,12 +90,6 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
         Play Game
       </Link>
       <Link 
-        to="/admin-game" 
-        className={getButtonClass('secondary')}
-      >
-        Admin Control
-      </Link>
-      <Link 
         to="/login" 
         className={getButtonClass('secondary')}
       >
@@ -115,24 +107,26 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
   return (
     <nav className={getNavigationClass(isScrolled)}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center h-20">
           {/* Logo */}
-          <div className="text-2xl font-bold text-gold">ANDAR BAHAR</div>
+          <div className="text-xl sm:text-2xl md:text-3xl font-bold text-gold">ANDAR BAHAR</div>
           
           {/* Desktop Navigation */}
-          <div className="hidden md:flex space-x-8">
+          <div className="hidden lg:flex items-center space-x-6">
             {renderNavLinks()}
-            {renderAuthLinks()}
+            <div className="flex items-center space-x-3">
+              {renderAuthLinks()}
+            </div>
           </div>
           
           {/* Mobile menu button */}
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-white focus:outline-none"
+              className="text-white focus:outline-none p-2 hover:bg-white/10 rounded-lg transition-colors"
             >
               <svg 
-                className="h-6 w-6" 
+                className="h-7 w-7" 
                 fill="none" 
                 viewBox="0 0 24 24" 
                 stroke="currentColor"
@@ -149,10 +143,12 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
         
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="md:hidden bg-black/95 backdrop-blur-lg rounded-lg mt-2 py-4 px-4">
-            <div className="flex flex-col space-y-4">
+          <div className="lg:hidden bg-black/95 backdrop-blur-lg rounded-lg mt-2 py-4 px-4 border border-gold/20">
+            <div className="flex flex-col space-y-3">
               {renderNavLinks(true)}
-              {renderAuthLinks()}
+              <div className="pt-3 border-t border-gold/20 flex flex-col space-y-3">
+                {renderAuthLinks()}
+              </div>
             </div>
           </div>
         )}
