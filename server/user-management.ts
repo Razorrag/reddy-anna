@@ -1,6 +1,7 @@
 // User Management System
 import { storage } from './storage-supabase';
 import { validateMobileNumber, validateEmail, sanitizeInput } from './validation';
+import bcrypt from 'bcryptjs';
 
 export interface UserProfileUpdate {
   name?: string;
@@ -73,7 +74,7 @@ export const updateUserProfile = async (userId: string, updates: UserProfileUpda
     // Return the user
     const userResponse = {
       id: user.id,
-      username: user.username,
+      username: user.phone, // Use phone as username since that's our identifier
       balance: user.balance,
       createdAt: user.created_at,
       updatedAt: user.updated_at
@@ -96,7 +97,7 @@ export const getUserDetails = async (userId: string): Promise<UserManagementResp
     // Format response
     const userResponse = {
       id: user.id,
-      username: user.username,
+      username: user.phone, // Use phone as username since that's our identifier
       balance: user.balance,
       createdAt: user.created_at,
       updatedAt: user.updated_at
@@ -123,9 +124,168 @@ export const getUserGameHistory = async (userId: string, filters: {
 };
 
 export const getAllUsers = async (filters: UserFilters = {}): Promise<UserManagementResponse> => {
-  // Supabase doesn't currently store additional user details like name, mobile, etc.
-  // in our simplified schema, so this function is not directly implementable
-  throw new Error('getAllUsers function not implemented in Supabase version');
+  try {
+    // Get all users from storage
+    const allUsers = await storage.getAllUsers();
+    
+    if (!allUsers || allUsers.length === 0) {
+      return { success: true, users: [], total: 0 };
+    }
+
+    // Apply filters
+    let filteredUsers = [...allUsers];
+
+    // Status filter
+    if (filters.status) {
+      filteredUsers = filteredUsers.filter((u: any) => u.status === filters.status);
+    }
+
+    // Search filter (by phone or name)
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filteredUsers = filteredUsers.filter((u: any) => 
+        u.phone?.toLowerCase().includes(searchLower) ||
+        u.full_name?.toLowerCase().includes(searchLower) ||
+        u.id?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Balance filters
+    if (filters.balanceMin !== undefined) {
+      filteredUsers = filteredUsers.filter((u: any) => parseFloat(u.balance) >= filters.balanceMin!);
+    }
+    if (filters.balanceMax !== undefined) {
+      filteredUsers = filteredUsers.filter((u: any) => parseFloat(u.balance) <= filters.balanceMax!);
+    }
+
+    // Date filters
+    if (filters.joinDateFrom) {
+      filteredUsers = filteredUsers.filter((u: any) => u.created_at && new Date(u.created_at) >= filters.joinDateFrom!);
+    }
+    if (filters.joinDateTo) {
+      filteredUsers = filteredUsers.filter((u: any) => u.created_at && new Date(u.created_at) <= filters.joinDateTo!);
+    }
+
+    // Sorting
+    if (filters.sortBy) {
+      filteredUsers.sort((a: any, b: any) => {
+        let aVal: any, bVal: any;
+        
+        switch (filters.sortBy) {
+          case 'balance':
+            aVal = parseFloat(a.balance);
+            bVal = parseFloat(b.balance);
+            break;
+          case 'createdAt':
+            aVal = a.created_at ? new Date(a.created_at).getTime() : 0;
+            bVal = b.created_at ? new Date(b.created_at).getTime() : 0;
+            break;
+          case 'lastLogin':
+            aVal = a.last_login ? new Date(a.last_login).getTime() : 0;
+            bVal = b.last_login ? new Date(b.last_login).getTime() : 0;
+            break;
+          case 'name':
+            aVal = a.full_name || '';
+            bVal = b.full_name || '';
+            break;
+          default:
+            return 0;
+        }
+        
+        const order = filters.sortOrder === 'desc' ? -1 : 1;
+        return aVal > bVal ? order : aVal < bVal ? -order : 0;
+      });
+    }
+
+    // Pagination
+    const total = filteredUsers.length;
+    const offset = filters.offset || 0;
+    const limit = filters.limit || 50;
+    const paginatedUsers = filteredUsers.slice(offset, offset + limit);
+
+    // Format response
+    const formattedUsers = paginatedUsers.map((u: any) => ({
+      id: u.id,
+      phone: u.phone,
+      fullName: u.full_name,
+      role: u.role,
+      status: u.status,
+      balance: parseFloat(u.balance),
+      totalWinnings: parseFloat(u.total_winnings || '0'),
+      totalLosses: parseFloat(u.total_losses || '0'),
+      gamesPlayed: u.games_played || 0,
+      gamesWon: u.games_won || 0,
+      phoneVerified: u.phone_verified,
+      lastLogin: u.last_login,
+      createdAt: u.created_at,
+      updatedAt: u.updated_at
+    }));
+
+    return { success: true, users: formattedUsers, total };
+  } catch (error) {
+    console.error('Get all users error:', error);
+    return { success: false, error: 'Failed to retrieve users' };
+  }
+};
+
+export const createUserManually = async (
+  adminId: string,
+  userData: {
+    phone: string;
+    name: string;
+    initialBalance?: number;
+    role?: string;
+    status?: string;
+    referralCode?: string;
+  }
+): Promise<UserManagementResponse> => {
+  try {
+    // Validate phone number
+    if (!validateMobileNumber(userData.phone)) {
+      return { success: false, error: 'Invalid phone number format. Must be a 10-digit Indian mobile number.' };
+    }
+
+    // Check if user already exists
+    const existingUser = await storage.getUserByPhone(userData.phone);
+    if (existingUser) {
+      return { success: false, error: 'User with this phone number already exists' };
+    }
+
+    // Generate a default password (phone number)
+    const defaultPassword = userData.phone;
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+    // Create user
+    const newUser = await storage.createUser({
+      phone: userData.phone,
+      password: hashedPassword,
+      full_name: userData.name,
+      role: userData.role || 'player',
+      status: userData.status || 'active',
+      balance: (userData.initialBalance || 100000).toString(),
+      referral_code: userData.referralCode, // Store referral code if provided
+    } as any);
+
+    // Log the creation (we'll implement this when we add the database table)
+    console.log(`Admin ${adminId} created user ${newUser.id} with phone ${userData.phone}`);
+
+    return {
+      success: true,
+      user: {
+        id: newUser.id,
+        phone: newUser.phone,
+        fullName: newUser.full_name,
+        role: newUser.role,
+        status: newUser.status,
+        balance: parseFloat(newUser.balance),
+        createdAt: newUser.created_at
+      },
+      message: `User created successfully. Default password is: ${defaultPassword}`
+    };
+  } catch (error) {
+    console.error('Create user manually error:', error);
+    return { success: false, error: 'Failed to create user' };
+  }
 };
 
 export const updateUserStatus = async (
@@ -134,7 +294,32 @@ export const updateUserStatus = async (
   adminId: string, 
   reason?: string
 ): Promise<UserManagementResponse> => {
-  throw new Error('updateUserStatus function not implemented in Supabase version');
+  try {
+    const user = await storage.getUserById(userId);
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    // Update user status
+    const updatedUser = await storage.updateUser(userId, { status });
+
+    console.log(`Admin ${adminId} updated user ${userId} status to ${status}. Reason: ${reason || 'None'}`);
+
+    return {
+      success: true,
+      user: {
+        id: updatedUser.id,
+        phone: updatedUser.phone,
+        fullName: updatedUser.full_name,
+        status: updatedUser.status,
+        balance: parseFloat(updatedUser.balance)
+      },
+      message: `User status updated to ${status}`
+    };
+  } catch (error) {
+    console.error('Update user status error:', error);
+    return { success: false, error: 'Failed to update user status' };
+  }
 };
 
 export const updateUserBalance = async (
@@ -161,7 +346,7 @@ export const updateUserBalance = async (
     // Return updated user details
     const userResponse = {
       id: user.id,
-      username: user.username,
+      username: user.phone, // Use phone as username since that's our identifier
       balance: user.balance,
       createdAt: user.created_at,
       updatedAt: user.updated_at
@@ -191,7 +376,7 @@ export const getUserStatistics = async (userId?: string): Promise<UserManagement
       const statistics = {
         user: {
           id: user.id,
-          username: user.username,
+          username: user.phone, // Use phone as username since that's our identifier
           balance: user.balance,
           createdAt: user.created_at
         },
@@ -229,9 +414,31 @@ export const getUserStatistics = async (userId?: string): Promise<UserManagement
 };
 
 export const getReferredUsers = async (userId: string): Promise<UserManagementResponse> => {
-  // For now, this functionality is not available in the simplified Supabase schema
-  // since we don't store referral relationships in our current implementation
-  return { success: true, users: [] };
+  try {
+    const referrals = await storage.getUserReferrals(userId);
+    
+    // Format response
+    const formattedReferrals = referrals.map((referral: any) => ({
+      id: referral.id,
+      referredUserId: referral.referred_user_id,
+      referredUser: {
+        id: referral.referred_user?.id,
+        phone: referral.referred_user?.phone,
+        fullName: referral.referred_user?.full_name,
+        createdAt: referral.referred_user?.created_at
+      },
+      depositAmount: parseFloat(referral.deposit_amount || '0'),
+      bonusAmount: parseFloat(referral.bonus_amount || '0'),
+      bonusApplied: referral.bonus_applied,
+      bonusAppliedAt: referral.bonus_applied_at,
+      createdAt: referral.created_at
+    }));
+
+    return { success: true, users: formattedReferrals };
+  } catch (error) {
+    console.error('Get referred users error:', error);
+    return { success: false, error: 'Failed to retrieve referred users' };
+  }
 };
 
 export const bulkUpdateUserStatus = async (

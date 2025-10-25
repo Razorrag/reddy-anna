@@ -1,34 +1,64 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users table
+// Users table (updated for phone-based authentication)
 export const users = pgTable("users", {
+  id: varchar("id").primaryKey(), // Phone number as ID
+  phone: varchar("phone").notNull().unique(),
+  password_hash: text("password_hash").notNull(),
+  full_name: text("full_name"),
+  role: text("role").default("player"),
+  status: text("status").default("active"),
+  balance: decimal("balance", { precision: 15, scale: 2 }).notNull().default("100000.00"), // ₹100,000 default
+  total_winnings: decimal("total_winnings", { precision: 15, scale: 2 }).default("0.00"),
+  total_losses: decimal("total_losses", { precision: 15, scale: 2 }).default("0.00"),
+  games_played: integer("games_played").default(0),
+  games_won: integer("games_won").default(0),
+  phone_verified: boolean("phone_verified").default(false),
+  referral_code: varchar("referral_code"), // Referral code used during signup
+  referral_code_generated: varchar("referral_code_generated"), // Auto-generated referral code for sharing
+  deposit_bonus_available: decimal("deposit_bonus_available", { precision: 15, scale: 2 }).default("0.00"),
+  referral_bonus_available: decimal("referral_bonus_available", { precision: 15, scale: 2 }).default("0.00"),
+  original_deposit_amount: decimal("original_deposit_amount", { precision: 15, scale: 2 }).default("0.00"),
+  total_bonus_earned: decimal("total_bonus_earned", { precision: 15, scale: 2 }).default("0.00"),
+  last_login: timestamp("last_login"),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+// Admin credentials table (new)
+export const adminCredentials = pgTable("admin_credentials", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  balance: integer("balance").notNull().default(5000000), // Default balance ₹50,00,000
+  username: varchar("username").notNull().unique(),
+  password_hash: text("password_hash").notNull(),
+  role: text("role").default("admin"),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
 });
 
 // Game settings table
 export const gameSettings = pgTable("game_settings", {
-  settingKey: varchar("setting_key").primaryKey(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  settingKey: varchar("setting_key").notNull().unique(),
   settingValue: text("setting_value").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Game sessions table
 export const gameSessions = pgTable("game_sessions", {
-  gameId: varchar("game_id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gameId: varchar("game_id").notNull().unique(),
   openingCard: text("opening_card"), // e.g., "A♠"
-  phase: text("phase").notNull().default("idle"), // idle, betting, dealing, complete
-  currentTimer: integer("current_timer").default(30),
-  status: text("status").notNull().default("active"), // active, completed
+  phase: text("phase").notNull().default("waiting"), // waiting, betting, dealing, completed
+  status: text("status").notNull().default("active"), // active, completed, cancelled
+  currentTimer: integer("current_timer").default(0),
   winner: text("winner"), // andar or bahar
   winningCard: text("winning_card"),
-  round: integer("round").default(1), // Current round
-  winningRound: integer("winning_round"), // Round in which winner was found
+  totalCards: integer("total_cards").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -49,18 +79,81 @@ export const playerBets = pgTable("player_bets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
   gameId: varchar("game_id").notNull(),
-  round: integer("round").notNull(), // Added: round number
+  round: varchar("round").notNull(), // round1, round2
   side: text("side").notNull(), // andar or bahar
-  amount: integer("amount").notNull(),
-  status: text("status").notNull().default("pending"), // pending, won, lost
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  status: text("status").notNull().default("active"), // active, won, lost, cancelled
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// User transactions table
+export const userTransactions = pgTable("user_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  transactionType: text("transaction_type").notNull(), // deposit, withdrawal, bet, win, loss, bonus
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  balanceBefore: decimal("balance_before", { precision: 15, scale: 2 }).notNull(),
+  balanceAfter: decimal("balance_after", { precision: 15, scale: 2 }).notNull(),
+  referenceId: varchar("reference_id"),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Game statistics table
+export const gameStatistics = pgTable("game_statistics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gameId: varchar("game_id").notNull(),
+  totalPlayers: integer("total_players").default(0),
+  totalBets: decimal("total_bets", { precision: 15, scale: 2 }).default("0"),
+  totalWinnings: decimal("total_winnings", { precision: 15, scale: 2 }).default("0"),
+  houseEarnings: decimal("house_earnings", { precision: 15, scale: 2 }).default("0"),
+  andarBetsCount: integer("andar_bets_count").default(0),
+  baharBetsCount: integer("bahar_bets_count").default(0),
+  andarTotalBet: decimal("andar_total_bet", { precision: 15, scale: 2 }).default("0"),
+  baharTotalBet: decimal("bahar_total_bet", { precision: 15, scale: 2 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Game history table
+export const gameHistory = pgTable("game_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gameId: varchar("game_id").notNull(),
+  openingCard: text("opening_card").notNull(),
+  winner: text("winner").notNull(), // andar or bahar
+  winningCard: text("winning_card").notNull(),
+  totalCards: integer("total_cards").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Blocked users table
+export const blockedUsers = pgTable("blocked_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  reason: text("reason"),
+  blockedBy: varchar("blocked_by"), // References admin_credentials.id
+  blockedAt: timestamp("blocked_at").defaultNow(),
+});
+
+// User referrals table
+export const userReferrals = pgTable("user_referrals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  referrerUserId: varchar("referrer_user_id").notNull(),
+  referredUserId: varchar("referred_user_id").notNull(),
+  depositAmount: decimal("deposit_amount", { precision: 15, scale: 2 }),
+  bonusAmount: decimal("bonus_amount", { precision: 15, scale: 2 }),
+  bonusApplied: boolean("bonus_applied").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  bonusAppliedAt: timestamp("bonus_applied_at"),
+});
+
 // Stream settings table
 export const streamSettings = pgTable("stream_settings", {
-  settingKey: varchar("setting_key").primaryKey(),
-  settingValue: text("setting_value").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  settingKey: varchar("setting_key").notNull().unique(),
+  settingValue: text("setting_value"),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -71,31 +164,52 @@ export interface StreamSettings {
   description?: string;
 }
 
-// Game history table
-export const gameHistory = pgTable("game_history", {
+// User creation log table (for tracking admin-created accounts)
+export const userCreationLog = pgTable("user_creation_log", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  gameId: varchar("game_id").notNull(),
-  openingCard: text("opening_card").notNull(),
-  winner: text("winner").notNull(), // andar or bahar
-  winningCard: text("winning_card").notNull(),
-  totalCards: integer("total_cards").notNull(),
-  round: integer("round").notNull(), // This is now the winning round
+  createdByAdminId: varchar("created_by_admin_id").notNull(),
+  userPhone: varchar("user_phone", { length: 15 }).notNull(),
+  createdUserId: varchar("created_user_id").notNull(),
+  initialBalance: decimal("initial_balance", { precision: 15, scale: 2 }).default("0.00"),
+  createdReason: text("created_reason"),
+  ipAddress: varchar("ip_address"),
+  userAgent: text("user_agent"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// WhatsApp messages table (for tracking user requests to admin)
+export const whatsappMessages = pgTable("whatsapp_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  userPhone: varchar("user_phone", { length: 15 }).notNull(),
+  adminPhone: varchar("admin_phone", { length: 15 }).notNull(),
+  requestType: varchar("request_type", { length: 50 }).notNull(), // withdrawal, deposit, support, balance
+  message: text("message").notNull(),
+  status: varchar("status", { length: 20 }).default("pending"), // pending, sent, responded
+  priority: integer("priority").default(3), // 1-5, 1 being highest
+  isUrgent: boolean("is_urgent").default(false),
+  metadata: text("metadata"), // JSON string for additional data
+  createdAt: timestamp("created_at").defaultNow(),
+  sentAt: timestamp("sent_at"),
+  respondedAt: timestamp("responded_at"),
+  responseMessage: text("response_message"),
+  responseBy: varchar("response_by"),
+});
+
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
-  balance: true,
+  created_at: true,
+  updated_at: true,
+}).extend({
+  phone: z.string().optional(), // Allow passing phone for phone-based auth
 });
 
 export const insertGameSessionSchema = createInsertSchema(gameSessions).omit({
-  gameId: true,
+  id: true,
   createdAt: true,
   updatedAt: true,
-}).extend({
-  round: z.number().optional(),
-  winningRound: z.number().optional(),
 });
 
 export const insertBetSchema = createInsertSchema(playerBets).omit({
@@ -104,7 +218,6 @@ export const insertBetSchema = createInsertSchema(playerBets).omit({
   updatedAt: true,
 }).extend({
   amount: z.number().min(1000).max(100000), // Bet limits
-  round: z.number().min(1).max(3), // Added: round number
 });
 
 export const insertDealtCardSchema = createInsertSchema(dealtCards).omit({
@@ -115,6 +228,12 @@ export const insertDealtCardSchema = createInsertSchema(dealtCards).omit({
 export const insertGameHistorySchema = createInsertSchema(gameHistory).omit({
   id: true,
   createdAt: true,
+});
+
+export const createUserReferralSchema = createInsertSchema(userReferrals).omit({
+  id: true,
+  createdAt: true,
+  bonusAppliedAt: true,
 });
 
 // Types
@@ -132,6 +251,9 @@ export type DealtCard = typeof dealtCards.$inferSelect;
 
 export type InsertGameHistory = z.infer<typeof insertGameHistorySchema>;
 export type GameHistoryEntry = typeof gameHistory.$inferSelect;
+
+export type InsertUserReferral = z.infer<typeof createUserReferralSchema>;
+export type UserReferral = typeof userReferrals.$inferSelect;
 
 // Card and game types
 export const SUITS = ['♠', '♥', '♦', '♣'] as const;

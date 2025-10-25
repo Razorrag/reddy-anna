@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '../../lib/utils';
 import { getNavigationClass, getButtonClass } from '../../lib/theme-utils';
+import { useAuth } from '../../contexts/AppContext';
+import UserProfileButton from '../UserProfile/UserProfileButton';
 
 interface NavigationProps {
   isScrolled?: boolean;
@@ -15,6 +17,7 @@ const NAV_SECTIONS = [
 ];
 
 const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
+  const { isAuthenticated } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('');
   const [location] = useLocation();
@@ -81,28 +84,89 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
     </>
   );
 
-  const renderAuthLinks = () => (
-    <>
-      <Link 
-        to="/game" 
-        className={getButtonClass('primary')}
-      >
-        Play Game
-      </Link>
-      <Link 
-        to="/login" 
-        className={getButtonClass('secondary')}
-      >
-        Login
-      </Link>
-      <Link 
-        to="/signup" 
-        className={getButtonClass('secondary')}
-      >
-        Sign Up
-      </Link>
-    </>
-  );
+  const renderAuthLinks = () => {
+    // Check if user is logged in from localStorage
+    const userStr = localStorage.getItem('user');
+    const adminStr = localStorage.getItem('admin');
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    const isAdminLoggedIn = localStorage.getItem('isAdminLoggedIn') === 'true';
+    
+    if (isLoggedIn && userStr) {
+      const user = JSON.parse(userStr);
+      // Regular user is logged in
+      return (
+        <div className="flex items-center space-x-3">
+          <Link
+            to="/game"
+            className={getButtonClass('primary')}
+          >
+            Play Game
+          </Link>
+          <Link
+            to="/profile"
+            className="text-white hover:text-gold transition-colors"
+          >
+            Profile
+          </Link>
+          <button
+            onClick={() => {
+              localStorage.removeItem('user');
+              localStorage.removeItem('isLoggedIn');
+              localStorage.removeItem('userRole');
+              window.location.href = '/';
+            }}
+            className="text-white hover:text-gold transition-colors"
+          >
+            Logout
+          </button>
+        </div>
+      );
+    }
+    
+    if (isAdminLoggedIn && adminStr) {
+      const admin = JSON.parse(adminStr);
+      // Admin is logged in - no visible links
+      return (
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => {
+              localStorage.removeItem('admin');
+              localStorage.removeItem('isAdminLoggedIn');
+              localStorage.removeItem('adminRole');
+              window.location.href = '/';
+            }}
+            className="text-white hover:text-gold transition-colors"
+          >
+            Logout
+          </button>
+        </div>
+      );
+    }
+    
+    // No one is logged in - show login options without admin
+    return (
+      <div className="flex items-center space-x-3">
+        <Link
+          to="/game"
+          className={getButtonClass('primary')}
+        >
+          Play Game
+        </Link>
+        <Link
+          to="/login"
+          className={getButtonClass('secondary')}
+        >
+          Player Login
+        </Link>
+        <Link
+          to="/signup"
+          className={getButtonClass('secondary')}
+        >
+          Sign Up
+        </Link>
+      </div>
+    );
+  };
 
   return (
     <nav className={getNavigationClass(isScrolled)}>
@@ -148,6 +212,9 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
               {renderNavLinks(true)}
               <div className="pt-3 border-t border-gold/20 flex flex-col space-y-3">
                 {renderAuthLinks()}
+                {isAuthenticated && (
+                  <UserProfileButton className="lg:hidden w-full" />
+                )}
               </div>
             </div>
           </div>

@@ -67,7 +67,7 @@ export interface GameHistoryEntry {
 }
 
 export interface WebSocketMessage {
-  type: 'gameState' | 'betPlaced' | 'gameResult' | 'timerUpdate' | 'error' | 'connection' | 'authenticated' | 'sync_game_state' | 'opening_card_set' | 'opening_card_confirmed' | 'card_dealt' | 'timer_start' | 'timer_update' | 'timer_stop' | 'betting_stats' | 'start_round_2' | 'start_final_draw' | 'game_complete' | 'game_reset' | 'phase_change' | 'balance_update' | 'user_bets_update' | 'payout_received' | 'game_start' | 'deal_card' | 'bet_placed' | 'betting_locked' | 'round_complete' | 'card_animation' | 'confetti_trigger' | 'haptic_feedback' | 'accessibility_update' | 'notification' | 'save_cards' | 'reveal_cards' | 'deal_single_card' | 'cards_saved';
+  type: 'gameState' | 'betPlaced' | 'gameResult' | 'timerUpdate' | 'error' | 'connection' | 'authenticated' | 'sync_game_state' | 'opening_card_set' | 'opening_card_confirmed' | 'card_dealt' | 'timer_start' | 'timer_update' | 'timer_stop' | 'betting_stats' | 'start_round_2' | 'start_final_draw' | 'game_complete' | 'game_reset' | 'phase_change' | 'balance_update' | 'user_bets_update' | 'payout_received' | 'game_start' | 'deal_card' | 'bet_placed' | 'betting_locked' | 'round_complete' | 'card_animation' | 'confetti_trigger' | 'haptic_feedback' | 'accessibility_update' | 'notification' | 'save_cards' | 'reveal_cards' | 'deal_single_card' | 'cards_saved' | 'realtime_stats_update' | 'analytics_update' | 'admin_bet_update' | 'game_bets_update';
   data: any;
   timestamp?: Date;
 }
@@ -109,4 +109,148 @@ export interface GameSettings {
   betTimeLimit: number;
   revealTime: number;
   autoStart: boolean;
+}
+
+// Analytics interfaces
+export interface GameAnalytics {
+  id: string;
+  gameId: string;
+  winner?: 'andar' | 'bahar'; // Added winner property
+  totalPlayers: number;
+  totalBets: number;
+  totalWinnings: number;
+  houseEarnings: number;
+  profitLoss: number;
+  profitLossPercentage: number;
+  housePayout: number;
+  andarBetsCount: number;
+  baharBetsCount: number;
+  andarTotalBet: number;
+  baharTotalBet: number;
+  gameDuration: number;
+  uniquePlayers: number;
+  createdAt: Date;
+}
+
+export interface DailyAnalytics {
+  date: Date;
+  totalGames: number;
+  totalBets: number;
+  totalPayouts: number;
+  totalRevenue: number;
+  profitLoss: number;
+  profitLossPercentage: number;
+  uniquePlayers: number;
+  peakBetsHour: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface MonthlyAnalytics {
+  monthYear: string; // Format: YYYY-MM
+  totalGames: number;
+  totalBets: number;
+  totalPayouts: number;
+  totalRevenue: number;
+  profitLoss: number;
+  profitLossPercentage: number;
+  uniquePlayers: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface YearlyAnalytics {
+  year: number;
+  totalGames: number;
+  totalBets: number;
+  totalPayouts: number;
+  totalRevenue: number;
+  profitLoss: number;
+  profitLossPercentage: number;
+  uniquePlayers: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface RealtimeStats {
+  currentGame: {
+    id: string;
+    phase: string;
+    currentRound: number;
+    timer: number;
+    andarTotal: number;
+    baharTotal: number;
+    bettingLocked: boolean;
+    totalPlayers: number;
+  };
+  todayStats: DailyAnalytics | null;
+  todayGameCount: number;
+  todayBetTotal: number;
+  todayPlayers: number;
+}
+
+// User Management Type Definitions
+export interface UserBalanceUpdate {
+  amount: number;
+  type: 'add' | 'subtract';
+  reason: string;
+}
+
+export interface UserStatusUpdate {
+  status: 'active' | 'suspended' | 'banned';
+  reason: string;
+}
+
+export interface UserAdminFilters {
+  status?: 'active' | 'suspended' | 'banned';
+  search?: string;
+  limit?: number;
+  offset?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface UserCreateData {
+  phone: string;
+  name: string;
+  initialBalance?: number;
+  role?: string;
+  status?: string;
+}
+
+export interface AdminUser {
+  id: string;
+  phone: string;
+  fullName: string;
+  role: string;
+  status: 'active' | 'suspended' | 'banned';
+  balance: number;
+  totalWinnings: number;
+  totalLosses: number;
+  gamesPlayed: number;
+  gamesWon: number;
+  phoneVerified: boolean;
+  lastLogin?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UsersResponse {
+  success: boolean;
+  users: AdminUser[];
+  total: number;
+  error?: string;
+}
+
+export interface UserResponse {
+  success: boolean;
+  user?: AdminUser;
+  error?: string;
+  message?: string;
+}
+
+export interface UserStatisticsResponse {
+  success: boolean;
+  user?: any;
+  error?: string;
 }

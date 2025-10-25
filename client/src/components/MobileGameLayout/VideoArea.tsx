@@ -172,9 +172,13 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
           <div className="text-center">
             <div className="text-4xl font-bold mb-2">
               {gameState.gameWinner === 'andar' ? (
-                <span className="text-red-500">ANDAR WINS!</span>
+                <span className="text-red-500">ANDAR WON!</span>
+              ) : gameState.currentRound === 1 ? (
+                <span className="text-blue-500">BABA WON!</span>
+              ) : gameState.currentRound === 2 ? (
+                <span className="text-blue-500">SHOOT WON!</span>
               ) : (
-                <span className="text-blue-500">BAHAR WINS!</span>
+                <span className="text-blue-500">BAHAR WON!</span>
               )}
             </div>
             {gameState.winningCard && (

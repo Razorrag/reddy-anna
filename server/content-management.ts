@@ -358,3 +358,127 @@ export const validateSystemSettings = (settings: SystemSettings): { isValid: boo
     errors
   };
 };
+
+// Game-specific settings
+export interface GameSettings {
+  bettingTimerDuration?: number; // seconds
+  roundTransitionDelay?: number; // seconds
+  minBetAmount?: number;
+  maxBetAmount?: number;
+  defaultStartingBalance?: number;
+  houseCommissionRate?: number; // 0-1 (e.g., 0.05 = 5%)
+  adminWhatsAppNumber?: string;
+  default_deposit_bonus_percent?: number;
+  referral_bonus_percent?: number;
+  conditional_bonus_threshold?: number;
+}
+
+export const getGameSettings = async (): Promise<ContentResponse> => {
+  try {
+    const bettingTimer = await storage.getGameSetting('betting_timer_duration');
+    const transitionDelay = await storage.getGameSetting('round_transition_delay');
+    const minBet = await storage.getGameSetting('min_bet_amount');
+    const maxBet = await storage.getGameSetting('max_bet_amount');
+    const startingBalance = await storage.getGameSetting('default_starting_balance');
+    const commissionRate = await storage.getGameSetting('house_commission_rate');
+    const adminWhatsApp = await storage.getGameSetting('admin_whatsapp_number');
+    const defaultDepositBonusPercent = await storage.getGameSetting('default_deposit_bonus_percent');
+    const referralBonusPercent = await storage.getGameSetting('referral_bonus_percent');
+    const conditionalBonusThreshold = await storage.getGameSetting('conditional_bonus_threshold');
+
+    return {
+      success: true,
+      content: {
+        bettingTimerDuration: parseInt(bettingTimer || '30', 10),
+        roundTransitionDelay: parseInt(transitionDelay || '2', 10),
+        minBetAmount: parseInt(minBet || '1000', 10),
+        maxBetAmount: parseInt(maxBet || '100000', 10),
+        defaultStartingBalance: parseInt(startingBalance || '100000', 10),
+        houseCommissionRate: parseFloat(commissionRate || '0.05'),
+        adminWhatsAppNumber: adminWhatsApp || '918686886632',
+        default_deposit_bonus_percent: parseFloat(defaultDepositBonusPercent || '5'),
+        referral_bonus_percent: parseFloat(referralBonusPercent || '1'),
+        conditional_bonus_threshold: parseFloat(conditionalBonusThreshold || '30')
+      }
+    };
+  } catch (error) {
+    console.error('Game settings retrieval error:', error);
+    return { success: false, error: 'Failed to retrieve game settings' };
+  }
+};
+
+export const updateGameSettings = async (settings: GameSettings, adminId: string): Promise<ContentResponse> => {
+  try {
+    if (settings.bettingTimerDuration !== undefined) {
+      if (settings.bettingTimerDuration < 10 || settings.bettingTimerDuration > 300) {
+        return { success: false, error: 'Betting timer must be between 10 and 300 seconds' };
+      }
+      await storage.updateGameSetting('betting_timer_duration', settings.bettingTimerDuration.toString());
+    }
+
+    if (settings.roundTransitionDelay !== undefined) {
+      if (settings.roundTransitionDelay < 1 || settings.roundTransitionDelay > 10) {
+        return { success: false, error: 'Round transition delay must be between 1 and 10 seconds' };
+      }
+      await storage.updateGameSetting('round_transition_delay', settings.roundTransitionDelay.toString());
+    }
+
+    if (settings.minBetAmount !== undefined) {
+      if (settings.minBetAmount < 100) {
+        return { success: false, error: 'Minimum bet must be at least ₹100' };
+      }
+      await storage.updateGameSetting('min_bet_amount', settings.minBetAmount.toString());
+    }
+
+    if (settings.maxBetAmount !== undefined) {
+      if (settings.maxBetAmount < 1000) {
+        return { success: false, error: 'Maximum bet must be at least ₹1,000' };
+      }
+      await storage.updateGameSetting('max_bet_amount', settings.maxBetAmount.toString());
+    }
+
+    if (settings.defaultStartingBalance !== undefined) {
+      if (settings.defaultStartingBalance < 1000) {
+        return { success: false, error: 'Default starting balance must be at least ₹1,000' };
+      }
+      await storage.updateGameSetting('default_starting_balance', settings.defaultStartingBalance.toString());
+    }
+
+    if (settings.houseCommissionRate !== undefined) {
+      if (settings.houseCommissionRate < 0 || settings.houseCommissionRate > 0.5) {
+        return { success: false, error: 'House commission rate must be between 0 and 0.5 (50%)' };
+      }
+      await storage.updateGameSetting('house_commission_rate', settings.houseCommissionRate.toString());
+    }
+
+    if (settings.adminWhatsAppNumber !== undefined) {
+      await storage.updateGameSetting('admin_whatsapp_number', settings.adminWhatsAppNumber);
+    }
+
+    if (settings.default_deposit_bonus_percent !== undefined) {
+      if (settings.default_deposit_bonus_percent < 0 || settings.default_deposit_bonus_percent > 100) {
+        return { success: false, error: 'Default deposit bonus percent must be between 0 and 100' };
+      }
+      await storage.updateGameSetting('default_deposit_bonus_percent', settings.default_deposit_bonus_percent.toString());
+    }
+
+    if (settings.referral_bonus_percent !== undefined) {
+      if (settings.referral_bonus_percent < 0 || settings.referral_bonus_percent > 100) {
+        return { success: false, error: 'Referral bonus percent must be between 0 and 100' };
+      }
+      await storage.updateGameSetting('referral_bonus_percent', settings.referral_bonus_percent.toString());
+    }
+
+    if (settings.conditional_bonus_threshold !== undefined) {
+      if (settings.conditional_bonus_threshold < 0) {
+        return { success: false, error: 'Conditional bonus threshold must be greater than 0' };
+      }
+      await storage.updateGameSetting('conditional_bonus_threshold', settings.conditional_bonus_threshold.toString());
+    }
+
+    return { success: true, content: settings };
+  } catch (error) {
+    console.error('Game settings update error:', error);
+    return { success: false, error: 'Failed to update game settings' };
+  }
+};

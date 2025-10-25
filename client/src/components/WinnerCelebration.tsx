@@ -126,7 +126,13 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
               className="text-center mb-6"
             >
               <h1 className={`text-6xl font-black mb-4 bg-gradient-to-r ${winnerGradient} bg-clip-text text-transparent`}>
-                {winner.toUpperCase()} WINS!
+                {winner === 'andar' 
+                  ? 'ANDAR WON!' 
+                  : round === 1 
+                  ? 'BABA WON!' 
+                  : round === 2 
+                  ? 'SHOOT WON!' 
+                  : 'BAHAR WON!'}
               </h1>
               <div className="text-4xl font-bold text-white mb-2">
                 {winningCard}

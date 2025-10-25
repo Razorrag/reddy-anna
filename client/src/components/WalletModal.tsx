@@ -1,6 +1,7 @@
-import { X, Wallet, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { X, Wallet, ArrowDownToLine, ArrowUpFromLine, Gift, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 interface WalletModalProps {
   isOpen: boolean;
@@ -10,15 +11,16 @@ interface WalletModalProps {
   onWithdraw: (amount: number) => void;
 }
 
-export function WalletModal({ 
-  isOpen, 
-  onClose, 
+export function WalletModal({
+  isOpen,
+  onClose,
   userBalance,
   onDeposit,
-  onWithdraw 
+  onWithdraw
 }: WalletModalProps) {
   const [amount, setAmount] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
+  const { state: userProfileState, claimBonus } = useUserProfile();
 
   if (!isOpen) return null;
 
@@ -85,6 +87,53 @@ export function WalletModal({
             </div>
           </div>
         </div>
+
+        {/* Bonus Information */}
+        {userProfileState.bonusInfo && userProfileState.bonusInfo.totalBonus > 0 && (
+          <div className="p-4 border-b border-gold/30 bg-gradient-to-br from-green-500/10 to-blue-500/10">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-1 text-xs text-white/60 mb-1">
+                  <Gift className="w-3 h-3" />
+                  Deposit Bonus
+                </div>
+                <div className="text-lg font-bold text-green-400">
+                  ₹{userProfileState.bonusInfo.depositBonus.toLocaleString('en-IN')}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-1 text-xs text-white/60 mb-1">
+                  <TrendingUp className="w-3 h-3" />
+                  Referral Bonus
+                </div>
+                <div className="text-lg font-bold text-blue-400">
+                  ₹{userProfileState.bonusInfo.referralBonus.toLocaleString('en-IN')}
+                </div>
+              </div>
+            </div>
+            
+            {/* Claim Bonus Button */}
+            <div className="mt-3 text-center">
+              <Button
+                onClick={async () => {
+                  const result = await claimBonus();
+                  if (result.success) {
+                    // Success feedback could be added here
+                    console.log('Bonus claimed successfully');
+                  } else {
+                    // Error feedback could be added here
+                    console.error('Failed to claim bonus:', result.error);
+                  }
+                }}
+                disabled={userProfileState.loading || userProfileState.bonusInfo.totalBonus === 0}
+                className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Gift className="w-4 h-4 mr-2" />
+                Claim ₹{userProfileState.bonusInfo.totalBonus.toLocaleString('en-IN')} Bonus
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex border-b border-gold/30">

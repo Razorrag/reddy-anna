@@ -111,27 +111,24 @@ class ApiClient {
     return this.get('/game/history');
   }
 
-  async getUserBalance() {
-    return this.get('/user/balance');
-  }
-
   // Auth methods
-  async login(credentials: { email: string; password: string }) {
+  async login(credentials: { phone: string; password: string }) {
     console.log('Sending login request to backend:', credentials); // DEBUG LOG
     return this.post('/auth/login', credentials);
+  }
+
+  async adminLogin(credentials: { username: string; password: string }) {
+    console.log('Sending admin login request to backend:', credentials); // DEBUG LOG
+    return this.post('/auth/admin-login', credentials);
   }
 
   async logout() {
     return this.post('/auth/logout');
   }
 
-  async register(userData: { name: string; email: string; mobile: string; password: string }) {
+  async register(userData: { name: string; phone: string; password: string; confirmPassword: string }) {
     console.log('Sending registration request to backend:', userData); // DEBUG LOG
     return this.post('/auth/register', userData);
-  }
-
-  async refreshToken() {
-    return this.post('/auth/refresh');
   }
 }
 

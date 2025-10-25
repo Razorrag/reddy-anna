@@ -11,10 +11,10 @@ import { apiClient } from "@/lib/api-client";
 export default function Signup() {
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
-    mobile: '',
+    phone: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    referralCode: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -30,11 +30,19 @@ export default function Signup() {
 
     // Basic validation
     const newErrors: Record<string, string> = {};
-
+    
+    if (!formData.name || formData.name.trim().length < 2) {
+      newErrors.name = "Name must be at least 2 characters";
+    }
+    
+    if (!formData.phone || formData.phone.length < 10) {
+      newErrors.phone = "Please enter a valid 10-digit phone number";
+    }
+    
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = "Passwords don't match";
     }
-
+    
     if (formData.password.length < 6) {
       newErrors.password = "Password must be at least 6 characters";
     }
@@ -46,16 +54,15 @@ export default function Signup() {
     }
 
     try {
-      console.log('Sending registration request for:', formData.email); // Debug log
+      console.log('Sending registration request for:', formData.phone); // Debug log
       
-      // Make real API call to signup endpoint
-      // Ensure we're sending the right fields expected by backend
+      // Make API call using phone as primary identifier
       const response = await apiClient.post<any>('/auth/register', {
         name: formData.name,
-        email: formData.email,        // This will be used as both username and email
+        phone: formData.phone,        // Use phone number as identifier
         password: formData.password,
-        mobile: formData.mobile,
-        username: formData.email      // Also send as username for consistency
+        confirmPassword: formData.confirmPassword,
+        referralCode: formData.referralCode || undefined // Optional referral code
       });
 
       console.log('Registration response:', response); // Debug log
@@ -66,10 +73,9 @@ export default function Signup() {
 
       // Store user data and redirect to player game
       const userData = {
-        id: response.user?.id || response.id,
-        username: response.user?.username || response.username,
-        email: response.user?.email || formData.email,  // Store email separately
-        balance: response.user?.balance || response.balance || 10000,
+        id: response.user?.id || response.id, // Phone number as ID
+        phone: response.user?.phone || formData.phone, // Store phone separately
+        balance: response.user?.balance || response.balance || 100000.00, // Default to ₹100,000
         role: response.user?.role || 'player'
       };
 
@@ -105,16 +111,16 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-purple-900/20 to-red-900/20 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 flex items-center justify-center p-4">
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-20 left-10 w-32 h-32 bg-gold/10 rounded-full blur-xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-48 h-48 bg-purple-500/10 rounded-full blur-xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 right-20 w-24 h-24 bg-red-500/10 rounded-full blur-xl animate-pulse delay-500"></div>
+        <div className="absolute top-20 left-10 w-32 h-32 bg-purple-400/20 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-48 h-48 bg-indigo-400/20 rounded-full blur-xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 right-20 w-24 h-24 bg-purple-300/20 rounded-full blur-xl animate-pulse delay-500"></div>
       </div>
 
       {/* Signup Card */}
-      <Card className="w-full max-w-md bg-black/50 border-gold/30 backdrop-blur-sm relative z-10">
+      <Card className="w-full max-w-md bg-purple-950/60 border-purple-400/30 backdrop-blur-sm relative z-10">
         <CardHeader className="text-center pb-8">
           <div className="w-20 h-20 bg-gradient-to-br from-gold to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
             <UserPlus className="w-10 h-10 text-black" />
@@ -141,43 +147,51 @@ export default function Signup() {
                 placeholder="Enter your full name"
                 value={formData.name}
                 onChange={handleChange}
-                className="bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold"
+                className="bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400"
                 required
               />
+              {errors.name && (
+                <p className="text-red-500 text-sm">{errors.name}</p>
+              )}
             </div>
 
-            {/* Email Field */}
+            {/* Phone Field */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-gold font-semibold">
-                Email
+              <Label htmlFor="phone" className="text-gold font-semibold">
+                Phone Number
               </Label>
               <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Enter your email"
-                value={formData.email}
-                onChange={handleChange}
-                className="bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold"
-                required
-              />
-            </div>
-
-            {/* Mobile Field */}
-            <div className="space-y-2">
-              <Label htmlFor="mobile" className="text-gold font-semibold">
-                Mobile Number
-              </Label>
-              <Input
-                id="mobile"
-                name="mobile"
+                id="phone"
+                name="phone"
                 type="tel"
-                placeholder="Enter your mobile number"
-                value={formData.mobile}
+                placeholder="Enter your phone number"
+                value={formData.phone}
                 onChange={handleChange}
-                className="bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold"
+                className="bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400"
                 required
               />
+              {errors.phone && (
+                <p className="text-red-500 text-sm">{errors.phone}</p>
+              )}
+            </div>
+
+            {/* Referral Code Field */}
+            <div className="space-y-2">
+              <Label htmlFor="referralCode" className="text-gold font-semibold">
+                Referral Code <span className="text-white/60 text-xs font-normal">(Optional)</span>
+              </Label>
+              <Input
+                id="referralCode"
+                name="referralCode"
+                type="text"
+                placeholder="Enter referral code if you have one"
+                value={formData.referralCode}
+                onChange={handleChange}
+                className="bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400"
+              />
+              {errors.referralCode && (
+                <p className="text-red-500 text-sm">{errors.referralCode}</p>
+              )}
             </div>
 
             {/* Password Field */}
@@ -194,7 +208,7 @@ export default function Signup() {
                   value={formData.password}
                   onChange={handleChange}
                   className={cn(
-                    "bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold pr-12",
+                    "bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400 pr-12",
                     errors.password && "border-red-500"
                   )}
                   required
@@ -232,7 +246,7 @@ export default function Signup() {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   className={cn(
-                    "bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold pr-12",
+                    "bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400 pr-12",
                     errors.confirmPassword && "border-red-500"
                   )}
                   required
@@ -277,7 +291,7 @@ export default function Signup() {
               <input
                 type="checkbox"
                 id="terms"
-                className="mr-2 mt-1 w-4 h-4 text-gold bg-black/50 border-gold/30 rounded focus:ring-gold focus:ring-offset-0"
+                className="mr-2 mt-1 w-4 h-4 text-gold bg-purple-950/50 border-purple-400/30 rounded focus:ring-purple-400 focus:ring-offset-0"
                 required
               />
               <label htmlFor="terms" className="text-white/80">
@@ -316,56 +330,6 @@ export default function Signup() {
               <Link href="/" className="text-white/80 hover:text-gold transition-colors">
                 ← Back to Home
               </Link>
-            </div>
-
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gold/30"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-black/50 text-white/60">Or sign up with</span>
-              </div>
-            </div>
-
-            {/* Social Signup Buttons */}
-            <div className="grid grid-cols-2 gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="border-gold/30 text-gold hover:bg-gold/10 hover:text-gold-light"
-              >
-                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
-                  <path
-                    fill="currentColor"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                Google
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="border-gold/30 text-gold hover:bg-gold/10 hover:text-gold-light"
-              >
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/>
-                </svg>
-                Twitter
-              </Button>
             </div>
 
             {/* Sign In Link */}

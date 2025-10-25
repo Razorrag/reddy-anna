@@ -21,14 +21,34 @@ const PlayerGame: React.FC = () => {
   const { gameState, placeBet, updatePlayerWallet } = useGameState();
   const { placeBet: placeBetWebSocket } = useWebSocket();
 
-  // Mock user data
-  const user = { id: 'player-1', username: 'Player' };
+  // Get user data from localStorage
+  const getUserData = () => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      return {
+        id: user.id || user.phone,
+        username: user.full_name || 'Player',
+        phone: user.phone,
+        balance: user.balance || 100000.00 // Default to ₹100,000
+      };
+    }
+    // Default user data for testing
+    return {
+      id: 'test-player',
+      username: 'Test Player',
+      phone: '9876543210',
+      balance: 100000.00 // Default to ₹100,000
+    };
+  };
+
+  const user = getUserData();
   
   // Local state
   const [selectedBetAmount, setSelectedBetAmount] = useState(2500);
   const [selectedPosition, setSelectedPosition] = useState<BetSide | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
-  const [userBalance, setUserBalance] = useState(5000000); // ₹50 Lakhs test balance
+  const [userBalance, setUserBalance] = useState(user.balance); // Use user's balance from localStorage
   const [showChipSelector, setShowChipSelector] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -42,6 +62,38 @@ const PlayerGame: React.FC = () => {
 
   // Available bet amounts - matching schema limits (1000-100000)
   const betAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
+
+  // Update user balance from localStorage on component mount and when localStorage changes
+  useEffect(() => {
+    const updateBalanceFromStorage = () => {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const userData = JSON.parse(userStr);
+        const newBalance = userData.balance || 100000.00;
+        setUserBalance(newBalance);
+      }
+    };
+
+    // Initial balance update
+    updateBalanceFromStorage();
+
+    // Listen for storage changes (in case user logs in/out in another tab)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'user') {
+        updateBalanceFromStorage();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also check periodically for localStorage changes (for same-tab updates)
+    const interval = setInterval(updateBalanceFromStorage, 1000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Update the handlePlaceBet function to properly use WebSocket
   const handlePlaceBet = useCallback(async (position: BetSide) => {
@@ -119,7 +171,7 @@ const PlayerGame: React.FC = () => {
 
   // Handle deposit
   const handleDeposit = useCallback((amount: number) => {
-    setUserBalance(prev => prev + amount);
+    setUserBalance((prev: number) => prev + amount);
     updatePlayerWallet(userBalance + amount);
     showNotification(`Successfully deposited ₹${amount.toLocaleString('en-IN')}`, 'success');
   }, [userBalance, updatePlayerWallet, showNotification]);
@@ -130,7 +182,7 @@ const PlayerGame: React.FC = () => {
       showNotification('Insufficient balance', 'error');
       return;
     }
-    setUserBalance(prev => prev - amount);
+    setUserBalance((prev: number) => prev - amount);
     updatePlayerWallet(userBalance - amount);
     showNotification(`Successfully withdrew ₹${amount.toLocaleString('en-IN')}`, 'success');
   }, [userBalance, updatePlayerWallet, showNotification]);

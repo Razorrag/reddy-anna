@@ -62,16 +62,74 @@ export const validateUserData = (userData: any): { isValid: boolean; errors: str
     errors.push('Name must be at least 2 characters');
   }
   
-  if (!userData.email || !validateEmail(userData.email)) {
-    errors.push('Valid email is required');
-  }
-  
-  if (!userData.mobile || !validateMobileNumber(userData.mobile)) {
+  if (!userData.phone || !validateMobileNumber(userData.phone)) {
     errors.push('Valid 10-digit Indian mobile number is required');
   }
   
   if (!userData.password || !validatePassword(userData.password)) {
     errors.push('Password must be at least 8 characters with uppercase, lowercase, and number');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
+
+// New validation function for user registration with phone and password confirmation
+export const validateUserRegistrationData = (userData: any): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  if (!userData.name || userData.name.trim().length < 2) {
+    errors.push('Name must be at least 2 characters');
+  }
+  
+  if (!userData.phone || !validateMobileNumber(userData.phone)) {
+    errors.push('Valid 10-digit Indian mobile number is required');
+  }
+  
+  if (!userData.password || !validatePassword(userData.password)) {
+    errors.push('Password must be at least 8 characters with uppercase, lowercase, and number');
+  }
+  
+  if (!userData.confirmPassword || userData.password !== userData.confirmPassword) {
+    errors.push('Passwords do not match');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
+
+// New validation function for user login with phone
+export const validateLoginData = (loginData: any): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  if (!loginData.phone || !validateMobileNumber(loginData.phone)) {
+    errors.push('Valid 10-digit Indian mobile number is required');
+  }
+  
+  if (!loginData.password) {
+    errors.push('Password is required');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
+
+// New validation function for admin login with username
+export const validateAdminLoginData = (loginData: any): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  if (!loginData.username || loginData.username.trim().length < 3) {
+    errors.push('Username must be at least 3 characters');
+  }
+  
+  if (!loginData.password) {
+    errors.push('Password is required');
   }
   
   return {

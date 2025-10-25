@@ -23,28 +23,52 @@ export default function AdminLogin() {
     setError('');
 
     try {
-      // Make real API call to admin login endpoint
-      const email = formData.username.includes('@') 
-        ? formData.username 
-        : `${formData.username}@example.com`;
+      console.log('Sending admin login request for:', formData.username); // Debug log
       
-      const response = await apiClient.post<any>('/auth/admin/login', {
-        email: email,
+      // Validate input before sending
+      if (!formData.username || !formData.password) {
+        setError('Username and password are required');
+        setIsLoading(false);
+        return;
+      }
+
+      if (formData.username.length < 3 || formData.password.length < 6) {
+        setError('Invalid username or password format');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Make API call to admin login endpoint
+      const response = await apiClient.post<any>('/auth/admin-login', {
+        username: formData.username,
         password: formData.password
       });
 
+      console.log('Admin login response:', response); // Debug log
+
+      // Verify response has admin data
+      if (!response.admin && !response.admin.id) {
+        setError('Invalid admin credentials. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+
       // Set admin user data in localStorage from backend response
-      const adminUser = {
+      const adminData = {
         id: response.admin?.id || response.id,
-        username: response.admin?.username || response.username,
-        role: 'admin', // Backend should verify this
-        balance: response.admin?.balance || response.balance || 0
+        username: response.admin?.username || formData.username,
+        role: response.admin?.role || 'admin'
       };
-      
-      localStorage.setItem('user', JSON.stringify(adminUser));
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userRole', 'admin');
-      
+
+      localStorage.setItem('admin', JSON.stringify(adminData));
+      localStorage.setItem('isAdminLoggedIn', 'true');
+      localStorage.setItem('adminRole', adminData.role);
+
+      // Clear any existing user session to prevent conflicts
+      localStorage.removeItem('user');
+      localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('userRole');
+
       // Redirect to admin panel after successful login
       window.location.href = '/admin';
     } catch (err: any) {
@@ -63,16 +87,16 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-purple-900/20 to-red-900/20 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 flex items-center justify-center p-4">
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-20 left-10 w-32 h-32 bg-gold/10 rounded-full blur-xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-48 h-48 bg-purple-500/10 rounded-full blur-xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 right-20 w-24 h-24 bg-red-500/10 rounded-full blur-xl animate-pulse delay-500"></div>
+        <div className="absolute top-20 left-10 w-32 h-32 bg-purple-400/20 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-48 h-48 bg-indigo-400/20 rounded-full blur-xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 right-20 w-24 h-24 bg-purple-300/20 rounded-full blur-xl animate-pulse delay-500"></div>
       </div>
 
       {/* Admin Login Card */}
-      <Card className="w-full max-w-md bg-black/50 border-gold/30 backdrop-blur-sm relative z-10">
+      <Card className="w-full max-w-md bg-purple-950/60 border-purple-400/30 backdrop-blur-sm relative z-10">
         <CardHeader className="text-center pb-8">
           <div className="w-20 h-20 bg-gradient-to-br from-gold to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
             <Shield className="w-10 h-10 text-black" />
@@ -99,7 +123,7 @@ export default function AdminLogin() {
                 placeholder="Enter admin username"
                 value={formData.username}
                 onChange={handleChange}
-                className="bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold"
+                className="bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400"
                 required
               />
             </div>
@@ -117,14 +141,14 @@ export default function AdminLogin() {
                   placeholder="Enter admin password"
                   value={formData.password}
                   onChange={handleChange}
-                  className="bg-black/50 border-gold/30 text-white placeholder:text-white/50 focus:border-gold focus:ring-gold pr-12"
+                  className="bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400 pr-12"
                   required
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gold hover:text-gold-light"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-purple-300 hover:text-white"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
@@ -139,7 +163,7 @@ export default function AdminLogin() {
             {/* Error Message */}
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                 <p className="text-red-400 text-sm">{error}</p>
               </div>
             )}
@@ -152,7 +176,7 @@ export default function AdminLogin() {
             >
               {isLoading ? (
                 <div className="flex items-center">
-                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                   Authenticating...
                 </div>
               ) : (
@@ -163,19 +187,7 @@ export default function AdminLogin() {
               )}
             </Button>
 
-            {/* Navigation Options */}
-            <div className="flex flex-col gap-2">
-              <div className="text-center">
-                <Link href="/login" className="text-gold hover:text-gold-light font-semibold transition-colors">
-                  ← Back to User Login
-                </Link>
-              </div>
-              <div className="text-center">
-                <Link href="/" className="text-white/80 hover:text-gold transition-colors">
-                  Back to Home
-                </Link>
-              </div>
-            </div>
+            {/* No navigation options - admin access is isolated */}
           </form>
         </CardContent>
       </Card>

@@ -90,17 +90,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (token && userData) {
         try {
           const user = JSON.parse(userData);
+          // Use phone number as userId if available, otherwise use id
+          const userId = user.phone || user.id;
           ws.send(JSON.stringify({
             type: 'authenticate',
             data: {
-              userId: user.id,
-              username: user.username,
+              userId: userId,
+              username: user.username || user.full_name || 'Player',
               role: user.role || 'player',
+              wallet: user.balance || 0,
               token: token
             },
             timestamp: Date.now()
           }));
-          console.log('Authentication message sent with token');
+          console.log('Authentication message sent with userId:', userId);
         } catch (error) {
           console.error('Authentication error:', error);
         }
@@ -111,7 +114,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           data: {
             userId: 'anonymous',
             username: 'anonymous',
-            role: 'player'
+            role: 'player',
+            wallet: 0
           },
           timestamp: Date.now()
         }));
@@ -364,9 +368,22 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
 
             case 'balance_update':
-              // Update player wallet from backend
+              // Update player wallet from backend and sync with localStorage
               if (data.data?.balance !== undefined) {
                 updatePlayerWallet(data.data.balance);
+                
+                // Sync with localStorage for persistence
+                const userStr = localStorage.getItem('user');
+                if (userStr) {
+                  try {
+                    const user = JSON.parse(userStr);
+                    user.balance = data.data.balance;
+                    localStorage.setItem('user', JSON.stringify(user));
+                    console.log('✅ Balance updated in localStorage:', data.data.balance);
+                  } catch (error) {
+                    console.error('Failed to update balance in localStorage:', error);
+                  }
+                }
               }
               break;
             
@@ -444,6 +461,44 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               // Admin received confirmation that cards are saved
               console.log('✅ Cards saved confirmation:', data.data);
               showNotification(data.data.message || 'Cards saved successfully!', 'success');
+              break;
+
+            case 'realtime_stats_update':
+              // Handle real-time analytics updates for admin
+              console.log('📊 Real-time stats update received:', data.data);
+              // This will be handled by the AnalyticsDashboard component
+              // We can dispatch a custom event for components to listen to
+              const analyticsEvent = new CustomEvent('realtime-analytics-update', {
+                detail: data.data
+              });
+              window.dispatchEvent(analyticsEvent);
+              break;
+
+            case 'analytics_update':
+              // Handle general analytics updates
+              console.log('📈 Analytics update received:', data.data);
+              const analyticsUpdateEvent = new CustomEvent('analytics-update', {
+                detail: data.data
+              });
+              window.dispatchEvent(analyticsUpdateEvent);
+              break;
+
+            case 'admin_bet_update':
+              // Handle admin bet updates
+              console.log('📝 Admin bet update received:', data.data);
+              const betUpdateEvent = new CustomEvent('admin_bet_update', {
+                detail: data.data
+              });
+              window.dispatchEvent(betUpdateEvent);
+              break;
+
+            case 'game_bets_update':
+              // Handle game bets updates
+              console.log('🎲 Game bets update received:', data.data);
+              const gameBetsUpdateEvent = new CustomEvent('game_bets_update', {
+                detail: data.data
+              });
+              window.dispatchEvent(gameBetsUpdateEvent);
               break;
 
             default:

@@ -1,37 +1,15 @@
-// 🔐 UNIFIED SUPABASE AUTHENTICATION SYSTEM
-import jwt from 'jsonwebtoken';
+// 🔐 SIMPLIFIED SUPABASE AUTHENTICATION SYSTEM (NO JWT)
 import bcrypt from 'bcrypt';
-import { v4 as uuidv4 } from 'uuid';
 import { storage } from './storage-supabase';
-import { validateMobileNumber, validateEmail, validateUserData, sanitizeInput, validatePassword as validatePasswordFormat } from './validation';
+import { validateMobileNumber, sanitizeInput, validatePassword as validatePasswordFormat } from './validation';
 
 export interface AuthResult {
   success: boolean;
   user?: any;
   admin?: any;
-  token?: string;
   error?: string;
   errors?: string[];
 }
-
-export const generateToken = (payload: any): string => {
-  return jwt.sign(payload, process.env.JWT_SECRET || 'default_secret', { 
-    expiresIn: process.env.JWT_EXPIRES_IN || '24h',
-    issuer: process.env.JWT_ISSUER || 'AndarBaharApp',
-    audience: process.env.JWT_AUDIENCE || 'users'
-  } as jwt.SignOptions);
-};
-
-export const verifyToken = (token: string): any => {
-  try {
-    return jwt.verify(token, process.env.JWT_SECRET || 'default_secret', {
-      issuer: process.env.JWT_ISSUER || 'AndarBaharApp',
-      audience: process.env.JWT_AUDIENCE || 'users'
-    } as jwt.VerifyOptions);
-  } catch (error) {
-    return null;
-  }
-};
 
 export const hashPassword = async (password: string): Promise<string> => {
   const saltRounds = 12;
@@ -42,95 +20,82 @@ export const validatePassword = async (password: string, hashedPassword: string)
   return await bcrypt.compare(password, hashedPassword);
 };
 
-export const generateReferralCode = (): string => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-};
-
-// 🎯 REGISTER USER WITH SUPABASE
+// 🎯 REGISTER USER WITH PHONE NUMBER
 export const registerUser = async (userData: {
   name: string;
-  email: string;
-  mobile: string;
+  phone: string; // Changed from email to phone
   password: string;
-  referralCode?: string;
+  confirmPassword: string; // New field for validation
+  referralCode?: string; // Optional referral code
 }): Promise<AuthResult> => {
   try {
     // Sanitize input data
     const sanitizedData = sanitizeInput(userData);
 
     // Validate inputs
-    const validation = validateUserData(sanitizedData);
+    const validation = validateUserRegistrationData(sanitizedData);
     if (!validation.isValid) {
       return { success: false, error: 'Validation failed', errors: validation.errors };
     }
 
-    // Check if user already exists (using Supabase)
-    const existingUser = await storage.getUserByUsername(sanitizedData.email);
+    // Check if user already exists (using phone number)
+    const existingUser = await storage.getUserByPhone(sanitizedData.phone);
     if (existingUser) {
-      return { success: false, error: 'User already exists with this email' };
+      return { success: false, error: 'User already exists with this phone number' };
     }
 
     // Hash password
     const hashedPassword = await hashPassword(sanitizedData.password);
     
-    // Create new user using Supabase storage
+    // Create new user using phone as ID with ₹100,000 balance
     const newUser = await storage.createUser({
-      username: sanitizedData.email,
-      password: hashedPassword
-    });
-
-    // Generate JWT token
-    const token = generateToken({
-      id: newUser.id,
-      username: newUser.username,
-      role: 'player'
+      phone: sanitizedData.phone, // Use phone as ID and phone
+      password_hash: hashedPassword,
+      full_name: sanitizedData.name,
+      balance: "100000.00", // Set default balance to ₹100,000
+      referral_code: sanitizedData.referralCode || null // Store referral code if provided
     });
 
     // Format response (remove sensitive data)
     const userResponse = {
-      id: newUser.id,
-      username: newUser.username,
-      balance: newUser.balance
+      id: newUser.id, // This will be the phone number
+      phone: newUser.phone,
+      balance: newUser.balance // This should be ₹100,000
     };
 
-    return { success: true, user: userResponse, token };
+    return { success: true, user: userResponse };
   } catch (error) {
     console.error('Registration error:', error);
     return { success: false, error: 'Registration failed' };
   }
 };
 
-// 🔑 LOGIN USER WITH SUPABASE
-export const loginUser = async (email: string, password: string): Promise<AuthResult> => {
+// 🔑 LOGIN USER WITH PHONE NUMBER
+export const loginUser = async (phone: string, password: string): Promise<AuthResult> => {
   try {
     // Sanitize inputs
-    const sanitizedEmail = sanitizeInput(email).toLowerCase().trim();
+    const sanitizedPhone = sanitizeInput(phone).replace(/[^0-9]/g, ''); // Keep only digits
 
-    if (!sanitizedEmail || !password) {
-      console.log('Login validation failed: missing email or password');
-      return { success: false, error: 'Email and password are required' };
+    if (!sanitizedPhone || !password) {
+      console.log('Login validation failed: missing phone or password');
+      return { success: false, error: 'Phone number and password are required' };
     }
 
-    console.log('Login attempt for identifier:', sanitizedEmail); // Debug log
+    console.log('Login attempt for phone:', sanitizedPhone); // Debug log
 
-    // Find user by email using Supabase storage - this now supports both email and username search
-    const user = await storage.getUserByUsername(sanitizedEmail);
+    // Find user by phone number instead of email/username
+    const user = await storage.getUserByPhone(sanitizedPhone);
     
     console.log('User lookup result:', user ? 'User found' : 'User not found');
     if (!user) {
-      console.log('Failed login attempt for identifier:', sanitizedEmail);
+      console.log('Failed login attempt for phone:', sanitizedPhone);
       return { success: false, error: 'User not found' };
     }
 
-    console.log('User found, attempting password validation for user ID:', user.id); // Debug log
+    console.log('User found, attempting password validation for user ID:', user.id);
 
-    // Verify password - handle both password and password_hash fields
-    const passwordToCheck = (user as any).password_hash || (user as any).password;
+    // Verify password
+    const passwordToCheck = user.password_hash;
     if (!passwordToCheck) {
       console.log('No password found for user:', user.id);
       return { success: false, error: 'Invalid credentials' };
@@ -147,133 +112,148 @@ export const loginUser = async (email: string, password: string): Promise<AuthRe
     // Update last login
     await storage.updateUser(user.id, { last_login: new Date().toISOString() });
 
-    // Generate JWT token
-    const token = generateToken({
-      id: user.id,
-      username: user.username,
-      role: (user as any).role || 'player'
-    });
-
     // Format response (remove sensitive data)
     const userResponse = {
-      id: user.id,
-      username: user.username,
-      email: (user as any).email, // Include email in response
-      balance: user.balance,
-      role: (user as any).role || 'player'
+      id: user.id, // Phone number as ID
+      phone: user.phone,
+      balance: user.balance, // This should be ₹100,000 for test users
+      role: user.role || 'player'
     };
 
-    return { success: true, user: userResponse, token };
+    return { success: true, user: userResponse };
   } catch (error) {
     console.error('Login error:', error);
     return { success: false, error: 'Login failed' };
   }
 };
 
-// 👑 LOGIN ADMIN WITH SUPABASE
-export const loginAdmin = async (email: string, password: string): Promise<AuthResult> => {
+// 👑 LOGIN ADMIN WITH USERNAME AND PASSWORD
+export const loginAdmin = async (username: string, password: string): Promise<AuthResult> => {
   try {
-    // Sanitize inputs
-    const sanitizedEmail = sanitizeInput(email).toLowerCase();
+    const sanitizedUsername = sanitizeInput(username).toLowerCase();
 
-    console.log('Admin login attempt:', { sanitizedEmail, passwordProvided: !!password });
+    console.log('Admin login attempt:', { sanitizedUsername, passwordProvided: !!password });
 
-    if (!sanitizedEmail || !password) {
-      return { success: false, error: 'Email and password are required' };
+    if (!sanitizedUsername || !password) {
+      return { success: false, error: 'Username and password are required' };
     }
 
-    // Find admin by email using Supabase storage
-    const admin = await storage.getUserByUsername(sanitizedEmail);
+    // Find admin by username in admin_credentials table
+    const admin = await storage.getAdminByUsername(sanitizedUsername);
     if (!admin) {
-      console.log('Admin not found for email:', sanitizedEmail);
+      console.log('Admin not found for username:', sanitizedUsername);
       return { success: false, error: 'Admin not found' };
     }
 
     console.log('Admin found:', { 
       id: admin.id, 
       username: admin.username,
-      role: (admin as any).role,
-      hasPasswordHash: !!(admin as any).password_hash,
-      hasPassword: !!(admin as any).password
+      role: admin.role,
+      hasPasswordHash: !!admin.password_hash
     });
 
-    // Verify password - handle both password and password_hash fields
-    const passwordToCheck = (admin as any).password_hash || (admin as any).password;
-    console.log('Password to check exists:', !!passwordToCheck);
-    
-    const isValid = await validatePassword(password, passwordToCheck);
-    console.log('Password validation result:', isValid);
+    // Verify admin password
+    const isValid = await validatePassword(password, admin.password_hash);
+    console.log('Admin password validation result:', isValid);
     
     if (!isValid) {
       return { success: false, error: 'Invalid password' };
     }
 
-    // Get the actual role from the database
-    const adminRole = (admin as any).role || 'admin';
-
-    // Generate JWT token
-    const token = generateToken({
-      id: admin.id,
-      username: admin.username,
-      role: adminRole
-    });
-
     // Format response (remove sensitive data)
     const adminResponse = {
       id: admin.id,
       username: admin.username,
-      balance: admin.balance,
-      role: adminRole // <-- ADD THIS LINE
+      role: admin.role || 'admin'
     };
 
     console.log('Admin login successful for:', admin.username);
-    return { success: true, admin: adminResponse, token };
+    return { success: true, admin: adminResponse };
   } catch (error) {
     console.error('Admin login error:', error);
     return { success: false, error: 'Admin login failed' };
   }
 };
 
-// 🔄 REFRESH TOKEN
-export const refreshToken = async (token: string): Promise<AuthResult> => {
+// 🔍 GET USER BY ID
+export const getUserById = async (userId: string) => {
   try {
-    // Verify the existing token
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return { success: false, error: 'Invalid token' };
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return null;
     }
 
-    // Find user based on role using Supabase storage
-    const userOrAdmin = await storage.getUser(decoded.id);
-    if (!userOrAdmin) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Generate new token
-    const newToken = generateToken({
-      id: userOrAdmin.id,
-      username: userOrAdmin.username,
-      role: decoded.role
-    });
-
-    return { success: true, token: newToken };
+    // Remove sensitive data
+    const { password_hash, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   } catch (error) {
-    console.error('Token refresh error:', error);
-    return { success: false, error: 'Token refresh failed' };
+    console.error('Get user error:', error);
+    return null;
   }
 };
 
-// 🔐 AUTHENTICATION MIDDLEWARE
-export const authenticateToken = (token: string): { valid: boolean; user?: any; error?: string } => {
+// 📝 UPDATE USER PROFILE
+export const updateUserProfile = async (userId: string, updates: any) => {
   try {
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return { valid: false, error: 'Invalid token' };
+    const updatedUser = await storage.updateUser(userId, updates);
+    if (!updatedUser) {
+      return { success: false, error: 'User not found' };
     }
 
-    return { valid: true, user: decoded };
+    // Remove sensitive data
+    const { password_hash, ...userWithoutPassword } = updatedUser;
+    return { success: true, user: userWithoutPassword };
   } catch (error) {
-    return { valid: false, error: 'Token validation failed' };
+    console.error('Update user error:', error);
+    return { success: false, error: 'Profile update failed' };
+  }
+};
+
+// 🔧 PASSWORD RESET (Placeholder for future implementation)
+export const forgotPassword = async (phone: string): Promise<AuthResult> => {
+  // TODO: Implement password reset functionality
+  // 1. Generate reset token
+  // 2. Send SMS with reset link
+  // 3. Store reset token in database
+  return { success: false, error: 'Password reset not implemented yet' };
+};
+
+export const resetPassword = async (token: string, newPassword: string): Promise<AuthResult> => {
+  // TODO: Implement password reset functionality
+  // 1. Verify reset token
+  // 2. Update password in database
+  // 3. Invalidate reset token
+  return { success: false, error: 'Password reset not implemented yet' };
+};
+
+export const changePassword = async (
+  userId: string, 
+  currentPassword: string, 
+  newPassword: string
+): Promise<AuthResult> => {
+  try {
+    // Get user from database
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    // Verify current password
+    const isValid = await validatePassword(currentPassword, user.password_hash);
+    if (!isValid) {
+      return { success: false, error: 'Current password is incorrect' };
+    }
+
+    // Hash new password
+    const hashedNewPassword = await hashPassword(newPassword);
+
+    // Update password in database
+    await storage.updateUser(userId, { password_hash: hashedNewPassword });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Change password error:', error);
+    return { success: false, error: 'Password change failed' };
   }
 };
 
@@ -309,126 +289,64 @@ export const requireRole = (roles: string[]) => {
   };
 };
 
-// 🔍 GET USER BY ID
-export const getUserById = async (userId: string) => {
-  try {
-    const user = await storage.getUser(userId);
-    if (!user) {
-      return null;
-    }
-
-    // Remove sensitive data
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
-  } catch (error) {
-    console.error('Get user error:', error);
-    return null;
+// 🔐 VALIDATION FUNCTION FOR USER REGISTRATION
+export const validateUserRegistrationData = (userData: any): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  if (!userData.name || userData.name.trim().length < 2) {
+    errors.push('Name must be at least 2 characters');
   }
-};
-
-// 📝 UPDATE USER PROFILE
-export const updateUserProfile = async (userId: string, updates: any) => {
-  try {
-    const updatedUser = await storage.updateUser(userId, updates);
-    if (!updatedUser) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Remove sensitive data
-    const { password, ...userWithoutPassword } = updatedUser;
-    return { success: true, user: userWithoutPassword };
-  } catch (error) {
-    console.error('Update user error:', error);
-    return { success: false, error: 'Profile update failed' };
+  
+  if (!userData.phone || !validateMobileNumber(userData.phone)) {
+    errors.push('Valid 10-digit Indian mobile number is required');
   }
-};
-
-// 🚪 LOGOUT USER
-export const logoutUser = async (token: string): Promise<{ success: boolean; error?: string }> => {
-  try {
-    // In a real implementation, you might want to:
-    // 1. Add the token to a blacklist
-    // 2. Remove the session from database
-    // 3. Clear any cached user data
-    
-    // For now, we'll just verify the token is valid
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return { success: false, error: 'Invalid token' };
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('Logout error:', error);
-    return { success: false, error: 'Logout failed' };
+  
+  if (!userData.password || !validatePasswordFormat(userData.password)) {
+    errors.push('Password must be at least 8 characters with uppercase, lowercase, and number');
   }
-};
-
-// 📊 VALIDATE SESSION
-export const validateSession = async (token: string): Promise<{ valid: boolean; user?: any; error?: string }> => {
-  try {
-    const authResult = authenticateToken(token);
-    if (!authResult.valid) {
-      return { valid: false, error: authResult.error };
-    }
-
-    // Check if user still exists in database
-    const user = await getUserById(authResult.user.id);
-    if (!user) {
-      return { valid: false, error: 'User not found' };
-    }
-
-    return { valid: true, user };
-  } catch (error) {
-    console.error('Session validation error:', error);
-    return { valid: false, error: 'Session validation failed' };
+  
+  if (!userData.confirmPassword || userData.password !== userData.confirmPassword) {
+    errors.push('Passwords do not match');
   }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
 };
 
-// 🔧 PASSWORD RESET (Placeholder for future implementation)
-export const forgotPassword = async (email: string): Promise<AuthResult> => {
-  // TODO: Implement password reset functionality
-  // 1. Generate reset token
-  // 2. Send email with reset link
-  // 3. Store reset token in database
-  return { success: false, error: 'Password reset not implemented yet' };
-};
-
-export const resetPassword = async (token: string, newPassword: string): Promise<AuthResult> => {
-  // TODO: Implement password reset functionality
-  // 1. Verify reset token
-  // 2. Update password in database
-  // 3. Invalidate reset token
-  return { success: false, error: 'Password reset not implemented yet' };
-};
-
-export const changePassword = async (
-  userId: string, 
-  currentPassword: string, 
-  newPassword: string
-): Promise<AuthResult> => {
-  try {
-    // Get user from database
-    const user = await storage.getUser(userId);
-    if (!user) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Verify current password
-    const isValid = await validatePassword(currentPassword, user.password);
-    if (!isValid) {
-      return { success: false, error: 'Current password is incorrect' };
-    }
-
-    // Hash new password
-    const hashedNewPassword = await hashPassword(newPassword);
-
-    // Update password in database
-    await storage.updateUser(userId, { password: hashedNewPassword });
-
-    return { success: true };
-  } catch (error) {
-    console.error('Change password error:', error);
-    return { success: false, error: 'Password change failed' };
+// 🔐 VALIDATION FUNCTION FOR ADMIN LOGIN
+export const validateAdminLoginData = (loginData: any): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  if (!loginData.username || loginData.username.trim().length < 3) {
+    errors.push('Username must be at least 3 characters');
   }
+  
+  if (!loginData.password) {
+    errors.push('Password is required');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
+
+// 🔐 VALIDATION FUNCTION FOR USER LOGIN
+export const validateUserLoginData = (loginData: any): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  if (!loginData.phone || !validateMobileNumber(loginData.phone)) {
+    errors.push('Valid 10-digit Indian mobile number is required');
+  }
+  
+  if (!loginData.password) {
+    errors.push('Password is required');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
 };

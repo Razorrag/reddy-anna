@@ -21,6 +21,7 @@ import RoundTransition from '../RoundTransition';
 import NoWinnerTransition from '../NoWinnerTransition';
 import WinnerCelebration from '../WinnerCelebration';
 import SimpleStreamSettings from './SimpleStreamSettings';
+import BetMonitoringDashboard from '../BetMonitoringDashboard';
 
 const AdminGamePanel: React.FC = () => {
   const { gameState } = useGameState();
@@ -33,7 +34,7 @@ const AdminGamePanel: React.FC = () => {
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
   const [showWinnerCelebration, setShowWinnerCelebration] = useState(false);
   const [celebrationData, setCelebrationData] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'game' | 'stream'>('game');
+  const [activeTab, setActiveTab] = useState<'game' | 'stream' | 'bets'>('game');
   
   // Detect round changes and trigger transition animation
   useEffect(() => {
@@ -129,12 +130,24 @@ const AdminGamePanel: React.FC = () => {
             >
               🎥 Stream Settings
             </button>
+            <button
+              onClick={() => setActiveTab('bets')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'bets'
+                  ? 'bg-gold text-gray-900'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              🎲 Bet Monitoring
+            </button>
           </div>
         </div>
 
         {/* Tab Content */}
         {activeTab === 'stream' ? (
           <SimpleStreamSettings />
+        ) : activeTab === 'bets' ? (
+          <BetMonitoringDashboard />
         ) : (
           <div className="space-y-4">
             {/* STEP 1: Opening Card Selection (Only at start) */}
