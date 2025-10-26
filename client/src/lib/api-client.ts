@@ -58,7 +58,8 @@ class ApiClient {
   }
 
   async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
-    let url = `${this.baseURL}${endpoint}`;
+    // Don't double up the baseURL - request() already adds it
+    let url = endpoint;
     
     if (params) {
       const searchParams = new URLSearchParams();
