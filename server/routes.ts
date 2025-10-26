@@ -333,36 +333,54 @@ function calculatePayout(
 }
 
 // Authentication middleware with proper session handling
+// 🔐 SECURITY: NO BYPASSES - All requests must be authenticated
 const authenticateToken = (req: any, res: any, next: any) => {
   console.log('🔍 Authentication check for:', req.path);
   
   // Check if user is already authenticated via session
   if (req.session && req.session.user) {
     req.user = req.session.user;
-    console.log('  → Using session user:', req.user);
-  } 
-  // Check if user is authenticated via other means (e.g., from WebSocket auth)
-  else if (req.user) {
-    console.log('  → Using existing user:', req.user);
+    console.log('  ✅ Using session user:', { id: req.user.id, role: req.user.role });
+    return next();
   }
-  // Only set default user in development mode if not already authenticated
-  else if (process.env.NODE_ENV === 'development') {
-    console.log('  → Development mode: Setting default admin user');
-    req.user = {
-      id: 'dev-admin',
-      username: 'dev-admin',
-      role: 'admin',
-      phone: '0000000000'
-    };
-    // Also set in session for consistency
-    if (req.session) {
-      req.session.user = req.user;
+  
+  // Check for JWT token in Authorization header
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    try {
+      // Dynamically import to avoid circular dependencies
+      const { verifyToken } = require('./auth');
+      const decoded = verifyToken(token);
+      req.user = {
+        id: decoded.id,
+        phone: decoded.phone,
+        username: decoded.username,
+        role: decoded.role
+      };
+      console.log('  ✅ Using JWT token:', { id: req.user.id, role: req.user.role });
+      return next();
+    } catch (error) {
+      console.error('  ❌ Invalid JWT token:', error);
     }
   }
-  // In production, require proper authentication
-  else {
-    console.log('  → Production mode: Authentication required');
-    req.user = null;
+  
+  // Check if user is authenticated via other means
+  if (req.user) {
+    console.log('  ✅ Using existing user:', { id: req.user.id, role: req.user.role });
+    return next();
+  }
+  
+  // 🔐 SECURITY: No authentication found - REJECT REQUEST
+  console.log('  ❌ No authentication - request rejected');
+  req.user = null;
+  
+  // Return 401 Unauthorized for API routes
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Authentication required. Please login to continue.' 
+    });
   }
   
   next();
@@ -389,24 +407,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         switch (message.type) {
           case 'authenticate':
-            // Validate token if provided
+            // 🔐 SECURITY: Validate token - NO FALLBACK TO ANONYMOUS
             let authenticatedUser = null;
+            
             if (message.data?.token) {
               try {
                 const { verifyToken } = await import('./auth');
                 authenticatedUser = verifyToken(message.data.token);
-                console.log('✅ WebSocket token validated:', authenticatedUser);
+                console.log('✅ WebSocket token validated:', { 
+                  id: authenticatedUser.id, 
+                  role: authenticatedUser.role 
+                });
               } catch (error) {
                 console.error('❌ Invalid WebSocket token:', error);
+                ws.send(JSON.stringify({
+                  type: 'auth_error',
+                  data: { 
+                    message: 'Invalid or expired token. Please login again.',
+                    error: 'TOKEN_INVALID'
+                  }
+                }));
+                return; // Don't authenticate with invalid token
               }
             }
             
-            // Use authenticated user data or fallback to provided data
+            // 🔐 SECURITY: Require valid authentication - NO ANONYMOUS ACCESS
+            if (!authenticatedUser) {
+              console.warn('⚠️ WebSocket authentication failed - no valid token provided');
+              ws.send(JSON.stringify({
+                type: 'auth_error',
+                data: { 
+                  message: 'Authentication required. Please login first.',
+                  error: 'AUTH_REQUIRED'
+                }
+              }));
+              
+              // For backward compatibility, still send authenticated message but mark as not authenticated
+              ws.send(JSON.stringify({
+                type: 'authenticated',
+                data: { 
+                  userId: 'anonymous', 
+                  role: 'player', 
+                  wallet: 0,
+                  authenticated: false
+                }
+              }));
+              
+              // Don't add to clients set - they need to login first
+              return;
+            }
+            
+            // ✅ Valid authentication - create authenticated client
             client = {
               ws,
-              userId: authenticatedUser?.id || message.data?.userId || 'anonymous',
-              role: authenticatedUser?.role || message.data?.role || 'player',
-              wallet: authenticatedUser?.wallet || message.data?.wallet || 0,
+              userId: authenticatedUser.id,
+              role: authenticatedUser.role,
+              wallet: authenticatedUser.wallet || 0,
             };
             clients.add(client);
 
@@ -416,11 +472,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 userId: client.userId, 
                 role: client.role, 
                 wallet: client.wallet,
-                authenticated: !!authenticatedUser
+                authenticated: true
               }
             }));
             
-            console.log('🔌 Client authenticated:', { userId: client.userId, role: client.role });
+            console.log(`🔌 Client authenticated: ${client.role.toUpperCase()} ${client.userId}`);
 
             // Send current game state to new client
             const openingCardForSync = currentGameState.openingCard ? {
