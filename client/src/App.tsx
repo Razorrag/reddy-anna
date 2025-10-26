@@ -17,6 +17,7 @@ import AdminLogin from "@/pages/admin-login.tsx";
 import Profile from "@/pages/profile.tsx";
 import NotFound from "@/pages/not-found.tsx";
 import Unauthorized from "@/pages/unauthorized.tsx";
+import ProtectedRoute from "@/components/ProtectedRoute.tsx";
 import ProtectedAdminRoute from "@/components/ProtectedAdminRoute.tsx";
 import ErrorBoundary from "@/components/ErrorBoundary.tsx";
 import AppProviders from "@/providers/AppProviders.tsx";
@@ -33,9 +34,22 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/admin-login" component={AdminLogin} />
       
-      {/* Player Game Routes */}
-      <Route path="/play" component={PlayerGame} />
-      <Route path="/player-game" component={PlayerGame} />
+      {/* Player Game Routes - Require authentication */}
+      <Route path="/play">
+        <ProtectedRoute>
+          <PlayerGame />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/player-game">
+        <ProtectedRoute>
+          <PlayerGame />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/game">
+        <ProtectedRoute>
+          <PlayerGame />
+        </ProtectedRoute>
+      </Route>
       
       {/* Profile Routes */}
       <Route path="/profile" component={Profile} />
@@ -45,11 +59,6 @@ function Router() {
       <Route path="/admin">
         <ProtectedAdminRoute>
           <Admin />
-        </ProtectedAdminRoute>
-      </Route>
-      <Route path="/game">
-        <ProtectedAdminRoute>
-          <AdminGame />
         </ProtectedAdminRoute>
       </Route>
       <Route path="/admin-game">

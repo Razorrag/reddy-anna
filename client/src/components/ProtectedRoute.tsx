@@ -1,20 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useLocation } from 'wouter';
 import { useApp } from '../contexts/AppContext';
 
 interface ProtectedRouteProps {
   component?: React.ComponentType<any>;
   children?: React.ReactNode;
+  requireAuth?: boolean;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   component: Component, 
-  children 
+  children,
+  requireAuth = true
 }) => {
   const { state } = useApp();
-  
-  // TEMPORARY: DISABLE AUTHENTICATION FOR DEVELOPMENT
-  // Comment out the authentication checks to allow direct access to protected routes
-  // This allows access to /game and /admin without login
+  const [, setLocation] = useLocation();
   
   // Show loading while checking authentication
   if (!state.authChecked) {
@@ -25,36 +25,20 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
   
-  // AUTHENTICATION CHECKS DISABLED FOR DEVELOPMENT
-  // The following checks are commented out to bypass authentication
-  
-  /*
-  // Check if user is authenticated
-  if (!state.isAuthenticated) {
-    // Redirect to appropriate login based on required role
-    const loginPath = role === 'admin' ? '/admin-login' : redirectTo;
-    return <Redirect to={loginPath} />;
-  }
-  
-  // Check role if specified
-  if (role) {
-    const userRole = state.user?.role;
-    
-    if (Array.isArray(role)) {
-      // Check if user has any of the required roles
-      if (!userRole || !role.includes(userRole)) {
-        return <Redirect to="/unauthorized" />;
-      }
-    } else if (typeof role === 'string') {
-      // Check if user has the specific required role
-      if (userRole !== role) {
-        return <Redirect to="/unauthorized" />;
-      }
+  // Check if user is authenticated (if required)
+  useEffect(() => {
+    if (requireAuth && !state.isAuthenticated) {
+      console.log('Not authenticated, redirecting to login');
+      setLocation('/login');
     }
-  }
-  */
+  }, [requireAuth, state.isAuthenticated, setLocation]);
   
-  // Always return the children/component without authentication checks
+  // If authentication is required but user is not authenticated, show nothing (will redirect)
+  if (requireAuth && !state.isAuthenticated) {
+    return null;
+  }
+  
+  // Return the children/component
   return children ? <>{children}</> : Component ? <Component /> : null;
 };
 

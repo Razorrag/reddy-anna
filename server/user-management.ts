@@ -259,7 +259,8 @@ export const createUserManually = async (
     // Create user
     const newUser = await storage.createUser({
       phone: userData.phone,
-      password: hashedPassword,
+      password_hash: hashedPassword,
+      name: userData.name,
       full_name: userData.name,
       role: userData.role || 'player',
       status: userData.status || 'active',

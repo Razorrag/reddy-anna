@@ -308,11 +308,11 @@ export class SupabaseStorage implements IStorage {
     const user = {
       id,
       phone: id, // Use phone as both ID and phone
-      password_hash: insertUser.password_hash,
-      full_name: (insertUser as any).name || insertUser.phone,
-      role: 'player',
-      status: 'active',
-      balance: (insertUser as any).balance || "0.00", // Default to 0 if not specified
+      password_hash: insertUser.password_hash || (insertUser as any).password_hash,
+      full_name: (insertUser as any).full_name || (insertUser as any).name || insertUser.phone,
+      role: (insertUser as any).role || 'player',
+      status: (insertUser as any).status || 'active',
+      balance: (insertUser as any).balance || "100000.00", // Default to 100000 if not specified
       total_winnings: "0.00",
       total_losses: "0.00",
       games_played: 0,
