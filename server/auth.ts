@@ -390,22 +390,19 @@ export const requireAuth = (req: any, res: any, next: any) => {
     }
   }
   
-  // Development mode fallback - only for non-production
+  // No valid authentication found
+  console.log('❌ Authentication required - no valid session or token');
+  
+  // SECURITY: Development mode should still require authentication
+  // If you need to bypass authentication in development, use a proper test account
   if (process.env.NODE_ENV === 'development') {
-    console.log('⚠️ Development mode: Using default user');
-    req.user = {
-      id: 'dev-user',
-      username: 'dev-user',
-      role: 'player'
-    };
-    return next();
+    console.warn('⚠️ SECURITY WARNING: Authentication failed in development mode');
+    console.warn('⚠️ Create a test account using the registration endpoint');
   }
   
-  // No valid authentication found
-  console.log('❌ Authentication required');
   return res.status(401).json({ 
     success: false, 
-    error: 'Authentication required' 
+    error: 'Authentication required. Please login to continue.' 
   });
 };
 

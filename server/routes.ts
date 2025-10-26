@@ -497,7 +497,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentGameState.userBets.clear();
             currentGameState.bettingLocked = false;
             
-            const timerDuration = message.data.timer || 30;
+            // Use environment variable for default timer duration
+            const defaultTimerDuration = parseInt(process.env.DEFAULT_TIMER_DURATION || '30', 10);
+            const timerDuration = message.data.timer || defaultTimerDuration;
             
             try {
               const newGame = await storage.createGameSession({
@@ -599,11 +601,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const now = Date.now();
             const userLimit = userBetRateLimits.get(client.userId);
             
+            // Rate limiting - use environment variables
+            const maxBetsPerMinute = parseInt(process.env.MAX_BETS_PER_MINUTE || '30', 10);
+            const rateLimitWindow = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
+            
             if (userLimit && now < userLimit.resetTime) {
-              if (userLimit.count >= 30) {
+              if (userLimit.count >= maxBetsPerMinute) {
                 ws.send(JSON.stringify({
                   type: 'error',
-                  data: { message: 'Too many bets. Please slow down (max 30 bets per minute).' }
+                  data: { message: `Too many bets. Please slow down (max ${maxBetsPerMinute} bets per minute).` }
                 }));
                 break;
               }
@@ -611,15 +617,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } else {
               userBetRateLimits.set(client.userId, { 
                 count: 1, 
-                resetTime: now + 60000
+                resetTime: now + rateLimitWindow
               });
             }
             
-            // Validation
-            if (!betAmount || betAmount < 1000 || betAmount > 100000) {
+            // Validation - use environment variables for limits
+            const minBet = parseInt(process.env.MIN_BET || '1000', 10);
+            const maxBet = parseInt(process.env.MAX_BET || '100000', 10);
+            
+            if (!betAmount || betAmount < minBet || betAmount > maxBet) {
               ws.send(JSON.stringify({
                 type: 'error',
-                data: { message: `Invalid bet amount. Must be between ₹1,000 and ₹1,00,000` }
+                data: { message: `Invalid bet amount. Must be between ₹${minBet.toLocaleString()} and ₹${maxBet.toLocaleString()}` }
               }));
               break;
             }
@@ -1293,13 +1302,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Validate amount range
-      const minAmount = 100;
-      const maxAmount = 1000000;
+      // Validate amount range based on payment type - use environment variables
+      const minDeposit = parseFloat(process.env.MIN_DEPOSIT || '100');
+      const maxDeposit = parseFloat(process.env.MAX_DEPOSIT || '1000000');
+      const minWithdrawal = parseFloat(process.env.MIN_WITHDRAWAL || '500');
+      const maxWithdrawal = parseFloat(process.env.MAX_WITHDRAWAL || '500000');
+      
+      const minAmount = type === 'deposit' ? minDeposit : minWithdrawal;
+      const maxAmount = type === 'deposit' ? maxDeposit : maxWithdrawal;
+      
       if (numAmount < minAmount || numAmount > maxAmount) {
         return res.status(400).json({
           success: false,
-          error: `Amount must be between ₹${minAmount} and ₹${maxAmount}`
+          error: `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} amount must be between ₹${minAmount.toLocaleString()} and ₹${maxAmount.toLocaleString()}`
         });
       }
       

@@ -235,7 +235,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
       
-      const response = await apiClient.get('/api/user/profile') as any;
+      const response = await apiClient.get('/user/profile') as any;
       if (response.success && response.user) {
         dispatch({ type: 'SET_USER', payload: response.user });
       }
@@ -250,7 +250,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.get('/api/user/analytics') as any;
+      const response = await apiClient.get('/user/analytics') as any;
       if (response.success && response.data) {
         dispatch({ type: 'SET_ANALYTICS', payload: response.data });
       }
@@ -263,7 +263,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const fetchBonusInfo = async () => {
     try {
-      const response = await apiClient.get('/api/user/bonus-info') as any;
+      const response = await apiClient.get('/user/bonus-info') as any;
       if (response.success && response.data) {
         dispatch({ type: 'SET_BONUS_INFO', payload: response.data });
       }
@@ -275,7 +275,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const fetchReferralData = async () => {
     try {
-      const response = await apiClient.get('/api/user/referral-data') as any;
+      const response = await apiClient.get('/user/referral-data') as any;
       if (response.success && response.data) {
         dispatch({ type: 'SET_REFERRAL_DATA', payload: response.data });
       }
@@ -290,7 +290,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (!append) dispatch({ type: 'SET_LOADING', payload: true });
       
       const { offset, limit } = state.pagination.transactions;
-      const response = await apiClient.get(`/api/user/transactions?limit=${limit}&offset=${append ? offset : 0}&type=all`) as any;
+      const response = await apiClient.get(`/user/transactions?limit=${limit}&offset=${append ? offset : 0}&type=all`) as any;
       
       if (response.success && response.data) {
         dispatch({
@@ -314,7 +314,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (!append) dispatch({ type: 'SET_LOADING', payload: true });
       
       const { offset, limit } = state.pagination.gameHistory;
-      const response = await apiClient.get(`/api/user/game-history?limit=${limit}&offset=${append ? offset : 0}&result=all`) as any;
+      const response = await apiClient.get(`/user/game-history?limit=${limit}&offset=${append ? offset : 0}&result=all`) as any;
       
       if (response.success && response.data) {
         dispatch({
@@ -337,7 +337,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.put('/api/user/profile', updates) as any;
+      const response = await apiClient.put('/user/profile', updates) as any;
       if (response.success) {
         dispatch({ type: 'UPDATE_USER_PROFILE', payload: updates });
         return response;
@@ -355,7 +355,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post('/api/payment/process', {
+      const response = await apiClient.post('/payment/process', {
         amount,
         method: { type: method },
         type: 'deposit'
@@ -393,7 +393,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post('/api/payment/process', {
+      const response = await apiClient.post('/payment/process', {
         amount,
         method: { type: method },
         type: 'withdrawal'
@@ -431,7 +431,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post('/api/user/claim-bonus') as any;
+      const response = await apiClient.post('/user/claim-bonus') as any;
       
       if (response.success) {
         // Refresh analytics and bonus info after claiming

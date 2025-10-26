@@ -3,6 +3,10 @@
  * 
  * Clean, full-width interface focused ONLY on controlling the game.
  * No management features, no bet monitoring - just game control.
+ * 
+ * CRITICAL: DO NOT add RoundTransition or NoWinnerTransition components here!
+ * These are PLAYER-ONLY UI elements. Admin should maintain continuous game control
+ * without flashing black screens or transition animations during round changes.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -12,8 +16,6 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
-import RoundTransition from '../RoundTransition';
-import NoWinnerTransition from '../NoWinnerTransition';
 import WinnerCelebration from '../WinnerCelebration';
 import { Home } from 'lucide-react';
 
@@ -23,33 +25,11 @@ const AdminGamePanelSimplified: React.FC = () => {
   const { showNotification } = useNotification();
   
   const [isResetting, setIsResetting] = useState(false);
-  const [showRoundTransition, setShowRoundTransition] = useState(false);
-  const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
-  const [previousRound, setPreviousRound] = useState(gameState.currentRound);
   const [showWinnerCelebration, setShowWinnerCelebration] = useState(false);
   const [celebrationData, setCelebrationData] = useState<any>(null);
   const [, setLocation] = useLocation();
   
-  // Detect round changes and trigger transition animation
-  useEffect(() => {
-    if (gameState.currentRound !== previousRound && gameState.currentRound > 1) {
-      setShowRoundTransition(true);
-      setPreviousRound(gameState.currentRound);
-    }
-  }, [gameState.currentRound, previousRound]);
-
-  // Listen for no-winner transition events
-  useEffect(() => {
-    const handleNoWinner = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      setShowNoWinnerTransition(true);
-    };
-
-    window.addEventListener('no-winner-transition', handleNoWinner);
-    return () => window.removeEventListener('no-winner-transition', handleNoWinner);
-  }, []);
-
-  // Listen for game complete celebration events
+  // Listen for game complete celebration events (optional for admin)
   useEffect(() => {
     const handleGameComplete = (event: Event) => {
       const customEvent = event as CustomEvent;
@@ -194,18 +174,7 @@ const AdminGamePanelSimplified: React.FC = () => {
         </div>
       </div>
 
-      {/* Transitions and Celebrations */}
-      {showRoundTransition && (
-        <RoundTransition
-          round={gameState.currentRound}
-          onComplete={() => setShowRoundTransition(false)}
-        />
-      )}
-      
-      {showNoWinnerTransition && (
-        <NoWinnerTransition onComplete={() => setShowNoWinnerTransition(false)} />
-      )}
-      
+      {/* Winner Celebration - Optional for admin to see final results */}
       {showWinnerCelebration && celebrationData && (
         <WinnerCelebration
           winner={celebrationData.winner}

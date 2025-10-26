@@ -98,23 +98,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             },
             timestamp: Date.now()
           }));
-          console.log('Authentication message sent with userId:', userId);
+          console.log('✅ WebSocket authentication sent:', { userId, role: user.role, hasToken: !!token });
         } catch (error) {
-          console.error('Authentication error:', error);
+          console.error('❌ WebSocket authentication error:', error);
         }
       } else {
-        // Fallback for testing
-        ws.send(JSON.stringify({
-          type: 'authenticate',
-          data: {
-            userId: 'anonymous',
-            username: 'anonymous',
-            role: 'player',
-            wallet: 0
-          },
-          timestamp: Date.now()
-        }));
-        console.log('Fallback authentication message sent');
+        // NO FALLBACK - User must be logged in to use WebSocket
+        console.warn('⚠️ WebSocket not authenticated - no user/token found. User must login first.');
       }
     }
   }, []);
