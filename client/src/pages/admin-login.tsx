@@ -53,21 +53,28 @@ export default function AdminLogin() {
         return;
       }
 
-      // Set admin user data in localStorage from backend response
+      // Set admin user data in localStorage using UNIFIED storage keys
       const adminData = {
         id: response.admin?.id || response.id,
         username: response.admin?.username || formData.username,
+        phone: response.admin?.username || formData.username, // Use username as phone for admin
         role: response.admin?.role || 'admin'
       };
 
-      localStorage.setItem('admin', JSON.stringify(adminData));
-      localStorage.setItem('isAdminLoggedIn', 'true');
-      localStorage.setItem('adminRole', adminData.role);
+      // Use same keys as player login for unified authentication
+      localStorage.setItem('user', JSON.stringify(adminData));
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('userRole', adminData.role);
+      
+      // Store token if provided
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+      }
 
-      // Clear any existing user session to prevent conflicts
-      localStorage.removeItem('user');
-      localStorage.removeItem('isLoggedIn');
-      localStorage.removeItem('userRole');
+      // Clear old admin-specific keys (legacy cleanup)
+      localStorage.removeItem('admin');
+      localStorage.removeItem('isAdminLoggedIn');
+      localStorage.removeItem('adminRole');
 
       // Redirect to admin panel after successful login
       window.location.href = '/admin';

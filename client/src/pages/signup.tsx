@@ -75,7 +75,7 @@ export default function Signup() {
       const userData = {
         id: response.user?.id || response.id, // Phone number as ID
         phone: response.user?.phone || formData.phone, // Store phone separately
-        balance: response.user?.balance || response.balance || 100000.00, // Default to ₹100,000
+        balance: response.user?.balance || response.balance || 0,
         role: response.user?.role || 'player'
       };
 

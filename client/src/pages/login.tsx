@@ -30,17 +30,22 @@ export default function Login() {
         password: formData.password
       });
 
-      // Store user data in localStorage
+      // Store user data in localStorage using UNIFIED storage keys
       const userData = {
         id: response.user?.id || response.id,
         phone: response.user?.phone || formData.phone,
-        balance: response.user?.balance || response.balance || 100000.00,
+        balance: response.user?.balance || response.balance || 0,
         role: response.user?.role || 'player'
       };
 
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('userRole', userData.role);
+      
+      // Store token if provided
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+      }
 
       // Redirect to game
       window.location.href = '/game';

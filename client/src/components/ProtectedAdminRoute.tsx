@@ -18,28 +18,34 @@ export const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({ childr
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    // Check if user is authenticated as admin
+    // Check if user is authenticated as admin using UNIFIED storage
     const checkAdminAuth = () => {
-      const adminStr = localStorage.getItem('admin');
-      const isAdminLoggedIn = localStorage.getItem('isAdminLoggedIn') === 'true';
+      const userStr = localStorage.getItem('user');
+      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
       
-      if (adminStr && isAdminLoggedIn) {
+      if (userStr && isLoggedIn) {
         try {
-          const admin = JSON.parse(adminStr);
-          if (admin && (admin.role === 'admin' || admin.role === 'super_admin')) {
+          const user = JSON.parse(userStr);
+          // Check if user has admin or super_admin role
+          if (user && (user.role === 'admin' || user.role === 'super_admin')) {
             setIsAdmin(true);
             setIsChecking(false);
+            console.log(' Admin authenticated:', user.role);
             return;
+          } else {
+            console.log(' User is not admin, role:', user.role);
           }
         } catch (error) {
-          console.error('Error parsing admin data:', error);
+          console.error('Error parsing user data:', error);
         }
+      } else {
+        console.log(' No user logged in');
       }
       
-      // If not admin, redirect to 404 to hide route existence
+      // If not admin, redirect to admin login page
       setIsAdmin(false);
       setIsChecking(false);
-      setLocation('/not-found');
+      setLocation('/admin-login');
     };
 
     checkAdminAuth();

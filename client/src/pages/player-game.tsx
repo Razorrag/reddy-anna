@@ -30,19 +30,20 @@ const PlayerGame: React.FC = () => {
         id: user.id || user.phone,
         username: user.full_name || 'Player',
         phone: user.phone,
-        balance: user.balance || 100000.00 // Default to ₹100,000
+        balance: user.balance || 0
       };
     }
-    // Default user data for testing
-    return {
-      id: 'test-player',
-      username: 'Test Player',
-      phone: '9876543210',
-      balance: 100000.00 // Default to ₹100,000
-    };
+    // No user logged in - should not reach here due to ProtectedRoute
+    return null;
   };
 
   const user = getUserData();
+  
+  // Redirect if no user (shouldn't happen due to ProtectedRoute)
+  if (!user) {
+    window.location.href = '/login';
+    return null;
+  }
   
   // Local state
   const [selectedBetAmount, setSelectedBetAmount] = useState(2500);
@@ -69,7 +70,7 @@ const PlayerGame: React.FC = () => {
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const userData = JSON.parse(userStr);
-        const newBalance = userData.balance || 100000.00;
+        const newBalance = userData.balance || 0;
         setUserBalance(newBalance);
       }
     };

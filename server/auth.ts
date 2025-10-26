@@ -106,8 +106,8 @@ export const registerUser = async (userData: {
     // Hash password
     const hashedPassword = await hashPassword(sanitizedData.password);
     
-    // Create new user using phone as ID with default balance from env or 0
-    const defaultBalance = process.env.DEFAULT_BALANCE || "0.00";
+    // Create new user using phone as ID with default balance from env
+    const defaultBalance = process.env.DEFAULT_BALANCE || "100000.00";
     const newUser = await storage.createUser({
       phone: sanitizedData.phone, // Use phone as ID and phone
       password_hash: hashedPassword,
