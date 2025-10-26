@@ -388,18 +388,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         switch (message.type) {
           case 'authenticate':
+            // Validate token if provided
+            let authenticatedUser = null;
+            if (message.data?.token) {
+              try {
+                const { verifyToken } = await import('./auth');
+                authenticatedUser = verifyToken(message.data.token);
+                console.log('✅ WebSocket token validated:', authenticatedUser);
+              } catch (error) {
+                console.error('❌ Invalid WebSocket token:', error);
+              }
+            }
+            
+            // Use authenticated user data or fallback to provided data
             client = {
               ws,
-              userId: message.data?.userId || 'anonymous',
-              role: message.data?.role || 'player',
-              wallet: message.data?.wallet || 0,
+              userId: authenticatedUser?.id || message.data?.userId || 'anonymous',
+              role: authenticatedUser?.role || (message.data?.role === 'admin' ? 'player' : message.data?.role) || 'player',
+              wallet: authenticatedUser?.wallet || message.data?.wallet || 0,
             };
             clients.add(client);
 
             ws.send(JSON.stringify({
               type: 'authenticated',
-              data: { userId: client.userId, role: client.role, wallet: client.wallet }
+              data: { 
+                userId: client.userId, 
+                role: client.role, 
+                wallet: client.wallet,
+                authenticated: !!authenticatedUser
+              }
             }));
+            
+            console.log('🔌 Client authenticated:', { userId: client.userId, role: client.role });
 
             // Send current game state to new client
             const openingCardForSync = currentGameState.openingCard ? {
@@ -454,7 +474,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           case 'opening_card_set':
           case 'opening_card_confirmed':
           case 'game_start':
-            // Admin privileges removed for development - anyone can control the game
+            // CRITICAL: Only admin can start the game
+            if (!client || client.role !== 'admin') {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Only admin can start the game' }
+              }));
+              console.log('⚠️ Non-admin attempted to start game - blocked');
+              break;
+            }
             
             currentGameState.openingCard = message.data.openingCard?.display || message.data.openingCard;
             currentGameState.phase = 'betting';
@@ -546,6 +574,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const betAmount = message.data.amount;
             const betSide = message.data.side;
             const betRound = currentGameState.currentRound;
+            
+            // CRITICAL: Block admin from placing bets
+            if (client.role === 'admin') {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Admins cannot place bets. Admin role is for game control only.' }
+              }));
+              console.log('⚠️ Admin attempted to place bet - blocked');
+              break;
+            }
             
             // Block anonymous users in production
             const isAnonymous = client.userId === 'anonymous';
@@ -808,7 +846,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           case 'card_dealt':
           case 'deal_card':
-            // Admin privileges removed for development - anyone can deal cards
+            // CRITICAL: Only admin can deal cards
+            if (!client || client.role !== 'admin') {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Only admin can deal cards' }
+              }));
+              console.log('⚠️ Non-admin attempted to deal card - blocked');
+              break;
+            }
             
             const cardData = message.data.card;
             const cardDisplay = cardData?.display || cardData; // For database (string)
@@ -897,7 +943,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
           
           case 'game_reset':
-            // Admin privileges removed for development - anyone can reset the game
+            // CRITICAL: Only admin can reset the game
+            if (!client || client.role !== 'admin') {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Only admin can reset the game' }
+              }));
+              console.log('⚠️ Non-admin attempted to reset game - blocked');
+              break;
+            }
             
             if (currentGameState.timerInterval) {
               clearInterval(currentGameState.timerInterval);
@@ -972,7 +1026,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // REST API Routes
   
-  // Authentication Routes
+  // Apply authentication middleware to all API routes except public auth endpoints
+  app.use("/api/*", (req, res, next) => {
+    const publicPaths = [
+      '/api/auth/login',
+      '/api/auth/admin-login',
+      '/api/auth/register',
+      '/api/auth/refresh',
+      '/api/auth/logout' // Logout should be public
+    ];
+    
+    if (publicPaths.some(path => req.path === path)) {
+      console.log(`🔓 Public endpoint: ${req.path}`);
+      return next();
+    }
+    
+    return authenticateToken(req, res, next);
+  });
+  
+  // Authentication Routes (Public)
   app.post("/api/auth/register", authLimiter, async (req, res) => {
     try {
       const { validateUserRegistrationData } = await import('./auth');
@@ -1177,11 +1249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Auth routes don't need authentication
-  // Protected Routes (require authentication)
-  app.use("/api/*", authenticateToken);
-  
-  // Add logout endpoint
+  // Logout endpoint (now public, handled by middleware above)
   app.post("/api/auth/logout", (req, res) => {
     // Clear session
     if (req.session) {

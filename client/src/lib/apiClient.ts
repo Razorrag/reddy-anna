@@ -86,6 +86,7 @@ class APIClient {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       ...fetchOptions,
       method: 'GET',
+      credentials: 'include', // Include cookies for session auth
       headers: {
         ...this.getHeaders(skipAuth),
         ...fetchOptions.headers,
@@ -104,6 +105,7 @@ class APIClient {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       ...fetchOptions,
       method: 'POST',
+      credentials: 'include',
       headers: {
         ...this.getHeaders(skipAuth),
         ...fetchOptions.headers,
@@ -123,6 +125,7 @@ class APIClient {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       ...fetchOptions,
       method: 'PUT',
+      credentials: 'include',
       headers: {
         ...this.getHeaders(skipAuth),
         ...fetchOptions.headers,
@@ -142,6 +145,7 @@ class APIClient {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       ...fetchOptions,
       method: 'PATCH',
+      credentials: 'include',
       headers: {
         ...this.getHeaders(skipAuth),
         ...fetchOptions.headers,
@@ -161,6 +165,7 @@ class APIClient {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       ...fetchOptions,
       method: 'DELETE',
+      credentials: 'include',
       headers: {
         ...this.getHeaders(skipAuth),
         ...fetchOptions.headers,
