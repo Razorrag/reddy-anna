@@ -301,7 +301,7 @@ export class SupabaseStorage implements IStorage {
     return data || [];
   }
 
-  // Update createUser to use phone as ID with ₹100,000 balance
+  // Update createUser to use phone as ID with configurable default balance
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = (insertUser as any).phone || insertUser.phone; // Use phone number as ID
     
@@ -312,7 +312,7 @@ export class SupabaseStorage implements IStorage {
       full_name: (insertUser as any).name || insertUser.phone,
       role: 'player',
       status: 'active',
-      balance: (insertUser as any).balance || "100000.00", // Default to ₹100,000 if not specified
+      balance: (insertUser as any).balance || "0.00", // Default to 0 if not specified
       total_winnings: "0.00",
       total_losses: "0.00",
       games_played: 0,
@@ -351,7 +351,9 @@ export class SupabaseStorage implements IStorage {
       throw new Error('User not found');
     }
 
-    const newBalance = user.balance + amountChange;
+    // Convert balance from string to number, add change, convert back to string
+    const currentBalance = parseFloat(user.balance);
+    const newBalance = (currentBalance + amountChange).toFixed(2);
 
     const { error } = await supabaseServer
       .from('users')

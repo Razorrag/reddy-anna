@@ -61,12 +61,13 @@ export const registerUser = async (userData: {
     // Hash password
     const hashedPassword = await hashPassword(sanitizedData.password);
     
-    // Create new user using phone as ID with ₹100,000 balance
+    // Create new user using phone as ID with default balance from env or 0
+    const defaultBalance = process.env.DEFAULT_BALANCE || "0.00";
     const newUser = await storage.createUser({
       phone: sanitizedData.phone, // Use phone as ID and phone
       password_hash: hashedPassword,
       full_name: sanitizedData.name,
-      balance: "100000.00", // Set default balance to ₹100,000
+      balance: defaultBalance, // Use environment variable for default balance
       referral_code: sanitizedData.referralCode || null // Store referral code if provided
     });
 
@@ -296,34 +297,92 @@ export const changePassword = async (
   }
 };
 
-// 🛡️ REQUIRE AUTH MIDDLEWARE - DISABLED FOR DEVELOPMENT
+// 🛡️ REQUIRE AUTH MIDDLEWARE
 export const requireAuth = (req: any, res: any, next: any) => {
-  // ⚠️ AUTHENTICATION COMPLETELY DISABLED - ALL REQUESTS ALLOWED
-  console.log('⚠️ requireAuth disabled - allowing request');
+  // Check for token in Authorization header
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.startsWith('Bearer ') 
+    ? authHeader.substring(7) 
+    : null;
   
-  // Set a default user for compatibility
-  req.user = {
-    id: 'anonymous',
-    username: 'anonymous',
-    role: 'admin'
-  };
+  // Check session authentication
+  if (req.session && req.session.user) {
+    req.user = req.session.user;
+    console.log('✅ Authenticated via session:', req.user.id);
+    return next();
+  }
   
-  next();
+  // Check token authentication
+  if (token) {
+    try {
+      const decoded = JSON.parse(Buffer.from(token, 'base64').toString());
+      
+      // Check token expiration
+      if (decoded.exp && Date.now() > decoded.exp) {
+        return res.status(401).json({ 
+          success: false, 
+          error: 'Token expired' 
+        });
+      }
+      
+      req.user = {
+        id: decoded.id,
+        phone: decoded.phone,
+        username: decoded.username,
+        role: decoded.role
+      };
+      console.log('✅ Authenticated via token:', req.user.id);
+      return next();
+    } catch (error) {
+      console.error('Token validation error:', error);
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Invalid token' 
+      });
+    }
+  }
+  
+  // Development mode fallback - only for non-production
+  if (process.env.NODE_ENV === 'development') {
+    console.log('⚠️ Development mode: Using default user');
+    req.user = {
+      id: 'dev-user',
+      username: 'dev-user',
+      role: 'player'
+    };
+    return next();
+  }
+  
+  // No valid authentication found
+  console.log('❌ Authentication required');
+  return res.status(401).json({ 
+    success: false, 
+    error: 'Authentication required' 
+  });
 };
 
-// 👑 REQUIRE ROLE MIDDLEWARE - DISABLED FOR DEVELOPMENT
+// 👑 REQUIRE ROLE MIDDLEWARE
 export const requireRole = (roles: string[]) => {
   return (req: any, res: any, next: any) => {
-    // ⚠️ AUTHENTICATION COMPLETELY DISABLED - ALL REQUESTS ALLOWED
-    console.log('⚠️ requireRole disabled - allowing request for roles:', roles);
+    // First check if user is authenticated
+    if (!req.user) {
+      console.log('❌ No user found in request');
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Authentication required' 
+      });
+    }
     
-    // Set a default user with admin role for compatibility
-    req.user = {
-      id: 'anonymous',
-      username: 'anonymous',
-      role: 'admin' // Always admin to bypass all role checks
-    };
+    // Check if user has required role
+    if (!roles.includes(req.user.role)) {
+      console.log(`❌ Access denied. Required roles: ${roles.join(', ')}, User role: ${req.user.role}`);
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Insufficient permissions' 
+      });
+    }
     
+    console.log(`✅ Role check passed for ${req.user.id} (${req.user.role})`);
     next();
   };
 };

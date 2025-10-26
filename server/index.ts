@@ -10,26 +10,36 @@ import cors from 'cors';
 import path from 'path';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { startRTMPServer } from "./rtmp-server";
 
 // Validate all required environment variables
 const requiredEnvVars = [
   'SESSION_SECRET',
   'SUPABASE_URL',
-  'SUPABASE_SERVICE_KEY',
-  'JWT_SECRET', // Critical for signing tokens
+  'SUPABASE_SERVICE_KEY'
+];
+
+// Optional but recommended variables
+const optionalEnvVars = [
+  'JWT_SECRET',
   'JWT_EXPIRES_IN',
   'PORT',
-  'CORS_ORIGIN'
+  'CORS_ORIGIN',
+  'DEFAULT_BALANCE'
 ];
 
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+const missingOptionalVars = optionalEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
   console.error('❌ Missing required environment variables:', missingEnvVars.join(', '));
   console.error('Please set these variables in your .env file');
   console.error('Server cannot start without these critical configuration values.');
   process.exit(1);
+}
+
+if (missingOptionalVars.length > 0) {
+  console.warn('⚠️  Missing optional environment variables:', missingOptionalVars.join(', '));
+  console.warn('   Using default values. Set these in .env for production.');
 }
 
 // Debug environment variables
@@ -213,14 +223,5 @@ app.use((req, res, next) => {
     log(`serving on http://${host}:${port}`); // This should show 0.0.0.0:5000
     log(`WebSocket server running on the same port as HTTP server`);
     log(`🔧 Admin panel: Game Control available`);
-    
-    // Start RTMP server for direct OBS streaming
-    try {
-      startRTMPServer();
-      log(`✅ Direct OBS streaming enabled`);
-    } catch (error) {
-      log(`⚠️ RTMP server failed to start: ${error}`);
-      log(`   Make sure FFmpeg is installed and FFMPEG_PATH is set in .env`);
-    }
   });
 })();

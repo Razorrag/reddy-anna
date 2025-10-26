@@ -18,15 +18,27 @@ import {
   updateGameSettings
 } from './content-management';
 
-// Extend Express Request interface to include user property
+// Extend Express Request and Session interfaces
 declare global {
   namespace Express {
     interface Request {
       user?: {
         id: string;
         phone?: string;
+        username?: string;
         role?: string;
       };
+    }
+    interface SessionData {
+      user?: {
+        id: string;
+        phone?: string;
+        username?: string;
+        role?: string;
+      };
+      userId?: string;
+      adminId?: string;
+      isLoggedIn?: boolean;
     }
   }
 }
@@ -72,6 +84,22 @@ interface WSClient {
 
 const clients = new Set<WSClient>();
 
+// Async error handler wrapper
+function asyncHandler(fn: Function) {
+  return (req: any, res: any, next: any) => {
+    Promise.resolve(fn(req, res, next)).catch((error) => {
+      console.error('Async handler error:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: 'Internal server error',
+          message: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    });
+  };
+}
+
 // WebSocket bet rate limiting
 interface BetRateLimit {
   count: number;
@@ -88,23 +116,105 @@ interface UserBets {
   round2: { andar: number; bahar: number };
 }
 
-// Game state management
-let currentGameState = {
-  gameId: 'default-game',
-  openingCard: null as string | null,
-  phase: 'idle' as GamePhase,
-  currentRound: 1 as 1 | 2 | 3,
-  timer: 0,
-  andarCards: [] as string[],
-  baharCards: [] as string[],
-  winner: null as string | null,
-  winningCard: null as string | null,
-  round1Bets: { andar: 0, bahar: 0 },
-  round2Bets: { andar: 0, bahar: 0 },
-  userBets: new Map<string, UserBets>(),
-  timerInterval: null as NodeJS.Timeout | null,
-  bettingLocked: false
-};
+// Game state management with mutex for thread safety
+class GameState {
+  private state = {
+    gameId: 'default-game',
+    openingCard: null as string | null,
+    phase: 'idle' as GamePhase,
+    currentRound: 1 as 1 | 2 | 3,
+    timer: 0,
+    andarCards: [] as string[],
+    baharCards: [] as string[],
+    winner: null as string | null,
+    winningCard: null as string | null,
+    round1Bets: { andar: 0, bahar: 0 },
+    round2Bets: { andar: 0, bahar: 0 },
+    userBets: new Map<string, UserBets>(),
+    timerInterval: null as NodeJS.Timeout | null,
+    bettingLocked: false
+  };
+  
+  private updateLock = false;
+  
+  async withLock<T>(fn: () => Promise<T> | T): Promise<T> {
+    // Simple spinlock - wait for lock to be released
+    while (this.updateLock) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    
+    this.updateLock = true;
+    try {
+      return await fn();
+    } finally {
+      this.updateLock = false;
+    }
+  }
+  
+  get gameId() { return this.state.gameId; }
+  set gameId(value: string) { this.state.gameId = value; }
+  
+  get openingCard() { return this.state.openingCard; }
+  set openingCard(value: string | null) { this.state.openingCard = value; }
+  
+  get phase() { return this.state.phase; }
+  set phase(value: GamePhase) { this.state.phase = value; }
+  
+  get currentRound() { return this.state.currentRound; }
+  set currentRound(value: 1 | 2 | 3) { this.state.currentRound = value; }
+  
+  get timer() { return this.state.timer; }
+  set timer(value: number) { this.state.timer = value; }
+  
+  get andarCards() { return this.state.andarCards; }
+  get baharCards() { return this.state.baharCards; }
+  
+  addAndarCard(card: string) { this.state.andarCards.push(card); }
+  addBaharCard(card: string) { this.state.baharCards.push(card); }
+  
+  clearCards() {
+    this.state.andarCards = [];
+    this.state.baharCards = [];
+  }
+  
+  get winner() { return this.state.winner; }
+  set winner(value: string | null) { this.state.winner = value; }
+  
+  get winningCard() { return this.state.winningCard; }
+  set winningCard(value: string | null) { this.state.winningCard = value; }
+  
+  get round1Bets() { return this.state.round1Bets; }
+  get round2Bets() { return this.state.round2Bets; }
+  
+  get userBets() { return this.state.userBets; }
+  
+  get timerInterval() { return this.state.timerInterval; }
+  set timerInterval(value: NodeJS.Timeout | null) { this.state.timerInterval = value; }
+  
+  get bettingLocked() { return this.state.bettingLocked; }
+  set bettingLocked(value: boolean) { this.state.bettingLocked = value; }
+  
+  reset() {
+    this.state = {
+      gameId: `game-${Date.now()}`,
+      openingCard: null,
+      phase: 'idle' as GamePhase,
+      currentRound: 1 as 1 | 2 | 3,
+      timer: 0,
+      andarCards: [],
+      baharCards: [],
+      winner: null,
+      winningCard: null,
+      round1Bets: { andar: 0, bahar: 0 },
+      round2Bets: { andar: 0, bahar: 0 },
+      userBets: new Map<string, UserBets>(),
+      timerInterval: null,
+      bettingLocked: false
+    };
+  }
+}
+
+const currentGameState = new GameState();
 
 // WebSocket broadcast functions
 function broadcast(message: any, excludeClient?: WSClient) {
@@ -349,13 +459,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentGameState.openingCard = message.data.openingCard?.display || message.data.openingCard;
             currentGameState.phase = 'betting';
             currentGameState.currentRound = 1;
-            currentGameState.andarCards = [];
-            currentGameState.baharCards = [];
+            currentGameState.clearCards();
             currentGameState.winner = null;
             currentGameState.winningCard = null;
-            currentGameState.round1Bets = { andar: 0, bahar: 0 };
-            currentGameState.round2Bets = { andar: 0, bahar: 0 };
-            currentGameState.userBets = new Map<string, UserBets>();
+            currentGameState.round1Bets.andar = 0;
+            currentGameState.round1Bets.bahar = 0;
+            currentGameState.round2Bets.andar = 0;
+            currentGameState.round2Bets.bahar = 0;
+            currentGameState.userBets.clear();
             currentGameState.bettingLocked = false;
             
             const timerDuration = message.data.timer || 30;
@@ -436,8 +547,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const betSide = message.data.side;
             const betRound = currentGameState.currentRound;
             
-            // Skip database operations for anonymous users
+            // Block anonymous users in production
             const isAnonymous = client.userId === 'anonymous';
+            if (isAnonymous && process.env.NODE_ENV === 'production') {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Please login to place bets' }
+              }));
+              break;
+            }
             
             // Rate limiting
             const now = Date.now();
@@ -492,10 +610,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            // Skip balance check for anonymous users (testing only)
+            // Balance check (skip for anonymous in development only)
             if (!isAnonymous) {
               const currentUser = await storage.getUserById(client.userId);
-              if (!currentUser || currentUser.balance < betAmount) {
+              if (!currentUser) {
+                ws.send(JSON.stringify({
+                  type: 'error',
+                  data: { message: 'User not found' }
+                }));
+                break;
+              }
+              
+              const userBalance = parseFloat(currentUser.balance);
+              if (userBalance < betAmount) {
                 ws.send(JSON.stringify({
                   type: 'error',
                   data: { message: 'Insufficient balance' }
@@ -584,7 +711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const revealAndarDisplay = revealAndarCard.display || revealAndarCard;
             
             // Deal Bahar card first
-            currentGameState.baharCards.push(revealBaharDisplay);
+            currentGameState.addBaharCard(revealBaharDisplay);
             
             broadcast({
               type: 'card_dealt',
@@ -598,7 +725,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Wait 800ms then deal Andar card
             setTimeout(async () => {
-              currentGameState.andarCards.push(revealAndarDisplay);
+              currentGameState.addAndarCard(revealAndarDisplay);
               
               broadcast({
                 type: 'card_dealt',
@@ -656,9 +783,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`🎴 Round 3: Dealing ${singleCardDisplay} to ${singleSide}`);
             
             if (singleSide === 'bahar') {
-              currentGameState.baharCards.push(singleCardDisplay);
+              currentGameState.addBaharCard(singleCardDisplay);
             } else {
-              currentGameState.andarCards.push(singleCardDisplay);
+              currentGameState.addAndarCard(singleCardDisplay);
             }
             
             broadcast({
@@ -690,9 +817,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Store the display string in state for winner checking
             if (side === 'andar') {
-              currentGameState.andarCards.push(cardDisplay);
+              currentGameState.addAndarCard(cardDisplay);
             } else {
-              currentGameState.baharCards.push(cardDisplay);
+              currentGameState.addBaharCard(cardDisplay);
             }
             
             // Only save to database if gameId exists (skip for testing)
@@ -777,22 +904,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               currentGameState.timerInterval = null;
             }
             
-            currentGameState = {
-              gameId: `game-${Date.now()}`,
-              openingCard: null,
-              phase: 'idle' as GamePhase,
-              currentRound: 1 as 1 | 2 | 3,
-              timer: 0,
-              andarCards: [],
-              baharCards: [],
-              winner: null,
-              winningCard: null,
-              round1Bets: { andar: 0, bahar: 0 },
-              round2Bets: { andar: 0, bahar: 0 },
-              userBets: new Map<string, UserBets>(),
-              timerInterval: null,
-              bettingLocked: false
-            };
+            currentGameState.reset();
             
             broadcast({
               type: 'game_reset',
@@ -828,6 +940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('WebSocket connection closed');
       if (client) {
         clients.delete(client);
+        console.log(`Client ${client.userId} removed. Active clients: ${clients.size}`);
       }
     });
     
@@ -835,7 +948,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('WebSocket error:', error);
       if (client) {
         clients.delete(client);
+        console.log(`Client ${client.userId} removed due to error. Active clients: ${clients.size}`);
       }
+    });
+    
+    // Set up ping/pong to detect dead connections
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+      } else {
+        clearInterval(pingInterval);
+        if (client) {
+          clients.delete(client);
+          console.log(`Client ${client.userId} removed (dead connection). Active clients: ${clients.size}`);
+        }
+      }
+    }, 30000); // Ping every 30 seconds
+    
+    ws.on('pong', () => {
+      // Connection is alive
     });
   });
   
@@ -891,18 +1022,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (result.success && result.user) {
         // Set user in session for proper authentication
         if (req.session) {
-          req.session.user = {
+          (req.session as any).user = {
             id: result.user.id,
             phone: result.user.phone,
             role: result.user.role,
             username: result.user.phone // Using phone as username
           };
-          req.session.userId = result.user.id;
-          req.session.isLoggedIn = true;
+          (req.session as any).userId = result.user.id;
+          (req.session as any).isLoggedIn = true;
         }
         
         // Also set on request object for immediate use
-        (req as any).user = req.session.user;
+        (req as any).user = (req.session as any).user;
         
         auditLogger('user_login', result.user.id, { ip: req.ip });
         res.json({
@@ -939,18 +1070,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (result.success && result.admin) {
         // Set user in session for proper authentication
         if (req.session) {
-          req.session.user = {
+          (req.session as any).user = {
             id: result.admin.id,
             username: result.admin.username,
             role: result.admin.role,
             phone: result.admin.username // Using username which is typically the phone for admin
           };
-          req.session.adminId = result.admin.id;
-          req.session.isLoggedIn = true;
+          (req.session as any).adminId = result.admin.id;
+          (req.session as any).isLoggedIn = true;
         }
         
         // Also set on request object for immediate use
-        (req as any).user = req.session.user;
+        (req as any).user = (req.session as any).user;
         
         auditLogger('admin_login', result.admin.id, { ip: req.ip });
         res.json({
@@ -1001,10 +1132,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId, amount, method, type } = req.body;
       
+      // Validate required fields
       if (!userId || !amount || !method || !type) {
         return res.status(400).json({
           success: false,
           error: 'Missing required payment parameters'
+        });
+      }
+      
+      // Validate amount
+      const numAmount = parseFloat(amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid amount. Must be a positive number'
+        });
+      }
+      
+      // Validate amount range
+      const minAmount = 100;
+      const maxAmount = 1000000;
+      if (numAmount < minAmount || numAmount > maxAmount) {
+        return res.status(400).json({
+          success: false,
+          error: `Amount must be between ₹${minAmount} and ₹${maxAmount}`
+        });
+      }
+      
+      // Validate type
+      if (!['deposit', 'withdrawal'].includes(type)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid payment type. Must be deposit or withdrawal'
         });
       }
       
@@ -1016,8 +1175,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const result = await processPayment({ userId, amount, method, type });
-      auditLogger('payment_processed', userId, { amount, type, method: method.type });
+      const result = await processPayment({ userId, amount: numAmount, method, type });
+      auditLogger('payment_processed', userId, { amount: numAmount, type, method: method.type });
       
       res.json(result);
     } catch (error) {
@@ -2649,13 +2808,14 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     currentGameState.phase = 'idle';
     currentGameState.currentRound = 1;
     currentGameState.openingCard = null;
-    currentGameState.andarCards = [];
-    currentGameState.baharCards = [];
+    currentGameState.clearCards();
     currentGameState.winner = null;
     currentGameState.winningCard = null;
-    currentGameState.round1Bets = { andar: 0, bahar: 0 };
-    currentGameState.round2Bets = { andar: 0, bahar: 0 };
-    currentGameState.userBets = new Map();
+    currentGameState.round1Bets.andar = 0;
+    currentGameState.round1Bets.bahar = 0;
+    currentGameState.round2Bets.andar = 0;
+    currentGameState.round2Bets.bahar = 0;
+    currentGameState.userBets.clear();
     currentGameState.bettingLocked = false;
     currentGameState.timer = 0;
     
