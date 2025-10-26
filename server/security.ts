@@ -328,15 +328,19 @@ export const validateApiKey = (req: Request, res: Response, next: NextFunction) 
 export const validateAdminAccess = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
   
+  console.log('🔍 validateAdminAccess - User object:', user); // Debug logging
+  
   // Check if user exists and has admin role
   if (!user) {
+    console.log('⚠️ No user found in request');
     // In development, allow access with warning
     if (process.env.NODE_ENV !== 'production') {
-      console.log('⚠️ Dev mode: No user found, allowing admin access');
+      console.log('⚠️ Dev mode: No user found, creating default admin user');
       (req as any).user = {
         id: 'dev-admin',
         username: 'dev-admin',
-        role: 'admin'
+        role: 'admin',
+        phone: '0000000000' // Add default phone for compatibility
       };
       return next();
     }
@@ -349,13 +353,14 @@ export const validateAdminAccess = (req: Request, res: Response, next: NextFunct
   
   // Verify admin role
   if (user.role !== 'admin') {
-    console.log(`Access denied: User ${user.id} attempted to access admin endpoint`);
+    console.log(`Access denied: User ${user.id} (role: ${user.role}) attempted to access admin endpoint`);
     return res.status(403).json({
       success: false,
       error: 'Admin access required'
     });
   }
   
+  console.log(`✅ Admin access granted for user ${user.id}`);
   next();
 };
 

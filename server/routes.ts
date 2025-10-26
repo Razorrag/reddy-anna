@@ -221,17 +221,38 @@ function calculatePayout(
   }
 }
 
-// Authentication middleware - DISABLED FOR DEVELOPMENT
+// Authentication middleware with proper session handling
 const authenticateToken = (req: any, res: any, next: any) => {
-  // ⚠️ AUTHENTICATION COMPLETELY DISABLED - ALL REQUESTS ALLOWED
-  console.log('⚠️ Auth disabled - allowing request to:', req.path);
+  console.log('🔍 Authentication check for:', req.path);
   
-  // Set a default user for compatibility
-  req.user = {
-    id: 'anonymous',
-    username: 'anonymous',
-    role: 'admin' // Give admin role to bypass all checks
-  };
+  // Check if user is already authenticated via session
+  if (req.session && req.session.user) {
+    req.user = req.session.user;
+    console.log('  → Using session user:', req.user);
+  } 
+  // Check if user is authenticated via other means (e.g., from WebSocket auth)
+  else if (req.user) {
+    console.log('  → Using existing user:', req.user);
+  }
+  // Only set default user in development mode if not already authenticated
+  else if (process.env.NODE_ENV === 'development') {
+    console.log('  → Development mode: Setting default admin user');
+    req.user = {
+      id: 'dev-admin',
+      username: 'dev-admin',
+      role: 'admin',
+      phone: '0000000000'
+    };
+    // Also set in session for consistency
+    if (req.session) {
+      req.session.user = req.user;
+    }
+  }
+  // In production, require proper authentication
+  else {
+    console.log('  → Production mode: Authentication required');
+    req.user = null;
+  }
   
   next();
 };
@@ -867,8 +888,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const result = await loginUser(phone, password);
-      if (result.success) {
-        auditLogger('user_login', result.user?.id, { ip: req.ip });
+      if (result.success && result.user) {
+        // Set user in session for proper authentication
+        if (req.session) {
+          req.session.user = {
+            id: result.user.id,
+            phone: result.user.phone,
+            role: result.user.role,
+            username: result.user.phone // Using phone as username
+          };
+          req.session.userId = result.user.id;
+          req.session.isLoggedIn = true;
+        }
+        
+        // Also set on request object for immediate use
+        (req as any).user = req.session.user;
+        
+        auditLogger('user_login', result.user.id, { ip: req.ip });
         res.json({
           success: true,
           user: result.user
@@ -900,8 +936,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const result = await loginAdmin(username, password);
-      if (result.success) {
-        auditLogger('admin_login', result.admin?.id, { ip: req.ip });
+      if (result.success && result.admin) {
+        // Set user in session for proper authentication
+        if (req.session) {
+          req.session.user = {
+            id: result.admin.id,
+            username: result.admin.username,
+            role: result.admin.role,
+            phone: result.admin.username // Using username which is typically the phone for admin
+          };
+          req.session.adminId = result.admin.id;
+          req.session.isLoggedIn = true;
+        }
+        
+        // Also set on request object for immediate use
+        (req as any).user = req.session.user;
+        
+        auditLogger('admin_login', result.admin.id, { ip: req.ip });
         res.json({
           success: true,
           admin: result.admin
@@ -909,7 +960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(401).json({
           success: false,
-          error: result.error
+          error: result.error || 'Invalid credentials'
         });
       }
     } catch (error) {
@@ -921,8 +972,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Auth routes don't need authentication
   // Protected Routes (require authentication)
   app.use("/api/*", authenticateToken);
+  
+  // Add logout endpoint
+  app.post("/api/auth/logout", (req, res) => {
+    // Clear session
+    if (req.session) {
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('Error destroying session:', err);
+        }
+      });
+    }
+    
+    // Clear user from request
+    (req as any).user = null;
+    
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  });
   
   // Payment Routes
   app.post("/api/payment/process", paymentLimiter, async (req, res) => {
@@ -1472,7 +1544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin User Creation Endpoint
   app.post("/api/admin/users/create", generalLimiter, validateAdminAccess, async (req, res) => {
     try {
-      const { phone, name, initialBalance, role, status } = req.body;
+      const { phone, name, password, initialBalance, role, status } = req.body;
       
       if (!phone || !name) {
         return res.status(400).json({
@@ -1484,13 +1556,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await createUserManually(req.user!.id, {
         phone,
         name,
+        password,
         initialBalance,
         role,
         status
       });
       
       if (result.success) {
-        auditLogger('user_created', req.user!.id, { phone, name, initialBalance });
+        auditLogger('user_created', req.user!.id, { phone, name, initialBalance, hasCustomPassword: !!password });
       }
       
       res.json(result);

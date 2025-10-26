@@ -3,6 +3,12 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer, type ViteDevServer as ViteDevServerType } from 'vite';
 import { Server } from 'http';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Declare vite as a module variable
 let vite: ViteDevServerType | null = null;
@@ -16,16 +22,16 @@ export async function setupVite(app: express.Application, server: Server) {
     vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa', // Single page application
-      root: path.resolve(__dirname, '../../client'),
+      root: resolve(__dirname, '../../client'),
     });
     
     app.use(vite.middlewares);
 
     // Handle HTML requests - SPA fallback for all non-API routes
-    app.get(/^(?!\/api|\/ws|\/static|\/assets|\/favicon).*/, async (req, res, next) => {
+    app.get(/^(?!\\/api|\\/ws|\\/static|\\/assets|\\/favicon).*/, async (req, res, next) => {
       try {
-        const fs = require('fs');
-        const indexPath = path.resolve(__dirname, '../../client/index.html');
+        const fs = await import('fs');
+        const indexPath = resolve(__dirname, '../../client/index.html');
         
         // Read the index.html file
         let html = fs.readFileSync(indexPath, 'utf-8');
@@ -44,19 +50,19 @@ export async function setupVite(app: express.Application, server: Server) {
   }
 }
 
-export function serveStatic(app: express.Application) {
+export async function serveStatic(app: express.Application) {
   // Serve static files in production
-  const staticDir = path.resolve(__dirname, '../../client/dist');
+  const staticDir = resolve(__dirname, '../../client/dist');
   
   // Check if dist directory exists, otherwise use client root
-  const fs = require('fs');
-  const assetsDir = fs.existsSync(staticDir) ? staticDir : path.resolve(__dirname, '../../client');
+  const fs = await import('fs');
+  const assetsDir = fs.existsSync(staticDir) ? staticDir : resolve(__dirname, '../../client');
   
   app.use(express.static(assetsDir));
   
   // Handle all routes by serving index.html in production, excluding API routes
-  app.get(/^(?!\/api|\/ws|\/static|\/assets|\/favicon).*/, (req, res) => {
-    res.sendFile(path.resolve(assetsDir, 'index.html'));
+  app.get(/^(?!\\/api|\\/ws|\\/static|\\/assets|\\/favicon).*/, (req, res) => {
+    res.sendFile(resolve(assetsDir, 'index.html'));
   });
 }
 

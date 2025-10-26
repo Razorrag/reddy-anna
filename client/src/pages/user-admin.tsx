@@ -19,7 +19,8 @@ import {
   Plus,
   RefreshCw,
   Loader2,
-  ArrowLeft
+  ArrowLeft,
+  UserPlus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -32,7 +33,8 @@ import {
   validateMobileNumber,
   type UserAdminFilters,
   type UserBalanceUpdate,
-  type UserStatusUpdate
+  type UserStatusUpdate,
+  createUserManually
 } from "@/services/userAdminService";
 import { type AdminUser } from "@/types/game";
 import UserBalanceModal from "@/components/UserBalanceModal";
@@ -49,6 +51,17 @@ export default function UserAdmin() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  
+  // State for user creation
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newUserPhone, setNewUserPhone] = useState('');
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserBalance, setNewUserBalance] = useState('');
+  const [newUserRole, setNewUserRole] = useState('player');
+  const [newUserStatus, setNewUserStatus] = useState('active');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  
   const { toast } = useToast();
 
   // Load users from API
@@ -156,8 +169,64 @@ export default function UserAdmin() {
     return () => clearTimeout(timeoutId);
   }, [searchTerm, statusFilter]);
 
+  // Handle new user creation
+  const handleCreateUser = async () => {
+    if (!newUserName.trim() || !newUserPhone.trim()) {
+      toast({
+        title: "Error",
+        description: "Name and phone number are required",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsCreatingUser(true);
+    try {
+      const userData = {
+        phone: newUserPhone,
+        name: newUserName,
+        password: newUserPassword || newUserPhone, // Use provided password or default to phone number
+        initialBalance: parseFloat(newUserBalance) || 100000,
+        role: newUserRole,
+        status: newUserStatus
+      };
+
+      const response = await createUserManually(userData);
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: response.message || "User created successfully"
+        });
+        // Reset form
+        setNewUserPhone('');
+        setNewUserName('');
+        setNewUserPassword('');
+        setNewUserBalance('');
+        setNewUserRole('player');
+        setNewUserStatus('active');
+        setShowCreateForm(false);
+        // Reload users list
+        loadUsers({ search: searchTerm, status: statusFilter as any });
+      } else {
+        toast({
+          title: "Error",
+          description: response.error || "Failed to create user",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create user",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-4">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -171,13 +240,21 @@ export default function UserAdmin() {
                 Back to Dashboard
               </button>
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-500 bg-clip-text text-transparent drop-shadow-lg mb-2">User Management</h1>
-            <p className="text-gray-300">Manage realtime users currently in the game</p>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-gold to-yellow-600 bg-clip-text text-transparent drop-shadow-lg mb-2">User Management</h1>
+            <p className="text-gray-400">Manage realtime users currently in the game</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10"
+              className="border-gold/30 text-gold hover:bg-gold/10"
+              onClick={() => setShowCreateForm(!showCreateForm)}
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              {showCreateForm ? "Cancel" : "Create User"}
+            </Button>
+            <Button
+              variant="outline"
+              className="border-gold/30 text-gold hover:bg-gold/10"
               onClick={() => loadUsers({ search: searchTerm, status: statusFilter as any })}
               disabled={isLoading}
             >
@@ -192,65 +269,174 @@ export default function UserAdmin() {
         </div>
       </div>
 
+      {/* Create User Form */}
+      {showCreateForm && (
+        <div className="max-w-7xl mx-auto mb-8">
+          <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <UserPlus className="w-5 h-5" />
+                Create New User
+              </CardTitle>
+              <CardDescription className="text-gray-400">
+                Add a new user to the platform
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Full Name *</label>
+                  <Input
+                    value={newUserName}
+                    onChange={(e) => setNewUserName(e.target.value)}
+                    placeholder="Enter user's full name"
+                    className="bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Phone Number *</label>
+                  <Input
+                    value={newUserPhone}
+                    onChange={(e) => setNewUserPhone(e.target.value)}
+                    placeholder="Enter 10-digit phone number"
+                    className="bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Password</label>
+                  <Input
+                    type="password"
+                    value={newUserPassword}
+                    onChange={(e) => setNewUserPassword(e.target.value)}
+                    placeholder="Leave empty for default (phone number)"
+                    className="bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Initial Balance</label>
+                  <Input
+                    type="number"
+                    value={newUserBalance}
+                    onChange={(e) => setNewUserBalance(e.target.value)}
+                    placeholder="100000"
+                    className="bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Role</label>
+                  <select
+                    value={newUserRole}
+                    onChange={(e) => setNewUserRole(e.target.value)}
+                    className="w-full px-3 py-2 bg-black/30 border border-gold/30 rounded-md text-white focus:border-gold focus:outline-none"
+                  >
+                    <option value="player">Player</option>
+                    <option value="admin">Admin</option>
+                    <option value="moderator">Moderator</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Status</label>
+                  <select
+                    value={newUserStatus}
+                    onChange={(e) => setNewUserStatus(e.target.value)}
+                    className="w-full px-3 py-2 bg-black/30 border border-gold/30 rounded-md text-white focus:border-gold focus:outline-none"
+                  >
+                    <option value="active">Active</option>
+                    <option value="suspended">Suspended</option>
+                    <option value="banned">Banned</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  className="border-gray-500 text-gray-300 hover:bg-gray-500/10"
+                  onClick={() => setShowCreateForm(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-gold to-yellow-600 hover:from-yellow-500 hover:to-yellow-500 text-black font-semibold"
+                  onClick={handleCreateUser}
+                  disabled={isCreatingUser}
+                >
+                  {isCreatingUser ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Create User
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Stats Cards */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className={cn(
           "grid grid-cols-1 md:grid-cols-4 gap-6 transition-all duration-1000",
           isLoaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
         )}>
-          <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
+          <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-purple-200">Total Users</CardTitle>
+              <CardTitle className="text-sm font-medium text-gold">Total Users</CardTitle>
               <UserCheck className="h-4 w-4 text-white" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-white">{users.length}</div>
-              <p className="text-xs text-purple-300">
+              <p className="text-xs text-gray-400">
                 Registered users
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
+          <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-purple-200">Active Users</CardTitle>
+              <CardTitle className="text-sm font-medium text-gold">Active Users</CardTitle>
               <CheckCircle className="h-4 w-4 text-green-400" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-400">
                 {users.filter(u => u.status === 'active').length}
               </div>
-              <p className="text-xs text-purple-300">
+              <p className="text-xs text-gray-400">
                 Currently active
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
+          <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-purple-200">Suspended</CardTitle>
+              <CardTitle className="text-sm font-medium text-gold">Suspended</CardTitle>
               <XCircle className="h-4 w-4 text-yellow-400" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-400">
                 {users.filter(u => u.status === 'suspended').length}
               </div>
-              <p className="text-xs text-purple-300">
+              <p className="text-xs text-gray-400">
                 Temporarily suspended
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
+          <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-purple-200">Banned</CardTitle>
+              <CardTitle className="text-sm font-medium text-gold">Banned</CardTitle>
               <Ban className="h-4 w-4 text-red-400" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-400">
                 {users.filter(u => u.status === 'banned').length}
               </div>
-              <p className="text-xs text-purple-300">
+              <p className="text-xs text-gray-400">
                 Permanently banned
               </p>
             </CardContent>
@@ -260,23 +446,23 @@ export default function UserAdmin() {
 
       {/* Filters and Search */}
       <div className="max-w-7xl mx-auto mb-8">
-        <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
+        <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row gap-4 items-center">
               <div className="relative flex-1 w-full">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-200 w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gold w-4 h-4" />
                 <Input
                   placeholder="Search users by name, phone, or mobile number..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-purple-950/30 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400"
+                  className="pl-10 bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold"
                 />
               </div>
               <div className="flex gap-2">
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 bg-purple-950/30 border border-purple-400/30 rounded-md text-white focus:border-purple-400 focus:outline-none"
+                  className="px-3 py-2 bg-black/30 border border-gold/30 rounded-md text-white focus:border-gold focus:outline-none"
                 >
                   <option value="all">All Status</option>
                   <option value="active">Active</option>
@@ -291,10 +477,10 @@ export default function UserAdmin() {
 
       {/* Users Table */}
       <div className="max-w-7xl mx-auto">
-        <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
+        <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-white">User Accounts</CardTitle>
-            <CardDescription className="text-purple-200">
+            <CardDescription className="text-gray-400">
               Manage user accounts, balances, and permissions
             </CardDescription>
           </CardHeader>
