@@ -324,18 +324,36 @@ export const validateApiKey = (req: Request, res: Response, next: NextFunction) 
   next();
 };
 
-// Admin access validation - DISABLED FOR DEVELOPMENT
+// Admin access validation middleware
 export const validateAdminAccess = (req: Request, res: Response, next: NextFunction) => {
-  // ⚠️ ADMIN VALIDATION COMPLETELY DISABLED - ALL REQUESTS ALLOWED
-  console.log('⚠️ validateAdminAccess disabled - allowing request');
+  const user = (req as any).user;
   
-  // Set a default admin user for compatibility
-  if (!(req as any).user) {
-    (req as any).user = {
-      id: 'anonymous',
-      username: 'anonymous',
-      role: 'admin'
-    };
+  // Check if user exists and has admin role
+  if (!user) {
+    // In development, allow access with warning
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('⚠️ Dev mode: No user found, allowing admin access');
+      (req as any).user = {
+        id: 'dev-admin',
+        username: 'dev-admin',
+        role: 'admin'
+      };
+      return next();
+    }
+    
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required'
+    });
+  }
+  
+  // Verify admin role
+  if (user.role !== 'admin') {
+    console.log(`Access denied: User ${user.id} attempted to access admin endpoint`);
+    return res.status(403).json({
+      success: false,
+      error: 'Admin access required'
+    });
   }
   
   next();

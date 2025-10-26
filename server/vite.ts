@@ -21,23 +21,22 @@ export async function setupVite(app: express.Application, server: Server) {
     
     app.use(vite.middlewares);
 
-    // Handle HTML requests
-    app.get(/^(?!\/api|\/ws|\/static|\/assets|\/favicon).*/, async (req, res) => {
+    // Handle HTML requests - SPA fallback for all non-API routes
+    app.get(/^(?!\/api|\/ws|\/static|\/assets|\/favicon).*/, async (req, res, next) => {
       try {
+        const fs = require('fs');
         const indexPath = path.resolve(__dirname, '../../client/index.html');
-        let html = await vite!.transformIndexHtml(req.originalUrl, 
-          (await vite!.ssrLoadModule(indexPath)).default || 
-          await vite!.transformRequest(indexPath).then(result => result!.html)
-        );
+        
+        // Read the index.html file
+        let html = fs.readFileSync(indexPath, 'utf-8');
+        
+        // Transform the HTML with Vite
+        html = await vite!.transformIndexHtml(req.originalUrl, html);
         
         res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
       } catch (e) {
-        vite!.ssrLoadModule
-        const indexPath = path.resolve(__dirname, '../../client/index.html');
-        const html = await vite!.transformIndexHtml(req.originalUrl, 
-          await vite!.transformRequest(indexPath).then(result => result!.html || '')
-        );
-        res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+        console.error('Error serving HTML:', e);
+        next(e);
       }
     });
   } catch (e) {

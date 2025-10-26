@@ -33,8 +33,8 @@ function Router() {
       <Route path="/admin-login" component={AdminLogin} />
       
       {/* Player Game Routes */}
-      <Route path="/game" component={PlayerGame} />
       <Route path="/play" component={PlayerGame} />
+      <Route path="/player-game" component={PlayerGame} />
       
       {/* Profile Routes */}
       <Route path="/profile" component={Profile} />
@@ -44,6 +44,11 @@ function Router() {
       <Route path="/admin">
         <ProtectedAdminRoute>
           <Admin />
+        </ProtectedAdminRoute>
+      </Route>
+      <Route path="/game">
+        <ProtectedAdminRoute>
+          <AdminGame />
         </ProtectedAdminRoute>
       </Route>
       <Route path="/admin-game">

@@ -118,3 +118,8 @@ yarn-error.log*
 # Temporary folders
 tmp/
 temp/
+
+# RTMP/HLS streaming files
+media/
+*.ts
+*.m3u8

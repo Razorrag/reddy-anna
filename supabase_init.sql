@@ -307,96 +307,61 @@ CREATE INDEX IF NOT EXISTS idx_yearly_stats_year ON yearly_game_statistics(year)
 
 -- Insert default admin user
 -- Username: admin
--- Password: admin123
--- Password hash generated using bcrypt with 12 rounds
--- Hash for 'admin123': $2b$12$ZAn9noQkk7Adv.efdK/77e8BZark6rSz5I5PfoZUo3rjmeegIbg8K
+-- Password: Admin@123
+-- Password hash generated using bcrypt with 10 rounds
 INSERT INTO admin_credentials (id, username, password_hash, role, created_at, updated_at) 
-SELECT 
+VALUES (
   gen_random_uuid()::text,
   'admin',
-  '$2b$12$ZAn9noQkk7Adv.efdK/77e8BZark6rSz5I5PfoZUo3rjmeegIbg8K',
+  '$2b$10$GFwpBgUccj3Al4OqMLMTmukHeQoVymRbog99qaXDKiY6lrm/46iIu',
   'admin',
   NOW(),
   NOW()
-WHERE NOT EXISTS (SELECT 1 FROM admin_credentials WHERE username = 'admin');
+) ON CONFLICT (username) DO NOTHING;
 
 -- ============================================
 -- DEFAULT DATA - GAME SETTINGS
 -- ============================================
 
 INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'betting_timer_duration', '30', 'Duration of betting phase in seconds'
-WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'betting_timer_duration');
-
-INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'round_transition_delay', '2', 'Delay between rounds in seconds'
-WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'round_transition_delay');
-
-INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'min_bet_amount', '1000', 'Minimum bet amount in rupees'
-WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'min_bet_amount');
-
-INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'max_bet_amount', '100000', 'Maximum bet amount in rupees'
-WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'max_bet_amount');
-
-INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'default_starting_balance', '100000', 'Default starting balance for new users (₹100,000)'
-WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'default_starting_balance');
-
-INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'house_commission_rate', '0.05', 'House commission rate (0.05 = 5%)'
-WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'house_commission_rate');
-
-INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'admin_whatsapp_number', '918686886632', 'Admin WhatsApp number for user requests'
-WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'admin_whatsapp_number');
-
-INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'default_deposit_bonus_percent', '5', 'Default deposit bonus percentage'
-WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'default_deposit_bonus_percent');
-
-INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'referral_bonus_percent', '1', 'Referral bonus percentage'
-WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'referral_bonus_percent');
-
-INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'conditional_bonus_threshold', '30', 'Conditional bonus threshold percentage'
-WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'conditional_bonus_threshold');
+VALUES 
+  ('betting_timer_duration', '30', 'Duration of betting phase in seconds'),
+  ('round_transition_delay', '2', 'Delay between rounds in seconds'),
+  ('min_bet_amount', '1000', 'Minimum bet amount in rupees'),
+  ('max_bet_amount', '100000', 'Maximum bet amount in rupees'),
+  ('default_starting_balance', '100000', 'Default starting balance for new users (₹100,000)'),
+  ('house_commission_rate', '0.05', 'House commission rate (0.05 = 5%)'),
+  ('admin_whatsapp_number', '918686886632', 'Admin WhatsApp number for user requests'),
+  ('default_deposit_bonus_percent', '5', 'Default deposit bonus percentage'),
+  ('referral_bonus_percent', '1', 'Referral bonus percentage'),
+  ('conditional_bonus_threshold', '30', 'Conditional bonus threshold percentage')
+ON CONFLICT (setting_key) DO NOTHING;
 
 -- ============================================
 -- DEFAULT DATA - STREAM SETTINGS
 -- ============================================
 
 INSERT INTO stream_settings (setting_key, setting_value, description)
-SELECT 'stream_provider', 'youtube', 'Stream provider (youtube, restream, custom)'
-WHERE NOT EXISTS (SELECT 1 FROM stream_settings WHERE setting_key = 'stream_provider');
-
-INSERT INTO stream_settings (setting_key, setting_value, description)
-SELECT 'youtube_video_id', 'z7fyLrTL8ng', 'YouTube Live video ID'
-WHERE NOT EXISTS (SELECT 1 FROM stream_settings WHERE setting_key = 'youtube_video_id');
-
-INSERT INTO stream_settings (setting_key, setting_value, description)
-SELECT 'stream_title', 'Reddy Anna Andar Bahar Live', 'Title for the stream'
-WHERE NOT EXISTS (SELECT 1 FROM stream_settings WHERE setting_key = 'stream_title');
-
-INSERT INTO stream_settings (setting_key, setting_value, description)
-SELECT 'stream_status', 'offline', 'Current stream status (online/offline)'
-WHERE NOT EXISTS (SELECT 1 FROM stream_settings WHERE setting_key = 'stream_status');
+VALUES 
+  ('stream_provider', 'youtube', 'Stream provider (youtube, restream, custom)'),
+  ('youtube_video_id', 'z7fyLrTL8ng', 'YouTube Live video ID'),
+  ('stream_title', 'Reddy Anna Andar Bahar Live', 'Title for the stream'),
+  ('stream_status', 'offline', 'Current stream status (online/offline)')
+ON CONFLICT (setting_key) DO NOTHING;
 
 -- ============================================
 -- COMPLETION MESSAGE
 -- ============================================
 
-DO $
+DO $$
 BEGIN
   RAISE NOTICE '✅ Database initialization complete!';
   RAISE NOTICE '📊 All tables created successfully';
   RAISE NOTICE '🔐 Admin account created:';
   RAISE NOTICE '   Username: admin';
-  RAISE NOTICE '   Password: admin123';
+  RAISE NOTICE '   Password: Admin@123';
   RAISE NOTICE '🎮 Game settings configured';
   RAISE NOTICE '📺 Stream settings configured';
   RAISE NOTICE '';
   RAISE NOTICE '⚠️  IMPORTANT: Change the admin password after first login!';
-END $;
+END $$;

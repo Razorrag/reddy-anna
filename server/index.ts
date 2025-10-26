@@ -10,6 +10,7 @@ import cors from 'cors';
 import path from 'path';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { startRTMPServer } from "./rtmp-server";
 
 // Validate all required environment variables
 const requiredEnvVars = [
@@ -182,17 +183,6 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // Stream status endpoint - returns Restream.io status
-  app.get('/api/game/stream-status', (req, res) => {
-    res.json({
-      success: true,
-      streamStatus: 'live', // Restream.io handles the streaming
-      streamProvider: 'restream',
-      streamUrl: 'https://player.restream.io?token=2123471e69ed8bf8cb11cd207c282b1',
-      viewers: 0 // TODO: Implement viewer counting from Restream API
-    });
-  });
-
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
@@ -212,9 +202,16 @@ app.use((req, res, next) => {
   
   server.listen(port, host, () => {
     log(`serving on http://${host}:${port}`); // This should show 0.0.0.0:5000
-    log(`🎥 Restream.io integration enabled`);
-    log(`📡 Stream configured: https://player.restream.io?token=2123471e69ed8bf8cb11cd207c282b1`);
-    log(`🔧 Admin panel: Game Control + Stream Settings tabs available`);
     log(`WebSocket server running on the same port as HTTP server`);
+    log(`🔧 Admin panel: Game Control available`);
+    
+    // Start RTMP server for direct OBS streaming
+    try {
+      startRTMPServer();
+      log(`✅ Direct OBS streaming enabled`);
+    } catch (error) {
+      log(`⚠️ RTMP server failed to start: ${error}`);
+      log(`   Make sure FFmpeg is installed and FFMPEG_PATH is set in .env`);
+    }
   });
 })();

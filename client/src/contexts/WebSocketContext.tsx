@@ -30,21 +30,16 @@ const WebSocketContext = createContext<WebSocketContextType | undefined>(undefin
 
 const getWebSocketUrl = (): string => {
   if (typeof window !== 'undefined') {
-    // Check if we are in development mode
-    if (import.meta.env.DEV) {
-      // In development, use the Vite dev server host with WebSocket proxy
-      // Vite runs on localhost:3000 and proxies /ws to localhost:5000
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host; // This will be localhost:3000 in dev
-      return `${protocol}//${host}/ws`;
-    }
-    
-    // In production, use the relative host
+    // CORRECT IMPLEMENTATION: Use same protocol as page (http->ws, https->wss)
+    // This works correctly with Vite proxy in development:
+    // - Browser connects to ws://localhost:3000/ws
+    // - Vite proxy forwards to ws://localhost:5000/ws (backend)
+    // In production, connects directly to the same host as the page
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     return `${protocol}//${host}/ws`;
   }
-  // Server environment
+  // Server-side rendering fallback
   return process.env.WEBSOCKET_URL || 'ws://localhost:5000/ws';
 };
 

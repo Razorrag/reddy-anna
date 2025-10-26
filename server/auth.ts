@@ -20,6 +20,20 @@ export const validatePassword = async (password: string, hashedPassword: string)
   return await bcrypt.compare(password, hashedPassword);
 };
 
+// Generate simple authentication token
+export const generateToken = (userData: { id: string; phone?: string; username?: string; role: string }): string => {
+  const tokenData = {
+    id: userData.id,
+    phone: userData.phone,
+    username: userData.username,
+    role: userData.role,
+    exp: Date.now() + (24 * 60 * 60 * 1000) // 24 hours expiration
+  };
+  
+  // Simple base64 encoding (in production, use JWT library)
+  return Buffer.from(JSON.stringify(tokenData)).toString('base64');
+};
+
 // 🎯 REGISTER USER WITH PHONE NUMBER
 export const registerUser = async (userData: {
   name: string;
@@ -56,11 +70,20 @@ export const registerUser = async (userData: {
       referral_code: sanitizedData.referralCode || null // Store referral code if provided
     });
 
+    // Generate authentication token
+    const token = generateToken({
+      id: newUser.id,
+      phone: newUser.phone,
+      role: 'player'
+    });
+
     // Format response (remove sensitive data)
     const userResponse = {
       id: newUser.id, // This will be the phone number
       phone: newUser.phone,
-      balance: newUser.balance // This should be ₹100,000
+      balance: newUser.balance, // This should be ₹100,000
+      role: 'player',
+      token
     };
 
     return { success: true, user: userResponse };
@@ -112,12 +135,20 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
     // Update last login
     await storage.updateUser(user.id, { last_login: new Date().toISOString() });
 
+    // Generate authentication token
+    const token = generateToken({
+      id: user.id,
+      phone: user.phone,
+      role: user.role || 'player'
+    });
+
     // Format response (remove sensitive data)
     const userResponse = {
       id: user.id, // Phone number as ID
       phone: user.phone,
       balance: user.balance, // This should be ₹100,000 for test users
-      role: user.role || 'player'
+      role: user.role || 'player',
+      token
     };
 
     return { success: true, user: userResponse };
@@ -160,11 +191,19 @@ export const loginAdmin = async (username: string, password: string): Promise<Au
       return { success: false, error: 'Invalid password' };
     }
 
+    // Generate authentication token
+    const token = generateToken({
+      id: admin.id,
+      username: admin.username,
+      role: admin.role || 'admin'
+    });
+
     // Format response (remove sensitive data)
     const adminResponse = {
       id: admin.id,
       username: admin.username,
-      role: admin.role || 'admin'
+      role: admin.role || 'admin',
+      token
     };
 
     console.log('Admin login successful for:', admin.username);

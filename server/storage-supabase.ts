@@ -134,7 +134,14 @@ export interface IStorage {
   getGameHistory(limit?: number): Promise<GameHistoryEntry[]>;
   
   // Settings operations
-  getGameSettings(): Promise<{ minBet: number; maxBet: number; timerDuration: number }>;
+  getGameSettings(): Promise<{ 
+    minBet: number; 
+    maxBet: number; 
+    timerDuration: number;
+    default_deposit_bonus_percent: number;
+    referral_bonus_percent: number;
+    conditional_bonus_threshold: number;
+  }>;
   updateGameSettings(settings: { minBet?: number; maxBet?: number; timerDuration?: number }): Promise<void>;
   getGameSetting(key: string): Promise<string | undefined>;
   updateGameSetting(key: string, value: string): Promise<void>;

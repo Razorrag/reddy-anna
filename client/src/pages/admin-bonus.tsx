@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +21,8 @@ import {
   Award,
   RefreshCw,
   Download,
-  Clock
+  Clock,
+  ArrowLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +58,7 @@ interface BonusSettings {
 }
 
 export default function AdminBonus() {
+  const [, setLocation] = useLocation();
   const [bonusTransactions, setBonusTransactions] = useState<BonusTransaction[]>([]);
   const [referralData, setReferralData] = useState<ReferralData[]>([]);
   const [bonusSettings, setBonusSettings] = useState<BonusSettings>({
@@ -207,13 +210,22 @@ export default function AdminBonus() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 p-4">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Bonus Management</h1>
-            <p className="text-purple-200">Manage deposit bonuses, referral bonuses, and system settings</p>
+            <div className="flex items-center gap-3 mb-2">
+              <button
+                onClick={() => setLocation('/admin')}
+                className="px-4 py-2 bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-white rounded-lg font-semibold transition-all duration-200 hover:scale-105 shadow-lg flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Dashboard
+              </button>
+            </div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-500 bg-clip-text text-transparent drop-shadow-lg mb-2">Bonus Management</h1>
+            <p className="text-gray-300">Manage deposit bonuses, referral bonuses, and system settings</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10">

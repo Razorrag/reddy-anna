@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +18,8 @@ import {
   Activity,
   Plus,
   RefreshCw,
-  Loader2
+  Loader2,
+  ArrowLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -38,6 +40,7 @@ import UserDetailsModal from "@/components/UserDetailsModal";
 import { useToast } from "@/hooks/use-toast";
 
 export default function UserAdmin() {
+  const [, setLocation] = useLocation();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -154,15 +157,22 @@ export default function UserAdmin() {
   }, [searchTerm, statusFilter]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 p-4">
-      {/* No breadcrumbs - admin access is hidden */}
-      
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 p-4">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">User Management</h1>
-            <p className="text-purple-200">Manage realtime users currently in the game</p>
+            <div className="flex items-center gap-3 mb-2">
+              <button
+                onClick={() => setLocation('/admin')}
+                className="px-4 py-2 bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-white rounded-lg font-semibold transition-all duration-200 hover:scale-105 shadow-lg flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Dashboard
+              </button>
+            </div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-500 bg-clip-text text-transparent drop-shadow-lg mb-2">User Management</h1>
+            <p className="text-gray-300">Manage realtime users currently in the game</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
