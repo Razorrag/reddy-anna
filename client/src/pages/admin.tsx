@@ -93,7 +93,7 @@ export default function Admin() {
           {/* Game Control */}
           <Card 
             className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer"
-            onClick={() => setLocation('/game')}
+            onClick={() => setLocation('/admin-game')}
           >
             <CardHeader>
               <div className="w-16 h-16 bg-gradient-to-br from-gold to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
