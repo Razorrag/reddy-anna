@@ -82,29 +82,9 @@ export const paymentLimiter = rateLimit({
 
 // Helmet security headers configuration
 export const securityHeaders = helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
-      scriptSrc: ["'self'"],
-      connectSrc: ["'self'", "https://api.telegram.org", "wss:"],
-      mediaSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      childSrc: ["'none'"],
-      frameSrc: ["'none'"],
-      workerSrc: ["'self'"],
-      manifestSrc: ["'self'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
-    },
-  },
+  contentSecurityPolicy: false, // EXPLICITLY DISABLE CSP
+  hsts: false, // EXPLICITLY DISABLE HSTS
   referrerPolicy: { policy: 'no-referrer' },
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true
-  },
   noSniff: true,
   frameguard: { action: 'deny' },
   xssFilter: true,
@@ -112,6 +92,7 @@ export const securityHeaders = helmet({
   hidePoweredBy: true,
   ieNoOpen: true,
 });
+
 
 // CORS configuration
 export const corsOptions = {
