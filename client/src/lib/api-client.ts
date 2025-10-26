@@ -22,8 +22,21 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // CRITICAL FIX: Remove /api prefix from endpoint if present to prevent double prefix
+    // Since baseURL already includes /api, endpoints should not start with /api
+    let cleanEndpoint = endpoint;
+    if (endpoint.startsWith('/api/')) {
+      cleanEndpoint = endpoint.substring(4); // Remove '/api' to prevent /api/api/
+      console.warn(`⚠️ Endpoint started with /api/, automatically removed: ${endpoint} → ${cleanEndpoint}`);
+    }
+    
+    // Ensure endpoint starts with /
+    if (!cleanEndpoint.startsWith('/')) {
+      cleanEndpoint = '/' + cleanEndpoint;
+    }
+    
     // CRITICAL: Use relative URL so proxy works
-    const url = `${this.baseURL}${endpoint}`;
+    const url = `${this.baseURL}${cleanEndpoint}`;
     
     console.log(`Making request to: ${url}`); // DEBUG LOG
     

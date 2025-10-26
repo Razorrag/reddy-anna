@@ -81,30 +81,52 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (ws && ws.readyState === WebSocket.OPEN) {
       const token = localStorage.getItem('token');
       const userData = localStorage.getItem('user');
+      const isLoggedIn = localStorage.getItem('isLoggedIn');
 
-      if (token && userData) {
+      console.log('🔐 WebSocket authentication check:', {
+        hasToken: !!token,
+        hasUserData: !!userData,
+        isLoggedIn
+      });
+
+      if (userData && isLoggedIn === 'true') {
         try {
           const user = JSON.parse(userData);
-          // Use phone number as userId if available, otherwise use id
-          const userId = user.phone || user.id;
+          
+          // Use phone number as userId if available, otherwise use id or username
+          const userId = user.phone || user.id || user.username;
+          
+          // CRITICAL: Get role from multiple sources to ensure it's captured
+          const userRole = user.role || localStorage.getItem('userRole') || 'player';
+          
+          console.log('📤 Sending WebSocket authentication:', {
+            userId,
+            role: userRole,
+            username: user.username || user.full_name,
+            hasToken: !!token
+          });
+          
           ws.send(JSON.stringify({
             type: 'authenticate',
             data: {
               userId: userId,
-              username: user.username || user.full_name || 'Player',
-              role: user.role || 'player',
+              username: user.username || user.full_name || user.phone || 'User',
+              role: userRole, // Use determined role without fallback
               wallet: user.balance || 0,
-              token: token
+              token: token || undefined
             },
             timestamp: Date.now()
           }));
-          console.log('✅ WebSocket authentication sent:', { userId, role: user.role, hasToken: !!token });
+          
+          console.log(`✅ WebSocket authentication sent for ${userRole.toUpperCase()}: ${userId}`);
         } catch (error) {
           console.error('❌ WebSocket authentication error:', error);
+          console.error('❌ Failed to parse user data:', userData);
         }
       } else {
         // NO FALLBACK - User must be logged in to use WebSocket
-        console.warn('⚠️ WebSocket not authenticated - no user/token found. User must login first.');
+        console.warn('⚠️ WebSocket not authenticated - no valid user session found');
+        console.warn('⚠️ User must login first. HasUserData:', !!userData, 'IsLoggedIn:', isLoggedIn);
       }
     }
   }, []);

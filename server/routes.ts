@@ -73,6 +73,7 @@ import {
   auditLogger
 } from './security';
 import { validateUserData } from './validation';
+import streamRoutes from './stream-routes';
 
 // WebSocket client tracking
 interface WSClient {
@@ -987,6 +988,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             });
             break;
+          
+          // WebRTC Signaling for Screen Share Streaming
+          case 'webrtc_offer':
+            // Handle WebRTC offer from admin
+            if (client?.role === 'admin') {
+              console.log('📡 Admin sending WebRTC offer');
+              
+              // Broadcast offer to all players
+              broadcast({
+                type: 'webrtc_offer',
+                data: {
+                  offer: message.data.offer,
+                  adminId: client.userId
+                }
+              }, client);
+            } else {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Only admin can send WebRTC offers' }
+              }));
+            }
+            break;
+
+          case 'webrtc_answer':
+            // Handle WebRTC answer from player
+            console.log('📡 Player sending WebRTC answer');
+            
+            // Send answer back to admin
+            clients.forEach((adminClient) => {
+              if (adminClient.role === 'admin' && adminClient.ws.readyState === WebSocket.OPEN) {
+                adminClient.ws.send(JSON.stringify({
+                  type: 'webrtc_answer',
+                  data: {
+                    answer: message.data.answer,
+                    playerId: client?.userId
+                  }
+                }));
+              }
+            });
+            break;
+
+          case 'webrtc_ice_candidate':
+            // Handle ICE candidates
+            console.log('🧊 ICE candidate received');
+            
+            if (client?.role === 'admin') {
+              // Broadcast to all players
+              broadcast({
+                type: 'webrtc_ice_candidate',
+                data: {
+                  candidate: message.data.candidate,
+                  fromAdmin: true
+                }
+              }, client);
+            } else {
+              // Send to admin only
+              clients.forEach((adminClient) => {
+                if (adminClient.role === 'admin' && adminClient.ws.readyState === WebSocket.OPEN) {
+                  adminClient.ws.send(JSON.stringify({
+                    type: 'webrtc_ice_candidate',
+                    data: {
+                      candidate: message.data.candidate,
+                      fromPlayer: client?.userId
+                    }
+                  }));
+                }
+              });
+            }
+            break;
+
+          case 'stream_start':
+            // Admin starting stream
+            if (client?.role === 'admin') {
+              console.log('🎥 Stream starting:', message.data.method);
+              
+              // Broadcast to all players
+              broadcast({
+                type: 'stream_status',
+                data: {
+                  status: 'connecting',
+                  method: message.data.method
+                }
+              });
+              
+              // Update database
+              const { streamStorage } = await import('./stream-storage');
+              await streamStorage.updateStreamStatus(message.data.method, 'connecting');
+            }
+            break;
+
+          case 'stream_stop':
+            // Admin stopping stream
+            if (client?.role === 'admin') {
+              console.log('🛑 Stream stopping');
+              
+              // Broadcast to all players
+              broadcast({
+                type: 'stream_status',
+                data: {
+                  status: 'offline'
+                }
+              });
+              
+              // Update database
+              const { streamStorage } = await import('./stream-storage');
+              const config = await streamStorage.getStreamConfig();
+              if (config) {
+                await streamStorage.updateStreamStatus(config.activeMethod, 'offline');
+              }
+            }
+            break;
+          
+          case 'stream_viewer_join':
+            // Player joined stream
+            console.log('👁️ Viewer joined stream');
+            
+            // Update viewer count (could aggregate in the future)
+            if (client?.role === 'player') {
+              const { streamStorage } = await import('./stream-storage');
+              const config = await streamStorage.getStreamConfig();
+              if (config) {
+                await streamStorage.updateViewerCount(config.viewerCount + 1);
+              }
+            }
+            break;
+            
+          case 'stream_viewer_leave':
+            // Player left stream
+            console.log('👁️ Viewer left stream');
+            
+            if (client?.role === 'player') {
+              const { streamStorage } = await import('./stream-storage');
+              const config = await streamStorage.getStreamConfig();
+              if (config && config.viewerCount > 0) {
+                await streamStorage.updateViewerCount(config.viewerCount - 1);
+              }
+            }
+            break;
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
@@ -1279,6 +1418,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       message: 'Logged out successfully'
     });
   });
+  
+  // Stream Routes - Dual streaming (RTMP and WebRTC)
+  app.use("/api/stream", streamRoutes);
   
   // Payment Routes
   app.post("/api/payment/process", paymentLimiter, async (req, res) => {
