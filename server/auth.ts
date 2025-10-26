@@ -1,5 +1,6 @@
-// 🔐 SIMPLIFIED SUPABASE AUTHENTICATION SYSTEM (NO JWT)
+// 🔐 JWT-BASED AUTHENTICATION SYSTEM WITH REFRESH TOKENS
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import { storage } from './storage-supabase';
 import { validateMobileNumber, sanitizeInput, validatePassword as validatePasswordFormat } from './validation';
 
@@ -20,18 +21,62 @@ export const validatePassword = async (password: string, hashedPassword: string)
   return await bcrypt.compare(password, hashedPassword);
 };
 
-// Generate simple authentication token
-export const generateToken = (userData: { id: string; phone?: string; username?: string; role: string }): string => {
-  const tokenData = {
-    id: userData.id,
-    phone: userData.phone,
-    username: userData.username,
-    role: userData.role,
-    exp: Date.now() + (24 * 60 * 60 * 1000) // 24 hours expiration
-  };
+// Generate JWT access token with shorter expiration
+export const generateAccessToken = (userData: { id: string; phone?: string; username?: string; role: string }): string => {
+  const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+  const expiresIn = process.env.JWT_EXPIRES_IN || '15m'; // 15 minutes default
   
-  // Simple base64 encoding (in production, use JWT library)
-  return Buffer.from(JSON.stringify(tokenData)).toString('base64');
+  return jwt.sign(
+    {
+      id: userData.id,
+      phone: userData.phone,
+      username: userData.username,
+      role: userData.role,
+      type: 'access'
+    },
+    secret,
+    { expiresIn }
+  );
+};
+
+// Generate JWT refresh token with longer expiration
+export const generateRefreshToken = (userData: { id: string; phone?: string; username?: string; role: string }): string => {
+  const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+  const expiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d'; // 7 days default
+  
+  const refreshToken = jwt.sign(
+    {
+      id: userData.id,
+      phone: userData.phone,
+      username: userData.username,
+      role: userData.role,
+      type: 'refresh'
+    },
+    secret,
+    { expiresIn }
+  );
+  
+  // In a real application, you'd store the refresh token in a database
+  // For now, we'll just return it to be stored by the client
+  return refreshToken;
+};
+
+// Verify JWT token
+export const verifyToken = (token: string): any => {
+  const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+  try {
+    return jwt.verify(token, secret);
+  } catch (error) {
+    throw new Error('Invalid or expired token');
+  }
+};
+
+// Generate authentication tokens (both access and refresh)
+export const generateTokens = (userData: { id: string; phone?: string; username?: string; role: string }) => {
+  return {
+    accessToken: generateAccessToken(userData),
+    refreshToken: generateRefreshToken(userData)
+  };
 };
 
 // 🎯 REGISTER USER WITH PHONE NUMBER
@@ -71,8 +116,8 @@ export const registerUser = async (userData: {
       referral_code: sanitizedData.referralCode || null // Store referral code if provided
     });
 
-    // Generate authentication token
-    const token = generateToken({
+    // Generate authentication tokens
+    const { accessToken, refreshToken } = generateTokens({
       id: newUser.id,
       phone: newUser.phone,
       role: 'player'
@@ -84,7 +129,8 @@ export const registerUser = async (userData: {
       phone: newUser.phone,
       balance: newUser.balance, // This should be ₹100,000
       role: 'player',
-      token
+      token: accessToken, // Keep same field name for compatibility
+      refreshToken
     };
 
     return { success: true, user: userResponse };
@@ -136,8 +182,8 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
     // Update last login
     await storage.updateUser(user.id, { last_login: new Date().toISOString() });
 
-    // Generate authentication token
-    const token = generateToken({
+    // Generate authentication tokens
+    const { accessToken, refreshToken } = generateTokens({
       id: user.id,
       phone: user.phone,
       role: user.role || 'player'
@@ -149,7 +195,8 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
       phone: user.phone,
       balance: user.balance, // This should be ₹100,000 for test users
       role: user.role || 'player',
-      token
+      token: accessToken, // Keep same field name for compatibility
+      refreshToken
     };
 
     return { success: true, user: userResponse };
@@ -192,8 +239,8 @@ export const loginAdmin = async (username: string, password: string): Promise<Au
       return { success: false, error: 'Invalid password' };
     }
 
-    // Generate authentication token
-    const token = generateToken({
+    // Generate authentication tokens
+    const { accessToken, refreshToken } = generateTokens({
       id: admin.id,
       username: admin.username,
       role: admin.role || 'admin'
@@ -204,7 +251,8 @@ export const loginAdmin = async (username: string, password: string): Promise<Au
       id: admin.id,
       username: admin.username,
       role: admin.role || 'admin',
-      token
+      token: accessToken, // Keep same field name for compatibility
+      refreshToken
     };
 
     console.log('Admin login successful for:', admin.username);
@@ -315,13 +363,13 @@ export const requireAuth = (req: any, res: any, next: any) => {
   // Check token authentication
   if (token) {
     try {
-      const decoded = JSON.parse(Buffer.from(token, 'base64').toString());
+      const decoded = verifyToken(token);
       
-      // Check token expiration
-      if (decoded.exp && Date.now() > decoded.exp) {
+      // Ensure this is an access token, not a refresh token
+      if (decoded.type !== 'access') {
         return res.status(401).json({ 
           success: false, 
-          error: 'Token expired' 
+          error: 'Invalid token type' 
         });
       }
       
@@ -331,13 +379,13 @@ export const requireAuth = (req: any, res: any, next: any) => {
         username: decoded.username,
         role: decoded.role
       };
-      console.log('✅ Authenticated via token:', req.user.id);
+      console.log('✅ Authenticated via JWT token:', req.user.id);
       return next();
     } catch (error) {
       console.error('Token validation error:', error);
       return res.status(401).json({ 
         success: false, 
-        error: 'Invalid token' 
+        error: 'Invalid or expired token' 
       });
     }
   }

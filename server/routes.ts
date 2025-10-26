@@ -1103,6 +1103,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Token refresh endpoint (doesn't need authentication)
+  app.post("/api/auth/refresh", async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+      
+      if (!refreshToken) {
+        return res.status(401).json({
+          success: false,
+          error: 'Refresh token is required'
+        });
+      }
+
+      // Verify refresh token
+      const { verifyToken } = await import('./auth');
+      let decoded;
+      try {
+        decoded = verifyToken(refreshToken);
+      } catch (error) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid refresh token'
+        });
+      }
+
+      // Ensure this is a refresh token, not an access token
+      if (decoded.type !== 'refresh') {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid token type for refresh'
+        });
+      }
+
+      // In a real implementation, you would check if the refresh token exists in your database
+      // For now, we'll just generate new tokens based on the user's information
+      const { generateTokens } = await import('./auth');
+      
+      // Get user information (in a real implementation, you'd fetch from database)
+      const { storage } = await import('./storage-supabase');
+      let user;
+      if (decoded.phone) {
+        user = await storage.getUserByPhone(decoded.phone);
+      } else if (decoded.username) {
+        const admin = await storage.getAdminByUsername(decoded.username);
+        user = { id: admin.id, phone: admin.username, role: admin.role }; // Normalize for token generation
+      }
+      
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          error: 'User not found'
+        });
+      }
+
+      // Generate new access and refresh tokens
+      const newTokens = generateTokens({
+        id: user.id,
+        phone: user.phone,
+        role: user.role || 'player'
+      });
+
+      res.json({
+        success: true,
+        token: newTokens.accessToken, // Keep same field name for compatibility
+        refreshToken: newTokens.refreshToken
+      });
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Token refresh failed'
+      });
+    }
+  });
+
   // Auth routes don't need authentication
   // Protected Routes (require authentication)
   app.use("/api/*", authenticateToken);
