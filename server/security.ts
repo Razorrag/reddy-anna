@@ -306,42 +306,35 @@ export const validateApiKey = (req: Request, res: Response, next: NextFunction) 
 };
 
 // Admin access validation middleware
+// 🔐 SECURITY: NO BYPASSES - Admin access requires proper authentication
 export const validateAdminAccess = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
   
-  console.log('🔍 validateAdminAccess - User object:', user); // Debug logging
+  console.log('🔍 validateAdminAccess check:', { 
+    hasUser: !!user, 
+    userId: user?.id, 
+    role: user?.role 
+  });
   
-  // Check if user exists and has admin role
+  // 🔐 SECURITY: Check if user exists (NO DEV MODE BYPASS)
   if (!user) {
-    console.log('⚠️ No user found in request');
-    // In development, allow access with warning
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('⚠️ Dev mode: No user found, creating default admin user');
-      (req as any).user = {
-        id: 'dev-admin',
-        username: 'dev-admin',
-        role: 'admin',
-        phone: '0000000000' // Add default phone for compatibility
-      };
-      return next();
-    }
-    
+    console.log('❌ Admin access denied: No authenticated user');
     return res.status(401).json({
       success: false,
-      error: 'Authentication required'
+      error: 'Authentication required. Please login as admin.'
     });
   }
   
-  // Verify admin role
-  if (user.role !== 'admin') {
-    console.log(`Access denied: User ${user.id} (role: ${user.role}) attempted to access admin endpoint`);
+  // 🔐 SECURITY: Verify admin role (NO EXCEPTIONS)
+  if (user.role !== 'admin' && user.role !== 'super_admin') {
+    console.log(`❌ Admin access denied: User ${user.id} has role '${user.role}' (requires 'admin' or 'super_admin')`);
     return res.status(403).json({
       success: false,
-      error: 'Admin access required'
+      error: 'Admin access required. Your role does not have permission.'
     });
   }
   
-  console.log(`✅ Admin access granted for user ${user.id}`);
+  console.log(`✅ Admin access granted: ${user.id} (${user.role})`);
   next();
 };
 

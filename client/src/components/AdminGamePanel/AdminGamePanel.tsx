@@ -24,7 +24,7 @@ import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
 import PersistentSidePanel from '../PersistentSidePanel';
 import WinnerCelebration from '../WinnerCelebration';
-import SimpleStreamSettings from './SimpleStreamSettings';
+import DualStreamSettings from './DualStreamSettings';
 import { Home } from 'lucide-react';
 
 const AdminGamePanel: React.FC = () => {
@@ -130,7 +130,7 @@ const AdminGamePanel: React.FC = () => {
 
         {/* Tab Content */}
         {activeTab === 'stream' ? (
-          <SimpleStreamSettings />
+          <DualStreamSettings />
         ) : (
           <div className="space-y-4">
             {/* STEP 1: Opening Card Selection (Only at start) */}

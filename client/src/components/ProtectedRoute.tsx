@@ -25,14 +25,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       if (userStr && isLoggedIn) {
         try {
           const user = JSON.parse(userStr);
-          // Check if user has player role (not admin)
-          if (user && user.role === 'player') {
+          // Allow both players AND admins (admins need to see player experience)
+          if (user && (user.role === 'player' || user.role === 'admin' || user.role === 'super_admin')) {
             setIsAuthenticated(true);
             setIsChecking(false);
-            console.log('✅ Player authenticated');
+            console.log(`✅ User authenticated: ${user.role}`);
             return;
           } else {
-            console.log('❌ User is not a player, role:', user.role);
+            console.log('❌ User has invalid role:', user.role);
           }
         } catch (error) {
           console.error('Error parsing user data:', error);
