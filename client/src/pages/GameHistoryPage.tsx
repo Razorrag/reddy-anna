@@ -137,7 +137,7 @@ const GameHistoryPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-400"></div>
@@ -150,7 +150,7 @@ const GameHistoryPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-4">
         <div className="max-w-7xl mx-auto">
           <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-6">
             <h3 className="text-red-400 text-lg font-semibold mb-2">Error</h3>
@@ -165,7 +165,7 @@ const GameHistoryPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-4">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-6">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

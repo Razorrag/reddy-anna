@@ -147,7 +147,7 @@ export default function AdminPayments() {
   const pendingRequests = transactions.filter(t => t.status === 'pending').length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-4">
       {/* No breadcrumbs - admin access is hidden */}
 
       {/* Header */}
