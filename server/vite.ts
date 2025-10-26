@@ -51,18 +51,26 @@ export async function setupVite(app: express.Application, server: Server) {
 }
 
 export async function serveStatic(app: express.Application) {
-  // Serve static files in production
-  const staticDir = resolve(__dirname, '../../client/dist');
+  // Serve static files in production from dist/public
+  // After build, the compiled server is in dist/ and the client files are in dist/public/
+  const staticDir = resolve(__dirname, 'public');
   
-  // Check if dist directory exists, otherwise use client root
+  // Check if dist/public directory exists
   const fs = await import('fs');
-  const assetsDir = fs.existsSync(staticDir) ? staticDir : resolve(__dirname, '../../client');
+  if (!fs.existsSync(staticDir)) {
+    console.error('❌ Production build not found at:', staticDir);
+    console.error('   Run "npm run build" to create the production build');
+    throw new Error('Production build not found. Please run: npm run build');
+  }
   
-  app.use(express.static(assetsDir));
+  console.log('✅ Serving static files from:', staticDir);
+  app.use(express.static(staticDir));
   
   // Handle all routes by serving index.html in production, excluding API routes
   app.get(/^(?!\/api|\/ws|\/static|\/assets|\/favicon).*/, (req, res) => {
-    res.sendFile(resolve(assetsDir, 'index.html'));
+    const indexPath = resolve(staticDir, 'index.html');
+    console.log('📄 Serving index.html from:', indexPath);
+    res.sendFile(indexPath);
   });
 }
 
