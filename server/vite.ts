@@ -28,7 +28,7 @@ export async function setupVite(app: express.Application, server: Server) {
     app.use(vite.middlewares);
 
     // Handle HTML requests - SPA fallback for all non-API routes
-    app.get(/^(?!\\/api|\\/ws|\\/static|\\/assets|\\/favicon).*/, async (req, res, next) => {
+    app.get(/^(?!\/api|\/ws|\/static|\/assets|\/favicon).*/, async (req, res, next) => {
       try {
         const fs = await import('fs');
         const indexPath = resolve(__dirname, '../../client/index.html');
@@ -61,7 +61,7 @@ export async function serveStatic(app: express.Application) {
   app.use(express.static(assetsDir));
   
   // Handle all routes by serving index.html in production, excluding API routes
-  app.get(/^(?!\\/api|\\/ws|\\/static|\\/assets|\\/favicon).*/, (req, res) => {
+  app.get(/^(?!\/api|\/ws|\/static|\/assets|\/favicon).*/, (req, res) => {
     res.sendFile(resolve(assetsDir, 'index.html'));
   });
 }
