@@ -106,8 +106,8 @@ log('✅ CORS configured');
 
 // Security headers middleware
 app.use((req, res, next) => {
-  // Only set COOP on HTTPS or localhost
-  const isSecure = req.protocol === 'https' || req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+  // Only set COOP and Origin-Agent-Cluster on HTTPS
+  const isSecure = req.protocol === 'https';
   
   if (isSecure) {
     // Cross-Origin-Opener-Policy: Isolate browsing context
@@ -119,7 +119,7 @@ app.use((req, res, next) => {
   
   // Security headers that work on HTTP and HTTPS
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'ALLOW-FROM https://player.restream.io');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   
   // CSP for production
@@ -131,7 +131,7 @@ app.use((req, res, next) => {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "img-src 'self' data: blob: https:; " +
       "font-src 'self' data: https://fonts.gstatic.com; " +
-      "connect-src 'self' ws: wss:; " +
+      "connect-src 'self' ws: wss: http: https:; " +
       "media-src 'self' blob:; " +
       "frame-src 'self' https://player.restream.io;"
     );
@@ -153,13 +153,23 @@ app.use(session({
     checkPeriod: 86400000 // prune expired entries every 24h
   }),
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    secure: false, // Allow HTTP for now (set to true when using HTTPS)
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax' // Allow cross-site requests
   }
 }));
 
 log('✅ Session middleware configured');
+
+// Attach session user to req.user for all requests
+app.use((req, res, next) => {
+  if (req.session && (req.session as any).user) {
+    (req as any).user = (req.session as any).user;
+    console.log('✅ User attached from session:', (req as any).user);
+  }
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
