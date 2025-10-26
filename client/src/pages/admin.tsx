@@ -16,7 +16,8 @@ import {
   Settings,
   GamepadIcon,
   TrendingUp,
-  Activity
+  Activity,
+  MessageSquare
 } from "lucide-react";
 
 export default function Admin() {
@@ -232,6 +233,27 @@ export default function Admin() {
             <CardContent>
               <div className="text-center text-sm text-gray-400">
                 Advanced configuration options
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* WhatsApp Settings */}
+          <Card 
+            className="bg-black/40 border-green-500/30 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer"
+            onClick={() => setLocation('/admin-whatsapp-settings')}
+          >
+            <CardHeader>
+              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <MessageSquare className="w-8 h-8 text-white" />
+              </div>
+              <CardTitle className="text-white text-center text-xl">WhatsApp Settings</CardTitle>
+              <CardDescription className="text-gray-400 text-center">
+                Configure WhatsApp contact number
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center text-sm text-gray-400">
+                Set where user requests are sent
               </div>
             </CardContent>
           </Card>

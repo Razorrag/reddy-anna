@@ -25,6 +25,8 @@ export interface SystemSettings {
   referralCommission?: number;
   backupFrequency?: string; // 'daily', 'weekly', 'monthly'
   whatsappBusinessAPI?: string;
+  adminWhatsappNumber?: string; // WhatsApp number where user requests are sent
+  whatsappNumber?: string; // Legacy field
   minDepositAmount?: number;
   maxDepositAmount?: number;
   minWithdrawAmount?: number;
@@ -133,6 +135,16 @@ export const updateSystemSettings = async (settings: SystemSettings, adminId: st
     if (settings.maxWithdrawAmount !== undefined) {
       await storage.updateGameSetting('max_withdraw_amount', settings.maxWithdrawAmount.toString());
     }
+    if (settings.adminWhatsappNumber !== undefined) {
+      await storage.updateGameSetting('admin_whatsapp_number', settings.adminWhatsappNumber);
+      console.log('✅ Admin WhatsApp number updated:', settings.adminWhatsappNumber);
+    }
+    if (settings.customerSupportEmail !== undefined) {
+      await storage.updateGameSetting('customer_support_email', settings.customerSupportEmail);
+    }
+    if (settings.customerSupportPhone !== undefined) {
+      await storage.updateGameSetting('customer_support_phone', settings.customerSupportPhone);
+    }
 
     return { success: true, content: settings };
   } catch (error) {
@@ -152,6 +164,9 @@ export const getSystemSettings = async (): Promise<ContentResponse> => {
     const maxDepositAmount = await storage.getGameSetting('max_deposit_amount');
     const minWithdrawAmount = await storage.getGameSetting('min_withdraw_amount');
     const maxWithdrawAmount = await storage.getGameSetting('max_withdraw_amount');
+    const adminWhatsappNumber = await storage.getGameSetting('admin_whatsapp_number');
+    const customerSupportEmail = await storage.getGameSetting('customer_support_email');
+    const customerSupportPhone = await storage.getGameSetting('customer_support_phone');
     
     return { success: true, content: {
       maintenanceMode: maintenanceMode === 'true',
@@ -160,15 +175,16 @@ export const getSystemSettings = async (): Promise<ContentResponse> => {
       referralCommission: parseInt(referralCommission || '5', 10),
       backupFrequency: 'daily',
       whatsappBusinessAPI: '',
-      whatsappNumber: '+91 8686886632',
+      adminWhatsappNumber: adminWhatsappNumber || '918686886632',
+      whatsappNumber: adminWhatsappNumber || '918686886632', // Legacy field
       minDepositAmount: parseInt(minDepositAmount || '100', 10),
       maxDepositAmount: parseInt(maxDepositAmount || '100000', 10),
       minWithdrawAmount: parseInt(minWithdrawAmount || '500', 10),
       maxWithdrawAmount: parseInt(maxWithdrawAmount || '50000', 10),
       autoWithdrawal: false,
       kycRequired: true,
-      customerSupportEmail: 'support@reddyanna.com',
-      customerSupportPhone: '+91 8686886632'
+      customerSupportEmail: customerSupportEmail || 'support@reddyanna.com',
+      customerSupportPhone: customerSupportPhone || '+91 8686886632'
     } };
   } catch (error) {
     console.error('Settings retrieval error:', error);
