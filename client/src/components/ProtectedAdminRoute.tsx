@@ -9,8 +9,12 @@ interface ProtectedAdminRouteProps {
  * ProtectedAdminRoute - Ensures only authenticated admins can access admin pages
  * 
  * This component checks if the user is authenticated as an admin before rendering
- * the protected content. If not authenticated, it redirects to a 404 page
- * to hide the existence of admin routes from regular users.
+ * the protected content.
+ * 
+ * Behavior:
+ * - If admin is logged in → Allow access
+ * - If player is logged in → Redirect to /unauthorized
+ * - If no one is logged in → Redirect to /admin-login
  */
 export const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({ children }) => {
   const [location, setLocation] = useLocation();
@@ -30,19 +34,25 @@ export const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({ childr
           if (user && (user.role === 'admin' || user.role === 'super_admin')) {
             setIsAdmin(true);
             setIsChecking(false);
-            console.log(' Admin authenticated:', user.role);
+            console.log('✅ Admin authenticated:', user.role);
             return;
           } else {
-            console.log(' User is not admin, role:', user.role);
+            // User is logged in but not as admin (probably a player)
+            console.log('❌ User is logged in as:', user.role, '- Access denied to admin routes');
+            setIsAdmin(false);
+            setIsChecking(false);
+            // Redirect to unauthorized page instead of admin login
+            setLocation('/unauthorized');
+            return;
           }
         } catch (error) {
           console.error('Error parsing user data:', error);
         }
       } else {
-        console.log(' No user logged in');
+        console.log('❌ No user logged in - redirecting to admin login');
       }
       
-      // If not admin, redirect to admin login page
+      // If not logged in at all, redirect to admin login page
       setIsAdmin(false);
       setIsChecking(false);
       setLocation('/admin-login');

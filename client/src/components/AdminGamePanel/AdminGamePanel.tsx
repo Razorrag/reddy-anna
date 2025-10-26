@@ -22,8 +22,7 @@ import RoundTransition from '../RoundTransition';
 import NoWinnerTransition from '../NoWinnerTransition';
 import WinnerCelebration from '../WinnerCelebration';
 import SimpleStreamSettings from './SimpleStreamSettings';
-import BetMonitoringDashboard from '../BetMonitoringDashboard';
-import { Users, Gift, BarChart3, History, CreditCard, Settings, Home } from 'lucide-react';
+import { Home } from 'lucide-react';
 
 const AdminGamePanel: React.FC = () => {
   const { gameState } = useGameState();
@@ -36,7 +35,7 @@ const AdminGamePanel: React.FC = () => {
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
   const [showWinnerCelebration, setShowWinnerCelebration] = useState(false);
   const [celebrationData, setCelebrationData] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'game' | 'stream' | 'bets'>('game');
+  const [activeTab, setActiveTab] = useState<'game' | 'stream'>('game');
   const [, setLocation] = useLocation();
   
   // Detect round changes and trigger transition animation
@@ -96,10 +95,10 @@ const AdminGamePanel: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 p-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-6">
+      <div className="w-full">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-900/40 via-slate-900/40 to-purple-900/40 backdrop-blur-sm rounded-xl border border-purple-500/30 shadow-2xl p-6 mb-6">
+        <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-gold/30 shadow-2xl p-4 mb-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
               <button
@@ -109,8 +108,8 @@ const AdminGamePanel: React.FC = () => {
                 <Home className="w-4 h-4" />
                 Dashboard
               </button>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-500 bg-clip-text text-transparent drop-shadow-lg">🎰 Game Control</h1>
-              <span className="text-base px-4 py-2 bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 border border-yellow-500/40 text-yellow-300 rounded-lg font-bold shadow-lg">Round {gameState.currentRound}</span>
+              <h1 className="text-3xl font-bold text-gold drop-shadow-lg">🎰 Game Control</h1>
+              <span className="text-base px-4 py-2 bg-gold/20 border border-gold/40 text-gold rounded-lg font-bold shadow-lg">Round {gameState.currentRound}</span>
               <span className="text-sm px-3 py-1.5 bg-purple-600/30 border border-purple-400/30 text-purple-200 rounded-lg font-medium">Phase: {gameState.phase}</span>
             </div>
             <button 
@@ -122,13 +121,13 @@ const AdminGamePanel: React.FC = () => {
             </button>
           </div>
           
-          {/* Tab Navigation */}
-          <div className="flex gap-3 border-t border-purple-500/20 pt-4 overflow-x-auto">
+          {/* Tab Navigation - Only Game Control and Stream */}
+          <div className="flex gap-3 border-t border-gold/20 pt-4 overflow-x-auto">
             <button
               onClick={() => setActiveTab('game')}
               className={`px-6 py-3 rounded-xl font-bold transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'game'
-                  ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-gray-900 shadow-lg scale-105'
+                  ? 'bg-gradient-to-r from-gold to-yellow-600 text-gray-900 shadow-lg scale-105'
                   : 'bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 border border-slate-600/50'
               }`}
             >
@@ -138,90 +137,20 @@ const AdminGamePanel: React.FC = () => {
               onClick={() => setActiveTab('stream')}
               className={`px-6 py-3 rounded-xl font-bold transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'stream'
-                  ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-gray-900 shadow-lg scale-105'
+                  ? 'bg-gradient-to-r from-gold to-yellow-600 text-gray-900 shadow-lg scale-105'
                   : 'bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 border border-slate-600/50'
               }`}
             >
               🎥 Stream Settings
             </button>
-            <button
-              onClick={() => setActiveTab('bets')}
-              className={`px-6 py-3 rounded-xl font-bold transition-all duration-200 whitespace-nowrap ${
-                activeTab === 'bets'
-                  ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-gray-900 shadow-lg scale-105'
-                  : 'bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 border border-slate-600/50'
-              }`}
-            >
-              🎲 Bet Monitoring
-            </button>
           </div>
         </div>
 
-        {/* Quick Access Navigation Cards */}
-        <div className="bg-gradient-to-r from-slate-900/40 via-purple-900/40 to-slate-900/40 backdrop-blur-sm rounded-xl border border-purple-500/30 shadow-xl p-6 mb-6">
-          <h2 className="text-xl font-bold text-yellow-300 mb-4">📊 Management Dashboard</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <button
-              onClick={() => setLocation('/user-admin')}
-              className="p-4 bg-gradient-to-br from-blue-900/50 to-blue-800/50 hover:from-blue-800/60 hover:to-blue-700/60 rounded-xl border border-blue-500/30 transition-all duration-200 hover:scale-105 shadow-lg"
-            >
-              <Users className="w-8 h-8 text-blue-300 mx-auto mb-2" />
-              <div className="text-sm font-bold text-blue-200">User</div>
-              <div className="text-sm font-bold text-blue-200">Management</div>
-            </button>
-            
-            <button
-              onClick={() => setLocation('/admin-bonus')}
-              className="p-4 bg-gradient-to-br from-purple-900/50 to-purple-800/50 hover:from-purple-800/60 hover:to-purple-700/60 rounded-xl border border-purple-500/30 transition-all duration-200 hover:scale-105 shadow-lg"
-            >
-              <Gift className="w-8 h-8 text-purple-300 mx-auto mb-2" />
-              <div className="text-sm font-bold text-purple-200">Bonus &</div>
-              <div className="text-sm font-bold text-purple-200">Referral</div>
-            </button>
-            
-            <button
-              onClick={() => setLocation('/admin-analytics')}
-              className="p-4 bg-gradient-to-br from-green-900/50 to-green-800/50 hover:from-green-800/60 hover:to-green-700/60 rounded-xl border border-green-500/30 transition-all duration-200 hover:scale-105 shadow-lg"
-            >
-              <BarChart3 className="w-8 h-8 text-green-300 mx-auto mb-2" />
-              <div className="text-sm font-bold text-green-200">Analytics</div>
-              <div className="text-sm font-bold text-green-200">Dashboard</div>
-            </button>
-            
-            <button
-              onClick={() => setLocation('/game-history')}
-              className="p-4 bg-gradient-to-br from-yellow-900/50 to-yellow-800/50 hover:from-yellow-800/60 hover:to-yellow-700/60 rounded-xl border border-yellow-500/30 transition-all duration-200 hover:scale-105 shadow-lg"
-            >
-              <History className="w-8 h-8 text-yellow-300 mx-auto mb-2" />
-              <div className="text-sm font-bold text-yellow-200">Game</div>
-              <div className="text-sm font-bold text-yellow-200">History</div>
-            </button>
-            
-            <button
-              onClick={() => setLocation('/admin-payments')}
-              className="p-4 bg-gradient-to-br from-red-900/50 to-red-800/50 hover:from-red-800/60 hover:to-red-700/60 rounded-xl border border-red-500/30 transition-all duration-200 hover:scale-105 shadow-lg"
-            >
-              <CreditCard className="w-8 h-8 text-red-300 mx-auto mb-2" />
-              <div className="text-sm font-bold text-red-200">Payments</div>
-              <div className="text-sm font-bold text-red-200">D/W</div>
-            </button>
-            
-            <button
-              onClick={() => setLocation('/backend-settings')}
-              className="p-4 bg-gradient-to-br from-gray-900/50 to-gray-800/50 hover:from-gray-800/60 hover:to-gray-700/60 rounded-xl border border-gray-500/30 transition-all duration-200 hover:scale-105 shadow-lg"
-            >
-              <Settings className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <div className="text-sm font-bold text-gray-200">Backend</div>
-              <div className="text-sm font-bold text-gray-200">Settings</div>
-            </button>
-          </div>
-        </div>
+        {/* Management Dashboard Removed - Access from main admin dashboard */}
 
         {/* Tab Content */}
         {activeTab === 'stream' ? (
           <SimpleStreamSettings />
-        ) : activeTab === 'bets' ? (
-          <BetMonitoringDashboard />
         ) : (
           <div className="space-y-4">
             {/* STEP 1: Opening Card Selection (Only at start) */}
