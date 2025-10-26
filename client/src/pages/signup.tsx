@@ -111,16 +111,16 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-20 left-10 w-32 h-32 bg-purple-400/20 rounded-full blur-xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-48 h-48 bg-indigo-400/20 rounded-full blur-xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 right-20 w-24 h-24 bg-purple-300/20 rounded-full blur-xl animate-pulse delay-500"></div>
+        <div className="absolute top-20 left-10 w-32 h-32 bg-gold/10 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-48 h-48 bg-purple-500/10 rounded-full blur-xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 right-20 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl animate-pulse delay-500"></div>
       </div>
 
       {/* Signup Card */}
-      <Card className="w-full max-w-md bg-purple-950/60 border-purple-400/30 backdrop-blur-sm relative z-10">
+      <Card className="w-full max-w-md bg-black/40 border-gold/30 backdrop-blur-sm relative z-10">
         <CardHeader className="text-center pb-8">
           <div className="w-20 h-20 bg-gradient-to-br from-gold to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
             <UserPlus className="w-10 h-10 text-black" />
@@ -128,7 +128,7 @@ export default function Signup() {
           <CardTitle className="text-3xl font-bold text-gold mb-2">
             Join Reddy Anna
           </CardTitle>
-          <CardDescription className="text-white/80 text-lg">
+          <CardDescription className="text-gray-400 text-lg">
             Create your account to start playing
           </CardDescription>
         </CardHeader>
@@ -147,7 +147,7 @@ export default function Signup() {
                 placeholder="Enter your full name"
                 value={formData.name}
                 onChange={handleChange}
-                className="bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400"
+                className="bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold focus:ring-gold"
                 required
               />
               {errors.name && (
@@ -167,7 +167,7 @@ export default function Signup() {
                 placeholder="Enter your phone number"
                 value={formData.phone}
                 onChange={handleChange}
-                className="bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400"
+                className="bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold focus:ring-gold"
                 required
               />
               {errors.phone && (
@@ -187,7 +187,7 @@ export default function Signup() {
                 placeholder="Enter referral code if you have one"
                 value={formData.referralCode}
                 onChange={handleChange}
-                className="bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400"
+                className="bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold focus:ring-gold"
               />
               {errors.referralCode && (
                 <p className="text-red-500 text-sm">{errors.referralCode}</p>
@@ -208,7 +208,7 @@ export default function Signup() {
                   value={formData.password}
                   onChange={handleChange}
                   className={cn(
-                    "bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400 pr-12",
+                    "bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold focus:ring-gold pr-12",
                     errors.password && "border-red-500"
                   )}
                   required
@@ -217,7 +217,7 @@ export default function Signup() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gold hover:text-gold-light"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-white"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
@@ -246,7 +246,7 @@ export default function Signup() {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   className={cn(
-                    "bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400 pr-12",
+                    "bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold focus:ring-gold pr-12",
                     errors.confirmPassword && "border-red-500"
                   )}
                   required
@@ -255,7 +255,7 @@ export default function Signup() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gold hover:text-gold-light"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-white"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
                   {showConfirmPassword ? (
@@ -291,7 +291,7 @@ export default function Signup() {
               <input
                 type="checkbox"
                 id="terms"
-                className="mr-2 mt-1 w-4 h-4 text-gold bg-purple-950/50 border-purple-400/30 rounded focus:ring-purple-400 focus:ring-offset-0"
+                className="mr-2 mt-1 w-4 h-4 text-gold bg-black/30 border-gold/30 rounded focus:ring-gold focus:ring-offset-0"
                 required
               />
               <label htmlFor="terms" className="text-white/80">
@@ -309,7 +309,7 @@ export default function Signup() {
             {/* Submit Button */}
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-gold-light hover:to-yellow-500 text-lg py-3 font-semibold shadow-lg hover:shadow-gold/30 transition-all duration-300"
+              className="w-full bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-yellow-500 hover:to-gold text-lg py-3 font-semibold shadow-lg hover:shadow-gold/30 transition-all duration-300"
               disabled={isLoading}
             >
               {isLoading ? (

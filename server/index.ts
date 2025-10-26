@@ -47,7 +47,10 @@ const allowedOrigins = [
   'https://reddy-anna-7n83.onrender.com',
   'https://reddy-anna.onrender.com',
   'http://localhost:5173', // Vite dev server
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://91.108.110.72:5000', // Production server
+  'https://91.108.110.72',      // Production server HTTPS
+  'http://91.108.110.72'        // Production server HTTP
 ];
 
 app.use(cors({
@@ -71,6 +74,12 @@ app.use(cors({
       // In production, be more permissive - allow it anyway
       if (process.env.NODE_ENV === 'production') {
         console.log('Production mode: Allowing origin anyway');
+        // Also allow server's own IP addresses
+        const serverIp = '91.108.110.72';
+        if (origin.includes(serverIp)) {
+          console.log(`Production mode: Allowing server IP origin: ${origin}`);
+          return callback(null, true);
+        }
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));

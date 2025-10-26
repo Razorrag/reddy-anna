@@ -233,6 +233,7 @@ export const createUserManually = async (
   userData: {
     phone: string;
     name: string;
+    password?: string;  // Optional custom password
     initialBalance?: number;
     role?: string;
     status?: string;
@@ -251,9 +252,9 @@ export const createUserManually = async (
       return { success: false, error: 'User with this phone number already exists' };
     }
 
-    // Generate a default password (phone number)
-    const defaultPassword = userData.phone;
-    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+    // Use provided password or default to phone number
+    const passwordToUse = userData.password || userData.phone;
+    const hashedPassword = await bcrypt.hash(passwordToUse, 10);
 
     // Create user
     const newUser = await storage.createUser({
@@ -280,7 +281,7 @@ export const createUserManually = async (
         balance: parseFloat(newUser.balance),
         createdAt: newUser.created_at
       },
-      message: `User created successfully. Default password is: ${defaultPassword}`
+      message: `User created successfully. ${userData.password ? 'Custom password set' : `Default password is: ${passwordToUse}`}`
     };
   } catch (error) {
     console.error('Create user manually error:', error);

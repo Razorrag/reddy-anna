@@ -60,16 +60,16 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-20 left-10 w-32 h-32 bg-purple-400/20 rounded-full blur-xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-48 h-48 bg-indigo-400/20 rounded-full blur-xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 right-20 w-24 h-24 bg-purple-300/20 rounded-full blur-xl animate-pulse delay-500"></div>
+        <div className="absolute top-20 left-10 w-32 h-32 bg-gold/10 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-48 h-48 bg-purple-500/10 rounded-full blur-xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 right-20 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl animate-pulse delay-500"></div>
       </div>
 
       {/* Login Card */}
-      <Card className="w-full max-w-md bg-purple-950/60 border-purple-400/30 backdrop-blur-sm relative z-10">
+      <Card className="w-full max-w-md bg-black/40 border-gold/30 backdrop-blur-sm relative z-10">
         <CardHeader className="text-center pb-8">
           <div className="w-20 h-20 bg-gradient-to-br from-gold to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
             <User className="w-10 h-10 text-black" />
@@ -77,7 +77,7 @@ export default function Login() {
           <CardTitle className="text-3xl font-bold text-gold mb-2">
             Welcome Back
           </CardTitle>
-          <CardDescription className="text-white/80 text-lg">
+          <CardDescription className="text-gray-400 text-lg">
             Sign in to your account to play
           </CardDescription>
         </CardHeader>
@@ -96,7 +96,7 @@ export default function Login() {
                 placeholder="Enter your mobile number"
                 value={formData.phone}
                 onChange={handleChange}
-                className="bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400"
+                className="bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold focus:ring-gold"
                 required
               />
             </div>
@@ -114,14 +114,14 @@ export default function Login() {
                   placeholder="Enter your password"
                   value={formData.password}
                   onChange={handleChange}
-                  className="bg-purple-950/50 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400 focus:ring-purple-400 pr-12"
+                  className="bg-black/30 border-gold/30 text-white placeholder:text-gray-400 focus:border-gold focus:ring-gold pr-12"
                   required
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-purple-300 hover:text-white"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-white"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
@@ -144,7 +144,7 @@ export default function Login() {
             {/* Submit Button */}
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-gold-light hover:to-yellow-500 text-lg py-3 font-semibold shadow-lg hover:shadow-gold/30 transition-all duration-300"
+              className="w-full bg-gradient-to-r from-gold to-yellow-600 text-black hover:from-yellow-500 hover:to-gold text-lg py-3 font-semibold shadow-lg hover:shadow-gold/30 transition-all duration-300"
               disabled={isLoading}
             >
               {isLoading ? (
