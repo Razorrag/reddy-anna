@@ -404,7 +404,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             client = {
               ws,
               userId: authenticatedUser?.id || message.data?.userId || 'anonymous',
-              role: authenticatedUser?.role || (message.data?.role === 'admin' ? 'player' : message.data?.role) || 'player',
+              role: authenticatedUser?.role || message.data?.role || 'player',
               wallet: authenticatedUser?.wallet || message.data?.wallet || 0,
             };
             clients.add(client);
