@@ -1158,7 +1158,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         auditLogger('admin_login', result.admin.id, { ip: req.ip });
         res.json({
           success: true,
-          admin: result.admin
+          admin: result.admin,
+          token: result.admin.token, // Include token for WebSocket authentication
+          refreshToken: result.admin.refreshToken
         });
       } else {
         res.status(401).json({
