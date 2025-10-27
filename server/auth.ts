@@ -37,7 +37,7 @@ export const generateAccessToken = (userData: { id: string; phone?: string; user
       type: 'access'
     },
     secret,
-    { expiresIn: expiresIn } as jwt.SignOption
+    { expiresIn: expiresIn } as jwt.SignOptions
   );
 };
 
@@ -55,7 +55,7 @@ export const generateRefreshToken = (userData: { id: string; phone?: string; use
       type: 'refresh'
     },
     secret,
-    { expiresIn: expiresIn } as jwt.SignOption
+    { expiresIn: expiresIn } as jwt.SignOptions
   );
   
   // In a real application, you'd store the refresh token in a database
@@ -158,7 +158,6 @@ export const registerUser = async (userData: {
     
     try {
       const newUser = await storage.createUser({
-        id: sanitizedData.phone.toString(), // Set phone as the ID
         phone: sanitizedData.phone,
         password_hash: hashedPassword,
         full_name: sanitizedData.name,
@@ -175,8 +174,7 @@ export const registerUser = async (userData: {
         deposit_bonus_available: "0.00", // Use string format
         referral_bonus_available: "0.00", // Use string format
         total_bonus_earned: "0.00", // Use string format
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        last_login: new Date()
       });
 
       // If a referral code was used, create the referral relationship
@@ -262,9 +260,8 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
     
     // Update last login
     try {
-      await storage.updateUser(user.id, { 
-        last_login: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+      await storage.updateUser(user.id, {
+        last_login: new Date()
       });
     } catch (updateError) {
       console.error('Error updating last login:', updateError);
