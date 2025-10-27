@@ -194,8 +194,8 @@ try {
   const authContent = fs.readFileSync('./server/auth.ts', 'utf8');
   
   // Check that requireAuth supports session authentication
-  if (authContent.includes('if (req.session && req.session.user)') && 
-      authContent.includes('req.user = req.session.user')) {
+  if (authContent.includes('if (req.session && (req.session as any).user)') &&
+      authContent.includes('req.user = (req.session as any).user')) {
     console.log('✅ requireAuth supports session authentication');
   } else {
     console.log('❌ requireAuth does not support session authentication');

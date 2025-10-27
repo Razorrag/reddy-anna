@@ -454,8 +454,8 @@ export const changePassword = async (
 // 🛡️ REQUIRE AUTH MIDDLEWARE
 export const requireAuth = (req: any, res: any, next: any) => {
   // Check session authentication first
-  if (req.session && req.session.user) {
-    req.user = req.session.user;
+  if (req.session && (req.session as any).user) {
+    req.user = (req.session as any).user;
     console.log('✅ Authenticated via session:', req.user.id);
     return next();
   }

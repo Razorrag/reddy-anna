@@ -1902,22 +1902,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bonus Information Route
   app.get("/api/user/bonus-info", generalLimiter, async (req, res) => {
     try {
-      // Check authentication first - use session or JWT token
-      let userId = null;
-      
-      if (req.session && req.session.user && req.session.user.id) {
-        userId = req.session.user.id;
-      } else if (req.user && req.user.id) {
-        userId = req.user.id;
-      }
-      
-      if (!userId) {
+      // The unified requireAuth middleware should have set req.user
+      if (!req.user || !req.user.id) {
         return res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
       }
       
+      const userId = req.user.id;
       const bonusInfo = await storage.getUserBonusInfo(userId);
       
       res.json({

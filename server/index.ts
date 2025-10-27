@@ -165,11 +165,11 @@ app.use(session({
 
 log('✅ Session middleware configured');
 
-// Attach session user to req.user for all requests
+// Attach session user to req.user for all requests (only if session exists)
 app.use((req, res, next) => {
   if (req.session && (req.session as any).user) {
     (req as any).user = (req.session as any).user;
-    console.log('✅ User attached from session:', (req as any).user);
+    console.log('✅ User attached from session:', (req as any).user?.id);
   }
   next();
 });
