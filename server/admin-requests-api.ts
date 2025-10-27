@@ -4,7 +4,7 @@
 import express from 'express';
 import { EnhancedWhatsAppService, AdminRequest, DashboardSettings } from './whatsapp-service-enhanced';
 import { Pool } from 'pg';
-import { authenticateToken } from './routes';
+import { requireAuth } from './auth';
 
 interface ApiResponse<T = any> {
     success: boolean;
@@ -33,7 +33,7 @@ class AdminRequestsAPI {
         });
 
         // Get all requests with pagination and filtering
-        this.router.get('/requests', authenticateToken, async (req, res) => {
+        this.router.get('/requests', requireAuth, async (req, res) => {
             try {
                 const page = parseInt(req.query.page as string) || 1;
                 const limit = parseInt(req.query.limit as string) || 50;
@@ -63,7 +63,7 @@ class AdminRequestsAPI {
         });
 
         // Get request by ID
-        this.router.get('/requests/:id', authenticateToken, async (req, res) => {
+        this.router.get('/requests/:id', requireAuth, async (req, res) => {
             try {
                 const { id } = req.params;
                 const requests = await this.whatsappService.getAllRequests(1, 1, { id });
@@ -98,7 +98,7 @@ class AdminRequestsAPI {
         });
 
         // Update request status
-        this.router.put('/requests/:id/status', authenticateToken, async (req, res) => {
+        this.router.put('/requests/:id/status', requireAuth, async (req, res) => {
             try {
                 const { id } = req.params;
                 const { status, notes } = req.body;
@@ -138,7 +138,7 @@ class AdminRequestsAPI {
         });
 
         // Update balance and process request
-        this.router.put('/requests/:id/process', authenticateToken, async (req, res) => {
+        this.router.put('/requests/:id/process', requireAuth, async (req, res) => {
             try {
                 const { id } = req.params;
                 const { status, notes } = req.body;
@@ -178,7 +178,7 @@ class AdminRequestsAPI {
         });
 
         // Get request summary statistics
-        this.router.get('/requests/summary', authenticateToken, async (req, res) => {
+        this.router.get('/requests/summary', requireAuth, async (req, res) => {
             try {
                 const summary = await this.whatsappService.getRequestSummary();
 
@@ -198,7 +198,7 @@ class AdminRequestsAPI {
         });
 
         // Get requests by status
-        this.router.get('/requests/status/:status', authenticateToken, async (req, res) => {
+        this.router.get('/requests/status/:status', requireAuth, async (req, res) => {
             try {
                 const { status } = req.params;
                 const limit = parseInt(req.query.limit as string) || 50;
@@ -229,7 +229,7 @@ class AdminRequestsAPI {
         });
 
         // Get dashboard settings
-        this.router.get('/settings', authenticateToken, async (req, res) => {
+        this.router.get('/settings', requireAuth, async (req, res) => {
             try {
                 const settings = this.whatsappService.getDashboardSettings();
 
@@ -249,7 +249,7 @@ class AdminRequestsAPI {
         });
 
         // Update dashboard settings
-        this.router.put('/settings', authenticateToken, async (req, res) => {
+        this.router.put('/settings', requireAuth, async (req, res) => {
             try {
                 const settings: Partial<DashboardSettings> = req.body;
                 await this.whatsappService.updateDashboardSettings(settings);
@@ -269,7 +269,7 @@ class AdminRequestsAPI {
         });
 
         // Manual request creation (for testing and admin use)
-        this.router.post('/requests/manual', authenticateToken, async (req, res) => {
+        this.router.post('/requests/manual', requireAuth, async (req, res) => {
             try {
                 const {
                     user_phone,
@@ -324,7 +324,7 @@ class AdminRequestsAPI {
         });
 
         // Export requests data (for reporting)
-        this.router.get('/requests/export', authenticateToken, async (req, res) => {
+        this.router.get('/requests/export', requireAuth, async (req, res) => {
             try {
                 const { format = 'json', date_from, date_to } = req.query;
                 

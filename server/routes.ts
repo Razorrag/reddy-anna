@@ -447,73 +447,8 @@ function calculatePayout(
   }
 }
 
-// Authentication middleware with proper session handling
-// 🔐 SECURITY: NO BYPASSES - All requests must be authenticated
-const authenticateToken = (req: any, res: any, next: any) => {
-  console.log('🔍 Authentication check for:', req.path);
-  
-  // Check if user is already authenticated via session
-  if (req.session && req.session.user) {
-    req.user = req.session.user;
-    console.log('  ✅ Using session user:', { id: req.user.id, role: req.user.role });
-    return next();
-  }
-  
-  // Check for JWT token in Authorization header
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    try {
-      // Dynamically import to avoid circular dependencies
-      const { verifyToken } = require('./auth');
-      const decoded = verifyToken(token);
-      
-      // Ensure this is an access token, not a refresh token
-      if (decoded.type !== 'access') {
-        console.error('  ❌ Invalid token type:', decoded.type);
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid token type. Please use an access token.'
-        });
-      }
-      
-      req.user = {
-        id: decoded.id,
-        phone: decoded.phone,
-        username: decoded.username,
-        role: decoded.role
-      };
-      console.log('  ✅ Using JWT token:', { id: req.user.id, role: req.user.role });
-      return next();
-    } catch (error) {
-      console.error('  ❌ Invalid JWT token:', error);
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid or expired token. Please login again.'
-      });
-    }
-  }
-  
-  // 🔐 SECURITY: No authentication found - REJECT REQUEST
-  console.log('  ❌ No authentication - request rejected');
-  req.user = null;
-  
-  // Return 401 Unauthorized for API routes
-  if (req.path.startsWith('/api/')) {
-    return res.status(401).json({
-      success: false,
-      error: 'Authentication required. Please login to continue.'
-    });
-  }
-  
-  // For non-API routes, still require authentication
-  return res.status(401).json({
-    success: false,
-    error: 'Authentication required. Please login to continue.'
-  });
-};
-
-export { authenticateToken };
+// Import unified authentication middleware from auth.ts
+import { requireAuth } from './auth';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -1402,7 +1337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // REST API Routes
   
-  // Apply authentication middleware to all API routes except public auth endpoints
+  // Apply unified authentication middleware to all API routes except public auth endpoints
   app.use("/api/*", (req, res, next) => {
     const publicPaths = [
       '/api/auth/login',
@@ -1417,7 +1352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return next();
     }
     
-    return authenticateToken(req, res, next);
+    return requireAuth(req, res, next);
   });
   
   // Authentication Routes (Public)
@@ -1967,15 +1902,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bonus Information Route
   app.get("/api/user/bonus-info", generalLimiter, async (req, res) => {
     try {
-      // Check authentication first
-      if (!req.user || !req.user.id) {
+      // Check authentication first - use session or JWT token
+      let userId = null;
+      
+      if (req.session && req.session.user && req.session.user.id) {
+        userId = req.session.user.id;
+      } else if (req.user && req.user.id) {
+        userId = req.user.id;
+      }
+      
+      if (!userId) {
         return res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
       }
       
-      const userId = req.user.id;
       const bonusInfo = await storage.getUserBonusInfo(userId);
       
       res.json({
@@ -2833,12 +2775,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (userStr) {
         try {
           const user = JSON.parse(userStr);
+          // Set req.user for consistency with other routes
+          req.user = {
+            id: user.id || 'test-user',
+            phone: user.phone,
+            username: user.username,
+            role: user.role || 'player'
+          };
           res.json({ balance: user.balance || 100000.00 });
         } catch (e) {
+          // Set a default user for fallback
+          req.user = {
+            id: 'default-user',
+            phone: 'default',
+            username: 'default',
+            role: 'player'
+          };
           res.json({ balance: 100000.00 }); // Default to ₹100,000
         }
       } else {
         // For now, allow without auth for testing
+        // Set a default user for consistency
+        req.user = {
+          id: 'anonymous-user',
+          phone: 'anonymous',
+          username: 'anonymous',
+          role: 'player'
+        };
         res.json({ balance: 100000.00 }); // Default to ₹100,000
       }
     } catch (error) {
