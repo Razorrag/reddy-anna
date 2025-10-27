@@ -51,50 +51,53 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// CORS configuration - Support multiple origins for development and production
-const allowedOrigins = [
-  process.env.CORS_ORIGIN || 'http://localhost:3000',
-  'https://reddy-anna-7n83.onrender.com',
-  'https://reddy-anna.onrender.com',
-  'http://localhost:5173', // Vite dev server
-  'http://localhost:3000',
-  'http://91.108.110.72:5000', // Production server
-  'https://91.108.110.72',      // Production server HTTPS
-  'http://91.108.110.72'        // Production server HTTP
-];
+// ✅ PRODUCTION-READY: Dynamic CORS configuration via environment variables
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [];
+  const defaultOrigins = [
+    'http://localhost:5173', // Vite dev server
+    'http://localhost:3000',
+    'http://localhost:5000'
+  ];
+  
+  return process.env.NODE_ENV === 'production' 
+    ? envOrigins.length > 0 ? envOrigins : []
+    : [...defaultOrigins, ...envOrigins];
+};
+
+const allowedOrigins = getAllowedOrigins();
+
+log(`✅ CORS allowed origins: ${allowedOrigins.join(', ')}`);
 
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, curl, or same-origin)
     if (!origin) return callback(null, true);
     
-    // In production, allow all Render.com subdomains
+    // In production, check against configured origins
     if (process.env.NODE_ENV === 'production') {
-      if (origin.includes('render.com') || origin.includes('onrender.com')) {
+      // Allow configured domains and their subdomains
+      const isAllowed = allowedOrigins.some(allowed => {
+        return origin === allowed || origin.endsWith(`.${allowed.replace(/^https?:\/\//, '')}`);
+      });
+      
+      if (isAllowed) {
         return callback(null, true);
       }
+      
+      // Log blocked origin for debugging
+      console.warn(`[CORS] Blocked origin in production: ${origin}`);
+      console.warn(`[CORS] Allowed origins: ${allowedOrigins.join(', ')}`);
+      return callback(new Error('Not allowed by CORS'));
     }
     
-    // Check against allowed origins list
+    // Development: more permissive
     if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('CORS blocked origin:', origin);
-      console.log('Allowed origins:', allowedOrigins);
-      // In production, be more permissive - allow it anyway
-      if (process.env.NODE_ENV === 'production') {
-        console.log('Production mode: Allowing origin anyway');
-        // Also allow server's own IP addresses
-        const serverIp = '91.108.110.72';
-        if (origin.includes(serverIp)) {
-          console.log(`Production mode: Allowing server IP origin: ${origin}`);
-          return callback(null, true);
-        }
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
+      return callback(null, true);
     }
+    
+    console.log(`[CORS] Origin not in allowed list: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true, // Allow cookies/session
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -153,10 +156,10 @@ app.use(session({
     checkPeriod: 86400000 // prune expired entries every 24h
   }),
   cookie: {
-    secure: false, // Allow HTTP for now (set to true when using HTTPS)
+    secure: process.env.NODE_ENV === 'production', // SECURITY: true in production (HTTPS only)
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax' // Allow cross-site requests
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax' // Strict in production
   }
 }));
 

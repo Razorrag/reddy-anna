@@ -30,16 +30,14 @@ const WebSocketContext = createContext<WebSocketContextType | undefined>(undefin
 
 const getWebSocketUrl = (): string => {
   if (typeof window !== 'undefined') {
-    // CORRECT IMPLEMENTATION: Use same protocol as page (http->ws, https->wss)
-    // This works correctly with Vite proxy in development:
-    // - Browser connects to ws://localhost:3000/ws
-    // - Vite proxy forwards to ws://localhost:5000/ws (backend)
-    // In production, connects directly to the same host as the page
+    // ✅ PRODUCTION-READY: Dynamic URL based on current page location
+    // Development: ws://localhost:5173/ws (proxied to backend)
+    // Production: wss://yourdomain.com/ws (direct connection)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     return `${protocol}//${host}/ws`;
   }
-  // Server-side rendering fallback
+  // Server-side rendering fallback (should not be used in browser)
   return process.env.WEBSOCKET_URL || 'ws://localhost:5000/ws';
 };
 

@@ -118,3 +118,21 @@ yarn-error.log*
 # Temporary folders
 tmp/
 temp/
+
+# Test coverage
+coverage/
+.vitest/
+
+# TypeScript
+*.tsbuildinfo
+.tsbuildinfo
+
+# Redis dump files (if running locally)
+dump.rdb
+
+# PM2 files
+.pm2/
+ecosystem.config.cjs
+
+# Environment backups
+.env.backup
