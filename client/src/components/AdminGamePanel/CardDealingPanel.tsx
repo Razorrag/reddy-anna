@@ -21,8 +21,9 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
   const { showNotification } = useNotification();
   const { gameState } = useGameState();
   
-  const [selectedBaharCard, setSelectedBaharCard] = useState<Card | null>(null);
-  const [selectedAndarCard, setSelectedAndarCard] = useState<Card | null>(null);
+  // NEW: Individual card selection state for Rounds 1 & 2
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [nextSide, setNextSide] = useState<'bahar' | 'andar'>('bahar');
   const [dealingInProgress, setDealingInProgress] = useState(false);
   const [previousRound, setPreviousRound] = useState(round);
   
@@ -33,8 +34,8 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
   React.useEffect(() => {
     if (round !== previousRound) {
       console.log(`🔄 Round changed from ${previousRound} to ${round} - clearing card selections`);
-      setSelectedBaharCard(null);
-      setSelectedAndarCard(null);
+      setSelectedCard(null);
+      setNextSide('bahar'); // Always start with Bahar
       setDealingInProgress(false);
       setPreviousRound(round);
     }
@@ -99,75 +100,50 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
       return;
     }
     
-    // Rounds 1 & 2: Pair selection (only in dealing phase)
-    if (!selectedBaharCard) {
-      setSelectedBaharCard(card);
-      showNotification(`Bahar: ${card.display}`, 'info');
-    } else if (!selectedAndarCard) {
-      setSelectedAndarCard(card);
-      showNotification(`Andar: ${card.display}`, 'info');
-    } else {
-      // Reset and start over
-      setSelectedBaharCard(card);
-      setSelectedAndarCard(null);
-      showNotification(`Bahar: ${card.display}`, 'info');
-    }
+    // NEW: Rounds 1 & 2: Individual card selection with alternating sides
+    setSelectedCard(card);
+    showNotification(`${nextSide.toUpperCase()}: ${card.display}`, 'info');
   };
 
-  const handleDealCards = async () => {
-    if (!selectedBaharCard || !selectedAndarCard) {
-      showNotification('Please select both Bahar and Andar cards!', 'error');
+  const handleDealIndividualCard = async () => {
+    if (!selectedCard) {
+      showNotification('Please select a card to deal!', 'error');
       return;
     }
 
     setDealingInProgress(true);
 
     try {
-      // Deal Bahar card first
+      // Send individual card to backend using existing deal_card type
       sendWebSocketMessage({
         type: 'deal_card',
         data: {
-          card: selectedBaharCard,
-          side: 'bahar'
+          card: selectedCard,
+          side: nextSide
         }
       });
       
-      // Wait 800ms then deal Andar card
-      setTimeout(() => {
-        sendWebSocketMessage({
-          type: 'deal_card',
-          data: {
-            card: selectedAndarCard,
-            side: 'andar'
-          }
-        });
-      }, 800);
+      showNotification(`🎴 Dealing ${selectedCard.display} to ${nextSide.toUpperCase()}...`, 'success');
       
-      showNotification('🎬 Dealing cards to players...', 'success');
+      // Clear selection and alternate side for next card
+      setSelectedCard(null);
+      setNextSide(nextSide === 'bahar' ? 'andar' : 'bahar');
       
-      // Clear selections after dealing
       setTimeout(() => {
-        setSelectedBaharCard(null);
-        setSelectedAndarCard(null);
         setDealingInProgress(false);
-      }, 1500);
+      }, 500);
       
     } catch (error) {
-      showNotification('Failed to deal cards', 'error');
+      showNotification('Failed to deal card', 'error');
       setDealingInProgress(false);
     }
   };
 
-  // REMOVED: handleDealSingleCard and handleShowRound3Card
-  // Round 3 cards now drop immediately when selected (no confirmation needed)
-
+  // NEW: Handle undo for individual card selection
   const handleUndo = () => {
-    if (selectedAndarCard) {
-      setSelectedAndarCard(null);
-      showNotification('Andar selection cleared', 'info');
-    } else if (selectedBaharCard) {
-      setSelectedBaharCard(null);
-      showNotification('Bahar selection cleared', 'info');
+    if (selectedCard) {
+      setSelectedCard(null);
+      showNotification('Card selection cleared', 'info');
     }
   };
 
@@ -181,25 +157,17 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
           ) : round === 3 ? (
             <span>🔥 Round 3: Click card → Drops immediately to {round3NextSide === 'bahar' ? 'BAHAR' : 'ANDAR'} → Auto-alternates</span>
           ) : (
-            <span>1️⃣ Select BAHAR card → 2️⃣ Select ANDAR card → 3️⃣ Click Deal</span>
+            <span>🃏 Click card → Deals to {nextSide === 'bahar' ? 'BAHAR' : 'ANDAR'} → Check winner → Alternate sides</span>
           )}
         </div>
       </div>
       
       {/* Current Selection (Rounds 1 & 2) */}
-      {round < 3 && (selectedBaharCard || selectedAndarCard) && (
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div className="bg-blue-900/30 rounded-lg p-3 border-2 border-blue-500/50 text-center">
-            <div className="text-sm text-gray-400 mb-1">Bahar</div>
-            <div className={`text-3xl font-bold ${selectedBaharCard ? (selectedBaharCard.color === 'red' ? 'text-red-500' : 'text-white') : 'text-gray-600'}`}>
-              {selectedBaharCard?.display || '--'}
-            </div>
-          </div>
-          <div className="bg-red-900/30 rounded-lg p-3 border-2 border-red-500/50 text-center">
-            <div className="text-sm text-gray-400 mb-1">Andar</div>
-            <div className={`text-3xl font-bold ${selectedAndarCard ? (selectedAndarCard.color === 'red' ? 'text-red-500' : 'text-white') : 'text-gray-600'}`}>
-              {selectedAndarCard?.display || '--'}
-            </div>
+      {round < 3 && selectedCard && (
+        <div className="bg-gradient-to-r from-blue-900/30 to-red-900/30 rounded-lg p-3 border-2 border-gold/50 text-center">
+          <div className="text-sm text-gray-400 mb-1">Next Card: {nextSide.toUpperCase()}</div>
+          <div className={`text-4xl font-bold ${selectedCard ? (selectedCard.color === 'red' ? 'text-red-500' : 'text-white') : 'text-gray-600'}`}>
+            {selectedCard?.display || '--'}
           </div>
         </div>
       )}
@@ -221,8 +189,8 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
                 .filter(card => card.suit === suit.name)
                 .map(card => {
                   // Round 3: No selection highlight (cards drop immediately)
-                  // Rounds 1 & 2: Highlight selected cards
-                  const isSelected = round < 3 && (selectedBaharCard?.id === card.id || selectedAndarCard?.id === card.id);
+                  // Rounds 1 & 2: Highlight selected card
+                  const isSelected = round < 3 && selectedCard?.id === card.id;
                   const isUsed = gameState.usedCards.some(usedCard => usedCard.id === card.id);
                   const isDisabled = dealingInProgress || isUsed || phase === 'betting';
                   
@@ -275,7 +243,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
       <div className="flex gap-3">
         <button
           onClick={handleUndo}
-          disabled={!selectedBaharCard && !selectedAndarCard || dealingInProgress}
+          disabled={!selectedCard || dealingInProgress}
           className="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-600 text-white rounded-lg text-sm font-semibold"
         >
           ↩️ Clear
@@ -284,11 +252,11 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
         {/* Only show Deal button when phase is 'dealing' and rounds 1 & 2 */}
         {phase === 'dealing' && round < 3 && (
           <button
-            onClick={handleDealCards}
-            disabled={!selectedBaharCard || !selectedAndarCard || dealingInProgress}
+            onClick={handleDealIndividualCard}
+            disabled={!selectedCard || dealingInProgress}
             className="flex-[2] px-6 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-lg text-base font-bold shadow-lg"
           >
-            {dealingInProgress ? '⏳ Dealing...' : '🎬 Deal Cards to Players'}
+            {dealingInProgress ? '⏳ Dealing...' : `🎴 Deal to ${nextSide.toUpperCase()}`}
           </button>
         )}
         

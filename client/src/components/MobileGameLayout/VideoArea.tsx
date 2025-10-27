@@ -1,17 +1,18 @@
 /**
  * VideoArea - Enhanced video stream area with circular countdown timer overlay
- * 
+ *
  * Features:
  * - Circular countdown timer with yellow stroke
  * - Round number display
  * - Pulse effect when <5 seconds
  * - Phase-specific colors (betting/dealing)
  * - Smooth timer animations
+ * - Unified StreamPlayer for both RTMP and WebRTC streaming
  */
 
 import React, { useEffect, useState } from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
-import { VideoStream } from '../VideoStream';
+import StreamPlayer from '../StreamPlayer';
 
 interface VideoAreaProps {
   className?: string;
@@ -74,9 +75,9 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
     <div className={`relative bg-black rounded-lg overflow-hidden ${className}`}>
       {/* Live Video Stream */}
       <div className="relative aspect-video">
-        <VideoStream 
+        <StreamPlayer
           isLive={gameState.phase !== 'idle'}
-          title={streamTitle}
+          className="w-full h-full"
         />
 
         {/* Game Status Overlay - Removed to keep video clean */}

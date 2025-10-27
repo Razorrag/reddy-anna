@@ -1,8 +1,9 @@
 /**
  * Player Game Page - Main Player Interface
- * 
+ *
  * This is the main game interface for players participating in Andar Bahar.
  * Uses the new MobileGameLayout for a unified mobile-first design.
+ * Features the simplified unified StreamPlayer for both RTMP and WebRTC streaming.
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -10,6 +11,7 @@ import { useGameState } from '../contexts/GameStateContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
 import MobileGameLayout from '../components/MobileGameLayout/MobileGameLayout';
+import StreamPlayer from '../components/StreamPlayer';
 import { GameHistoryModal } from '../components/GameHistoryModal';
 import { WalletModal } from '../components/WalletModal';
 import RoundTransition from '../components/RoundTransition';

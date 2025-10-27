@@ -174,15 +174,19 @@ const AdminGamePanel: React.FC = () => {
               {/* Status Message (below cards) */}
               <div className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 rounded-xl border border-green-500/50 p-6 text-center shadow-xl backdrop-blur-sm">
                 <div className="text-2xl font-bold text-green-300 mb-2">
-                  {gameState.currentRound === 1 && '⏳ Round 1 - Deal 1 Bahar + 1 Andar'}
-                  {gameState.currentRound === 2 && '⏳ Round 2 - Deal 1 MORE Bahar + 1 MORE Andar'}
+                  {gameState.currentRound === 1 && '🃏 Round 1 - Individual Card Dealing'}
+                  {gameState.currentRound === 2 && '🃏 Round 2 - Individual Card Dealing'}
                   {gameState.currentRound === 3 && '⚡ Round 3 - Continuous Draw Until Match'}
                 </div>
                 <div className="text-base text-gray-300 mt-2">
-                  {gameState.currentRound === 3 
+                  {gameState.currentRound === 3
                     ? 'Deal alternating: Bahar → Andar → Bahar → Andar...'
-                    : 'Select cards and click "Show Cards to Players"'
+                    : 'Deal ONE card at a time - winner checked immediately after each card'
                   }
+                </div>
+                <div className="text-sm text-blue-300 mt-2">
+                  {gameState.currentRound === 1 && 'Round 1: Deal 1 Bahar → Check winner → Deal 1 Andar → Check winner → Round 2 if no winner'}
+                  {gameState.currentRound === 2 && 'Round 2: Deal 2nd Bahar → Check winner → Deal 2nd Andar → Check winner → Round 3 if no winner'}
                 </div>
               </div>
 

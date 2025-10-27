@@ -133,7 +133,14 @@ class GameState {
     round2Bets: { andar: 0, bahar: 0 },
     userBets: new Map<string, UserBets>(),
     timerInterval: null as NodeJS.Timeout | null,
-    bettingLocked: false
+    bettingLocked: false,
+    // NEW: Track last dealt side for proper game flow
+    lastDealtSide: null as 'bahar' | 'andar' | null,
+    // NEW: Track round completion status
+    roundCompletionStatus: {
+      round1: { baharComplete: false, andarComplete: false },
+      round2: { baharComplete: false, andarComplete: false }
+    }
   };
   
   private updateLock = false;
@@ -170,9 +177,6 @@ class GameState {
   get andarCards() { return this.state.andarCards; }
   get baharCards() { return this.state.baharCards; }
   
-  addAndarCard(card: string) { this.state.andarCards.push(card); }
-  addBaharCard(card: string) { this.state.baharCards.push(card); }
-  
   clearCards() {
     this.state.andarCards = [];
     this.state.baharCards = [];
@@ -195,6 +199,69 @@ class GameState {
   get bettingLocked() { return this.state.bettingLocked; }
   set bettingLocked(value: boolean) { this.state.bettingLocked = value; }
   
+  get lastDealtSide() { return this.state.lastDealtSide; }
+  set lastDealtSide(value: 'bahar' | 'andar' | null) { this.state.lastDealtSide = value; }
+  
+  get roundCompletionStatus() { return this.state.roundCompletionStatus; }
+  
+  // NEW: Method to update round completion status
+  updateRoundCompletion(side: 'bahar' | 'andar') {
+    const currentRound = this.state.currentRound;
+    if (currentRound === 1) {
+      if (side === 'bahar') {
+        this.state.roundCompletionStatus.round1.baharComplete = true;
+      } else {
+        this.state.roundCompletionStatus.round1.andarComplete = true;
+      }
+    } else if (currentRound === 2) {
+      if (side === 'bahar') {
+        this.state.roundCompletionStatus.round2.baharComplete = true;
+      } else {
+        this.state.roundCompletionStatus.round2.andarComplete = true;
+      }
+    }
+  }
+  
+  // NEW: Method to check if specific round side is complete
+  isSideComplete(round: number, side: 'bahar' | 'andar'): boolean {
+    if (round === 1) {
+      return this.state.roundCompletionStatus.round1[side === 'bahar' ? 'baharComplete' : 'andarComplete'];
+    } else if (round === 2) {
+      return this.state.roundCompletionStatus.round2[side === 'bahar' ? 'baharComplete' : 'andarComplete'];
+    }
+    return false;
+  }
+  
+  // NEW: Enhanced card adding methods with side tracking
+  addAndarCard(card: string) {
+    this.state.andarCards.push(card);
+    this.state.lastDealtSide = 'andar';
+    this.updateRoundCompletion('andar');
+  }
+  addBaharCard(card: string) {
+    this.state.baharCards.push(card);
+    this.state.lastDealtSide = 'bahar';
+    this.updateRoundCompletion('bahar');
+  }
+  
+  // NEW: Method to get next expected side based on current state
+  getNextExpectedSide(): 'bahar' | 'andar' | null {
+    const round = this.state.currentRound;
+    const andarCount = this.state.andarCards.length;
+    const baharCount = this.state.baharCards.length;
+    
+    return getNextExpectedSide(round, andarCount, baharCount);
+  }
+  
+  // NEW: Method to check if round is complete
+  isRoundComplete(): boolean {
+    const round = this.state.currentRound;
+    const andarCount = this.state.andarCards.length;
+    const baharCount = this.state.baharCards.length;
+    
+    return isRoundComplete(round, andarCount, baharCount);
+  }
+   
   reset() {
     this.state = {
       gameId: `game-${Date.now()}`,
@@ -210,7 +277,12 @@ class GameState {
       round2Bets: { andar: 0, bahar: 0 },
       userBets: new Map<string, UserBets>(),
       timerInterval: null,
-      bettingLocked: false
+      bettingLocked: false,
+      lastDealtSide: null,
+      roundCompletionStatus: {
+        round1: { baharComplete: false, andarComplete: false },
+        round2: { baharComplete: false, andarComplete: false }
+      }
     };
   }
 }
@@ -303,6 +375,48 @@ function getBetCountForSide(side: 'andar' | 'bahar'): number {
   return count;
 }
 
+// NEW: Helper function to check if current round is complete
+function isRoundComplete(currentRound: number, andarCount: number, baharCount: number): boolean {
+  switch (currentRound) {
+    case 1:
+      // Round 1 complete when both sides have 1 card each
+      return andarCount === 1 && baharCount === 1;
+    case 2:
+      // Round 2 complete when both sides have 2 cards each
+      return andarCount === 2 && baharCount === 2;
+    case 3:
+      // Round 3 never completes until winner is found
+      return false;
+    default:
+      return false;
+  }
+}
+
+// NEW: Helper function to determine next expected side for proper game flow
+function getNextExpectedSide(currentRound: number, andarCount: number, baharCount: number): 'bahar' | 'andar' | null {
+  switch (currentRound) {
+    case 1:
+      // Round 1: Bahar first, then Andar
+      if (baharCount === 0) return 'bahar';
+      if (baharCount === 1 && andarCount === 0) return 'andar';
+      return null; // Round complete
+    
+    case 2:
+      // Round 2: Bahar first, then Andar (after Round 1 completion)
+      if (baharCount === 1 && andarCount === 1) return 'bahar'; // Second Bahar
+      if (baharCount === 2 && andarCount === 1) return 'andar'; // Second Andar
+      return null; // Round complete or invalid state
+    
+    case 3:
+      // Round 3: Alternate starting with Bahar
+      if ((baharCount + andarCount) % 2 === 0) return 'bahar'; // Even total = Bahar's turn
+      return 'andar'; // Odd total = Andar's turn
+    
+    default:
+      return null;
+  }
+}
+
 function calculatePayout(
   round: number,
   winner: 'andar' | 'bahar',
@@ -385,6 +499,8 @@ const authenticateToken = (req: any, res: any, next: any) => {
   
   next();
 };
+
+export { authenticateToken };
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -798,6 +914,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
           
           case 'reveal_cards':
+            // ⚠️ DEPRECATED: This case is deprecated in favor of individual card dealing
             // Admin manually reveals cards after timer expired (no pre-selection)
             if (currentGameState.phase !== 'dealing') {
               ws.send(JSON.stringify({
@@ -807,67 +924,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            console.log('🎬 Admin manually revealing cards:', message.data);
+            console.log('⚠️ Deprecated reveal_cards case used. Please use individual card dealing instead.');
             
+            // For backward compatibility, handle as individual cards
             const revealBaharCard = message.data.baharCard;
             const revealAndarCard = message.data.andarCard;
-            const revealBaharDisplay = revealBaharCard.display || revealBaharCard;
-            const revealAndarDisplay = revealAndarCard.display || revealAndarCard;
             
-            // Deal Bahar card first
-            currentGameState.addBaharCard(revealBaharDisplay);
-            
-            broadcast({
-              type: 'card_dealt',
-              data: {
-                card: revealBaharCard,
-                side: 'bahar',
-                position: currentGameState.baharCards.length,
-                isWinningCard: false
-              }
-            });
-            
-            // Wait 800ms then deal Andar card
-            setTimeout(async () => {
-              currentGameState.addAndarCard(revealAndarDisplay);
+            if (revealBaharCard) {
+              // Deal Bahar card first using individual dealing logic
+              const revealBaharDisplay = revealBaharCard.display || revealBaharCard;
+              currentGameState.addBaharCard(revealBaharDisplay);
               
               broadcast({
                 type: 'card_dealt',
                 data: {
-                  card: revealAndarCard,
-                  side: 'andar',
-                  position: currentGameState.andarCards.length,
+                  card: revealBaharCard,
+                  side: 'bahar',
+                  position: currentGameState.baharCards.length,
                   isWinningCard: false
                 }
               });
               
-              // Check for winner
               const baharWinner = checkWinner(revealBaharDisplay);
-              const andarWinner = checkWinner(revealAndarDisplay);
-              
               if (baharWinner) {
                 await completeGame('bahar', revealBaharDisplay);
-              } else if (andarWinner) {
-                await completeGame('andar', revealAndarDisplay);
-              } else {
-                // No winner, transition to next round
-                console.log(`🎴 No winner in Round ${currentGameState.currentRound}`);
+                break;
+              }
+            }
+            
+            if (revealAndarCard) {
+              // Wait 800ms then deal Andar card using individual dealing logic
+              setTimeout(async () => {
+                const revealAndarDisplay = revealAndarCard.display || revealAndarCard;
+                currentGameState.addAndarCard(revealAndarDisplay);
                 
                 broadcast({
-                  type: 'notification',
+                  type: 'card_dealt',
                   data: {
-                    message: `No winner in Round ${currentGameState.currentRound}. Starting Round ${currentGameState.currentRound + 1} in 2 seconds...`,
-                    type: 'info'
+                    card: revealAndarCard,
+                    side: 'andar',
+                    position: currentGameState.andarCards.length,
+                    isWinningCard: false
                   }
                 });
                 
-                if (currentGameState.currentRound === 1) {
-                  setTimeout(() => transitionToRound2(), 2000);
-                } else if (currentGameState.currentRound === 2) {
-                  setTimeout(() => transitionToRound3(), 2000);
+                const andarWinner = checkWinner(revealAndarDisplay);
+                if (andarWinner) {
+                  await completeGame('andar', revealAndarDisplay);
+                } else {
+                  // No winner, check for round completion
+                  const roundComplete = currentGameState.isRoundComplete();
+                  if (roundComplete) {
+                    console.log(`🔄 Round ${currentGameState.currentRound} complete! No winner found.`);
+                    
+                    const roundMessages = {
+                      1: `Round 1 complete! No winner after 1 Bahar + 1 Andar card. Starting Round 2 in 2 seconds...`,
+                      2: `Round 2 complete! No winner after 2 Bahar + 2 Andar cards. Starting Round 3 (Continuous Draw) in 2 seconds...`
+                    };
+                    
+                    broadcast({
+                      type: 'notification',
+                      data: {
+                        message: roundMessages[currentGameState.currentRound as keyof typeof roundMessages] || `No winner in Round ${currentGameState.currentRound}. Starting Round ${currentGameState.currentRound + 1} in 2 seconds...`,
+                        type: 'info'
+                      }
+                    });
+                    
+                    if (currentGameState.currentRound === 1) {
+                      setTimeout(() => transitionToRound2(), 2000);
+                    } else if (currentGameState.currentRound === 2) {
+                      setTimeout(() => transitionToRound3(), 2000);
+                    }
+                  }
                 }
-              }
-            }, 800);
+              }, 800);
+            }
             break;
           
           case 'deal_single_card':
@@ -927,6 +1058,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const side = message.data.side;
             const position = message.data.position || (side === 'bahar' ? currentGameState.baharCards.length + 1 : currentGameState.andarCards.length + 1);
             
+            // NEW: Individual card dealing logic for proper game flow
+            console.log(`🎴 Individual card dealing: ${cardDisplay} to ${side} (Round ${currentGameState.currentRound})`);
+            
             // Store the display string in state for winner checking
             if (side === 'andar') {
               currentGameState.addAndarCard(cardDisplay);
@@ -957,9 +1091,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const isWinner = checkWinner(cardDisplay);
             
             // Broadcast the FULL card object back (as received from admin)
-            broadcast({ 
-              type: 'card_dealt', 
-              data: { 
+            broadcast({
+              type: 'card_dealt',
+              data: {
                 card: cardData, // Send full Card object, not reconstructed
                 side,
                 position,
@@ -968,7 +1102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             if (isWinner) {
-              console.log('✅ Winner found! Completing game...');
+              console.log(`✅ Winner found! ${side.toUpperCase()} wins with ${cardDisplay}`);
               try {
                 await completeGame(side as 'andar' | 'bahar', cardDisplay);
               } catch (error) {
@@ -982,27 +1116,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 });
               }
             } else {
-              console.log(`🎴 No winner yet. Andar: ${currentGameState.andarCards.length}, Bahar: ${currentGameState.baharCards.length}, Round: ${currentGameState.currentRound}`);
+              console.log(`🃏 No winner yet. Andar: ${currentGameState.andarCards.length}, Bahar: ${currentGameState.baharCards.length}, Round: ${currentGameState.currentRound}`);
               
-              const roundComplete = (currentGameState.currentRound === 1 && currentGameState.andarCards.length === 1 && currentGameState.baharCards.length === 1) ||
-                                   (currentGameState.currentRound === 2 && currentGameState.andarCards.length === 2 && currentGameState.baharCards.length === 2);
+              // NEW: Check for round completion with proper individual card dealing logic
+              const roundComplete = isRoundComplete(currentGameState.currentRound, currentGameState.andarCards.length, currentGameState.baharCards.length);
               
               if (roundComplete) {
-                console.log(`🔄 Round ${currentGameState.currentRound} complete! Auto-transitioning in 2 seconds...`);
+                console.log(`🔄 Round ${currentGameState.currentRound} complete! No winner found. Auto-transitioning in 2 seconds...`);
                 
-                // Notify players
+                // NEW: Enhanced notification with round completion details
+                const roundMessages = {
+                  1: `Round 1 complete! No winner after 1 Bahar + 1 Andar card. Starting Round 2 in 2 seconds...`,
+                  2: `Round 2 complete! No winner after 2 Bahar + 2 Andar cards. Starting Round 3 (Continuous Draw) in 2 seconds...`
+                };
+                
                 broadcast({
                   type: 'notification',
                   data: {
-                    message: `No winner in Round ${currentGameState.currentRound}. Starting Round ${currentGameState.currentRound + 1} in 2 seconds...`,
+                    message: roundMessages[currentGameState.currentRound as keyof typeof roundMessages] || `No winner in Round ${currentGameState.currentRound}. Starting Round ${currentGameState.currentRound + 1} in 2 seconds...`,
                     type: 'info'
                   }
                 });
                 
+                // NEW: Proper round transitions
                 if (currentGameState.currentRound === 1) {
                   setTimeout(() => transitionToRound2(), 2000);
                 } else if (currentGameState.currentRound === 2) {
                   setTimeout(() => transitionToRound3(), 2000);
+                }
+              } else {
+                // NEW: Inform admin about next expected side for proper game flow
+                const nextSide = getNextExpectedSide(currentGameState.currentRound, currentGameState.andarCards.length, currentGameState.baharCards.length);
+                if (nextSide) {
+                  broadcast({
+                    type: 'notification',
+                    data: {
+                      message: `Next card should go to ${nextSide.toUpperCase()} side`,
+                      type: 'success'
+                    }
+                  });
                 }
               }
             }
