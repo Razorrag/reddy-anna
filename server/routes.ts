@@ -1393,9 +1393,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication Routes (Public)
   app.post("/api/auth/register", authLimiter, async (req, res) => {
     try {
+      console.log('📝 Registration request received:', { 
+        name: req.body.name, 
+        phone: req.body.phone, 
+        hasPassword: !!req.body.password,
+        hasConfirmPassword: !!req.body.confirmPassword
+      });
+      
       const { validateUserRegistrationData } = await import('./auth');
       const validation = validateUserRegistrationData(req.body);
       if (!validation.isValid) {
+        console.log('❌ Registration validation failed:', validation.errors);
         return res.status(400).json({
           success: false,
           error: 'Validation failed',
@@ -1774,7 +1782,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User Management Routes
   app.get("/api/user/profile", generalLimiter, async (req, res) => {
     try {
-      const result = await getUserDetails(req.user!.id);
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+      const result = await getUserDetails(req.user.id);
       res.json(result);
     } catch (error) {
       console.error('User details error:', error);
@@ -1788,7 +1799,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User Analytics Route
   app.get("/api/user/analytics", generalLimiter, async (req, res) => {
     try {
-      const userId = req.user!.id;
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+      const userId = req.user.id;
       
       // Get user details
       const user = await storage.getUser(userId);
@@ -1859,7 +1873,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User Transactions Route
   app.get("/api/user/transactions", generalLimiter, async (req, res) => {
     try {
-      const userId = req.user!.id;
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+      const userId = req.user.id;
       const { limit = 20, offset = 0, type = 'all' } = req.query;
       
       // Mock transaction data - in real implementation, this would come from transactions table
@@ -1920,7 +1937,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bonus Information Route
   app.get("/api/user/bonus-info", generalLimiter, async (req, res) => {
     try {
-      const userId = req.user!.id;
+      // Check authentication first
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+      
+      const userId = req.user.id;
       const bonusInfo = await storage.getUserBonusInfo(userId);
       
       res.json({
@@ -1939,7 +1964,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Claim Bonus Route
   app.post("/api/user/claim-bonus", generalLimiter, async (req, res) => {
     try {
-      const userId = req.user!.id;
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+      const userId = req.user.id;
       const result = await applyAvailableBonus(userId);
       
       if (result) {
@@ -1966,7 +1994,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enhanced User Game History Route
   app.get("/api/user/game-history", generalLimiter, async (req, res) => {
     try {
-      const userId = req.user!.id;
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+      const userId = req.user.id;
       const { limit = 20, offset = 0, result = 'all' } = req.query;
       
       // Get user's game history with bet details
