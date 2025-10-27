@@ -92,6 +92,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByPhone(phone: string): Promise<User | undefined>; // New method for phone-based lookup
+  getUserByReferralCode(referralCode: string): Promise<User | undefined>; // New method for referral code lookup
   getAdminByUsername(username: string): Promise<any | undefined>; // New method for admin authentication
   getUserById(id: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>; // Get all users
@@ -256,6 +257,22 @@ export class SupabaseStorage implements IStorage {
     return data;
   }
 
+  // New method for referral code-based user lookup
+  async getUserByReferralCode(referralCode: string): Promise<User | undefined> {
+    const { data, error } = await supabaseServer
+      .from('users')
+      .select('*')
+      .eq('referral_code_generated', referralCode)
+      .single();
+
+    if (error) {
+      console.error('Error getting user by referral code:', error);
+      return undefined;
+    }
+
+    return data;
+  }
+
   // New method for admin authentication
   async getAdminByUsername(username: string): Promise<any | undefined> {
     const { data, error } = await supabaseServer
@@ -303,23 +320,28 @@ export class SupabaseStorage implements IStorage {
 
   // Update createUser to use phone as ID with configurable default balance
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = (insertUser as any).phone || insertUser.phone; // Use phone number as ID
+    const id = insertUser.id || (insertUser as any).phone || insertUser.phone; // Use provided ID or phone number as ID
     
     const user = {
       id,
-      phone: id, // Use phone as both ID and phone
-      password_hash: insertUser.password_hash || (insertUser as any).password_hash,
-      full_name: (insertUser as any).full_name || (insertUser as any).name || insertUser.phone,
-      role: (insertUser as any).role || 'player',
-      status: (insertUser as any).status || 'active',
-      balance: (insertUser as any).balance || "100000.00", // Default to 100000 if not specified
-      total_winnings: "0.00",
-      total_losses: "0.00",
-      games_played: 0,
-      games_won: 0,
-      phone_verified: false,
-      referral_code: (insertUser as any).referral_code || null, // Store referral code if provided
-      last_login: null,
+      phone: insertUser.phone,
+      password_hash: insertUser.password_hash,
+      full_name: insertUser.full_name || (insertUser as any).name || insertUser.phone,
+      role: insertUser.role || (insertUser as any).role || 'player',
+      status: insertUser.status || (insertUser as any).status || 'active',
+      balance: insertUser.balance.toString() || "100000.00", // Keep as string to match schema
+      total_winnings: insertUser.total_winnings.toString() || "0.00",
+      total_losses: insertUser.total_losses.toString() || "0.00",
+      games_played: insertUser.games_played || 0,
+      games_won: insertUser.games_won || 0,
+      phone_verified: insertUser.phone_verified || false,
+      referral_code: insertUser.referral_code || (insertUser as any).referral_code || null, // Store referral code if provided
+      referral_code_generated: null, // Will be generated later
+      original_deposit_amount: insertUser.original_deposit_amount.toString() || "0.00",
+      deposit_bonus_available: insertUser.deposit_bonus_available.toString() || "0.00",
+      referral_bonus_available: insertUser.referral_bonus_available.toString() || "0.00",
+      total_bonus_earned: insertUser.total_bonus_earned.toString() || "0.00",
+      last_login: insertUser.last_login || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -332,7 +354,22 @@ export class SupabaseStorage implements IStorage {
 
     if (error) {
       console.error('Error creating user:', error);
+      // Check for specific error types
+      if (error.code === '23505') { // Unique violation
+        throw new Error('User with this phone number already exists');
+      }
       throw error;
+    }
+
+    // After creating the user, generate a referral code for them
+    try {
+      const { data: genResult } = await supabaseServer.rpc('generate_referral_code', {
+        p_user_id: data.id
+      });
+      console.log(`Generated referral code for user ${data.id}:`, genResult);
+    } catch (referralError) {
+      console.error('Error generating referral code:', referralError);
+      // Don't fail the entire operation for referral code generation
     }
 
     return data;
@@ -367,8 +404,8 @@ export class SupabaseStorage implements IStorage {
       }
 
       // Log successful update
-      if (data && data.length > 0) {
-        console.log(`✅ Balance updated atomically for user ${userId}: ${data[0].old_balance} → ${data[0].new_balance}`);
+      if (data !== null) {
+        console.log(`✅ Balance updated atomically for user ${userId}: ${data.new_balance}`);
       }
     } catch (error: any) {
       console.error('Error in updateUserBalance:', error);
@@ -1645,7 +1682,7 @@ export class SupabaseStorage implements IStorage {
 
   async applyConditionalBonus(userId: string): Promise<boolean> {
     const { data, error } = await supabaseServer
-      .rpc('check_conditional_bonus', { user_id_param: userId });
+      .rpc('check_conditional_bonus', { user_id_input: userId });
 
     if (error) {
       console.error('Error applying conditional bonus:', error);

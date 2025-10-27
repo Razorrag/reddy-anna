@@ -74,6 +74,7 @@ import {
 } from './security';
 import { validateUserData } from './validation';
 import streamRoutes from './stream-routes';
+import { streamStorage } from './stream-storage';
 
 // WebSocket client tracking
 interface WSClient {
@@ -1261,17 +1262,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (client?.role === 'admin') {
               console.log('🎥 Stream starting:', message.data.method);
               
+              // Start stream session tracking
+              const sessionId = await streamStorage.startStreamSession(message.data.method, client.userId);
+              
               // Broadcast to all players
               broadcast({
                 type: 'stream_status',
                 data: {
                   status: 'connecting',
-                  method: message.data.method
+                  method: message.data.method,
+                  sessionId: sessionId || undefined
                 }
               });
               
               // Update database
-              const { streamStorage } = await import('./stream-storage');
               await streamStorage.updateStreamStatus(message.data.method, 'connecting');
             }
             break;
@@ -1281,6 +1285,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (client?.role === 'admin') {
               console.log('🛑 Stream stopping');
               
+              // End stream session if we have a session ID
+              if (message.data?.sessionId) {
+                await streamStorage.endStreamSession(message.data.sessionId);
+              } else {
+                // Fallback: update status directly
+                const config = await streamStorage.getStreamConfig();
+                if (config) {
+                  await streamStorage.updateStreamStatus(config.activeMethod, 'offline');
+                }
+              }
+              
               // Broadcast to all players
               broadcast({
                 type: 'stream_status',
@@ -1288,13 +1303,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   status: 'offline'
                 }
               });
-              
-              // Update database
-              const { streamStorage } = await import('./stream-storage');
-              const config = await streamStorage.getStreamConfig();
-              if (config) {
-                await streamStorage.updateStreamStatus(config.activeMethod, 'offline');
-              }
             }
             break;
           
@@ -1302,13 +1310,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Player joined stream
             console.log('👁️ Viewer joined stream');
             
-            // Update viewer count (could aggregate in the future)
-            if (client?.role === 'player') {
-              const { streamStorage } = await import('./stream-storage');
-              const config = await streamStorage.getStreamConfig();
-              if (config) {
-                await streamStorage.updateViewerCount(config.viewerCount + 1);
-              }
+            // Update viewer count
+            const config = await streamStorage.getStreamConfig();
+            if (config) {
+              await streamStorage.updateViewerCount(config.viewerCount + 1);
+              
+              // Notify admin of viewer count change
+              broadcastToRole({
+                type: 'viewer_count_update',
+                data: {
+                  count: config.viewerCount + 1
+                }
+              }, 'admin');
             }
             break;
             
@@ -1316,12 +1329,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Player left stream
             console.log('👁️ Viewer left stream');
             
-            if (client?.role === 'player') {
-              const { streamStorage } = await import('./stream-storage');
-              const config = await streamStorage.getStreamConfig();
-              if (config && config.viewerCount > 0) {
-                await streamStorage.updateViewerCount(config.viewerCount - 1);
-              }
+            const config2 = await streamStorage.getStreamConfig();
+            if (config2 && config2.viewerCount > 0) {
+              await streamStorage.updateViewerCount(config2.viewerCount - 1);
+              
+              // Notify admin of viewer count change
+              broadcastToRole({
+                type: 'viewer_count_update',
+                data: {
+                  count: config2.viewerCount - 1
+                }
+              }, 'admin');
             }
             break;
         }
@@ -2817,105 +2835,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stream Settings API Endpoints - Simplified RTMP Only
-  app.get("/api/game/stream-settings", async (req, res) => {
-    try {
-      const settings = await storage.getStreamSettings();
-      
-      // Convert array to object for easier frontend consumption
-      const settingsObj = settings.reduce((acc, setting) => {
-        acc[setting.settingKey] = setting.settingValue;
-        return acc;
-      }, {} as Record<string, string>);
-
-      res.json({
-        // Only RTMP settings - no hardcoded fallbacks
-        restreamRtmpUrl: settingsObj.restream_rtmp_url || '',
-        restreamStreamKey: settingsObj.restream_stream_key || '',
-        streamTitle: settingsObj.stream_title || 'Andar Bahar Live',
-        streamStatus: settingsObj.stream_status || 'offline'
-      });
-    } catch (error) {
-      console.error('Error fetching stream settings:', error);
-      res.status(500).json({ error: 'Failed to fetch stream settings' });
-    }
-  });
-
-  app.post("/api/game/stream-settings", async (req, res) => {
-    try {
-      const { 
-        restreamRtmpUrl,
-        restreamStreamKey,
-        streamTitle
-      } = req.body;
-
-      // Update only RTMP settings
-      if (restreamRtmpUrl !== undefined) await storage.updateStreamSetting('restream_rtmp_url', restreamRtmpUrl);
-      if (restreamStreamKey !== undefined) await storage.updateStreamSetting('restream_stream_key', restreamStreamKey);
-      if (streamTitle !== undefined) await storage.updateStreamSetting('stream_title', streamTitle);
-
-      // Update monitoring data
-      await storage.updateStreamSetting('last_stream_check', new Date().toISOString());
-
-      res.json({ 
-        success: true, 
-        message: 'Stream settings updated successfully',
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Error updating stream settings:', error);
-      res.status(500).json({ error: 'Failed to update stream settings' });
-    }
-  });
-
-  // Stream Status Update Endpoint (for monitoring)
-  app.post("/api/game/stream-status", async (req, res) => {
-    try {
-      const { streamStatus } = req.body;
-
-      // Update stream status only
-      if (streamStatus !== undefined) await storage.updateStreamSetting('stream_status', streamStatus);
-      await storage.updateStreamSetting('last_stream_check', new Date().toISOString());
-
-      res.json({ 
-        success: true, 
-        message: 'Stream status updated successfully',
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Error updating stream status:', error);
-      res.status(500).json({ error: 'Failed to update stream status' });
-    }
-  });
-  
-  // Stream Status Check Endpoint (for monitoring live status)
+  // Stream Status Check Endpoint - Redirects to unified stream config
   app.get("/api/game/stream-status-check", async (req, res) => {
     try {
-      const settings = await storage.getStreamSettings();
-      const settingsObj = settings.reduce((acc, setting) => {
-        acc[setting.settingKey] = setting.settingValue;
-        return acc;
-      }, {} as Record<string, string>);
-
-      const lastCheck = settingsObj.last_stream_check;
-      const currentStatus = settingsObj.stream_status || 'offline';
+      // Use the unified stream configuration instead of the old system
+      const streamConfig = await streamStorage.getStreamConfig();
       
-      // If no check in last 5 minutes, assume offline
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-      const isStale = lastCheck && new Date(lastCheck) < fiveMinutesAgo;
-      
-      if (isStale && currentStatus === 'live') {
-        // Auto-update to offline if stale
-        await storage.updateStreamSetting('stream_status', 'offline');
-        await storage.updateStreamSetting('last_stream_check', new Date().toISOString());
+      if (!streamConfig) {
+        return res.json({
+          status: 'offline',
+          lastCheck: null,
+          isStale: false,
+          viewers: 0,
+          bitrate: 0
+        });
       }
 
       res.json({
-        status: isStale && currentStatus === 'live' ? 'offline' : currentStatus,
-        lastCheck,
-        isStale,
-        viewers: settingsObj.stream_viewers || '0',
-        bitrate: settingsObj.stream_bitrate || '0'
+        status: streamConfig.streamStatus,
+        lastCheck: streamConfig.rtmpLastCheck || streamConfig.webrtcLastCheck || null,
+        isStale: false, // Determined by the unified stream system now
+        viewers: streamConfig.viewerCount,
+        bitrate: streamConfig.webrtcBitrate
       });
     } catch (error) {
       console.error('Error checking stream status:', error);

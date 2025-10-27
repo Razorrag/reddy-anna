@@ -1,12 +1,13 @@
 /**
- * Stream API Routes
+ * Unified Stream API Routes
  * 
- * RESTful API endpoints for managing dual streaming (RTMP and WebRTC)
- * Handles configuration, status updates, and session management
+ * Consolidates dual streaming (RTMP + WebRTC) into a single comprehensive system
+ * Replaces the duplicate stream settings systems with unified endpoints
  */
 
 import express, { Router } from 'express';
 import { streamStorage } from './stream-storage';
+import { webrtcSignaling } from './webrtc-signaling';
 import { requireAuth } from './auth';
 
 const router: Router = express.Router();
@@ -25,8 +26,8 @@ const validateAdminAccess = (req: any, res: any, next: any) => {
 };
 
 /**
- * GET /api/stream/config
- * Get current stream configuration
+ * GET /api/unified-stream/config
+ * Get current unified stream configuration
  * Public (authenticated users can view, but sensitive data hidden for non-admins)
  */
 router.get('/config', requireAuth, async (req, res) => {
@@ -49,7 +50,9 @@ router.get('/config', requireAuth, async (req, res) => {
         streamTitle: config.streamTitle,
         rtmpPlayerUrl: config.rtmpPlayerUrl,
         webrtcRoomId: config.webrtcRoomId,
-        viewerCount: config.viewerCount
+        viewerCount: config.viewerCount,
+        totalViews: config.totalViews,
+        streamDurationSeconds: config.streamDurationSeconds
       };
       
       return res.json({
@@ -64,7 +67,7 @@ router.get('/config', requireAuth, async (req, res) => {
       data: config
     });
   } catch (error) {
-    console.error('❌ Error fetching stream config:', error);
+    console.error('❌ Error fetching unified stream config:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch stream configuration'
@@ -73,17 +76,17 @@ router.get('/config', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /api/stream/method
+ * POST /api/unified-stream/method
  * Switch streaming method (Admin only)
  */
 router.post('/method', requireAuth, validateAdminAccess, async (req, res) => {
   try {
     const { method } = req.body;
 
-    if (!['rtmp', 'webrtc'].includes(method)) {
+    if (!['rtmp', 'webrtc', 'none'].includes(method)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid stream method. Must be "rtmp" or "webrtc"'
+        error: 'Invalid stream method. Must be "rtmp", "webrtc", or "none"'
       });
     }
 
@@ -111,7 +114,7 @@ router.post('/method', requireAuth, validateAdminAccess, async (req, res) => {
 });
 
 /**
- * POST /api/stream/rtmp/config
+ * POST /api/unified-stream/rtmp/config
  * Update RTMP configuration (Admin only)
  */
 router.post('/rtmp/config', requireAuth, validateAdminAccess, async (req, res) => {
@@ -152,7 +155,7 @@ router.post('/rtmp/config', requireAuth, validateAdminAccess, async (req, res) =
 });
 
 /**
- * POST /api/stream/webrtc/config
+ * POST /api/unified-stream/webrtc/config
  * Update WebRTC configuration (Admin only)
  */
 router.post('/webrtc/config', requireAuth, validateAdminAccess, async (req, res) => {
@@ -226,14 +229,14 @@ router.post('/webrtc/config', requireAuth, validateAdminAccess, async (req, res)
 });
 
 /**
- * POST /api/stream/status
+ * POST /api/unified-stream/status
  * Update stream status (Admin only)
  */
 router.post('/status', requireAuth, validateAdminAccess, async (req, res) => {
   try {
     const { method, status } = req.body;
 
-    if (!['rtmp', 'webrtc'].includes(method)) {
+    if (!['rtmp', 'webrtc', 'none'].includes(method)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid stream method'
@@ -272,7 +275,7 @@ router.post('/status', requireAuth, validateAdminAccess, async (req, res) => {
 });
 
 /**
- * POST /api/stream/title
+ * POST /api/unified-stream/title
  * Update stream title (Admin only)
  */
 router.post('/title', requireAuth, validateAdminAccess, async (req, res) => {
@@ -309,7 +312,7 @@ router.post('/title', requireAuth, validateAdminAccess, async (req, res) => {
 });
 
 /**
- * POST /api/stream/session/start
+ * POST /api/unified-stream/session/start
  * Start stream session tracking (Admin only)
  */
 router.post('/session/start', requireAuth, validateAdminAccess, async (req, res) => {
@@ -347,7 +350,7 @@ router.post('/session/start', requireAuth, validateAdminAccess, async (req, res)
 });
 
 /**
- * POST /api/stream/session/end
+ * POST /api/unified-stream/session/end
  * End stream session (Admin only)
  */
 router.post('/session/end', requireAuth, validateAdminAccess, async (req, res) => {
@@ -384,7 +387,7 @@ router.post('/session/end', requireAuth, validateAdminAccess, async (req, res) =
 });
 
 /**
- * POST /api/stream/viewers
+ * POST /api/unified-stream/viewers
  * Update viewer count (Admin only)
  */
 router.post('/viewers', requireAuth, validateAdminAccess, async (req, res) => {
@@ -422,7 +425,7 @@ router.post('/viewers', requireAuth, validateAdminAccess, async (req, res) => {
 });
 
 /**
- * GET /api/stream/sessions
+ * GET /api/unified-stream/sessions
  * Get recent stream sessions (Admin only)
  */
 router.get('/sessions', requireAuth, validateAdminAccess, async (req, res) => {
@@ -444,91 +447,89 @@ router.get('/sessions', requireAuth, validateAdminAccess, async (req, res) => {
 });
 
 /**
- * POST /api/stream/webrtc/offer
- * Handle WebRTC offer from admin (Screen sharing)
+ * GET /api/unified-stream/webrtc/active
+ * Get active WebRTC streams (Public)
  */
-router.post('/webrtc/offer', requireAuth, validateAdminAccess, async (req, res) => {
+router.get('/webrtc/active', requireAuth, async (req, res) => {
   try {
-    const { offer, roomId } = req.body;
-
-    if (!offer) {
-      return res.status(400).json({
-        success: false,
-        error: 'WebRTC offer is required'
-      });
-    }
-
-    // Update stream status to indicate screen sharing is active
-    await streamStorage.updateStreamStatus('webrtc', 'online');
-
+    const activeStreams = webrtcSignaling.getActiveStreams();
+    
     res.json({
       success: true,
-      message: 'WebRTC offer received',
-      data: { offer, roomId }
+      data: activeStreams
     });
   } catch (error) {
-    console.error('❌ Error handling WebRTC offer:', error);
+    console.error('❌ Error fetching active WebRTC streams:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to handle WebRTC offer'
+      error: 'Failed to fetch active WebRTC streams'
     });
   }
 });
 
 /**
- * POST /api/stream/webrtc/answer
- * Handle WebRTC answer from viewer (Screen sharing)
+ * POST /api/unified-stream/webrtc/stream-control
+ * Control WebRTC streaming (Admin only)
  */
-router.post('/webrtc/answer', requireAuth, async (req, res) => {
+router.post('/webrtc/stream-control', requireAuth, validateAdminAccess, async (req, res) => {
   try {
-    const { answer, roomId } = req.body;
+    const { action, streamId } = req.body;
 
-    if (!answer) {
+    if (!['start', 'stop', 'pause', 'resume'].includes(action)) {
       return res.status(400).json({
         success: false,
-        error: 'WebRTC answer is required'
+        error: 'Invalid action. Must be: start, stop, pause, resume'
+      });
+    }
+
+    // This would integrate with the WebRTC signaling server
+    // For now, just update the stream status
+    const config = await streamStorage.getStreamConfig();
+    if (!config) {
+      return res.status(404).json({
+        success: false,
+        error: 'Stream configuration not found'
+      });
+    }
+
+    let newStatus: string;
+    switch (action) {
+      case 'start':
+        newStatus = 'online';
+        break;
+      case 'stop':
+        newStatus = 'offline';
+        break;
+      case 'pause':
+        newStatus = 'connecting'; // or a new 'paused' status
+        break;
+      case 'resume':
+        newStatus = 'online';
+        break;
+      default:
+        newStatus = 'offline';
+    }
+
+    const success = await streamStorage.updateStreamStatus('webrtc', newStatus as any);
+
+    if (!success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to control WebRTC stream'
       });
     }
 
     res.json({
       success: true,
-      message: 'WebRTC answer received',
-      data: { answer, roomId }
+      message: `WebRTC stream ${action}ed successfully`,
+      action,
+      streamId
     });
   } catch (error) {
-    console.error('❌ Error handling WebRTC answer:', error);
+    console.error('❌ Error controlling WebRTC stream:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to handle WebRTC answer'
-    });
-  }
-});
-
-/**
- * POST /api/stream/webrtc/ice-candidate
- * Handle WebRTC ICE candidate for connection establishment
- */
-router.post('/webrtc/ice-candidate', requireAuth, async (req, res) => {
-  try {
-    const { candidate, roomId } = req.body;
-
-    if (!candidate) {
-      return res.status(400).json({
-        success: false,
-        error: 'ICE candidate is required'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'ICE candidate received',
-      data: { candidate, roomId }
-    });
-  } catch (error) {
-    console.error('❌ Error handling ICE candidate:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to handle ICE candidate'
+      error: 'Failed to control WebRTC stream'
     });
   }
 });

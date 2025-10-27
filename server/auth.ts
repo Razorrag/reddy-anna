@@ -3,6 +3,8 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { storage } from './storage-supabase';
 import { validateMobileNumber, sanitizeInput, validatePassword as validatePasswordFormat } from './validation';
+import { User } from '@shared/schema';
+import { supabaseServer } from './lib/supabaseServer';
 
 export interface AuthResult {
   success: boolean;
@@ -24,7 +26,7 @@ export const validatePassword = async (password: string, hashedPassword: string)
 // Generate JWT access token with shorter expiration
 export const generateAccessToken = (userData: { id: string; phone?: string; username?: string; role: string }): string => {
   const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
-  const expiresIn = process.env.JWT_EXPIRES_IN || '15m'; // 15 minutes default
+  const expiresIn = process.env.JWT_EXPIRES_IN || '1h'; // 1 hour default
   
   return jwt.sign(
     {
@@ -35,7 +37,7 @@ export const generateAccessToken = (userData: { id: string; phone?: string; user
       type: 'access'
     },
     secret,
-    { expiresIn }
+    { expiresIn: expiresIn } as jwt.SignOption
   );
 };
 
@@ -53,7 +55,7 @@ export const generateRefreshToken = (userData: { id: string; phone?: string; use
       type: 'refresh'
     },
     secret,
-    { expiresIn }
+    { expiresIn: expiresIn } as jwt.SignOption
   );
   
   // In a real application, you'd store the refresh token in a database
@@ -67,6 +69,7 @@ export const verifyToken = (token: string): any => {
   try {
     return jwt.verify(token, secret);
   } catch (error) {
+    console.error('Token verification error:', error);
     throw new Error('Invalid or expired token');
   }
 };
@@ -103,37 +106,98 @@ export const registerUser = async (userData: {
       return { success: false, error: 'User already exists with this phone number' };
     }
 
+    // Check if referral code is valid (if provided)
+    let referrerUser = null;
+    if (sanitizedData.referralCode) {
+      // Use the existing storage method to find referrer by referral code
+      // First, we need to import supabaseServer, but since it's in a different file, 
+      // we'll use the storage method which should be available
+      try {
+        // Try to find user by referral_code_generated field using raw query
+        // since it's not in the standard interface
+        const { data: referrerData, error: referrerError } = await supabaseServer
+          .from('users')
+          .select('id, phone, full_name')
+          .eq('referral_code_generated', sanitizedData.referralCode)
+          .single();
+
+        if (referrerError || !referrerData) {
+          return { success: false, error: 'Invalid referral code' };
+        }
+        
+        referrerUser = referrerData;
+      } catch (error) {
+        console.error('Error finding referrer by referral code:', error);
+        return { success: false, error: 'Invalid referral code' };
+      }
+    }
+
     // Hash password
     const hashedPassword = await hashPassword(sanitizedData.password);
     
-    // Create new user using phone as ID with default balance from env
-    const defaultBalance = process.env.DEFAULT_BALANCE || "100000.00";
-    const newUser = await storage.createUser({
-      phone: sanitizedData.phone, // Use phone as ID and phone
-      password_hash: hashedPassword,
-      full_name: sanitizedData.name,
-      balance: defaultBalance, // Use environment variable for default balance
-      referral_code: sanitizedData.referralCode || null // Store referral code if provided
-    });
+    // Create new user with phone as both ID and phone number
+    const defaultBalance = parseFloat(process.env.DEFAULT_BALANCE || "100000.00");
+    
+    try {
+      const newUser = await storage.createUser({
+        id: sanitizedData.phone.toString(), // Set phone as the ID
+        phone: sanitizedData.phone,
+        password_hash: hashedPassword,
+        full_name: sanitizedData.name,
+        balance: defaultBalance.toFixed(2), // Format as string with 2 decimal places
+        referral_code: sanitizedData.referralCode || null,
+        role: 'player',
+        status: 'active',
+        total_winnings: "0.00", // Use string format
+        total_losses: "0.00", // Use string format
+        games_played: 0,
+        games_won: 0,
+        phone_verified: false,
+        original_deposit_amount: defaultBalance.toFixed(2), // Format as string with 2 decimal places
+        deposit_bonus_available: "0.00", // Use string format
+        referral_bonus_available: "0.00", // Use string format
+        total_bonus_earned: "0.00", // Use string format
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
 
-    // Generate authentication tokens
-    const { accessToken, refreshToken } = generateTokens({
-      id: newUser.id,
-      phone: newUser.phone,
-      role: 'player'
-    });
+      // If a referral code was used, create the referral relationship
+      if (referrerUser) {
+        try {
+          // Use the existing method in storage to track referral
+          await storage.checkAndApplyReferralBonus(newUser.id, defaultBalance); // This handles referral tracking internally
+        } catch (referralError) {
+          console.error('Error tracking referral:', referralError);
+          // Don't fail the registration for referral tracking issues
+        }
+      }
 
-    // Format response (remove sensitive data)
-    const userResponse = {
-      id: newUser.id, // This will be the phone number
-      phone: newUser.phone,
-      balance: newUser.balance, // This should be ₹100,000
-      role: 'player',
-      token: accessToken, // Keep same field name for compatibility
-      refreshToken
-    };
+      // Generate authentication tokens
+      const { accessToken, refreshToken } = generateTokens({
+        id: newUser.id,
+        phone: newUser.phone,
+        role: newUser.role || 'player'
+      });
 
-    return { success: true, user: userResponse };
+      // Format response (remove sensitive data)
+      const userResponse = {
+        id: newUser.id,
+        phone: newUser.phone,
+        balance: parseFloat(newUser.balance),
+        role: newUser.role || 'player',
+        token: accessToken, // Keep same field name for compatibility
+        refreshToken
+      };
+
+      return { success: true, user: userResponse };
+    } catch (storageError) {
+      console.error('Storage error during registration:', storageError);
+      // Check if it's a duplicate key error
+      if (storageError instanceof Error && storageError.message.includes('duplicate')) {
+        return { success: false, error: 'User already exists with this phone number' };
+      }
+      return { success: false, error: 'Database error during registration' };
+    }
   } catch (error) {
     console.error('Registration error:', error);
     return { success: false, error: 'Registration failed' };
@@ -165,13 +229,12 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
     console.log('User found, attempting password validation for user ID:', user.id);
 
     // Verify password
-    const passwordToCheck = user.password_hash;
-    if (!passwordToCheck) {
+    if (!user.password_hash) {
       console.log('No password found for user:', user.id);
       return { success: false, error: 'Invalid credentials' };
     }
     
-    const isValid = await validatePassword(password, passwordToCheck);
+    const isValid = await validatePassword(password, user.password_hash);
     if (!isValid) {
       console.log('Invalid password for user:', user.id);
       return { success: false, error: 'Invalid password' };
@@ -180,7 +243,15 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
     console.log('Successful login for user:', user.id);
     
     // Update last login
-    await storage.updateUser(user.id, { last_login: new Date().toISOString() });
+    try {
+      await storage.updateUser(user.id, { 
+        last_login: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    } catch (updateError) {
+      console.error('Error updating last login:', updateError);
+      // Don't fail the login just because we couldn't update last login
+    }
 
     // Generate authentication tokens
     const { accessToken, refreshToken } = generateTokens({
@@ -193,7 +264,7 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
     const userResponse = {
       id: user.id, // Phone number as ID
       phone: user.phone,
-      balance: user.balance, // This should be ₹100,000 for test users
+      balance: parseFloat(user.balance || '0'),
       role: user.role || 'player',
       token: accessToken, // Keep same field name for compatibility
       refreshToken
@@ -218,7 +289,22 @@ export const loginAdmin = async (username: string, password: string): Promise<Au
     }
 
     // Find admin by username in admin_credentials table
-    const admin = await storage.getAdminByUsername(sanitizedUsername);
+    let admin = await storage.getAdminByUsername(sanitizedUsername);
+    
+    // If not found in storage, try to create a default admin (development only)
+    if (!admin && process.env.NODE_ENV === 'development') {
+      console.log('No admin found, attempting to set up default admin...');
+      try {
+        const { ensureAdminExists } = await import('../scripts/setup-admin');
+        await ensureAdminExists();
+        
+        // Try again after setup
+        admin = await storage.getAdminByUsername(sanitizedUsername);
+      } catch (setupError) {
+        console.error('Error during admin setup:', setupError);
+      }
+    }
+    
     if (!admin) {
       console.log('Admin not found for username:', sanitizedUsername);
       return { success: false, error: 'Admin not found' };
@@ -232,6 +318,11 @@ export const loginAdmin = async (username: string, password: string): Promise<Au
     });
 
     // Verify admin password
+    if (!admin.password_hash) {
+      console.log('No password hash found for admin:', admin.id);
+      return { success: false, error: 'Invalid credentials' };
+    }
+    
     const isValid = await validatePassword(password, admin.password_hash);
     console.log('Admin password validation result:', isValid);
     
