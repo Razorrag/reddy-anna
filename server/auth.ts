@@ -67,10 +67,28 @@ export const generateRefreshToken = (userData: { id: string; phone?: string; use
 export const verifyToken = (token: string): any => {
   const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
   try {
-    return jwt.verify(token, secret);
+    return jwt.verify(token, secret) as any;
   } catch (error) {
     console.error('Token verification error:', error);
     throw new Error('Invalid or expired token');
+  }
+};
+
+// Verify refresh token specifically
+export const verifyRefreshToken = (token: string): any => {
+  const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+  try {
+    const decoded = jwt.verify(token, secret) as any;
+    
+    // Ensure this is a refresh token
+    if (decoded.type !== 'refresh') {
+      throw new Error('Invalid token type. Expected refresh token.');
+    }
+    
+    return decoded;
+  } catch (error) {
+    console.error('Refresh token verification error:', error);
+    throw new Error('Invalid or expired refresh token');
   }
 };
 
@@ -438,18 +456,18 @@ export const changePassword = async (
 
 // 🛡️ REQUIRE AUTH MIDDLEWARE
 export const requireAuth = (req: any, res: any, next: any) => {
-  // Check for token in Authorization header
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.startsWith('Bearer ') 
-    ? authHeader.substring(7) 
-    : null;
-  
-  // Check session authentication
+  // Check session authentication first
   if (req.session && req.session.user) {
     req.user = req.session.user;
     console.log('✅ Authenticated via session:', req.user.id);
     return next();
   }
+  
+  // Check for token in Authorization header
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.startsWith('Bearer ')
+    ? authHeader.substring(7)
+    : null;
   
   // Check token authentication
   if (token) {
@@ -458,9 +476,10 @@ export const requireAuth = (req: any, res: any, next: any) => {
       
       // Ensure this is an access token, not a refresh token
       if (decoded.type !== 'access') {
-        return res.status(401).json({ 
-          success: false, 
-          error: 'Invalid token type' 
+        console.error('❌ Invalid token type:', decoded.type);
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid token type. Please use an access token.'
         });
       }
       
@@ -473,27 +492,21 @@ export const requireAuth = (req: any, res: any, next: any) => {
       console.log('✅ Authenticated via JWT token:', req.user.id);
       return next();
     } catch (error) {
-      console.error('Token validation error:', error);
-      return res.status(401).json({ 
-        success: false, 
-        error: 'Invalid or expired token' 
+      console.error('❌ Token validation error:', error);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired token. Please login again.'
       });
     }
   }
   
-  // No valid authentication found
+  // 🔐 SECURITY: No valid authentication found - REJECT REQUEST
   console.log('❌ Authentication required - no valid session or token');
   
-  // SECURITY: Development mode should still require authentication
-  // If you need to bypass authentication in development, use a proper test account
-  if (process.env.NODE_ENV === 'development') {
-    console.warn('⚠️ SECURITY WARNING: Authentication failed in development mode');
-    console.warn('⚠️ Create a test account using the registration endpoint');
-  }
-  
-  return res.status(401).json({ 
-    success: false, 
-    error: 'Authentication required. Please login to continue.' 
+  // Return 401 Unauthorized
+  return res.status(401).json({
+    success: false,
+    error: 'Authentication required. Please login to continue.'
   });
 };
 

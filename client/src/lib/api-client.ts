@@ -26,7 +26,7 @@ class ApiClient {
     // Since baseURL already includes /api, endpoints should not start with /api
     let cleanEndpoint = endpoint;
     if (endpoint.startsWith('/api/')) {
-      cleanEndpoint = endpoint.substring(4); // Remove '/api' to prevent /api/api/
+      cleanEndpoint = endpoint.substring(5); // Remove '/api/' to prevent /api/api/
       console.warn(`⚠️ Endpoint started with /api/, automatically removed: ${endpoint} → ${cleanEndpoint}`);
     }
     

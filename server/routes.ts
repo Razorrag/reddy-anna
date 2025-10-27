@@ -467,6 +467,16 @@ const authenticateToken = (req: any, res: any, next: any) => {
       // Dynamically import to avoid circular dependencies
       const { verifyToken } = require('./auth');
       const decoded = verifyToken(token);
+      
+      // Ensure this is an access token, not a refresh token
+      if (decoded.type !== 'access') {
+        console.error('  ❌ Invalid token type:', decoded.type);
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid token type. Please use an access token.'
+        });
+      }
+      
       req.user = {
         id: decoded.id,
         phone: decoded.phone,
@@ -477,13 +487,11 @@ const authenticateToken = (req: any, res: any, next: any) => {
       return next();
     } catch (error) {
       console.error('  ❌ Invalid JWT token:', error);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired token. Please login again.'
+      });
     }
-  }
-  
-  // Check if user is authenticated via other means
-  if (req.user) {
-    console.log('  ✅ Using existing user:', { id: req.user.id, role: req.user.role });
-    return next();
   }
   
   // 🔐 SECURITY: No authentication found - REJECT REQUEST
@@ -492,13 +500,17 @@ const authenticateToken = (req: any, res: any, next: any) => {
   
   // Return 401 Unauthorized for API routes
   if (req.path.startsWith('/api/')) {
-    return res.status(401).json({ 
-      success: false, 
-      error: 'Authentication required. Please login to continue.' 
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required. Please login to continue.'
     });
   }
   
-  next();
+  // For non-API routes, still require authentication
+  return res.status(401).json({
+    success: false,
+    error: 'Authentication required. Please login to continue.'
+  });
 };
 
 export { authenticateToken };
