@@ -43,8 +43,14 @@ export default function Signup() {
       newErrors.confirmPassword = "Passwords don't match";
     }
     
-    if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    // Match backend validation: 8+ chars with uppercase, lowercase, and number
+    if (formData.password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters";
+    }
+    
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(formData.password)) {
+      newErrors.password = "Password must contain uppercase, lowercase, and number";
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -82,6 +88,17 @@ export default function Signup() {
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('userRole', 'player');
+
+      // CRITICAL: Ensure token is stored (check multiple sources)
+      const token = response.token || response.user?.token;
+      if (!token) {
+        console.error('❌ No token received from server');
+        setApiError('Registration failed - no token received. Please try again.');
+        setSuccess(false);
+        return;
+      }
+      localStorage.setItem('token', token);
+      console.log('✅ Token stored successfully');
 
       // Redirect after 1 second to show success message
       setTimeout(() => {

@@ -118,7 +118,7 @@ export interface IStorage {
   getActiveBetsForGame(gameId: string): Promise<PlayerBet[]>;
   getBetById(betId: string): Promise<PlayerBet | null>;
   getBettingStats(gameId: string): Promise<{ andarTotal: number; baharTotal: number; andarCount: number; baharCount: number }>;
-  getUserBets(userId: string): Promise<PlayerBet[]>;
+  getUserBets(userId: string, limit?: number, offset?: number): Promise<PlayerBet[]>;
   getUserGameHistory(userId: string): Promise<any[]>;
   
   // Card operations
@@ -345,24 +345,34 @@ export class SupabaseStorage implements IStorage {
       return;
     }
     
-    // Get current balance
-    const user = await this.getUserById(userId);
-    if (!user) {
-      throw new Error('User not found');
-    }
+    // 🔒 SECURITY FIX: Use atomic balance update to prevent race conditions
+    try {
+      const { data, error } = await supabaseServer.rpc('update_balance_atomic', {
+        p_user_id: userId,
+        p_amount_change: amountChange
+      });
 
-    // Convert balance from string to number, add change, convert back to string
-    const currentBalance = parseFloat(user.balance);
-    const newBalance = (currentBalance + amountChange).toFixed(2);
+      if (error) {
+        console.error('❌ Atomic balance update failed:', error);
+        
+        // Check for specific error types
+        if (error.message?.includes('User not found')) {
+          throw new Error('User not found');
+        }
+        if (error.message?.includes('Insufficient balance')) {
+          throw new Error('Insufficient balance');
+        }
+        
+        throw new Error('Failed to update user balance');
+      }
 
-    const { error } = await supabaseServer
-      .from('users')
-      .update({ balance: newBalance })
-      .eq('id', userId);
-
-    if (error) {
-      console.error('Error updating user balance:', error);
-      throw new Error('Failed to update user balance');
+      // Log successful update
+      if (data && data.length > 0) {
+        console.log(`✅ Balance updated atomically for user ${userId}: ${data[0].old_balance} → ${data[0].new_balance}`);
+      }
+    } catch (error: any) {
+      console.error('Error in updateUserBalance:', error);
+      throw error;
     }
   }
 
@@ -875,12 +885,13 @@ export class SupabaseStorage implements IStorage {
     return data || [];
   }
 
-  async getUserBets(userId: string): Promise<PlayerBet[]> {
+  async getUserBets(userId: string, limit: number = 50, offset: number = 0): Promise<PlayerBet[]> {
     const { data, error } = await supabaseServer
       .from('player_bets')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1); // Supabase uses inclusive range
 
     if (error) {
       console.error('Error getting user bets:', error);

@@ -463,12 +463,25 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     ]);
   };
 
-  // Initialize data on mount
+  // Initialize data on mount (only for players, not admins)
   useEffect(() => {
     const initializeData = async () => {
       const isLoggedIn = localStorage.getItem('isLoggedIn');
-      if (isLoggedIn === 'true') {
-        await refreshData();
+      const userStr = localStorage.getItem('user');
+      
+      if (isLoggedIn === 'true' && userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          // Only fetch profile data for players, not admins
+          if (userData.role === 'player') {
+            console.log('✅ Initializing player profile data');
+            await refreshData();
+          } else {
+            console.log('ℹ️ Skipping profile data fetch for admin user');
+          }
+        } catch (error) {
+          console.error('❌ Failed to parse user data:', error);
+        }
       }
     };
     

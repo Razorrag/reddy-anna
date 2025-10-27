@@ -46,8 +46,8 @@ export default function AdminLogin() {
 
       console.log('Admin login response:', response); // Debug log
 
-      // Verify response has admin data
-      if (!response.admin && !response.admin.id) {
+      // Verify response has admin data (FIXED: proper null check)
+      if (!response.admin || !response.admin?.id) {
         setError('Invalid admin credentials. Please try again.');
         setIsLoading(false);
         return;
@@ -66,10 +66,15 @@ export default function AdminLogin() {
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('userRole', adminData.role);
       
-      // Store token if provided
-      if (response.token) {
-        localStorage.setItem('token', response.token);
+      // CRITICAL: Ensure token is stored (check multiple sources)
+      const token = response.token || response.admin?.token;
+      if (!token) {
+        console.error('❌ No token received from server');
+        setError('Authentication failed - no token received. Please try again.');
+        return;
       }
+      localStorage.setItem('token', token);
+      console.log('✅ Admin token stored successfully');
 
       // Clear old admin-specific keys (legacy cleanup)
       localStorage.removeItem('admin');

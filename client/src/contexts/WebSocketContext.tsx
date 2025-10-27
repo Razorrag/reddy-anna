@@ -455,6 +455,23 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               }
               break;
 
+            case 'auth_error':
+              // Handle authentication errors - redirect to login
+              console.error('❌ WebSocket authentication error:', data.data);
+              showNotification(data.data?.message || 'Session expired. Please login again.', 'error');
+              
+              // Clear localStorage
+              localStorage.removeItem('user');
+              localStorage.removeItem('token');
+              localStorage.removeItem('isLoggedIn');
+              localStorage.removeItem('userRole');
+              
+              // Redirect to login after short delay
+              setTimeout(() => {
+                window.location.href = '/login';
+              }, 2000);
+              break;
+
             case 'error':
               showNotification(data.data?.message || 'An error occurred', 'error');
               console.error('WebSocket error received:', {

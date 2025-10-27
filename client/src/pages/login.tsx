@@ -42,10 +42,15 @@ export default function Login() {
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('userRole', userData.role);
       
-      // Store token if provided
-      if (response.token) {
-        localStorage.setItem('token', response.token);
+      // CRITICAL: Ensure token is stored (check multiple sources)
+      const token = response.token || response.user?.token;
+      if (!token) {
+        console.error('❌ No token received from server');
+        setError('Authentication failed - no token received. Please try again.');
+        return;
       }
+      localStorage.setItem('token', token);
+      console.log('✅ Token stored successfully');
 
       // Redirect to game
       window.location.href = '/game';

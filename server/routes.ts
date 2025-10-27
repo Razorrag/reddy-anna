@@ -558,18 +558,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }
               }));
               
-              // For backward compatibility, still send authenticated message but mark as not authenticated
-              ws.send(JSON.stringify({
-                type: 'authenticated',
-                data: { 
-                  userId: 'anonymous', 
-                  role: 'player', 
-                  wallet: 0,
-                  authenticated: false
-                }
-              }));
-              
-              // Don't add to clients set - they need to login first
+              // SECURITY: Close connection immediately - no anonymous access
+              ws.close(4001, 'Authentication required');
               return;
             }
             
@@ -1533,8 +1523,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Token refresh endpoint (doesn't need authentication)
-  app.post("/api/auth/refresh", async (req, res) => {
+  // Token refresh endpoint (doesn't need authentication but needs rate limiting)
+  app.post("/api/auth/refresh", authLimiter, async (req, res) => {
     try {
       const { refreshToken } = req.body;
       
@@ -2593,6 +2583,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({
           success: false,
           error: 'Bet not found'
+        });
+      }
+      
+      // 🔒 SECURITY: Only allow bet modification during betting phase
+      const game = await storage.getGameSession(currentBet.gameId);
+      if (!game) {
+        return res.status(404).json({
+          success: false,
+          error: 'Game session not found'
+        });
+      }
+      
+      if (game.phase !== 'betting') {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot modify bets after betting phase. Current phase: ${game.phase}`
         });
       }
       

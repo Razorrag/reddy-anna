@@ -51,8 +51,12 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
-      {/* Profile Routes */}
-      <Route path="/profile" component={Profile} />
+      {/* Profile Routes - Protected */}
+      <Route path="/profile">
+        <ProtectedRoute>
+          <Profile />
+        </ProtectedRoute>
+      </Route>
       
       {/* Admin Routes - Protected and hidden from public routing */}
       {/* These routes will be accessed directly via URL only by admins who know the exact paths */}
