@@ -1412,9 +1412,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       '/api/auth/logout' // Logout should be public
     ];
     
-    // Check both req.path and req.originalUrl for matching
+    // Check both req.path and req.originalUrl for exact matching
     const currentPath = req.path || req.originalUrl;
-    if (publicPaths.some(path => currentPath === path || currentPath.startsWith(path))) {
+    
+    // Exact path matching - only match exact paths to avoid conflicts
+    const isPublic = publicPaths.some(path => currentPath === path);
+    
+    if (isPublic) {
       console.log(`🔓 Public endpoint: ${currentPath}`);
       return next();
     }

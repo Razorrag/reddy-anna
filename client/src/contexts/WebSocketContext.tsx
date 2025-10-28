@@ -76,6 +76,16 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   const authenticateUser = useCallback(() => {
     const ws = (window as any).gameWebSocket;
     if (ws && ws.readyState === WebSocket.OPEN) {
+      // Check if we're on a page that requires authentication
+      const currentPath = window.location.pathname;
+      const unauthenticatedPages = ['/login', '/signup', '/register'];
+      
+      // Don't authenticate if on unauthenticated pages
+      if (unauthenticatedPages.includes(currentPath)) {
+        console.log('🔄 Skipping WebSocket authentication on unauthenticated page:', currentPath);
+        return;
+      }
+
       const token = localStorage.getItem('token');
       const userData = localStorage.getItem('user');
       const isLoggedIn = localStorage.getItem('isLoggedIn');
@@ -83,7 +93,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.log('🔐 WebSocket authentication check:', {
         hasToken: !!token,
         hasUserData: !!userData,
-        isLoggedIn
+        isLoggedIn,
+        currentPath
       });
 
       if (userData && isLoggedIn === 'true') {
@@ -130,6 +141,16 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const connectWebSocket = useCallback(() => {
     if (typeof window === 'undefined') return; // Skip on server
+    
+    // Check if we're on a page that should have WebSocket connection
+    const currentPath = window.location.pathname;
+    const unconnectedPages = ['/login', '/signup', '/register', '/admin-login']; // Pages that don't need WebSocket
+    
+    // Don't connect WebSocket if on pages that don't need it
+    if (unconnectedPages.includes(currentPath)) {
+      console.log('🔄 Skipping WebSocket connection on page that doesn\'t require WebSocket:', currentPath);
+      return;
+    }
     
     // Prevent multiple connections
     const existingWs = (window as any).gameWebSocket;
@@ -704,7 +725,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   useEffect(() => {
     // Only connect once on mount
-    connectWebSocket();
+    if (typeof window !== 'undefined') {
+      const currentPath = window.location.pathname;
+      const unconnectedPages = ['/login', '/signup', '/register', '/admin-login'];
+      
+      // Only connect WebSocket if not on unconnected pages
+      if (!unconnectedPages.includes(currentPath)) {
+        connectWebSocket();
+      } else {
+        console.log('🔄 Not connecting WebSocket on:', currentPath);
+      }
+    } else {
+      // Server-side: don't connect WebSocket
+      connectWebSocket();
+    }
     
     // Cleanup on unmount or HMR
     return () => {
