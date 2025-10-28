@@ -63,13 +63,14 @@ export default function Signup() {
       console.log('Sending registration request for:', formData.phone); // Debug log
       
       // Make API call using phone as primary identifier
+      // IMPORTANT: skipAuth: true to prevent sending Authorization header
       const response = await apiClient.post<any>('/auth/register', {
         name: formData.name,
         phone: formData.phone,        // Use phone number as identifier
         password: formData.password,
         confirmPassword: formData.confirmPassword,
         referralCode: formData.referralCode || undefined // Optional referral code
-      });
+      }, { skipAuth: true });
 
       console.log('Registration response:', response); // Debug log
 

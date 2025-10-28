@@ -39,10 +39,11 @@ export default function AdminLogin() {
       }
       
       // Make API call to admin login endpoint
+      // IMPORTANT: skipAuth: true to prevent sending Authorization header
       const response = await apiClient.post<any>('/auth/admin-login', {
         username: formData.username,
         password: formData.password
-      });
+      }, { skipAuth: true });
 
       console.log('Admin login response:', response); // Debug log
 

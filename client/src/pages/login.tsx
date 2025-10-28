@@ -25,10 +25,11 @@ export default function Login() {
       console.log('Sending login request for:', formData.phone);
       
       // User login only
+      // IMPORTANT: skipAuth: true to prevent sending Authorization header
       const response = await apiClient.post<any>('/auth/login', {
         phone: formData.phone,
         password: formData.password
-      });
+      }, { skipAuth: true });
 
       // Store user data in localStorage using UNIFIED storage keys
       const userData = {
