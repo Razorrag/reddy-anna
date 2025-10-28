@@ -1404,41 +1404,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Apply unified authentication middleware to all API routes except public auth endpoints
   app.use("/api/*", (req, res, next) => {
+    // Define public API paths that should NOT require authentication
+    // These paths will bypass the requireAuth middleware
     const publicPaths = [
       '/api/auth/login',
-      '/api/auth/admin-login',
+      '/api/auth/admin-login', 
       '/api/auth/register',
       '/api/auth/refresh',
-      '/api/auth/logout' // Logout should be public
+      '/api/auth/logout'
     ];
     
-    // Normalize the current path to ensure consistent matching
-    const currentPath = req.path || req.originalUrl || req.url;
+    // Get the clean path without query parameters for comparison
+    // Using multiple methods to ensure we get the correct path
+    let cleanPath;
     
-    // Exact path matching with additional checks for common variations
-    const isPublic = publicPaths.some(path => {
-      // Exact match
-      if (currentPath === path) return true;
-      
-      // Match if the request path starts with the public path but has query parameters or additional segments
-      // Only if the path is exactly the public path or the public path followed by ? or /
-      if (currentPath.startsWith(path)) {
-        const remainingPath = currentPath.substring(path.length);
-        // If remaining path starts with ? (query parameters) or / (additional path segments)
-        // and if it's query params only, then it's a match
-        if (remainingPath.startsWith('?')) return true;
-        // If it's an exact match with no additional path segments, it's a match
-        if (remainingPath === '') return true;
+    if (req.originalUrl) {
+      cleanPath = req.originalUrl.split('?')[0];
+    } else if (req.url) {
+      cleanPath = req.url.split('?')[0];
+    } else if (req.path) {
+      cleanPath = req.path;
+    } else {
+      // Fallback - get from full URL
+      const fullUrl = req.url || '';
+      cleanPath = fullUrl.split('?')[0] || fullUrl;
+    }
+    
+    // Log detailed information for debugging
+    console.log(`🔍 Auth check - Method: ${req.method}, Raw URL: "${req.url}", Clean Path: "${cleanPath}"`);
+    
+    // Check if this is a public path that should not require authentication
+    let isPublicEndpoint = false;
+    
+    for (const publicPath of publicPaths) {
+      if (cleanPath === publicPath) {
+        isPublicEndpoint = true;
+        console.log(`✅ Public endpoint identified: "${cleanPath}" matches "${publicPath}"`);
+        break;
       }
-      
-      return false;
-    });
+    }
     
-    if (isPublic) {
-      console.log(`🔓 Public endpoint: ${currentPath}`);
+    // Allow public endpoints to continue without authentication
+    if (isPublicEndpoint) {
+      console.log(`🔓 Allowing public endpoint: "${cleanPath}"`);
       return next();
     }
     
+    // For all other endpoints, require authentication
+    console.log(`🔐 Requiring authentication for: "${cleanPath}"`);
     return requireAuth(req, res, next);
   });
   
