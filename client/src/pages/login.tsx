@@ -64,8 +64,10 @@ export default function Login() {
       login(userData, token);
       console.log('✅ Login successful');
 
-      // Redirect to game
-      window.location.href = '/game';
+      // Redirect to game after a short delay to allow WebSocket to authenticate
+      setTimeout(() => {
+        window.location.href = '/player-game';
+      }, 1000);
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Invalid phone number or password');

@@ -32,10 +32,13 @@ const WebSocketContext = createContext<WebSocketContextType | undefined>(undefin
 const getWebSocketUrl = (): string => {
   if (typeof window !== 'undefined') {
     // ✅ PRODUCTION-READY: Dynamic URL based on current page location
-    // Development: ws://localhost:5173/ws (proxied to backend)
+    // Development: ws://localhost:3000/ws (client dev server, proxied to backend)
     // Production: wss://yourdomain.com/ws (direct connection)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
+    
+    // Use the same host as the current page for WebSocket connection
+    // This ensures it works both in development (localhost:3000) and production (yourdomain.com)
     return `${protocol}//${host}/ws`;
   }
   // Server-side rendering fallback (should not be used in browser)
@@ -118,7 +121,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             username: user.username || user.full_name || user.phone || 'User',
             role: userRole, // Use determined role without fallback
             wallet: user.balance || 0,
-            token: token || undefined
+            token: token // Always send token if available
           },
           timestamp: Date.now()
         }));
@@ -717,11 +720,11 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       const currentPath = window.location.pathname;
       const unconnectedPages = ['/login', '/signup', '/register', '/admin-login'];
       
-      // Only connect WebSocket if not on unconnected pages
-      if (!unconnectedPages.includes(currentPath)) {
+      // Only connect WebSocket if not on unconnected pages AND auth is checked AND user is authenticated
+      if (!unconnectedPages.includes(currentPath) && authState.authChecked && authState.isAuthenticated) {
         connectWebSocket();
       } else {
-        console.log('🔄 Not connecting WebSocket on:', currentPath);
+        console.log('🔄 Not connecting WebSocket on:', currentPath, '- authChecked:', authState.authChecked, '- isAuthenticated:', authState.isAuthenticated);
       }
     } else {
       // Server-side: don't connect WebSocket
@@ -740,7 +743,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         clearTimeout(reconnectTimeout);
       }
     };
-  }, []); // Empty deps - only run once on mount
+  }, [authState.authChecked, authState.isAuthenticated]); // Add authState.isAuthenticated to deps
 
   const sendWebSocketMessage = useCallback((message: WebSocketMessage) => {
     const ws = (window as any).gameWebSocket;

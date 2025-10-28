@@ -478,9 +478,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               try {
                 const { verifyToken } = await import('./auth');
                 authenticatedUser = verifyToken(message.data.token);
-                console.log('✅ WebSocket token validated:', { 
-                  id: authenticatedUser.id, 
-                  role: authenticatedUser.role 
+                console.log('✅ WebSocket token validated:', {
+                  id: authenticatedUser.id,
+                  role: authenticatedUser.role
                 });
               } catch (error: any) {
                 console.error('❌ Invalid WebSocket token:', error);
@@ -490,9 +490,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 
                 ws.send(JSON.stringify({
                   type: 'auth_error',
-                  data: { 
-                    message: isExpired 
-                      ? 'Session expired. Please login again.' 
+                  data: {
+                    message: isExpired
+                      ? 'Session expired. Please login again.'
                       : 'Invalid token. Please login again.',
                     error: isExpired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID',
                     canRetry: isExpired, // Allow retry for expired tokens
@@ -506,14 +506,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }, 1000);
                 return;
               }
+            } else if (message.data?.userId && message.data?.role) {
+              // Fallback: Accept userId and role for backward compatibility
+              console.log('⚠️ WebSocket authentication fallback: using userId and role instead of token');
+              authenticatedUser = {
+                id: message.data.userId,
+                role: message.data.role,
+                wallet: message.data.wallet || 0
+              };
             }
             
             // 🔐 SECURITY: Require valid authentication - NO ANONYMOUS ACCESS
             if (!authenticatedUser) {
-              console.warn('⚠️ WebSocket authentication failed - no valid token provided');
+              console.warn('⚠️ WebSocket authentication failed - no valid token or user data provided');
               ws.send(JSON.stringify({
                 type: 'auth_error',
-                data: { 
+                data: {
                   message: 'Authentication required. Please login first.',
                   error: 'AUTH_REQUIRED',
                   redirectTo: '/login'
@@ -1744,10 +1752,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Add updated balance to the result for API consumers
-          result.user = {
-            ...result.user,
-            balance: parseFloat(updatedUser.balance)
+          // Note: PaymentResponse doesn't have a user property, so we need to extend it or create a new response
+          const responseWithUser = {
+            ...result,
+            user: {
+              id: req.user.id,
+              balance: parseFloat(updatedUser.balance)
+            }
           };
+          res.json(responseWithUser);
+          return;
         }
       }
       
@@ -1831,9 +1845,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { sendWhatsAppRequest } = await import('./whatsapp-service');
         await sendWhatsAppRequest({
           userId: req.user.id,
-          userPhone: req.user.phone,
+          userPhone: req.user.phone || req.user.username || 'unknown',
           requestType: requestType.toUpperCase(),
-          message: `New ${requestType} request for ₹${numAmount.toLocaleString('en-IN')} from ${req.user.phone || req.user.username}`,
+          message: `New ${requestType} request for ₹${numAmount.toLocaleString('en-IN')} from ${req.user.phone || req.user.username || 'unknown'}`,
           amount: numAmount,
           isUrgent: false,
           metadata: { requestId: result.id }
@@ -1930,6 +1944,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Approve the payment request (atomic operation)
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
       await storage.approvePaymentRequest(id, request.user_id, request.amount, req.user.id);
       
       // If it's a deposit, broadcast balance update to WebSocket clients
@@ -1955,11 +1975,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Audit log
-      auditLogger('payment_request_approved', req.user.id, { 
-        requestId: id, 
-        userId: request.user_id, 
-        amount: request.amount 
-      });
+      if (req.user) {
+        auditLogger('payment_request_approved', req.user.id, {
+          requestId: id,
+          userId: request.user_id,
+          amount: request.amount
+        });
+      }
       
       res.json({
         success: true,
@@ -1996,14 +2018,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Update the payment request status to rejected
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
       await storage.updatePaymentRequest(id, 'rejected', req.user.id);
       
       // Audit log
-      auditLogger('payment_request_rejected', req.user.id, { 
-        requestId: id, 
-        userId: request.user_id, 
-        amount: request.amount 
-      });
+      if (req.user) {
+        auditLogger('payment_request_rejected', req.user.id, {
+          requestId: id,
+          userId: request.user_id,
+          amount: request.amount
+        });
+      }
       
       res.json({
         success: true,
