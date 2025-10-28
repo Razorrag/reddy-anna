@@ -58,6 +58,9 @@ export interface IStateManager {
   
   // Cleanup
   cleanup(): Promise<void>;
+  
+  // Stream tracking
+  getActiveStreams(): Array<{ streamId: string }>;
 }
 
 /**
@@ -115,6 +118,11 @@ class InMemoryStateManager implements IStateManager {
 
   async cleanup(): Promise<void> {
     // No cleanup needed for in-memory
+  }
+
+  getActiveStreams(): Array<{ streamId: string }> {
+    // Return all active game IDs as stream IDs
+    return Array.from(this.gameStates.keys()).map(gameId => ({ streamId: gameId }));
   }
 }
 
@@ -244,6 +252,13 @@ class RedisStateManager implements IStateManager {
       await this.client.quit();
       this.connected = false;
     }
+  }
+
+  getActiveStreams(): Array<{ streamId: string }> {
+    // For Redis, we'd need to scan for game keys
+    // For now, return empty array - this should be implemented properly
+    console.warn('⚠️ getActiveStreams not fully implemented for Redis');
+    return [];
   }
 }
 

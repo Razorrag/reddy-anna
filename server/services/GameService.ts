@@ -225,7 +225,7 @@ export class GameService {
     });
 
     // Check for winner
-    const winner = this.checkWinner(card, gameState.openingCard!);
+    const winner = this.checkWinner(card, gameState.openingCard!, side);
     if (winner) {
       gameState.winner = winner;
       gameState.phase = 'complete';
@@ -301,15 +301,15 @@ export class GameService {
 
   /**
    * Check if card matches opening card (same rank)
+   * Returns the side where the matching card was dealt
    */
-  private checkWinner(dealtCard: string, openingCard: string): 'andar' | 'bahar' | null {
+  private checkWinner(dealtCard: string, openingCard: string, side: 'andar' | 'bahar'): 'andar' | 'bahar' | null {
     const dealtRank = dealtCard.slice(0, -1);
     const openingRank = openingCard.slice(0, -1);
 
+    // If ranks match, the side where the card was dealt wins
     if (dealtRank === openingRank) {
-      // Winner determined by which side the card was dealt to
-      // This logic depends on your game rules
-      return null; // Implement your winning logic
+      return side;
     }
 
     return null;

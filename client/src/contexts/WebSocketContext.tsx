@@ -55,7 +55,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     addDealtCard,
     updatePlayerWallet,
     updatePlayerRoundBets,
-    updateRoundBets,
     resetBettingData,
     clearCards,
     resetGame,
@@ -172,7 +171,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         showNotification('Connected to game server', 'success');
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = async (event) => {
         try {
           const data = JSON.parse(event.data);
           
@@ -454,8 +453,45 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
 
             case 'auth_error':
-              // Handle authentication errors - redirect to login
+              // Handle authentication errors with enhanced retry logic
               console.error('❌ WebSocket authentication error:', data.data);
+              
+              // Check if we can retry with token refresh
+              if (data.data?.error === 'TOKEN_EXPIRED' && data.data?.canRetry) {
+                showNotification('Session expired. Attempting to refresh...', 'warning');
+                
+                // Attempt to refresh token (if refresh endpoint exists)
+                try {
+                  const response = await fetch('/api/auth/refresh', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    }
+                  });
+                  
+                  if (response.ok) {
+                    const { token, user } = await response.json();
+                    
+                    // Update localStorage
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(user));
+                    
+                    // Reconnect WebSocket with new token
+                    setTimeout(() => {
+                      connectWebSocket();
+                    }, 1000);
+                    
+                    showNotification('Session refreshed successfully', 'success');
+                    return;
+                  }
+                } catch (error) {
+                  console.error('Token refresh failed:', error);
+                  // Fall through to logout
+                }
+              }
+              
+              // If refresh failed or not possible, redirect to login
               showNotification(data.data?.message || 'Session expired. Please login again.', 'error');
               
               // Clear localStorage
@@ -466,7 +502,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               
               // Redirect to login after short delay
               setTimeout(() => {
-                window.location.href = '/login';
+                window.location.href = data.data?.redirectTo || '/login';
               }, 2000);
               break;
 

@@ -482,16 +482,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   id: authenticatedUser.id, 
                   role: authenticatedUser.role 
                 });
-              } catch (error) {
+              } catch (error: any) {
                 console.error('❌ Invalid WebSocket token:', error);
+                
+                // Check if token is expired vs invalid
+                const isExpired = error.message?.includes('expired') || error.name === 'TokenExpiredError';
+                
                 ws.send(JSON.stringify({
                   type: 'auth_error',
                   data: { 
-                    message: 'Invalid or expired token. Please login again.',
-                    error: 'TOKEN_INVALID'
+                    message: isExpired 
+                      ? 'Session expired. Please login again.' 
+                      : 'Invalid token. Please login again.',
+                    error: isExpired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID',
+                    canRetry: isExpired, // Allow retry for expired tokens
+                    redirectTo: '/login'
                   }
                 }));
-                return; // Don't authenticate with invalid token
+                
+                // Give client time to receive message before closing
+                setTimeout(() => {
+                  ws.close(4001, isExpired ? 'Token expired' : 'Invalid token');
+                }, 1000);
+                return;
               }
             }
             
@@ -502,12 +515,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 type: 'auth_error',
                 data: { 
                   message: 'Authentication required. Please login first.',
-                  error: 'AUTH_REQUIRED'
+                  error: 'AUTH_REQUIRED',
+                  redirectTo: '/login'
                 }
               }));
               
-              // SECURITY: Close connection immediately - no anonymous access
-              ws.close(4001, 'Authentication required');
+              // Give client time to receive message before closing
+              setTimeout(() => {
+                ws.close(4001, 'Authentication required');
+              }, 1000);
               return;
             }
             
@@ -996,8 +1012,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const side = message.data.side;
             const position = message.data.position || (side === 'bahar' ? currentGameState.baharCards.length + 1 : currentGameState.andarCards.length + 1);
             
+            // 🔒 CRITICAL: Validate game is in dealing phase
+            if (currentGameState.phase !== 'dealing') {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { 
+                  message: `Cannot deal cards. Game is in ${currentGameState.phase} phase.`,
+                  currentPhase: currentGameState.phase
+                }
+              }));
+              console.log(`⚠️ Card dealing blocked - game in ${currentGameState.phase} phase`);
+              break;
+            }
+            
+            // 🔒 CRITICAL: Validate dealing sequence (Bahar first, then Andar)
+            const expectedSide = getNextExpectedSide(
+              currentGameState.currentRound, 
+              currentGameState.andarCards.length, 
+              currentGameState.baharCards.length
+            );
+            
+            if (expectedSide === null) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { 
+                  message: `Current round is complete. Please wait for round transition.`,
+                  currentRound: currentGameState.currentRound,
+                  andarCards: currentGameState.andarCards.length,
+                  baharCards: currentGameState.baharCards.length
+                }
+              }));
+              console.log(`⚠️ Card dealing blocked - round ${currentGameState.currentRound} is complete`);
+              break;
+            }
+            
+            if (side !== expectedSide) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { 
+                  message: `Invalid dealing sequence! Expected ${expectedSide.toUpperCase()} card next, but received ${side.toUpperCase()}.`,
+                  expectedSide: expectedSide,
+                  attemptedSide: side,
+                  currentRound: currentGameState.currentRound,
+                  hint: `In Round ${currentGameState.currentRound}, deal ${expectedSide.toUpperCase()} first.`
+                }
+              }));
+              console.log(`⚠️ Invalid dealing sequence - expected ${expectedSide}, got ${side}`);
+              break;
+            }
+            
             // NEW: Individual card dealing logic for proper game flow
-            console.log(`🎴 Individual card dealing: ${cardDisplay} to ${side} (Round ${currentGameState.currentRound})`);
+            console.log(`🎴 ✅ Valid card dealing: ${cardDisplay} to ${side} (Round ${currentGameState.currentRound})`);
             
             // Store the display string in state for winner checking
             if (side === 'andar') {
