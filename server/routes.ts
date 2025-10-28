@@ -1412,11 +1412,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       '/api/auth/logout' // Logout should be public
     ];
     
-    // Check both req.path and req.originalUrl for exact matching
-    const currentPath = req.path || req.originalUrl;
+    // Normalize the current path to ensure consistent matching
+    const currentPath = req.path || req.originalUrl || req.url;
     
-    // Exact path matching - only match exact paths to avoid conflicts
-    const isPublic = publicPaths.some(path => currentPath === path);
+    // Exact path matching with additional checks for common variations
+    const isPublic = publicPaths.some(path => {
+      // Exact match
+      if (currentPath === path) return true;
+      
+      // Match if the request path starts with the public path but has query parameters or additional segments
+      // Only if the path is exactly the public path or the public path followed by ? or /
+      if (currentPath.startsWith(path)) {
+        const remainingPath = currentPath.substring(path.length);
+        // If remaining path starts with ? (query parameters) or / (additional path segments)
+        // and if it's query params only, then it's a match
+        if (remainingPath.startsWith('?')) return true;
+        // If it's an exact match with no additional path segments, it's a match
+        if (remainingPath === '') return true;
+      }
+      
+      return false;
+    });
     
     if (isPublic) {
       console.log(`🔓 Public endpoint: ${currentPath}`);

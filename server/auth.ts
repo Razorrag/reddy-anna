@@ -68,9 +68,26 @@ export const verifyToken = (token: string): any => {
   const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
   try {
     return jwt.verify(token, secret) as any;
-  } catch (error) {
-    console.error('Token verification error:', error);
-    throw new Error('Invalid or expired token');
+  } catch (error: any) {
+    console.error('Token verification error:', error?.message || error);
+    
+    // Provide more specific error messages based on the type of JWT error
+    if (error.name === 'JsonWebTokenError') {
+      if (error.message.includes('invalid signature')) {
+        console.error('❌ JWT Signature mismatch - token may have been created with different secret');
+        throw new Error('Invalid token signature. Please login again.');
+      } else if (error.message.includes('invalid token')) {
+        throw new Error('Invalid token format');
+      } else {
+        throw new Error('Token verification failed');
+      }
+    } else if (error.name === 'TokenExpiredError') {
+      console.error('❌ Token has expired');
+      throw new Error('Token has expired. Please login again.');
+    } else {
+      console.error('❌ Unexpected token error:', error.message);
+      throw new Error('Invalid or expired token');
+    }
   }
 };
 
@@ -86,9 +103,26 @@ export const verifyRefreshToken = (token: string): any => {
     }
     
     return decoded;
-  } catch (error) {
-    console.error('Refresh token verification error:', error);
-    throw new Error('Invalid or expired refresh token');
+  } catch (error: any) {
+    console.error('Refresh token verification error:', error?.message || error);
+    
+    // Provide more specific error messages based on the type of JWT error
+    if (error.name === 'JsonWebTokenError') {
+      if (error.message.includes('invalid signature')) {
+        console.error('❌ Refresh token signature mismatch - token may have been created with different secret');
+        throw new Error('Invalid refresh token signature. Please login again.');
+      } else if (error.message.includes('invalid token')) {
+        throw new Error('Invalid refresh token format');
+      } else {
+        throw new Error('Refresh token verification failed');
+      }
+    } else if (error.name === 'TokenExpiredError') {
+      console.error('❌ Refresh token has expired');
+      throw new Error('Refresh token has expired. Please login again.');
+    } else {
+      console.error('❌ Unexpected refresh token error:', error.message);
+      throw new Error('Invalid or expired refresh token');
+    }
   }
 };
 
