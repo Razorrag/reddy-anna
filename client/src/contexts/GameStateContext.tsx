@@ -266,7 +266,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
           payload: {
             userId: user.id || user.phone || 'user',
             username: user.username || user.full_name || user.phone || 'Player',
-            wallet: user.balance || 50000 // default balance
+            wallet: user.balance || 0 // default balance
           }
         });
         dispatch({
@@ -280,7 +280,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
           payload: {
             userId: 'guest',
             username: 'Guest Player',
-            wallet: 50000
+            wallet: 0
           }
         });
         dispatch({
@@ -301,7 +301,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         payload: {
           userId: 'guest',
           username: 'Guest Player',
-          wallet: 50000
+          wallet: 0
         }
       });
       dispatch({

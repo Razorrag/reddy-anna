@@ -191,6 +191,19 @@ CREATE TABLE IF NOT EXISTS user_referrals (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Create payment_requests table
+CREATE TABLE IF NOT EXISTS payment_requests (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id TEXT REFERENCES users(id),
+    request_type TEXT CHECK (request_type IN ('deposit', 'withdrawal')),
+    amount NUMERIC,
+    payment_method TEXT,
+    status TEXT CHECK (status IN ('pending', 'approved', 'rejected', 'completed')) DEFAULT 'pending',
+    admin_id TEXT REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Create user_transactions table
 CREATE TABLE IF NOT EXISTS user_transactions (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

@@ -17,6 +17,7 @@ import { GameHistoryModal } from '../components/GameHistoryModal';
 import { WalletModal } from '../components/WalletModal';
 import RoundTransition from '../components/RoundTransition';
 import NoWinnerTransition from '../components/NoWinnerTransition';
+import WinnerCelebration from '../components/WinnerCelebration';
 import type { BetSide } from '../types/game';
 
 const PlayerGame: React.FC = () => {
@@ -51,6 +52,7 @@ const PlayerGame: React.FC = () => {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showRoundTransition, setShowRoundTransition] = useState(false);
   const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
+  const [showWinnerCelebration, setShowWinnerCelebration] = useState(false);
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
 
   // Available bet amounts - matching schema limits (1000-100000)
@@ -63,15 +65,10 @@ const PlayerGame: React.FC = () => {
     }
   }, [user]);
 
-  // Update the handlePlaceBet function to properly use WebSocket
+  // Update the handlePlaceBet function to properly use REST API for balance validation
   const handlePlaceBet = useCallback(async (position: BetSide) => {
     if (selectedBetAmount === 0) {
       showNotification('Please select a chip first', 'error');
-      return;
-    }
-
-    if (selectedBetAmount > userBalance) {
-      showNotification('Insufficient balance', 'error');
       return;
     }
 
@@ -88,7 +85,14 @@ const PlayerGame: React.FC = () => {
     setIsPlacingBet(true);
 
     try {
-      // Use WebSocket to place bet
+      // FIXED: First validate balance via REST API
+      const balanceCheck = await apiClient.get<{success: boolean, balance: number}>('/user/balance');
+      if (!balanceCheck.success || balanceCheck.balance < selectedBetAmount) {
+        showNotification('Insufficient balance', 'error');
+        return;
+      }
+
+      // Then place bet via WebSocket for game logic
       await placeBetWebSocket(position, selectedBetAmount);
 
       showNotification(`Bet placed: ₹${selectedBetAmount} on ${position}`, 'success');
@@ -97,7 +101,7 @@ const PlayerGame: React.FC = () => {
     } finally {
       setIsPlacingBet(false);
     }
-  }, [selectedBetAmount, userBalance, gameState, placeBetWebSocket, showNotification]);
+  }, [selectedBetAmount, gameState, placeBetWebSocket, showNotification]);
 
   // Handle bet position selection
   const handlePositionSelect = useCallback((position: BetSide) => {
@@ -217,6 +221,21 @@ const PlayerGame: React.FC = () => {
     return () => window.removeEventListener('no-winner-transition', handleNoWinner);
   }, []);
 
+  // Listen for game complete celebration events
+  useEffect(() => {
+    const handleGameComplete = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('Game complete celebration received:', customEvent.detail);
+      // Show celebration for wins
+      if (customEvent.detail.winner) {
+        setShowWinnerCelebration(true);
+      }
+    };
+
+    window.addEventListener('game-complete-celebration', handleGameComplete);
+    return () => window.removeEventListener('game-complete-celebration', handleGameComplete);
+  }, []);
+
   // Mock history data
   const mockHistory = [
     { 
@@ -314,6 +333,17 @@ const PlayerGame: React.FC = () => {
         nextRound={gameState.currentRound}
         onComplete={() => setShowNoWinnerTransition(false)}
       />
+
+      {/* Winner Celebration - Shows when user wins */}
+      {showWinnerCelebration && (
+        <WinnerCelebration
+          winner={null} // Will be set by event
+          winningCard=""
+          round={gameState.currentRound}
+          payoutMessage=""
+          onComplete={() => setShowWinnerCelebration(false)}
+        />
+      )}
 
       {/* Round Transition Animation */}
       <RoundTransition

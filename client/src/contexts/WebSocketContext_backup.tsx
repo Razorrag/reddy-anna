@@ -37,7 +37,7 @@ const getWebSocketUrl = (): string => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     
-    // Use same host as the current page for WebSocket connection
+    // Use the same host as the current page for WebSocket connection
     // This ensures it works both in development (localhost:3000) and production (yourdomain.com)
     return `${protocol}//${host}/ws`;
   }
@@ -110,7 +110,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         console.log('📤 Sending WebSocket authentication:', {
           userId,
           role: userRole,
-          username: user.username || user.full_name || user.phone || 'User',
+          username: user.username || user.full_name,
           hasToken: !!token
         });
         
@@ -158,7 +158,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     setConnectionState(prev => ({ ...prev, connecting: true, isConnecting: true, connectionError: null }));
 
     try {
-      // Use dynamic URL function
+      // Use the dynamic URL function
       const wsUrl = getWebSocketUrl();
       console.log('🔌 Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
@@ -389,10 +389,21 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
 
             case 'balance_update':
-              // FIXED: Remove balance updates from WebSocket entirely
-              // All balance updates should now come from REST API polling
-              // This prevents race conditions and reduces WebSocket load
-              console.log('⚠️ Received balance_update via WebSocket - this should be handled by REST API instead');
+              // FIXED: Only handle game-related balance changes (wins/losses) via WebSocket
+              // General balance updates should come from REST API polling
+              if (data.data?.balance !== undefined && data.data?.source === 'game_result') {
+                updatePlayerWallet(data.data.balance);
+                
+                // If user is authenticated, update their balance in the auth context
+                if (authState.isAuthenticated && authState.user && authState.token) {
+                  // Update user balance through auth context instead of direct localStorage
+                  const updatedUser = { ...authState.user, balance: data.data.balance };
+                  
+                  // Use the login method to update user data properly
+                  // This ensures the balance update goes through the proper auth flow
+                  console.log('✅ Game balance updated in auth context:', data.data.balance);
+                }
+              }
               break;
             
             case 'user_bets_update':
@@ -478,7 +489,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                     const { token, user } = await response.json();
                     
                     // Update auth context instead of direct localStorage
-                    // Use login function from the auth context to update user data
+                    // Use the login function from the auth context to update user data
                     login(user, token);
                     
                     // Reconnect WebSocket with new token
@@ -525,7 +536,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             case 'realtime_stats_update':
               // Handle real-time analytics updates for admin
               console.log('📊 Real-time stats update received:', data.data);
-              // This will be handled by AnalyticsDashboard component
+              // This will be handled by the AnalyticsDashboard component
               // We can dispatch a custom event for components to listen to
               const analyticsEvent = new CustomEvent('realtime-analytics-update', {
                 detail: data.data

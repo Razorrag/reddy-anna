@@ -750,8 +750,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
               userLimit.count++;
             } else {
-              userBetRateLimits.set(client.userId, { 
-                count: 1, 
+              userBetRateLimits.set(client.userId, {
+                count: 1,
                 resetTime: now + rateLimitWindow
               });
             }
@@ -792,26 +792,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            // Balance check (skip for anonymous in development only)
-            if (!isAnonymous) {
-              const currentUser = await storage.getUserById(client.userId);
-              if (!currentUser) {
-                ws.send(JSON.stringify({
-                  type: 'error',
-                  data: { message: 'User not found' }
-                }));
-                break;
-              }
-              
-              const userBalance = parseFloat(currentUser.balance);
-              if (userBalance < betAmount) {
-                ws.send(JSON.stringify({
-                  type: 'error',
-                  data: { message: 'Insufficient balance' }
-                }));
-                break;
-              }
-            }
+            // FIXED: Skip balance check in WebSocket - let REST API handle it
+            // This prevents race conditions between WebSocket and REST API
             
             if (!currentGameState.userBets.has(client.userId)) {
               currentGameState.userBets.set(client.userId, {
@@ -831,7 +813,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 status: 'pending'
               });
               
-              await storage.updateUserBalance(client.userId, -betAmount);
+              // FIXED: Don't update balance via WebSocket - let REST API handle it
+              // await storage.updateUserBalance(client.userId, -betAmount);
             }
             
             const userBet = currentGameState.userBets.get(client.userId)!;
@@ -843,18 +826,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               currentGameState.round2Bets[betSide as 'andar' | 'bahar'] += betAmount;
             }
             
-            let updatedBalance = betAmount; // For anonymous
-            if (!isAnonymous) {
-              const updatedUser = await storage.getUserById(client.userId);
-              if (updatedUser) {
-                updatedBalance = updatedUser.balance;
-                ws.send(JSON.stringify({
-                  type: 'balance_update',
-                  data: { balance: updatedUser.balance }
-                }));
-              }
-            }
-              
+            // FIXED: Don't send balance update from WebSocket - let REST API handle it
+            // This prevents race conditions and ensures proper balance synchronization
+                
             ws.send(JSON.stringify({
               type: 'user_bets_update',
               data: {
@@ -864,7 +838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }));
             
-            broadcast({ 
+            broadcast({
               type: 'betting_stats',
               data: {
                 andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
@@ -1731,32 +1705,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Broadcast balance update to all WebSocket clients for this user
           // This will ensure the game interface gets real-time balance updates
           try {
-            // Find WebSocket clients for this user and send balance update
-            // We need to access the 'clients' Set from the WebSocket server
-            // Since the WebSocket server is set up in the same file, we can reference clients
-            clients.forEach(client => {
-              if (client.userId === userId) {
-                client.ws.send(JSON.stringify({
-                  type: 'balance_update',
-                  data: { 
-                    balance: parseFloat(updatedUser.balance),
-                    type: `${type}_${result.status}`,
-                    amount: numAmount
-                  }
-                }));
-              }
-            });
+            // FIXED: Remove balance updates from WebSocket entirely
+            // All balance updates should now come from REST API polling
+            // This prevents race conditions and reduces WebSocket load
+            console.log(`💰 Balance updated via REST API: ${userId} -> ${parseFloat(updatedUser.balance)} (${type})`);
           } catch (broadcastError) {
             console.error('Failed to broadcast balance update:', broadcastError);
             // Don't fail the payment if broadcast fails
           }
           
           // Add updated balance to the result for API consumers
-          // Note: PaymentResponse doesn't have a user property, so we need to extend it or create a new response
+          // Note: PaymentResponse doesn't have a user property, so we create a new response object
           const responseWithUser = {
             ...result,
             user: {
-              id: req.user.id,
+              id: req.user!.id,
               balance: parseFloat(updatedUser.balance)
             }
           };
@@ -1844,10 +1807,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { sendWhatsAppRequest } = await import('./whatsapp-service');
         await sendWhatsAppRequest({
-          userId: req.user.id,
-          userPhone: req.user.phone || req.user.username || 'unknown',
+          userId: req.user!.id,
+          userPhone: req.user!.phone || req.user!.username || 'unknown',
           requestType: requestType.toUpperCase(),
-          message: `New ${requestType} request for ₹${numAmount.toLocaleString('en-IN')} from ${req.user.phone || req.user.username || 'unknown'}`,
+          message: `New ${requestType} request for ₹${numAmount.toLocaleString('en-IN')} from ${req.user!.phone || req.user!.username || 'unknown'}`,
           amount: numAmount,
           isUrgent: false,
           metadata: { requestId: result.id }
@@ -1952,27 +1915,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       await storage.approvePaymentRequest(id, request.user_id, request.amount, req.user.id);
       
-      // If it's a deposit, broadcast balance update to WebSocket clients
-      if (request.request_type === 'deposit') {
-        try {
-          // Find WebSocket clients for this user and send balance update
-          clients.forEach(client => {
-            if (client.userId === request.user_id) {
-              client.ws.send(JSON.stringify({
-                type: 'balance_update',
-                data: { 
-                  balance: request.amount, // This would need to be the new balance
-                  type: `deposit_approved`,
-                  amount: request.amount
-                }
-              }));
-            }
-          });
-        } catch (broadcastError) {
-          console.error('Failed to broadcast balance update:', broadcastError);
-          // Don't fail the approval if broadcast fails
-        }
-      }
+      // FIXED: Remove balance updates from WebSocket entirely
+      // All balance updates should now come from REST API polling
+      console.log(`💰 Payment request approved via REST API: ${request.user_id} -> ${request.amount} (${request.request_type})`);
       
       // Audit log
       if (req.user) {
@@ -2331,7 +2276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const userId = req.user.id;
       const result = await applyAvailableBonus(userId);
-      
+       
       if (result) {
         auditLogger('bonus_claimed', userId, { timestamp: new Date().toISOString() });
         res.json({
@@ -2349,6 +2294,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         success: false,
         error: 'Failed to claim bonus'
+      });
+    }
+  });
+
+  // Referral Data Route - NEW ENDPOINT
+  app.get("/api/user/referral-data", generalLimiter, async (req, res) => {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+      
+      const userId = req.user.id;
+      
+      // Get user's referral code and statistics
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found'
+        });
+      }
+
+      // Get user's referred users
+      const referredUsers = await storage.getUserReferrals(userId);
+      
+      // Calculate referral statistics
+      const totalReferrals = referredUsers.length;
+      const totalDepositsFromReferrals = referredUsers.reduce((sum, referral) =>
+        sum + (parseFloat(referral.depositAmount || '0') || 0), 0
+      );
+      const totalBonusEarned = referredUsers.reduce((sum, referral) =>
+        sum + (parseFloat(referral.bonusAmount || '0') || 0), 0
+      );
+      const activeReferrals = referredUsers.filter(referral =>
+        referral.bonusApplied
+      ).length;
+
+      const referralData = {
+        referralCode: user.referral_code_generated,
+        totalReferrals,
+        activeReferrals,
+        totalDepositsFromReferrals,
+        totalBonusEarned,
+        referredUsers: referredUsers.map(referral => ({
+          id: referral.referredUserId,
+          phone: '', // Would need to fetch user details separately
+          fullName: '', // Would need to fetch user details separately
+          depositAmount: parseFloat(referral.depositAmount || '0') || 0,
+          bonusAmount: parseFloat(referral.bonusAmount || '0') || 0,
+          bonusApplied: referral.bonusApplied,
+          createdAt: referral.createdAt
+        }))
+      };
+
+      res.json({
+        success: true,
+        data: referralData
+      });
+    } catch (error) {
+      console.error('Get referral data error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve referral data'
       });
     }
   });
@@ -3490,29 +3498,23 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       }
     }
     
-    // Send payout notifications to clients
+    // FIXED: Simplify WebSocket notifications - only send game result notifications
+    // Balance updates should come from REST API polling to prevent race conditions
     try {
-      const updatedUser = await storage.getUserById(userId);
-      if (updatedUser) {
-        clients.forEach(client => {
-          if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
-            client.ws.send(JSON.stringify({
-              type: 'balance_update',
-              data: { balance: updatedUser.balance }
-            }));
-           
-            client.ws.send(JSON.stringify({
-              type: 'payout_received',
-              data: {
-                amount: payout,
-                winner,
-                round: currentGameState.currentRound,
-                yourBets: bets
-              }
-            }));
-          }
-        });
-      }
+      clients.forEach(client => {
+        if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+          // Only send payout notification, not balance update
+          client.ws.send(JSON.stringify({
+            type: 'payout_received',
+            data: {
+              amount: payout,
+              winner,
+              round: currentGameState.currentRound,
+              yourBets: bets
+            }
+          }));
+        }
+      });
     } catch (error) {
       console.error(`⚠️ Error sending payout notification to user ${userId}:`, error);
     }
