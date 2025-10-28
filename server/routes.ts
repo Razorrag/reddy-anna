@@ -1715,6 +1715,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const result = await processPayment({ userId, amount: numAmount, method, type });
+      
+      // If payment was successful, get updated user balance for response
+      if (result.success) {
+        const updatedUser = await storage.getUser(userId);
+        if (updatedUser) {
+          // Broadcast balance update to all WebSocket clients for this user
+          // This will ensure the game interface gets real-time balance updates
+          try {
+            // Find WebSocket clients for this user and send balance update
+            // We need to access the 'clients' Set from the WebSocket server
+            // Since the WebSocket server is set up in the same file, we can reference clients
+            clients.forEach(client => {
+              if (client.userId === userId) {
+                client.ws.send(JSON.stringify({
+                  type: 'balance_update',
+                  data: { 
+                    balance: parseFloat(updatedUser.balance),
+                    type: `${type}_${result.status}`,
+                    amount: numAmount
+                  }
+                }));
+              }
+            });
+          } catch (broadcastError) {
+            console.error('Failed to broadcast balance update:', broadcastError);
+            // Don't fail the payment if broadcast fails
+          }
+          
+          // Add updated balance to the result for API consumers
+          result.user = {
+            ...result.user,
+            balance: parseFloat(updatedUser.balance)
+          };
+        }
+      }
+      
       auditLogger('payment_processed', userId, { amount: numAmount, type, method: method.type });
       
       res.json(result);

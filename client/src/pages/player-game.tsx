@@ -10,6 +10,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useGameState } from '../contexts/GameStateContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { apiClient } from '../lib/api-client';
 import MobileGameLayout from '../components/MobileGameLayout/MobileGameLayout';
 import StreamPlayer from '../components/StreamPlayer';
 import { GameHistoryModal } from '../components/GameHistoryModal';
@@ -175,22 +176,13 @@ const PlayerGame: React.FC = () => {
   // Handle deposit
   const handleDeposit = useCallback(async (amount: number) => {
     try {
-      // Use the same API client as UserProfileContext
-      const response = await fetch('/api/payment/process', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          amount: amount,
-          method: { type: 'upi' }, // Default to UPI for game deposits
-          type: 'deposit'
-        })
+      // Use the apiClient which handles authentication automatically
+      const data = await apiClient.post<any>('/payment/process', {
+        userId: user.id,
+        amount: amount,
+        method: { type: 'upi' }, // Default to UPI for game deposits
+        type: 'deposit'
       });
-
-      const data = await response.json();
 
       if (data.success) {
         // Update user balance in localStorage after successful deposit
@@ -207,8 +199,8 @@ const PlayerGame: React.FC = () => {
       } else {
         showNotification(data.error || 'Deposit failed', 'error');
       }
-    } catch (error) {
-      showNotification('Deposit failed', 'error');
+    } catch (error: any) {
+      showNotification(error.message || 'Deposit failed', 'error');
       console.error('Deposit error:', error);
     }
   }, [user.id, updatePlayerWallet, showNotification]);
@@ -221,22 +213,13 @@ const PlayerGame: React.FC = () => {
     }
 
     try {
-      // Use the same API client as UserProfileContext
-      const response = await fetch('/api/payment/process', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          amount: amount,
-          method: { type: 'upi' }, // Default to UPI for game withdrawals
-          type: 'withdrawal'
-        })
+      // Use the apiClient which handles authentication automatically
+      const data = await apiClient.post<any>('/payment/process', {
+        userId: user.id,
+        amount: amount,
+        method: { type: 'upi' }, // Default to UPI for game withdrawals
+        type: 'withdrawal'
       });
-
-      const data = await response.json();
 
       if (data.success) {
         // Update user balance in localStorage after successful withdrawal
@@ -253,8 +236,8 @@ const PlayerGame: React.FC = () => {
       } else {
         showNotification(data.error || 'Withdrawal failed', 'error');
       }
-    } catch (error) {
-      showNotification('Withdrawal failed', 'error');
+    } catch (error: any) {
+      showNotification(error.message || 'Withdrawal failed', 'error');
       console.error('Withdrawal error:', error);
     }
   }, [user.id, userBalance, updatePlayerWallet, showNotification]);
