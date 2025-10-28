@@ -85,17 +85,17 @@ nano .env
 
 **Required variables:**
 ```env
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_SERVICE_KEY=YOUR_SERVICE_KEY
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+SUPABASE_URL=https://nliiasrfkenkkdlzkcum.supabase.co
+SUPABASE_SERVICE_KEY=AA+uCEFHm7yDHnFBwnLxwKeEftRPmw07VM1hcPAVV0c=
+VITE_SUPABASE_URL=https://nliiasrfkenkkdlzkcum.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5saWlhc3Jma>
 JWT_SECRET=$(openssl rand -base64 32)
 JWT_EXPIRES_IN=24h
 NODE_ENV=production
 PORT=5000
-ALLOWED_ORIGINS=https://yourdomain.com
-VITE_API_BASE_URL=yourdomain.com
-VITE_WS_URL=wss://yourdomain.com/ws
+ALLOWED_ORIGINS=http://91.108.110.72
+VITE_API_BASE_URL=http://91.108.110.72
+VITE_WS_URL=ws://91.108.110.72/ws
 ```
 
 - [ ] All variables set

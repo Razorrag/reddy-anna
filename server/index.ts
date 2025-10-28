@@ -45,6 +45,10 @@ console.log('✅ JWT Authentication enabled');
 console.log('✅ All required environment variables are set');
 
 const app = express();
+
+// Trust proxy - required for rate limiting behind reverse proxy/load balancer
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
