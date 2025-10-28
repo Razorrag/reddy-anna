@@ -88,25 +88,25 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
       </div>
 
-      {/* Circular Timer Overlay - CENTER OF SCREEN - ALWAYS VISIBLE */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-30">
-        <div className={`relative transition-all duration-300 ${
-          gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
-        }`}>
-          {/* Large Circular Timer */}
-          <div className="relative w-32 h-32">
-            <svg className="transform -rotate-90 w-32 h-32">
-              {/* Background circle */}
-              <circle
-                cx="64"
-                cy="64"
-                r="58"
-                stroke="rgba(0, 0, 0, 0.5)"
-                strokeWidth="8"
-                fill="rgba(0, 0, 0, 0.3)"
-              />
-              {/* Progress circle - only show during betting */}
-              {gameState.phase === 'betting' && (
+      {/* Circular Timer Overlay - CENTER OF SCREEN - ONLY VISIBLE DURING BETTING */}
+      {gameState.phase === 'betting' && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+          <div className={`relative transition-all duration-300 ${
+            gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
+          }`}>
+            {/* Large Circular Timer */}
+            <div className="relative w-32 h-32">
+              <svg className="transform -rotate-90 w-32 h-32">
+                {/* Background circle */}
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="58"
+                  stroke="rgba(0, 0, 0, 0.5)"
+                  strokeWidth="8"
+                  fill="rgba(0, 0, 0, 0.3)"
+                />
+                {/* Progress circle - only show during betting */}
                 <circle
                   cx="64"
                   cy="64"
@@ -118,26 +118,39 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
                   strokeDashoffset={`${2 * Math.PI * 58 * (1 - getTimerProgress())}`}
                   className="transition-all duration-1000 ease-linear"
                 />
-              )}
-            </svg>
-            {/* Timer text - ALWAYS VISIBLE */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-white font-bold text-4xl drop-shadow-lg">
-                {gameState.phase === 'betting' && localTimer > 0
-                  ? localTimer
-                  : gameState.phase === 'dealing'
-                  ? '🎴'
-                  : gameState.phase === 'complete'
-                  ? '✓'
-                  : gameState.phase === 'opening'
-                  ? '⏳'
-                  : '--'
-                }
+              </svg>
+              {/* Timer text */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-white font-bold text-4xl drop-shadow-lg">
+                  {localTimer > 0 ? localTimer : '--'}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Special indicator for non-betting phases to show game state */}
+      {gameState.phase !== 'betting' && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center pointer-events-none">
+          {gameState.phase === 'dealing' && (
+            <div className="text-6xl animate-pulse text-green-400 font-bold">🎴</div>
+          )}
+          {gameState.phase === 'complete' && gameState.gameWinner && (
+            <div className="text-center bg-black/70 backdrop-blur-sm rounded-xl p-4 border-2 border-yellow-500/50">
+              <div className="text-2xl font-bold text-yellow-400 mb-2">
+                {gameState.gameWinner === 'andar' ? 'ANDAR WON!' : 'BAHAR WON!'}
+              </div>
+              {gameState.winningCard && (
+                <div className="text-white text-lg">{gameState.winningCard.display}</div>
+              )}
+            </div>
+          )}
+          {(gameState.phase === 'idle' || gameState.phase === 'opening') && (
+            <div className="text-4xl text-gray-400 font-bold">⏳</div>
+          )}
+        </div>
+      )}
 
       {/* Phase Indicator with Round Number */}
       <div className="absolute top-4 left-4">

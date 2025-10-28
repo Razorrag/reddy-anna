@@ -1,13 +1,40 @@
 import { Router } from 'express';
-import { supabase } from '../lib/supabaseServer';
-import { authenticateAdmin } from '../auth';
+import { supabaseServer } from '../lib/supabaseServer';
+import jwt from 'jsonwebtoken';
 
 const router = Router();
 
+// Optional authentication middleware - tries to authenticate user but doesn't fail if no token provided
+const optionalAuth = (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7);
+      const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+      const decoded = jwt.verify(token, secret) as any;
+      
+      // Ensure this is an access token, not a refresh token
+      if (decoded.type === 'access') {
+        req.user = {
+          id: decoded.id,
+          phone: decoded.phone,
+          username: decoded.username,
+          role: decoded.role
+        };
+      }
+    } catch (authError) {
+      // If token is invalid, continue without user authentication
+      console.log('Invalid token provided, proceeding without user context');
+    }
+  }
+  // Always continue to next middleware regardless of authentication status
+  next();
+};
+
 // GET /api/stream/config - Returns current stream configuration
-router.get('/config', authenticateAdmin, async (req, res) => {
+router.get('/config', optionalAuth, async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseServer
       .from('stream_config')
       .select('*')
       .single();
@@ -20,27 +47,55 @@ router.get('/config', authenticateAdmin, async (req, res) => {
       });
     }
 
-    res.json({
-      success: true,
-      data: {
-        activeMethod: data.active_method,
-        streamStatus: data.stream_status,
-        rtmpEnabled: data.rtmp_enabled,
-        webrtcEnabled: data.webrtc_enabled,
-        streamWidth: data.stream_width,
-        streamHeight: data.stream_height,
-        showStream: data.show_stream,
-        streamTitle: data.stream_title,
-        viewerCount: data.viewer_count,
-        // RTMP specific
-        rtmpServerUrl: data.rtmp_server_url,
-        rtmpStreamKey: data.rtmp_stream_key,
-        // WebRTC specific
-        webrtcResolution: data.webrtc_resolution,
-        webrtcFps: data.webrtc_fps,
-        webrtcBitrate: data.webrtc_bitrate
-      }
-    });
+    // Hide sensitive data from non-admin users
+    if (!req.user || req.user.role !== 'admin') {
+      // For non-admin users, only return public information
+      res.json({
+        success: true,
+        data: {
+          activeMethod: data.active_method,
+          streamStatus: data.stream_status,
+          rtmpEnabled: data.rtmp_enabled,
+          webrtcEnabled: data.webrtc_enabled,
+          showStream: data.show_stream,
+          streamTitle: data.stream_title,
+          viewerCount: data.viewer_count,
+          // Don't expose sensitive information like stream keys
+          streamWidth: data.stream_width,
+          streamHeight: data.stream_height,
+          // RTMP specific - only expose public player URL
+          rtmpServerUrl: data.rtmp_enabled ? data.rtmp_server_url : undefined,
+          // Don't expose stream key to players
+          // WebRTC specific
+          webrtcResolution: data.webrtc_resolution,
+          webrtcFps: data.webrtc_fps,
+          webrtcBitrate: data.webrtc_bitrate
+        }
+      });
+    } else {
+      // Admin gets full config
+      res.json({
+        success: true,
+        data: {
+          activeMethod: data.active_method,
+          streamStatus: data.stream_status,
+          rtmpEnabled: data.rtmp_enabled,
+          webrtcEnabled: data.webrtc_enabled,
+          streamWidth: data.stream_width,
+          streamHeight: data.stream_height,
+          showStream: data.show_stream,
+          streamTitle: data.stream_title,
+          viewerCount: data.viewer_count,
+          // RTMP specific
+          rtmpServerUrl: data.rtmp_server_url,
+          rtmpStreamKey: data.rtmp_stream_key, // Only for admin
+          // WebRTC specific
+          webrtcResolution: data.webrtc_resolution,
+          webrtcFps: data.webrtc_fps,
+          webrtcBitrate: data.webrtc_bitrate
+        }
+      });
+    }
   } catch (error) {
     console.error('Error in get stream config:', error);
     res.status(500).json({ 
@@ -51,7 +106,15 @@ router.get('/config', authenticateAdmin, async (req, res) => {
 });
 
 // POST /api/stream/config - Updates stream configuration
-router.post('/config', authenticateAdmin, async (req, res) => {
+router.post('/config', optionalAuth, async (req, res) => {
+  // Check if user is authenticated and has admin role
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Admin access required'
+    });
+  }
+
   const {
     method,
     width,
@@ -68,7 +131,7 @@ router.post('/config', authenticateAdmin, async (req, res) => {
   } = req.body;
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseServer
       .from('stream_config')
       .update({
         active_method: method,
@@ -109,7 +172,15 @@ router.post('/config', authenticateAdmin, async (req, res) => {
 });
 
 // POST /api/stream/status - Updates stream status
-router.post('/status', authenticateAdmin, async (req, res) => {
+router.post('/status', optionalAuth, async (req, res) => {
+  // Check if user is authenticated and has admin role
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Admin access required'
+    });
+  }
+
   const { status } = req.body;
 
   if (!['online', 'offline', 'connecting', 'error'].includes(status)) {
@@ -120,7 +191,7 @@ router.post('/status', authenticateAdmin, async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseServer
       .from('stream_config')
       .update({
         stream_status: status,

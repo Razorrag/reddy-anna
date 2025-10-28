@@ -5,7 +5,7 @@ import bcrypt from 'bcrypt';
 async function setupAdmin() {
   try {
     const username = 'admin';
-    const password = 'admin123'; // Change this after setup!
+    const password = 'Admin@123'; // Change this after setup!
     
     console.log('Setting up initial admin account...');
     

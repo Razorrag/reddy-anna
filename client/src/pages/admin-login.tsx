@@ -60,8 +60,8 @@ export default function AdminLogin() {
 
       console.log('Admin login response:', response); // Debug log
 
-      // Verify response has admin data (FIXED: proper null check)
-      if (!response.admin || !response.admin?.id) {
+      // Check if response is successful and has admin data
+      if (!response.success || !response.admin || !response.admin?.id) {
         setError('Invalid admin credentials. Please try again.');
         setIsLoading(false);
         return;

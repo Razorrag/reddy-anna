@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
+import { useBalance } from '@/contexts/BalanceContext';
 import { WalletModal } from '@/components/WalletModal';
 
 const Profile: React.FC = () => {
@@ -33,6 +34,7 @@ const Profile: React.FC = () => {
     fetchReferralData,
     claimBonus
   } = useUserProfile();
+  const { balance, refreshBalance } = useBalance();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -220,7 +222,18 @@ const Profile: React.FC = () => {
                   <div>
                     <div className="text-white/80 text-sm mb-2">Current Balance</div>
                     <div className="text-4xl font-bold text-gold">
-                      {analytics ? formatCurrency(analytics.currentBalance) : 'Loading...'}
+                      {formatCurrency(balance)}
+                    </div>
+                    <div className="mt-2">
+                      <Button
+                        onClick={refreshBalance}
+                        variant="outline"
+                        size="sm"
+                        className="border-gold/30 text-gold hover:bg-gold/10"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Refresh Balance
+                      </Button>
                     </div>
                   </div>
                   
@@ -843,10 +856,21 @@ const Profile: React.FC = () => {
       <WalletModal
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
-        userBalance={analytics?.currentBalance || 0}
+        userBalance={balance}
       />
     </div>
   );
+
+  // Listen for balance updates
+  useEffect(() => {
+    const handleBalanceUpdate = (event: CustomEvent) => {
+      const { balance: newBalance, source } = event.detail;
+      console.log('Profile page received balance update:', newBalance, 'from', source);
+    };
+
+    window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
+    return () => window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
+  }, []);
 };
 
 export default Profile;

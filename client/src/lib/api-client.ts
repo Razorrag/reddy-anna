@@ -49,7 +49,29 @@ class APIClient {
     if (!response.ok) {
       // Handle authentication errors
       if (response.status === 401) {
-        // Token expired or invalid - clear and redirect appropriately
+        // Try to get error response first to see if this is a login failure vs auth token issue
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { error: 'Authentication failed' };
+        }
+        
+        // For login endpoints, don't clear existing tokens - just throw the error
+        const url = response.url;
+        const isLoginEndpoint = url.includes('/auth/login') || url.includes('/auth/admin-login');
+        
+        if (isLoginEndpoint) {
+          // For admin login, check if there's a specific error message
+          if (url.includes('/auth/admin-login')) {
+            const adminError = errorData.error || errorData.message || 'Invalid admin credentials';
+            console.error('Admin login failed:', adminError);
+            throw new Error(adminError);
+          }
+          throw new Error(errorData.error || errorData.message || 'Invalid credentials');
+        }
+        
+        // For other endpoints, clear tokens and redirect
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('isLoggedIn');
@@ -69,7 +91,7 @@ class APIClient {
         // If already on login pages, don't redirect
         else if (currentPath === '/login' || currentPath === '/signup') {
           // Stay on current page, just clear the tokens
-          return response.json().catch(() => ({} as any)); // Return empty if JSON fails
+          return {} as any; // Return empty for login pages
         }
         
         // Only redirect if not already on login page
@@ -78,7 +100,7 @@ class APIClient {
           window.location.href = redirectPath;
         }
         
-        throw new Error('Authentication required. Please login again.');
+        throw new Error(errorData.error || errorData.message || 'Authentication required. Please login again.');
       }
 
       if (response.status === 403) {
@@ -145,6 +167,18 @@ class APIClient {
 
   async delete<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
+  }
+
+  /**
+   * Notify balance update via WebSocket
+   */
+  async notifyBalanceUpdate(userId: string, balance: number, transactionType?: string, amount?: number): Promise<ApiResponse> {
+    return this.post<ApiResponse>('/user/balance-notify', {
+      userId,
+      balance,
+      transactionType: transactionType || 'unknown',
+      amount: amount || 0
+    });
   }
 }
 

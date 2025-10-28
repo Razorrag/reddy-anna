@@ -36,12 +36,58 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     ]
   };
 
-  // Cleanup on unmount
+  // Cleanup on unmount and setup WebRTC event listeners
   useEffect(() => {
+    // Listen for WebRTC answers from players
+    const handleWebRTCAnswer = (event: any) => {
+      const { answer, playerId } = event.detail;
+      handleAnswerReceived(answer, playerId);
+    };
+
+    const handleWebRTCIceCandidate = (event: any) => {
+      const { candidate, fromPlayer } = event.detail;
+      handleIceCandidateReceived(candidate, fromPlayer);
+    };
+
+    window.addEventListener('webrtc_answer_received', handleWebRTCAnswer as EventListener);
+    window.addEventListener('webrtc_ice_candidate_received', handleWebRTCIceCandidate as EventListener);
+
     return () => {
+      window.removeEventListener('webrtc_answer_received', handleWebRTCAnswer as EventListener);
+      window.removeEventListener('webrtc_ice_candidate_received', handleWebRTCIceCandidate as EventListener);
       stopAllStreaming();
     };
   }, []);
+
+  // Handle incoming WebRTC answer from player
+  const handleAnswerReceived = (answer: RTCSessionDescriptionInit, playerId: string) => {
+    console.log('Handling WebRTC answer from player:', playerId);
+    const pc = peerConnectionsRef.current.get('primary');
+    if (pc && answer) {
+      pc.setRemoteDescription(answer)
+        .then(() => {
+          console.log('✅ Answer set successfully for player:', playerId);
+        })
+        .catch(error => {
+          console.error('Error setting remote answer:', error);
+        });
+    }
+  };
+
+  // Handle incoming ICE candidate from player
+  const handleIceCandidateReceived = (candidate: RTCIceCandidateInit, fromPlayer: string) => {
+    console.log('Handling ICE candidate from player:', fromPlayer);
+    const pc = peerConnectionsRef.current.get('primary');
+    if (pc && candidate) {
+      pc.addIceCandidate(new RTCIceCandidate(candidate))
+        .then(() => {
+          console.log('✅ ICE candidate added for player:', fromPlayer);
+        })
+        .catch(error => {
+          console.error('Error adding ICE candidate:', error);
+        });
+    }
+  };
 
   // Stop all streaming
   const stopAllStreaming = () => {
@@ -101,8 +147,11 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
 
       showNotification('✅ Screen sharing started! Players can now see your screen.', 'success');
 
-      // Start broadcasting frames via WebSocket
-      broadcastStreamFrames(stream);
+      // Set up WebRTC connection
+      const pc = setupWebRTCConnection(stream);
+      if (pc) {
+        peerConnectionsRef.current.set('primary', pc);
+      }
 
     } catch (error: any) {
       console.error('Screen share failed:', error);
@@ -110,45 +159,68 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     }
   };
 
-  // Broadcast stream frames via WebSocket
-  const broadcastStreamFrames = (stream: MediaStream) => {
-    const videoTrack = stream.getVideoTracks()[0];
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const video = document.createElement('video');
-    
-    video.srcObject = stream;
-    video.play();
+  // Set up WebRTC connection for screen sharing
+  const setupWebRTCConnection = (stream: MediaStream) => {
+    try {
+      // Create RTCPeerConnection
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      });
 
-    // Capture and send frames at 10 FPS (balance between quality and bandwidth)
-    const frameInterval = setInterval(() => {
-      if (!isStreaming || !screenStream) {
-        clearInterval(frameInterval);
-        return;
+      // Add video track to peer connection
+      stream.getVideoTracks().forEach(track => {
+        pc.addTrack(track, stream);
+      });
+
+      // Handle ICE candidates
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          sendWebSocketMessage({
+            type: 'webrtc_ice_candidate',
+            data: {
+              candidate: event.candidate,
+              method: 'webrtc'
+            }
+          });
+        }
+      };
+
+      // Create offer
+      pc.createOffer()
+        .then(offer => {
+          return pc.setLocalDescription(offer);
+        })
+        .then(() => {
+          // Send offer via WebSocket
+          sendWebSocketMessage({
+            type: 'webrtc_offer',
+            data: {
+              offer: pc.localDescription,
+              method: 'webrtc'
+            }
+          });
+        })
+        .catch(error => {
+          console.error('Error creating WebRTC offer:', error);
+          showNotification(`WebRTC setup failed: ${error.message}`, 'error');
+        });
+
+      // Store the peer connection
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
       }
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx?.drawImage(video, 0, 0);
-
-      // Convert to base64 and send via WebSocket
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            sendWebSocketMessage({
-              type: 'stream_frame',
-              data: {
-                frame: reader.result,
-                timestamp: Date.now()
-              }
-            });
-          };
-          reader.readAsDataURL(blob);
-        }
-      }, 'image/jpeg', 0.7); // 70% quality for bandwidth optimization
-
-    }, 100); // 10 FPS
+      // Keep track of this connection
+      peerConnectionsRef.current.set('primary', pc);
+      return pc;
+    } catch (error) {
+      console.error('Error setting up WebRTC connection:', error);
+      showNotification(`WebRTC connection setup failed: ${error.message}`, 'error');
+      return null;
+    }
   };
 
   // Stop WebRTC screen share
@@ -157,6 +229,12 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
       screenStream.getTracks().forEach(track => track.stop());
       setScreenStream(null);
     }
+
+    // Close all peer connections
+    peerConnectionsRef.current.forEach(pc => {
+      pc.close();
+    });
+    peerConnectionsRef.current.clear();
 
     setIsStreaming(false);
     setStreamMethod('none');

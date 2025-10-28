@@ -489,6 +489,66 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     initializeData();
   }, []);
 
+  // Listen for balance updates
+  useEffect(() => {
+    const handleBalanceUpdate = (event: CustomEvent) => {
+      const { balance, source } = event.detail;
+      
+      // Update analytics if balance changed
+      if (state.analytics && state.analytics.currentBalance !== balance) {
+        dispatch({
+          type: 'SET_ANALYTICS',
+          payload: { ...state.analytics, currentBalance: balance }
+        });
+      }
+    };
+
+    const handleWebSocketBalanceUpdate = (event: CustomEvent) => {
+      const { balance, amount, type } = event.detail;
+      
+      // Update analytics
+      if (state.analytics) {
+        let updatedAnalytics = { ...state.analytics, currentBalance: balance };
+        
+        // Update profit/loss based on transaction type
+        if (type === 'win') {
+          updatedAnalytics.todayProfit += amount;
+          updatedAnalytics.totalWinnings += amount;
+        } else if (type === 'loss') {
+          updatedAnalytics.todayProfit += amount; // amount is negative
+          updatedAnalytics.totalLosses += Math.abs(amount);
+        } else if (type === 'deposit') {
+          updatedAnalytics.totalDeposits += amount;
+        } else if (type === 'withdrawal') {
+          updatedAnalytics.totalWithdrawals += amount;
+        }
+        
+        dispatch({
+          type: 'SET_ANALYTICS',
+          payload: updatedAnalytics
+        });
+      }
+    };
+
+    window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
+    window.addEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
+      window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+    };
+  }, [state.analytics]);
+
+  // Enhance refreshData to include balance refresh
+  const enhancedRefreshData = async () => {
+    await refreshData();
+    
+    // Trigger balance refresh
+    window.dispatchEvent(new CustomEvent('balance-refresh-requested', {
+      detail: { source: 'profile-refresh', timestamp: Date.now() }
+    }));
+  };
+
   // Auto-refresh bonus info every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
@@ -514,7 +574,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     deposit,
     withdraw,
     claimBonus,
-    refreshData
+    refreshData: enhancedRefreshData
   };
 
   return (

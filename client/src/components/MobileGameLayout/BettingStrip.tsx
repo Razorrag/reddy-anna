@@ -48,10 +48,21 @@ const BettingStrip: React.FC<BettingStripProps> = ({
   };
 
   const handleBetClick = (position: BetSide) => {
-    // Use gameState directly instead of separate checks
-    if (isPlacingBet ||
-        gameState.phase !== 'betting' ||
-        gameState.bettingLocked) {
+    // Enhanced betting logic - allow betting in round 2 during 'betting' phase
+    if (isPlacingBet || 
+        gameState.phase !== 'betting' || 
+        gameState.bettingLocked || 
+        gameState.countdownTimer <= 0) {
+      // Provide more specific feedback for different scenarios
+      if (gameState.bettingLocked) {
+        showNotification('Betting period has ended. Waiting for cards to be dealt.', 'error');
+      } else if (gameState.phase !== 'betting') {
+        showNotification(`Betting is not open in ${gameState.phase} phase`, 'error');
+      } else if (gameState.countdownTimer <= 0) {
+        showNotification('Betting time is up!', 'error');
+      } else if (isPlacingBet) {
+        showNotification('Please wait, processing your previous bet...', 'info');
+      }
       return;
     }
 
@@ -59,11 +70,26 @@ const BettingStrip: React.FC<BettingStripProps> = ({
       showNotification('Please select a chip first', 'error');
       return;
     }
+    
+    // Check if player has sufficient balance for the bet (convert to number if needed)
+    const currentBalance = typeof gameState.playerWallet === 'string' 
+      ? parseFloat(gameState.playerWallet) 
+      : Number(gameState.playerWallet);
+    
+    if (isNaN(currentBalance) || currentBalance < selectedBetAmount) {
+      showNotification('Insufficient balance for this bet', 'error');
+      return;
+    }
 
     onPlaceBet(position);
   };
 
-  const isBettingDisabled = isPlacingBet || gameState.phase !== 'betting' || gameState.countdownTimer <= 0 || gameState.bettingLocked;
+  // Enhanced betting disable logic - ensure betting is allowed in round 2 if in betting phase
+  // Only disable if timer is 0 AND we're still in betting phase (not during dealing)
+  const isBettingDisabled = isPlacingBet ||
+                           gameState.phase !== 'betting' ||
+                           gameState.bettingLocked ||
+                           (gameState.countdownTimer <= 0 && gameState.phase === 'betting');
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>

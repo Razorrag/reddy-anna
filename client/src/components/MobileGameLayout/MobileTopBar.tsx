@@ -45,15 +45,26 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
       <div className="px-4 py-3">
         {/* Main Top Bar Layout */}
         <div className="flex justify-between items-center">
-          {/* Left Side - Game ID and Title */}
+          {/* Left Side - Game ID, Title and Round */}
           <div className="flex flex-col">
             {/* Game ID */}
             <div className="text-white text-xs font-mono mb-1">
               {gameState.gameId || '1308544430'}
             </div>
-            {/* Game Title */}
-            <div className="text-white text-sm font-bold">
-              Andar Bahar Live Game
+            {/* Game Title and Round */}
+            <div className="flex items-center gap-2">
+              <div className="text-white text-sm font-bold">
+                Andar Bahar Live Game
+              </div>
+              {/* Round Indicator */}
+              <div className={`
+                px-2 py-1 rounded-full text-xs font-bold
+                ${gameState.currentRound === 1 ? 'bg-green-600 text-white' : ''}
+                ${gameState.currentRound === 2 ? 'bg-blue-600 text-white' : ''}
+                ${gameState.currentRound === 3 ? 'bg-red-600 text-white' : ''}
+              `}>
+                R{gameState.currentRound || 1}
+              </div>
             </div>
           </div>
 

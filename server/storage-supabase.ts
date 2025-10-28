@@ -224,112 +224,333 @@ export interface IStorage {
 export class SupabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
-    const { data, error } = await supabaseServer
-      .from('users')
-      .select('*')
-      .eq('id', id)
-      .single();
+    // Retry logic for failed fetches
+    const maxRetries = 3;
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabaseServer
+          .from('users')
+          .select('*')
+          .eq('id', id)
+          .single();
 
-    if (error) {
-      console.error('Error getting user:', error);
-      return undefined;
+        if (error) {
+          if (error.code === 'PGRST116') { // Not found is expected
+            return undefined;
+          }
+          throw error;
+        }
+
+        return data;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed to get user ${id}:`, error);
+        
+        // If it's a fetch failure, network error, or timeout, try again after a delay
+        if (error.message?.includes('fetch failed') || 
+            error.code === 'ECONNREFUSED' || 
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') {
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+        } else {
+          // If it's not a network error, don't retry
+          break;
+        }
+      }
     }
-
-    return data;
+    
+    console.error('Error getting user after all retries:', lastError);
+    return undefined;
   }
 
   async getUserByUsername(identifier: string): Promise<User | undefined> {
     // For backward compatibility, search by phone number
-    const { data, error } = await supabaseServer
-      .from('users')
-      .select('*')
-      .eq('phone', identifier)  // Search by phone field
-      .single();
+    // Retry logic for failed fetches
+    const maxRetries = 3;
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabaseServer
+          .from('users')
+          .select('*')
+          .eq('phone', identifier)  // Search by phone field
+          .single();
 
-    if (error) {
-      console.error('Error getting user by identifier:', error);
-      console.log('Searching for identifier:', identifier);
-      return undefined;
+        if (error) {
+          if (error.code === 'PGRST116') { // Not found is expected
+            return undefined;
+          }
+          throw error;
+        }
+
+        return data;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed to get user by identifier ${identifier}:`, error);
+        
+        // If it's a fetch failure, network error, or timeout, try again after a delay
+        if (error.message?.includes('fetch failed') || 
+            error.code === 'ECONNREFUSED' || 
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') {
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+        } else {
+          // If it's not a network error, don't retry
+          break;
+        }
+      }
     }
-
-    return data;
+    
+    console.error('Error getting user by identifier after all retries:', lastError);
+    console.log('Searching for identifier:', identifier);
+    return undefined;
   }
 
   // New method for phone-based user lookup
   async getUserByPhone(phone: string): Promise<User | undefined> {
-    const { data, error } = await supabaseServer
-      .from('users')
-      .select('*')
-      .eq('phone', phone)
-      .single();
+    // Retry logic for failed fetches
+    const maxRetries = 3;
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabaseServer
+          .from('users')
+          .select('*')
+          .eq('phone', phone)
+          .single();
 
-    if (error) {
-      console.error('Error getting user by phone:', error);
-      return undefined;
+        if (error) {
+          if (error.code === 'PGRST116') { // Not found is expected
+            return undefined;
+          }
+          throw error;
+        }
+
+        return data;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed to get user by phone ${phone}:`, error);
+        
+        // If it's a fetch failure, network error, or timeout, try again after a delay
+        if (error.message?.includes('fetch failed') || 
+            error.code === 'ECONNREFUSED' || 
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') {
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+        } else {
+          // If it's not a network error, don't retry
+          break;
+        }
+      }
     }
-
-    return data;
+    
+    console.error('Error getting user by phone after all retries:', lastError);
+    return undefined;
   }
 
   // New method for referral code-based user lookup
   async getUserByReferralCode(referralCode: string): Promise<User | undefined> {
-    const { data, error } = await supabaseServer
-      .from('users')
-      .select('*')
-      .eq('referral_code_generated', referralCode)
-      .single();
+    // Retry logic for failed fetches
+    const maxRetries = 3;
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabaseServer
+          .from('users')
+          .select('*')
+          .eq('referral_code_generated', referralCode)
+          .single();
 
-    if (error) {
-      console.error('Error getting user by referral code:', error);
-      return undefined;
+        if (error) {
+          if (error.code === 'PGRST116') { // Not found is expected
+            return undefined;
+          }
+          throw error;
+        }
+
+        return data;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed to get user by referral code ${referralCode}:`, error);
+        
+        // If it's a fetch failure, network error, or timeout, try again after a delay
+        if (error.message?.includes('fetch failed') || 
+            error.code === 'ECONNREFUSED' || 
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') {
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+        } else {
+          // If it's not a network error, don't retry
+          break;
+        }
+      }
     }
-
-    return data;
+    
+    console.error('Error getting user by referral code after all retries:', lastError);
+    return undefined;
   }
 
   // New method for admin authentication
   async getAdminByUsername(username: string): Promise<any | undefined> {
-    const { data, error } = await supabaseServer
-      .from('admin_credentials')
-      .select('*')
-      .eq('username', username)
-      .single();
+    // Retry logic for failed fetches
+    const maxRetries = 3;
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabaseServer
+          .from('admin_credentials')
+          .select('*')
+          .eq('username', username)
+          .single();
 
-    if (error) {
-      console.error('Error getting admin by username:', error);
-      return undefined;
+        if (error) {
+          if (error.code === 'PGRST116') { // Not found is expected
+            return undefined;
+          }
+          throw error;
+        }
+
+        return data;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed to get admin by username ${username}:`, error);
+        
+        // If it's a fetch failure, network error, or timeout, try again after a delay
+        if (error.message?.includes('fetch failed') || 
+            error.code === 'ECONNREFUSED' || 
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') {
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+        } else {
+          // If it's not a network error, don't retry
+          break;
+        }
+      }
     }
-
-    return data;
+    
+    console.error('Error getting admin by username after all retries:', lastError);
+    return undefined;
   }
 
   async getUserById(id: string): Promise<User | undefined> {
-    const { data, error } = await supabaseServer
-      .from('users')
-      .select('*')
-      .eq('id', id)
-      .single();
+    // Retry logic for failed fetches
+    const maxRetries = 3;
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabaseServer
+          .from('users')
+          .select('*')
+          .eq('id', id)
+          .single();
 
-    if (error) {
-      console.error('Error getting user by ID:', error);
-      return undefined;
+        if (error) {
+          if (error.code === 'PGRST116') { // Not found is expected
+            return undefined;
+          }
+          throw error;
+        }
+
+        return data;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed to get user by ID ${id}:`, error);
+        
+        // If it's a fetch failure, network error, or timeout, try again after a delay
+        if (error.message?.includes('fetch failed') || 
+            error.code === 'ECONNREFUSED' || 
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') {
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+        } else {
+          // If it's not a network error, don't retry
+          break;
+        }
+      }
     }
-
-    return data;
+    
+    console.error('Error getting user by ID after all retries:', lastError);
+    return undefined;
   }
 
   async getAllUsers(): Promise<User[]> {
-    const { data, error } = await supabaseServer
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // Retry logic for failed fetches
+    const maxRetries = 3;
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabaseServer
+          .from('users')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error getting all users:', error);
-      return [];
+        if (error) {
+          throw error;
+        }
+
+        return data || [];
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed to get all users:`, error);
+        
+        // If it's a fetch failure, network error, or timeout, try again after a delay
+        if (error.message?.includes('fetch failed') || 
+            error.code === 'ECONNREFUSED' || 
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') {
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+        } else {
+          // If it's not a network error, don't retry
+          break;
+        }
+      }
     }
-
-    return data || [];
+    
+    console.error('Error getting all users after all retries:', lastError);
+    return [];
   }
 
   // Update createUser to use phone as ID with configurable default balance
@@ -505,35 +726,99 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getCurrentGameSession(): Promise<GameSession | undefined> {
-    const { data, error } = await supabaseServer
-      .from('game_sessions')
-      .select('*')
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // Retry logic for failed fetches
+    const maxRetries = 3;
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabaseServer
+          .from('game_sessions')
+          .select('*')
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
 
-    if (error) {
-      console.error('Error getting current game session:', error);
-      return undefined;
+        if (error) {
+          if (error.code === 'PGRST116') { // Not found is expected
+            return undefined;
+          }
+          throw error;
+        }
+
+        return data;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed to get current game session:`, error);
+        
+        // If it's a fetch failure, network error, or timeout, try again after a delay
+        if (error.message?.includes('fetch failed') || 
+            error.code === 'ECONNREFUSED' || 
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') {
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+        } else {
+          // If it's not a network error, don't retry
+          break;
+        }
+      }
     }
-
-    return data;
+    
+    console.error('Error getting current game session after all retries:', lastError);
+    return undefined;
   }
 
   async getGameSession(gameId: string): Promise<GameSession | undefined> {
-    const { data, error } = await supabaseServer
-      .from('game_sessions')
-      .select('*')
-      .eq('game_id', gameId)
-      .single();
+    // Retry logic for failed fetches
+    const maxRetries = 3;
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabaseServer
+          .from('game_sessions')
+          .select('*')
+          .eq('game_id', gameId)
+          .single();
 
-    if (error) {
-      console.error('Error getting game session:', error);
-      return undefined;
+        if (error) {
+          if (error.code === 'PGRST116') { // Not found is expected
+            return undefined;
+          }
+          throw error;
+        }
+
+        return data;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed to get game session ${gameId}:`, error);
+        
+        // If it's a fetch failure, network error, or timeout, try again after a delay
+        if (error.message?.includes('fetch failed') || 
+            error.code === 'ECONNREFUSED' || 
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') {
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+        } else {
+          // If it's not a network error, don't retry
+          break;
+        }
+      }
     }
-
-    return data;
+    
+    console.error('Error getting game session after all retries:', lastError);
+    return undefined;
   }
 
   async updateGameSession(gameId: string, updates: Partial<GameSession>): Promise<void> {
@@ -1543,25 +1828,57 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getUserBonusInfo(userId: string): Promise<{ depositBonus: number; referralBonus: number; totalBonus: number }> {
-    const { data, error } = await supabaseServer
-      .from('users')
-      .select('deposit_bonus_available, referral_bonus_available')
-      .eq('id', userId)
-      .single();
-
-    if (error) {
-      console.error('Error getting user bonus info:', error);
-      return { depositBonus: 0, referralBonus: 0, totalBonus: 0 };
-    }
-
-    const depositBonus = parseFloat(data?.deposit_bonus_available || '0');
-    const referralBonus = parseFloat(data?.referral_bonus_available || '0');
+    // Retry logic for failed fetches
+    const maxRetries = 3;
+    let lastError: any;
     
-    return {
-      depositBonus,
-      referralBonus,
-      totalBonus: depositBonus + referralBonus
-    };
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabaseServer
+          .from('users')
+          .select('deposit_bonus_available, referral_bonus_available')
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          if (error.code === 'PGRST116') { // Not found is expected
+            return { depositBonus: 0, referralBonus: 0, totalBonus: 0 };
+          }
+          throw error;
+        }
+
+        const depositBonus = parseFloat(data?.deposit_bonus_available || '0');
+        const referralBonus = parseFloat(data?.referral_bonus_available || '0');
+        
+        return {
+          depositBonus,
+          referralBonus,
+          totalBonus: depositBonus + referralBonus
+        };
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Attempt ${attempt} failed to get user bonus info for ${userId}:`, error);
+        
+        // If it's a fetch failure, network error, or timeout, try again after a delay
+        if (error.message?.includes('fetch failed') || 
+            error.code === 'ECONNREFUSED' || 
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') {
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+        } else {
+          // If it's not a network error, don't retry
+          break;
+        }
+      }
+    }
+    
+    console.error('Error getting user bonus info after all retries:', lastError);
+    return { depositBonus: 0, referralBonus: 0, totalBonus: 0 };
   }
 
   async resetUserBonus(userId: string): Promise<void> {

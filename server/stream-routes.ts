@@ -8,8 +8,36 @@
 import express, { Router } from 'express';
 import { streamStorage } from './stream-storage';
 import { requireAuth } from './auth';
+import jwt from 'jsonwebtoken';
 
 const router: Router = express.Router();
+
+// Optional authentication middleware - tries to authenticate user but doesn't fail if no token provided
+const optionalAuth = (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7);
+      const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+      const decoded = jwt.verify(token, secret) as any;
+      
+      // Ensure this is an access token, not a refresh token
+      if (decoded.type === 'access') {
+        req.user = {
+          id: decoded.id,
+          phone: decoded.phone,
+          username: decoded.username,
+          role: decoded.role
+        };
+      }
+    } catch (authError) {
+      // If token is invalid, continue without user authentication
+      console.log('Invalid token provided, proceeding without user context');
+    }
+  }
+  // Always continue to next middleware regardless of authentication status
+  next();
+};
 
 /**
  * Middleware to check admin access
@@ -27,9 +55,9 @@ const validateAdminAccess = (req: any, res: any, next: any) => {
 /**
  * GET /api/stream/config
  * Get current stream configuration
- * Public (authenticated users can view, but sensitive data hidden for non-admins)
+ * Public endpoint - accessible to all authenticated users with role-based data filtering
  */
-router.get('/config', async (req, res) => {
+router.get('/config', optionalAuth, async (req, res) => {
   try {
     const config = await streamStorage.getStreamConfig();
     
@@ -47,6 +75,7 @@ router.get('/config', async (req, res) => {
         activeMethod: config.activeMethod,
         streamStatus: config.streamStatus,
         streamTitle: config.streamTitle,
+        // Only include public player-accessible stream URLs
         rtmpPlayerUrl: config.rtmpPlayerUrl,
         webrtcRoomId: config.webrtcRoomId,
         viewerCount: config.viewerCount,

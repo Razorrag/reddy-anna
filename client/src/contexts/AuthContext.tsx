@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback } from 'react';
 
 // Define user interface
 export interface User {
@@ -115,6 +115,7 @@ interface AuthContextType {
   checkAuthStatus: () => void;
   clearError: () => void;
   refreshUser: () => Promise<void>;
+  updateBalance: (newBalance: number, source?: string, transactionType?: string, amount?: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -218,6 +219,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // Add balance update method
+  const updateBalance = useCallback(async (newBalance: number, source: string = 'api', transactionType?: string, amount?: number) => {
+    if (state.user) {
+      const updatedUser = {
+        ...state.user,
+        balance: newBalance
+      };
+      
+      // Update localStorage
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      
+      // Update state
+      dispatch({
+        type: 'AUTH_SUCCESS',
+        payload: { user: updatedUser, token: state.token || '' }
+      });
+      
+      // Emit custom event for other contexts
+      window.dispatchEvent(new CustomEvent('balance-updated', {
+        detail: { balance: newBalance, source, timestamp: Date.now(), transactionType, amount }
+      }));
+    }
+  }, [state.user, state.token]);
+
+  // Listen for balance updates
+  useEffect(() => {
+    const handleBalanceUpdate = (event: CustomEvent) => {
+      const { balance: newBalance, source } = event.detail;
+      
+      if (state.user && state.user.balance !== newBalance) {
+        updateBalance(newBalance, source);
+      }
+    };
+
+    window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
+    return () => window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
+  }, [state.user, updateBalance]);
+
   const value = {
     // Direct access properties
     user: state.user,
@@ -233,7 +272,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     logout,
     checkAuthStatus,
     clearError,
-    refreshUser
+    refreshUser,
+    updateBalance
   };
 
   return (

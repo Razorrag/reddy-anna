@@ -706,7 +706,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           case 'bet_placed':
           case 'place_bet':
-            if (!client) break;
+            if (!client) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'Client not authenticated' }
+              }));
+              break;
+            }
             
             const betAmount = message.data.amount;
             const betSide = message.data.side;
@@ -792,61 +798,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
             
-            // FIXED: Skip balance check in WebSocket - let REST API handle it
-            // This prevents race conditions between WebSocket and REST API
-            
-            if (!currentGameState.userBets.has(client.userId)) {
-              currentGameState.userBets.set(client.userId, {
-                round1: { andar: 0, bahar: 0 },
-                round2: { andar: 0, bahar: 0 }
-              });
-            }
-            
-            // Only save to database for non-anonymous users
-            if (!isAnonymous) {
-              await storage.createBet({
-                userId: client.userId,
-                gameId: currentGameState.gameId,
-                round: betRound.toString(),
-                side: betSide,
-                amount: betAmount.toString(),
-                status: 'pending'
+            // FIXED: Add proper balance validation before placing bet
+            try {
+              // Get current user balance from database
+              const user = await storage.getUser(client.userId);
+              if (!user) {
+                ws.send(JSON.stringify({
+                  type: 'error',
+                  data: { message: 'User not found' }
+                }));
+                break;
+              }
+              
+              const currentBalance = parseFloat(user.balance) || 0;
+              
+              // Check if user has sufficient balance
+              if (currentBalance < betAmount) {
+                ws.send(JSON.stringify({
+                  type: 'error',
+                  data: { message: `Insufficient balance. Current balance: ₹${currentBalance.toLocaleString()}, Bet amount: ₹${betAmount.toLocaleString()}` }
+                }));
+                break;
+              }
+              
+              // Check total bets for this round to ensure user doesn't exceed balance
+              if (!currentGameState.userBets.has(client.userId)) {
+                currentGameState.userBets.set(client.userId, {
+                  round1: { andar: 0, bahar: 0 },
+                  round2: { andar: 0, bahar: 0 }
+                });
+              }
+              
+              const userBet = currentGameState.userBets.get(client.userId)!;
+              const currentRoundBets = betRound === 1
+                ? userBet.round1.andar + userBet.round1.bahar
+                : userBet.round2.andar + userBet.round2.bahar;
+              
+              if (currentBalance < currentRoundBets + betAmount) {
+                ws.send(JSON.stringify({
+                  type: 'error',
+                  data: { message: `Insufficient balance for additional bet. Current bets: ₹${currentRoundBets.toLocaleString()}, Attempted: ₹${betAmount.toLocaleString()}, Available: ₹${(currentBalance - currentRoundBets).toLocaleString()}` }
+                }));
+                break;
+              }
+              
+              // Only save to database for non-anonymous users
+              if (!isAnonymous) {
+                await storage.createBet({
+                  userId: client.userId,
+                  gameId: currentGameState.gameId,
+                  round: betRound.toString(),
+                  side: betSide,
+                  amount: betAmount.toString(),
+                  status: 'pending'
+                });
+                
+                // FIXED: Update balance in database immediately to prevent double-spending
+                await storage.updateUserBalance(client.userId, -betAmount);
+                
+                // Send balance update via WebSocket
+                const newBalance = currentBalance - betAmount;
+                clients.forEach(client => {
+                  if (client.userId === client.userId && client.ws.readyState === WebSocket.OPEN) {
+                    client.ws.send(JSON.stringify({
+                      type: 'balance_update',
+                      data: {
+                        balance: newBalance,
+                        amount: -betAmount,
+                        type: 'bet',
+                        timestamp: Date.now()
+                      }
+                    }));
+                  }
+                });
+              }
+              
+              // Update in-memory game state
+              if (betRound === 1) {
+                userBet.round1[betSide as 'andar' | 'bahar'] += betAmount;
+                currentGameState.round1Bets[betSide as 'andar' | 'bahar'] += betAmount;
+              } else if (betRound === 2) {
+                userBet.round2[betSide as 'andar' | 'bahar'] += betAmount;
+                currentGameState.round2Bets[betSide as 'andar' | 'bahar'] += betAmount;
+              }
+              
+              // Send success response to client
+              ws.send(JSON.stringify({
+                type: 'bet_success',
+                data: {
+                  side: betSide,
+                  amount: betAmount,
+                  round: betRound,
+                  newBalance: isAnonymous ? null : currentBalance - betAmount,
+                  message: `Bet placed successfully: ₹${betAmount.toLocaleString()} on ${betSide.charAt(0).toUpperCase() + betSide.slice(1)}`
+                }
+              }));
+              
+              // Update user's bet display
+              ws.send(JSON.stringify({
+                type: 'user_bets_update',
+                data: {
+                  round1Bets: userBet.round1,
+                  round2Bets: userBet.round2,
+                  currentRound: betRound
+                }
+              }));
+              
+              // Broadcast betting stats to all clients
+              broadcast({
+                type: 'betting_stats',
+                data: {
+                  andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+                  baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
+                  round1Bets: currentGameState.round1Bets,
+                  round2Bets: currentGameState.round2Bets
+                }
               });
               
-              // FIXED: Don't update balance via WebSocket - let REST API handle it
-              // await storage.updateUserBalance(client.userId, -betAmount);
+              console.log(`✅ Bet processed: ${client.userId} bet ₹${betAmount} on ${betSide} (Round ${betRound})`);
+            } catch (error: any) {
+              console.error('Error processing bet:', error);
+              ws.send(JSON.stringify({
+                type: 'error',
+                data: {
+                  message: error.message || 'Failed to process bet',
+                  error: error.code || 'BET_PROCESSING_ERROR'
+                }
+              }));
             }
-            
-            const userBet = currentGameState.userBets.get(client.userId)!;
-            if (betRound === 1) {
-              userBet.round1[betSide as 'andar' | 'bahar'] += betAmount;
-              currentGameState.round1Bets[betSide as 'andar' | 'bahar'] += betAmount;
-            } else if (betRound === 2) {
-              userBet.round2[betSide as 'andar' | 'bahar'] += betAmount;
-              currentGameState.round2Bets[betSide as 'andar' | 'bahar'] += betAmount;
-            }
-            
-            // FIXED: Don't send balance update from WebSocket - let REST API handle it
-            // This prevents race conditions and ensures proper balance synchronization
-                
-            ws.send(JSON.stringify({
-              type: 'user_bets_update',
-              data: {
-                round1Bets: userBet.round1,
-                round2Bets: userBet.round2,
-                currentRound: betRound
-              }
-            }));
-            
-            broadcast({
-              type: 'betting_stats',
-              data: {
-                andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
-                baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
-                round1Bets: currentGameState.round1Bets,
-                round2Bets: currentGameState.round2Bets
-              }
-            });
             break;
           
           case 'reveal_cards':
@@ -1390,11 +1469,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // These paths will bypass the requireAuth middleware
     const publicPaths = [
       '/api/auth/login',
-      '/api/auth/admin-login', 
+      '/api/auth/admin-login',
       '/api/auth/register',
       '/api/auth/refresh',
-      '/api/auth/logout'
+      '/api/auth/logout',
+      '/api/stream/config'  // Stream config should be accessible to all users
     ];
+    
+    // Log all API requests for debugging
+    console.log(`🔍 API Request: ${req.method} ${req.originalUrl || req.url}`);
     
     // Get the clean path without query parameters for comparison
     // Using multiple methods to ensure we get the correct path
@@ -3169,30 +3252,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // The unified requireAuth middleware should have set req.user
       if (!req.user || !req.user.id) {
-        return res.status(401).json({ 
-          success: false, 
-          error: 'Authentication required' 
+        console.log("Balance endpoint - No authenticated user found");
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
         });
       }
       
       const userId = req.user.id;
+      console.log(`Balance endpoint - Fetching balance for user: ${userId}`);
       const user = await storage.getUser(userId);
       
       if (!user) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'User not found' 
+        console.log(`Balance endpoint - User not found: ${userId}`);
+        return res.status(404).json({
+          success: false,
+          error: 'User not found'
         });
       }
       
-      res.json({ 
-        balance: parseFloat(user.balance) 
+      const balance = parseFloat(user.balance) || 0;
+      console.log(`Balance endpoint - Retrieved balance for ${userId}: ${balance}`);
+      
+      res.json({
+        success: true,
+        balance: balance
       });
     } catch (error) {
       console.error("Get balance error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        error: "Failed to get balance" 
+        error: "Failed to get balance"
+      });
+    }
+  });
+
+  // Balance notification endpoint for WebSocket updates
+  app.post("/api/user/balance-notify", async (req, res) => {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+      
+      const { userId, balance, transactionType, amount } = req.body;
+      
+      // Only allow users to notify their own balance updates
+      if (userId !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+      
+      // Broadcast balance update to all WebSocket clients for this user
+      try {
+        clients.forEach(client => {
+          if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+            client.ws.send(JSON.stringify({
+              type: 'balance_update',
+              data: {
+                userId,
+                balance: parseFloat(balance),
+                transactionType: transactionType || 'unknown',
+                amount: parseFloat(amount) || 0,
+                timestamp: Date.now()
+              }
+            }));
+          }
+        });
+        
+        console.log(`💰 Balance notification sent: ${userId} -> ${parseFloat(balance)} (${transactionType})`);
+      } catch (broadcastError) {
+        console.error('Failed to broadcast balance notification:', broadcastError);
+      }
+      
+      res.json({
+        success: true,
+        message: 'Balance notification sent successfully'
+      });
+    } catch (error) {
+      console.error('Balance notification error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Balance notification failed'
       });
     }
   });

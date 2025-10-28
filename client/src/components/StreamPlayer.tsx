@@ -365,39 +365,38 @@ const WebRTCStream: React.FC<{ config: StreamConfig }> = ({ config }) => {
   );
 };
 
-// WebRTC Stream Component - Receives frames via WebSocket
+// WebRTC Stream Component - Proper WebRTC connection
 const WebRTCStreamWebSocket: React.FC<{ config: StreamConfig }> = ({ config }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const [hasFrame, setHasFrame] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
 
   useEffect(() => {
-    console.log('🌐 WebRTC Stream initialized');
+    console.log('🌐 WebRTC Stream initializing');
 
-    // Listen for stream frames from WebSocket using the event system
-    const handleStreamFrame = (event: Event) => {
-      try {
-        const detail = (event as CustomEvent).detail;
-        
-        if (detail?.frame) {
-          // Display the frame
-          if (imgRef.current) {
-            imgRef.current.src = detail.frame;
-            setHasFrame(true);
-            setConnectionState('connected');
-          }
-        }
-      } catch (error) {
-        console.error('Error processing stream frame:', error);
-      }
+    // Initialize WebRTC connection
+    initializeWebRTC();
+
+    // Listen for WebRTC events
+    const handleWebRTCOffer = (event: any) => {
+      const { offer, adminId } = event.detail;
+      handleOfferReceived(offer, adminId);
     };
 
-    // Listen for stream status updates
-    const handleStreamStatus = (event: Event) => {
-      const detail = (event as CustomEvent).detail;
-      if (detail?.status) {
-        switch(detail.status) {
+    const handleWebRTCAnswer = (event: any) => {
+      const { answer } = event.detail;
+      handleAnswerReceived(answer);
+    };
+
+    const handleWebRTCIceCandidate = (event: any) => {
+      const { candidate, fromAdmin } = event.detail;
+      handleIceCandidateReceived(candidate, fromAdmin);
+    };
+
+    const handleStreamStatus = (event: any) => {
+      const { status } = event.detail;
+      if (status) {
+        switch(status) {
           case 'online':
             setConnectionState('connected');
             break;
@@ -407,39 +406,156 @@ const WebRTCStreamWebSocket: React.FC<{ config: StreamConfig }> = ({ config }) =
           case 'offline':
           case 'error':
             setConnectionState('disconnected');
+            // Close the connection if stream goes offline
+            cleanup();
             break;
         }
       }
     };
 
-    // Listen for stream start/stop events
-    const handleStreamStart = () => {
-      setConnectionState('connecting');
-    };
+    window.addEventListener('webrtc_offer_received', handleWebRTCOffer as EventListener);
+    window.addEventListener('webrtc_answer_received', handleWebRTCAnswer as EventListener);
+    window.addEventListener('webrtc_ice_candidate_received', handleWebRTCIceCandidate as EventListener);
+    window.addEventListener('stream_status_update', handleStreamStatus as EventListener);
 
-    const handleStreamStop = () => {
-      setConnectionState('disconnected');
-      setHasFrame(false);
-    };
-
-    // Add event listeners
-    window.addEventListener('stream_frame', handleStreamFrame);
-    window.addEventListener('stream_status', handleStreamStatus);
-    window.addEventListener('stream_start', handleStreamStart);
-    window.addEventListener('stream_stop', handleStreamStop);
-
-    // Cleanup
+    // Cleanup on unmount
     return () => {
-      window.removeEventListener('stream_frame', handleStreamFrame);
-      window.removeEventListener('stream_status', handleStreamStatus);
-      window.removeEventListener('stream_start', handleStreamStart);
-      window.removeEventListener('stream_stop', handleStreamStop);
+      window.removeEventListener('webrtc_offer_received', handleWebRTCOffer as EventListener);
+      window.removeEventListener('webrtc_answer_received', handleWebRTCAnswer as EventListener);
+      window.removeEventListener('webrtc_ice_candidate_received', handleWebRTCIceCandidate as EventListener);
+      window.removeEventListener('stream_status_update', handleStreamStatus as EventListener);
+      cleanup();
     };
   }, []);
 
+  // Initialize WebRTC connection
+  const initializeWebRTC = async () => {
+    try {
+      // Create peer connection
+      const peerConnection = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      });
+
+      peerConnectionRef.current = peerConnection;
+
+      // Handle incoming tracks (video from admin)
+      peerConnection.ontrack = (event) => {
+        console.log('📺 Received remote track:', event.track.kind);
+        if (videoRef.current && event.streams[0]) {
+          videoRef.current.srcObject = event.streams[0];
+          setConnectionState('connected');
+        }
+      };
+
+      // Handle ICE candidates from remote
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          console.log('🧊 Generated local ICE candidate');
+          // In a full implementation, this would be sent to the admin
+        }
+      };
+
+      // Handle connection state changes
+      peerConnection.onconnectionstatechange = () => {
+        console.log('🔌 Connection state:', peerConnection.connectionState);
+        switch (peerConnection.connectionState) {
+          case 'connected':
+            setConnectionState('connected');
+            break;
+          case 'disconnected':
+          case 'failed':
+            setConnectionState('disconnected');
+            break;
+          case 'connecting':
+            setConnectionState('connecting');
+            break;
+        }
+      };
+
+      console.log('✅ WebRTC connection initialized');
+    } catch (error) {
+      console.error('❌ Error initializing WebRTC:', error);
+      setConnectionState('error');
+    }
+  };
+
+  // Handle incoming WebRTC offer from admin
+  const handleOfferReceived = async (offer: RTCSessionDescriptionInit, adminId: string) => {
+    try {
+      console.log('Handling WebRTC offer from admin:', adminId);
+
+      const pc = peerConnectionRef.current;
+      if (!pc) {
+        console.error('No peer connection available');
+        return;
+      }
+
+      // Set remote description
+      await pc.setRemoteDescription(offer);
+
+      // Create answer
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      // In a full implementation, send this answer back to admin
+      // For now, we'll dispatch an event to be handled by WebSocket context
+      const answerEvent = new CustomEvent('webrtc_answer_ready', {
+        detail: { answer: pc.localDescription }
+      });
+      window.dispatchEvent(answerEvent);
+
+    } catch (error) {
+      console.error('Error handling WebRTC offer:', error);
+      setConnectionState('error');
+    }
+  };
+
+  // Handle incoming WebRTC answer
+  const handleAnswerReceived = async (answer: RTCSessionDescriptionInit) => {
+    const pc = peerConnectionRef.current;
+    if (pc && pc.remoteDescription) {
+      try {
+        await pc.setRemoteDescription(answer);
+        console.log('✅ WebRTC answer set successfully');
+      } catch (error) {
+        console.error('Error setting remote answer:', error);
+      }
+    }
+  };
+
+  // Handle incoming ICE candidate
+  const handleIceCandidateReceived = (candidate: RTCIceCandidateInit, fromAdmin: boolean) => {
+    const pc = peerConnectionRef.current;
+    if (pc && fromAdmin) {
+      try {
+        pc.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log('✅ ICE candidate added');
+      } catch (error) {
+        console.error('Error adding ICE candidate:', error);
+      }
+    }
+  };
+
+  // Cleanup function
+  const cleanup = () => {
+    console.log('🧹 Cleaning up WebRTC connection');
+    
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
   // Show connection status overlay
   const renderStatusOverlay = () => {
-    if (connectionState === 'connected' && hasFrame) return null;
+    if (connectionState === 'connected') return null;
 
     let statusText = '';
     let statusIcon = null;
@@ -461,12 +577,6 @@ const WebRTCStreamWebSocket: React.FC<{ config: StreamConfig }> = ({ config }) =
         statusIcon = <WifiOff className="w-16 h-16 text-red-400 mb-4 mx-auto" />;
         statusDetails = 'Please try again later';
         break;
-      default:
-        if (!hasFrame) {
-          statusText = 'WebRTC Stream Active';
-          statusIcon = <Wifi className="w-16 h-16 text-gold mb-4 mx-auto animate-pulse" />;
-          statusDetails = 'Waiting for frames...';
-        }
     }
 
     return (
@@ -483,15 +593,15 @@ const WebRTCStreamWebSocket: React.FC<{ config: StreamConfig }> = ({ config }) =
 
   return (
     <div className="absolute inset-0 w-full h-full bg-black">
-      {/* Stream display */}
-      <img
-        ref={imgRef}
+      <video
+        ref={videoRef}
         className="w-full h-full object-contain"
-        style={{ display: hasFrame ? 'block' : 'none' }}
-        alt="Live Stream"
+        autoPlay
+        playsInline
+        muted
+        style={{ display: connectionState === 'connected' ? 'block' : 'none' }}
       />
       
-      {/* Status overlay */}
       {renderStatusOverlay()}
     </div>
   );

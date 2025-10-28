@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+import { useBalance } from './BalanceContext';
+import { apiClient } from '@/lib/api-client';
 import type {
   Card,
   GamePhase,
@@ -256,46 +258,33 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [gameState, dispatch] = useReducer(gameReducer, initialState);
 
   // Initialize from AuthContext with improved error handling
+  const auth = useAuth();
+  const { balance, updateBalance, validateBalance } = useBalance();
+  
   useEffect(() => {
-    const initializeFromAuth = () => {
-      const { user, isAuthenticated } = useAuth();
+    // Initialize from auth state directly inside useEffect (no nested function)
+    const { user, isAuthenticated } = auth;
+    
+    if (isAuthenticated && user) {
+      // Convert balance to number if it's a string
+      const balanceAsNumber = typeof user.balance === 'string' 
+        ? parseFloat(user.balance) 
+        : Number(user.balance);
       
-      if (isAuthenticated && user) {
-        dispatch({
-          type: 'SET_USER_DATA',
-          payload: {
-            userId: user.id || user.phone || 'user',
-            username: user.username || user.full_name || user.phone || 'Player',
-            wallet: user.balance || 0 // default balance
-          }
-        });
-        dispatch({
-          type: 'SET_USER_ROLE',
-          payload: user.role === 'super_admin' ? 'admin' : (user.role || 'player')
-        });
-      } else {
-        // Initialize with default guest user
-        dispatch({
-          type: 'SET_USER_DATA',
-          payload: {
-            userId: 'guest',
-            username: 'Guest Player',
-            wallet: 0
-          }
-        });
-        dispatch({
-          type: 'SET_USER_ROLE',
-          payload: 'player'
-        });
-      }
-    };
-
-    // Try to initialize immediately
-    try {
-      initializeFromAuth();
-    } catch (e) {
-      console.error('Failed to initialize from auth context', e);
-      // Fallback to default values
+      dispatch({
+        type: 'SET_USER_DATA',
+        payload: {
+          userId: user.id || user.phone || 'user',
+          username: user.username || user.full_name || user.phone || 'Player',
+          wallet: isNaN(balanceAsNumber) ? 0 : balanceAsNumber
+        }
+      });
+      dispatch({
+        type: 'SET_USER_ROLE',
+        payload: user.role === 'super_admin' ? 'admin' : (user.role || 'player')
+      });
+    } else {
+      // Initialize with default guest user
       dispatch({
         type: 'SET_USER_DATA',
         payload: {
@@ -309,7 +298,96 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         payload: 'player'
       });
     }
-  }, []);
+  }, [auth.user, auth.isAuthenticated, auth.token]); // Add token to dependencies to update when token changes
+
+  // Add separate effect to update balance when user balance changes
+  useEffect(() => {
+    const { user, isAuthenticated } = auth;
+    
+    if (isAuthenticated && user && user.balance !== undefined) {
+      // Convert to number if it's a string
+      const balanceAsNumber = typeof user.balance === 'string' 
+        ? parseFloat(user.balance) 
+        : Number(user.balance);
+      
+      dispatch({
+        type: 'UPDATE_PLAYER_WALLET',
+        payload: isNaN(balanceAsNumber) ? 0 : balanceAsNumber
+      });
+    }
+  }, [auth.user?.balance, auth.isAuthenticated]); // Only update when balance changes
+
+  // Add balance refresh function
+  const refreshBalanceFromAPI = useCallback(async () => {
+    try {
+      const response = await apiClient.get<{success: boolean, balance: number, error?: string}>('/user/balance');
+      if (response.success && response.balance !== gameState.playerWallet) {
+        dispatch({
+          type: 'UPDATE_PLAYER_WALLET',
+          payload: response.balance
+        });
+        await updateBalance(response.balance, 'api', 'refresh', 0);
+        return response.balance;
+      }
+    } catch (error) {
+      console.error('Failed to refresh balance:', error);
+    }
+    return gameState.playerWallet;
+  }, [gameState.playerWallet, updateBalance]);
+
+  // Listen for balance updates from BalanceContext
+  useEffect(() => {
+    const handleBalanceUpdate = (event: CustomEvent) => {
+      const { balance: newBalance, source } = event.detail;
+      
+      // Convert to number if it's a string
+      const balanceAsNumber = typeof newBalance === 'string' 
+        ? parseFloat(newBalance) 
+        : Number(newBalance);
+      
+      if (!isNaN(balanceAsNumber) && balanceAsNumber !== gameState.playerWallet) {
+        dispatch({
+          type: 'UPDATE_PLAYER_WALLET',
+          payload: balanceAsNumber
+        });
+      }
+    };
+
+    const handleWebSocketBalanceUpdate = (event: CustomEvent) => {
+      const { balance: newBalance } = event.detail;
+      
+      // Convert to number if it's a string
+      const balanceAsNumber = typeof newBalance === 'string' 
+        ? parseFloat(newBalance) 
+        : Number(newBalance);
+      
+      if (!isNaN(balanceAsNumber) && balanceAsNumber !== gameState.playerWallet) {
+        dispatch({
+          type: 'UPDATE_PLAYER_WALLET',
+          payload: balanceAsNumber
+        });
+      }
+    };
+
+    window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
+    window.addEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
+      window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+    };
+  }, [gameState.playerWallet]);
+
+  // Add periodic balance refresh
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (auth.isAuthenticated && !gameState.isGameActive) {
+        await refreshBalanceFromAPI();
+      }
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [auth.isAuthenticated, gameState.isGameActive, refreshBalanceFromAPI]);
 
   // Dispatchers for all actions
   const setGameId = (id: string) => {
@@ -406,7 +484,21 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 2, bets: { andar: 0, bahar: 0 } } });
   };
 
-  const placeBet = (side: BetSide, amount: number) => {
+  const placeBet = async (side: BetSide, amount: number) => {
+    // Validate balance before placing bet
+    const isValidBalance = await validateBalance();
+    if (!isValidBalance) {
+      console.warn('Balance validation failed, skipping bet placement');
+      return;
+    }
+
+    // Ensure playerWallet is treated as a number for comparison
+    const currentBalance = Number(gameState.playerWallet);
+    if (isNaN(currentBalance) || currentBalance < amount) {
+      console.warn('Insufficient balance for bet or invalid balance value');
+      return;
+    }
+
     // This function now only updates local state
     // The actual bet placement is handled by WebSocket messages
     if (gameState.currentRound === 1) {
@@ -423,9 +515,12 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       updatePlayerRoundBets(2, newBets);
     }
     
-    if (gameState.playerWallet >= amount) {
-      updatePlayerWallet(gameState.playerWallet - amount);
-    }
+    // Update local balance immediately for UI responsiveness
+    const newBalance = currentBalance - amount;
+    updatePlayerWallet(newBalance);
+    
+    // Update balance in BalanceContext
+    await updateBalance(newBalance, 'api', 'bet', amount);
   };
 
   const value: GameStateContextType = {

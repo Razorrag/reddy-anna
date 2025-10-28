@@ -11,11 +11,13 @@ import { useGameState } from '../contexts/GameStateContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useBalance } from '../contexts/BalanceContext';
 import { apiClient } from '../lib/apiClient';
 import MobileGameLayout from '../components/MobileGameLayout/MobileGameLayout';
+import PlayerStreamView from '../components/PlayerStreamView';
 import { GameHistoryModal } from '../components/GameHistoryModal';
 import { WalletModal } from '../components/WalletModal';
-import RoundTransition from '../components/RoundTransition';
+import RoundNotification from '../components/RoundNotification';
 import NoWinnerTransition from '../components/NoWinnerTransition';
 import WinnerCelebration from '../components/WinnerCelebration';
 import type { BetSide } from '../types/game';
@@ -24,6 +26,7 @@ const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
   const { gameState, updatePlayerWallet } = useGameState();
   const { placeBet: placeBetWebSocket } = useWebSocket();
+  const { balance, updateBalance } = useBalance();
 
   // Get user data from AuthContext
   const { user, isAuthenticated } = useAuth();
@@ -50,7 +53,7 @@ const PlayerGame: React.FC = () => {
   const [showChipSelector, setShowChipSelector] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
-  const [showRoundTransition, setShowRoundTransition] = useState(false);
+  const [showRoundNotification, setShowRoundNotification] = useState(false);
   const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
   const [showWinnerCelebration, setShowWinnerCelebration] = useState(false);
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
@@ -58,12 +61,36 @@ const PlayerGame: React.FC = () => {
   // Available bet amounts - matching schema limits (1000-100000)
   const betAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
 
-  // Update user balance from AuthContext on component mount and when user changes
+  // Update user balance from BalanceContext
   useEffect(() => {
-    if (user) {
-      setUserBalance(user.balance || 0);
+    // Convert to number if it's a string
+    const balanceAsNumber = typeof balance === 'string' 
+      ? parseFloat(balance) 
+      : Number(balance);
+      
+    if (!isNaN(balanceAsNumber) && balanceAsNumber !== userBalance) {
+      setUserBalance(balanceAsNumber);
     }
-  }, [user]);
+  }, [balance, userBalance]);
+
+  // Listen for balance updates
+  useEffect(() => {
+    const handleBalanceUpdate = (event: CustomEvent) => {
+      const { balance: newBalance, source } = event.detail;
+      
+      // Convert to number if it's a string
+      const balanceAsNumber = typeof newBalance === 'string' 
+        ? parseFloat(newBalance) 
+        : Number(newBalance);
+      
+      if (!isNaN(balanceAsNumber)) {
+        setUserBalance(balanceAsNumber);
+      }
+    };
+
+    window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
+    return () => window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
+  }, []);
 
   // Update the handlePlaceBet function to properly use REST API for balance validation
   const handlePlaceBet = useCallback(async (position: BetSide) => {
@@ -82,35 +109,64 @@ const PlayerGame: React.FC = () => {
       return;
     }
 
+    if (gameState.countdownTimer <= 0) {
+      showNotification('Betting time is up!', 'error');
+      return;
+    }
+
     setIsPlacingBet(true);
 
     try {
-      // FIXED: First validate balance via REST API
-      const balanceCheck = await apiClient.get<{success: boolean, balance: number}>('/user/balance');
-      if (!balanceCheck.success || balanceCheck.balance < selectedBetAmount) {
+      // Validate balance before placing bet
+      const balanceCheck = await apiClient.get<{success: boolean, balance: number | string, error?: string}>('/user/balance');
+      
+      // Convert balance to number if it's a string
+      const balanceAsNumber = typeof balanceCheck.balance === 'string' 
+        ? parseFloat(balanceCheck.balance) 
+        : Number(balanceCheck.balance);
+      
+      if (!balanceCheck.success || isNaN(balanceAsNumber) || balanceAsNumber < selectedBetAmount) {
         showNotification('Insufficient balance', 'error');
+        // Update local balance if different
+        if (balanceCheck.success && !isNaN(balanceAsNumber)) {
+          updateBalance(balanceAsNumber, 'api');
+        }
+        setIsPlacingBet(false);
         return;
       }
 
-      // Then place bet via WebSocket for game logic
+      // Place bet via WebSocket for game logic
       await placeBetWebSocket(position, selectedBetAmount);
-
-      showNotification(`Bet placed: ₹${selectedBetAmount} on ${position}`, 'success');
+      
+      showNotification(`Bet placed: ₹${selectedBetAmount} on ${position.toUpperCase()} (Round ${gameState.currentRound})`, 'success');
     } catch (error) {
+      console.error('Failed to place bet:', error);
       showNotification('Failed to place bet', 'error');
     } finally {
       setIsPlacingBet(false);
     }
-  }, [selectedBetAmount, gameState, placeBetWebSocket, showNotification]);
+  }, [selectedBetAmount, gameState, placeBetWebSocket, showNotification, balance, updateBalance]);
 
   // Handle bet position selection
   const handlePositionSelect = useCallback((position: BetSide) => {
     if (gameState.phase !== 'betting') {
-      showNotification('Betting is not open', 'error');
+      showNotification(`Cannot select position - Current phase: ${gameState.phase}`, 'error');
       return;
     }
+    
+    if (gameState.bettingLocked) {
+      showNotification('Betting is locked - cannot select position', 'error');
+      return;
+    }
+    
+    if (gameState.countdownTimer <= 0) {
+      showNotification('Betting time is up!', 'error');
+      return;
+    }
+    
     setSelectedPosition(position);
-  }, [gameState.phase, showNotification]);
+    showNotification(`Selected position: ${position.toUpperCase()} (Round ${gameState.currentRound})`, 'info');
+  }, [gameState.phase, gameState.bettingLocked, gameState.countdownTimer, gameState.currentRound, showNotification]);
 
   // Handle chip selection
   const handleChipSelect = useCallback((amount: number) => {
@@ -201,10 +257,10 @@ const PlayerGame: React.FC = () => {
     }
   }, [gameState.playerWallet]);
 
-  // Detect round changes and trigger transition animation
+  // Detect round changes and trigger notification (only for rounds 1 and 2)
   useEffect(() => {
-    if (gameState.currentRound !== previousRound && gameState.currentRound > 1) {
-      setShowRoundTransition(true);
+    if (gameState.currentRound !== previousRound && gameState.currentRound > 1 && gameState.currentRound <= 2) {
+      setShowRoundNotification(true);
       setPreviousRound(gameState.currentRound);
     }
   }, [gameState.currentRound, previousRound]);
@@ -219,6 +275,20 @@ const PlayerGame: React.FC = () => {
 
     window.addEventListener('no-winner-transition', handleNoWinner);
     return () => window.removeEventListener('no-winner-transition', handleNoWinner);
+  }, []);
+
+  // Listen for round change events from WebSocket
+  useEffect(() => {
+    const handleRoundChange = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('Round change event received:', customEvent.detail);
+      if (customEvent.detail.round === 2) {
+        setShowRoundNotification(true);
+      }
+    };
+
+    window.addEventListener('round-change', handleRoundChange);
+    return () => window.removeEventListener('round-change', handleRoundChange);
   }, []);
 
   // Listen for game complete celebration events
@@ -345,18 +415,16 @@ const PlayerGame: React.FC = () => {
         />
       )}
 
-      {/* Round Transition Animation */}
-      <RoundTransition
-        show={showRoundTransition}
+      {/* Round Notification - Non-blocking toast for round changes */}
+      <RoundNotification
+        show={showRoundNotification}
         round={gameState.currentRound}
         message={
           gameState.currentRound === 2
             ? 'Place additional bets!'
-            : gameState.currentRound === 3
-            ? 'Final Draw - No more betting!'
             : ''
         }
-        onComplete={() => setShowRoundTransition(false)}
+        onComplete={() => setShowRoundNotification(false)}
       />
     </>
   );
