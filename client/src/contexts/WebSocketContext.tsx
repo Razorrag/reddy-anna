@@ -78,7 +78,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (ws && ws.readyState === WebSocket.OPEN) {
       // Check if we're on a page that requires authentication
       const currentPath = window.location.pathname;
-      const unauthenticatedPages = ['/login', '/signup', '/register'];
+      const unauthenticatedPages = ['/login', '/signup', '/register', '/admin-login'];
       
       // Don't authenticate if on unauthenticated pages
       if (unauthenticatedPages.includes(currentPath)) {
@@ -578,6 +578,60 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                 detail: data.data
               });
               window.dispatchEvent(gameBetsUpdateEvent);
+              break;
+
+            case 'webrtc:signal':
+              // Handle WebRTC signaling messages (offer, answer, ICE candidates)
+              console.log('📡 WebRTC signal received:', data.data);
+              const webrtcSignalEvent = new CustomEvent('webrtc_signal', {
+                detail: data.data
+              });
+              window.dispatchEvent(webrtcSignalEvent);
+              break;
+
+            case 'stream_frame':
+              // Handle direct stream frames (if using server-relayed streaming)
+              console.log('📹 Stream frame received');
+              const streamFrameEvent = new CustomEvent('stream_frame', {
+                detail: data.data
+              });
+              window.dispatchEvent(streamFrameEvent);
+              break;
+
+            case 'stream_status':
+              // Handle stream status updates
+              console.log('📡 Stream status update:', data.data);
+              const streamStatusEvent = new CustomEvent('stream_status', {
+                detail: data.data
+              });
+              window.dispatchEvent(streamStatusEvent);
+              break;
+
+            case 'stream_start':
+              // Stream started notification
+              console.log('🎬 Stream started:', data.data);
+              const streamStartEvent = new CustomEvent('stream_start', {
+                detail: data.data
+              });
+              window.dispatchEvent(streamStartEvent);
+              break;
+
+            case 'stream_stop':
+              // Stream stopped notification
+              console.log('⏹️ Stream stopped:', data.data);
+              const streamStopEvent = new CustomEvent('stream_stop', {
+                detail: data.data
+              });
+              window.dispatchEvent(streamStopEvent);
+              break;
+
+            case 'viewer_count_update':
+              // Viewer count update
+              console.log('👥 Viewer count update:', data.data);
+              const viewerCountEvent = new CustomEvent('viewer_count_update', {
+                detail: data.data
+              });
+              window.dispatchEvent(viewerCountEvent);
               break;
 
             default:

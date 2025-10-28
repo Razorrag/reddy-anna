@@ -1,323 +1,374 @@
-# 🧪 TESTING GUIDE - Post-Fix Verification
+# 🧪 TESTING GUIDE - Andar Bahar Game
 
-**Purpose:** Verify all fixes are working correctly  
-**Time Required:** 15-20 minutes  
-**Status:** Ready to Execute
+## 🚀 Quick Start Testing
+
+### **Prerequisites**
+1. Server is running on port 5000
+2. Client is running on port 5173 (or deployed)
+3. Database is set up with schema
+4. Environment variables are configured
 
 ---
 
-## 🚀 QUICK START
+## 📋 TEST SCENARIOS
 
-### Step 1: Start the Application
-```bash
-# Terminal 1 - Start Backend
-npm run dev:server
+### **Scenario 1: User Registration & Login**
 
-# Terminal 2 - Start Frontend
-npm run dev:client
+**Steps:**
+1. Navigate to `/register`
+2. Fill in registration form:
+   - Phone: 10-digit number
+   - Username: Unique username
+   - Password: Minimum 6 characters
+   - Full Name: Your name
+3. Click "Register"
+4. Navigate to `/login`
+5. Enter phone and password
+6. Click "Login"
+
+**Expected Results:**
+- ✅ Registration success message
+- ✅ Redirect to login page
+- ✅ Login success message
+- ✅ JWT token stored in localStorage
+- ✅ Redirect to game page
+- ✅ User data visible in UI
+
+**Check:**
+```javascript
+// Open browser console
+localStorage.getItem('token')        // Should show JWT token
+localStorage.getItem('user')         // Should show user data
+localStorage.getItem('isLoggedIn')   // Should be 'true'
 ```
 
-### Step 2: Open Browser
-- Navigate to: `http://localhost:5173` (or your dev port)
-- Open Developer Console (F12)
-- Keep Console open to see logs
+---
+
+### **Scenario 2: WebSocket Connection**
+
+**Steps:**
+1. Login as player
+2. Open browser console
+3. Check for WebSocket messages
+
+**Expected Results:**
+- ✅ "🔌 Connecting to WebSocket" message
+- ✅ "✅ WebSocket connected successfully" message
+- ✅ "📤 Sending WebSocket authentication" message
+- ✅ "✅ WebSocket authentication sent" message
+- ✅ Connection status shows "Connected"
+
+**Check:**
+```javascript
+// In browser console
+window.gameWebSocket                 // Should be WebSocket object
+window.gameWebSocket.readyState      // Should be 1 (OPEN)
+```
 
 ---
 
-## ✅ TEST SUITE 1: PLAYER AUTHENTICATION
+### **Scenario 3: Admin Panel Access**
 
-### Test 1.1: Player Registration (Password Validation)
-**Expected Result:** Password validation now requires 8+ chars with complexity
-
-1. Navigate to `/signup`
-2. Fill in form:
-   - Name: `Test Player`
-   - Phone: `9876543210`
-   - Password: `test123` (6 chars, should FAIL)
-   - Confirm Password: `test123`
-3. Click "Create Account"
-4. **✅ PASS:** Should show error: "Password must be at least 8 characters"
-
-5. Try again with: `Test1234` (8 chars with uppercase, lowercase, number)
-6. **✅ PASS:** Should succeed and redirect to `/game`
-7. **✅ PASS:** Console should show: "✅ Token stored successfully"
-8. **✅ PASS:** Check localStorage: `token` should exist
-
-### Test 1.2: Player Login (Token Storage)
-**Expected Result:** Token always stored and validated
-
-1. Logout (clear localStorage or use incognito)
-2. Navigate to `/login`
-3. Enter credentials:
-   - Phone: `9876543210`
-   - Password: `Test1234`
-4. Click "Sign In"
-5. **✅ PASS:** Should redirect to `/game`
-6. **✅ PASS:** Console should show: "✅ Token stored successfully"
-7. **✅ PASS:** Check localStorage:
-   - `user` exists
-   - `token` exists
-   - `isLoggedIn` = "true"
-   - `userRole` = "player"
-
----
-
-## ✅ TEST SUITE 2: ADMIN AUTHENTICATION
-
-### Test 2.1: Admin Login (Fixed Validation Bug)
-**Expected Result:** Admin login now works without validation error
-
-1. Logout completely
-2. Navigate to `/admin-login`
-3. Enter admin credentials:
-   - Username: `admin` (or your admin username)
-   - Password: `your-admin-password`
-4. Click "Admin Login"
-5. **✅ PASS:** Should NOT show "Invalid admin credentials" error
-6. **✅ PASS:** Should redirect to `/admin`
-7. **✅ PASS:** Console should show: "✅ Admin token stored successfully"
-8. **✅ PASS:** Check localStorage:
-   - `user` exists with `role: "admin"`
-   - `token` exists
-   - `isLoggedIn` = "true"
-   - `userRole` = "admin"`
-
-### Test 2.2: Admin Access to Player Routes
-**Expected Result:** Admin can access player routes (game)
-
-1. While logged in as admin, navigate to `/game`
-2. **✅ PASS:** Should be able to access (admins can see player view)
-3. **✅ PASS:** No redirect to login
-
----
-
-## ✅ TEST SUITE 3: ROUTE PROTECTION
-
-### Test 3.1: Profile Route Protection
-**Expected Result:** Profile route now requires authentication
-
-1. Logout completely (clear localStorage)
-2. Navigate directly to `/profile`
-3. **✅ PASS:** Should redirect to `/login`
-4. **✅ PASS:** Should NOT show profile page
-
-5. Login as player
-6. Navigate to `/profile`
-7. **✅ PASS:** Should show profile page
-8. **✅ PASS:** No redirect
-
-### Test 3.2: Admin Route Protection
-**Expected Result:** Admin routes only accessible to admins
-
-1. Login as player (not admin)
+**Steps:**
+1. Login with admin credentials
 2. Navigate to `/admin`
-3. **✅ PASS:** Should redirect to `/unauthorized`
-4. **✅ PASS:** Should NOT show admin panel
+3. Check admin controls
 
-5. Logout and login as admin
-6. Navigate to `/admin`
-7. **✅ PASS:** Should show admin panel
-8. **✅ PASS:** No redirect
+**Expected Results:**
+- ✅ Admin panel loads
+- ✅ Opening card selector visible
+- ✅ Card dealing controls visible
+- ✅ Game controls visible
+- ✅ Analytics dashboard visible
+
+**Admin Credentials:**
+- Check `docs/ADMIN_CREDENTIALS.md` for credentials
 
 ---
 
-## ✅ TEST SUITE 4: WEBSOCKET AUTHENTICATION
+### **Scenario 4: Complete Game Flow (Round 1 Winner)**
 
-### Test 4.1: WebSocket Connection with Valid Token
-**Expected Result:** WebSocket connects successfully with authentication
+**Setup:**
+- Admin logged in
+- At least 1 player logged in
 
-1. Login as player
-2. Navigate to `/game`
-3. Open Console and check for WebSocket messages
-4. **✅ PASS:** Should see: "✅ WebSocket connected successfully"
-5. **✅ PASS:** Should see: "✅ User authenticated: player"
-6. **✅ PASS:** Should see: "authenticated" message with your userId
-7. **✅ PASS:** Should NOT see any "auth_error" messages
+**Steps:**
+1. **Admin:** Select opening card (e.g., "K♠")
+2. **Admin:** Click "Start Game"
+3. **Player:** Place bet on Andar (₹1000)
+4. **Admin:** Wait for betting timer to end
+5. **Admin:** Deal 1st card to Bahar (e.g., "5♥")
+6. **Admin:** Deal 2nd card to Andar (e.g., "K♦") - WINNER!
 
-### Test 4.2: WebSocket Connection without Token
-**Expected Result:** WebSocket rejects connection and redirects to login
+**Expected Results:**
+- ✅ Opening card broadcast to all players
+- ✅ Betting phase starts with timer
+- ✅ Player can place bet
+- ✅ Balance deducted immediately (₹1000)
+- ✅ Betting locked after timer
+- ✅ Cards dealt and broadcast
+- ✅ Winner detected (Andar)
+- ✅ Payout calculated (₹2000 for 1:1)
+- ✅ Balance updated (original + ₹2000)
+- ✅ Game complete message shown
+- ✅ Game resets after 5 seconds
 
-1. Logout completely
-2. Manually remove `token` from localStorage (keep `user` and `isLoggedIn`)
-3. Navigate to `/game`
-4. **✅ PASS:** Should see WebSocket auth error in console
-5. **✅ PASS:** Should see notification: "Session expired. Please login again."
-6. **✅ PASS:** After 2 seconds, should redirect to `/login`
-7. **✅ PASS:** localStorage should be cleared
-
-### Test 4.3: No Anonymous WebSocket Access
-**Expected Result:** Anonymous users cannot connect to WebSocket
-
-1. Logout completely
-2. Open Console
-3. Try to manually create WebSocket connection:
+**Verify:**
 ```javascript
-const ws = new WebSocket('ws://localhost:5000/ws');
-ws.onopen = () => {
-  ws.send(JSON.stringify({
-    type: 'authenticate',
-    data: { userId: 'anonymous', role: 'player' }
-  }));
+// Player's balance should increase by ₹1000 (bet ₹1000, won ₹2000)
+// Check in UI and localStorage
+JSON.parse(localStorage.getItem('user')).balance
+```
+
+---
+
+### **Scenario 5: Complete Game Flow (Round 2 Winner)**
+
+**Steps:**
+1. **Admin:** Select opening card (e.g., "Q♥")
+2. **Admin:** Start game
+3. **Player:** Bet ₹2000 on Bahar (Round 1)
+4. **Admin:** Deal to Bahar (e.g., "7♠") - No match
+5. **Admin:** Deal to Andar (e.g., "3♦") - No match
+6. **System:** Auto-transition to Round 2
+7. **Player:** Bet ₹3000 on Bahar (Round 2)
+8. **Admin:** Deal to Bahar (e.g., "Q♣") - WINNER!
+
+**Expected Results:**
+- ✅ Round 1 completes without winner
+- ✅ "Round 1 complete! Starting Round 2..." notification
+- ✅ Round 2 betting starts automatically
+- ✅ Player can place Round 2 bet
+- ✅ Winner detected in Round 2
+- ✅ Payout: R1 Bahar (₹2000 × 2) + R2 Bahar (₹3000 × 1) = ₹7000
+- ✅ Balance updated correctly
+
+---
+
+### **Scenario 6: Complete Game Flow (Round 3 Winner)**
+
+**Steps:**
+1. **Admin:** Select opening card (e.g., "A♠")
+2. **Admin:** Start game
+3. **Player:** Bet ₹1000 on Andar (Round 1)
+4. **Admin:** Deal R1 cards - No winner
+5. **System:** Auto-transition to Round 2
+6. **Player:** Bet ₹1000 on Andar (Round 2)
+7. **Admin:** Deal R2 cards - No winner
+8. **System:** Auto-transition to Round 3
+9. **Admin:** Deal alternating cards until match (e.g., 5th card is "A♦" on Andar)
+
+**Expected Results:**
+- ✅ Round 1 and 2 complete without winner
+- ✅ Round 3 starts (Continuous Draw)
+- ✅ No betting in Round 3
+- ✅ Cards dealt alternating (Bahar, Andar, Bahar, Andar...)
+- ✅ Winner detected when match occurs
+- ✅ Payout: Total Andar bets (₹2000) × 2 = ₹4000
+- ✅ Balance updated correctly
+
+---
+
+### **Scenario 7: Insufficient Balance**
+
+**Steps:**
+1. Login as player with low balance (e.g., ₹500)
+2. Try to place bet of ₹1000
+
+**Expected Results:**
+- ✅ Error message: "Insufficient balance"
+- ✅ Bet not placed
+- ✅ Balance unchanged
+
+---
+
+### **Scenario 8: Duplicate Bet Prevention**
+
+**Steps:**
+1. Place bet on Andar (₹1000)
+2. Try to place another bet on Andar in same round
+
+**Expected Results:**
+- ✅ Error message: "You have already placed a bet on this side for this round"
+- ✅ Second bet not placed
+- ✅ Balance only deducted once
+
+---
+
+### **Scenario 9: Token Expiration**
+
+**Steps:**
+1. Login as player
+2. Wait for token to expire (1 hour) OR manually delete token
+3. Try to place a bet
+
+**Expected Results:**
+- ✅ Error message: "Authentication required"
+- ✅ Automatic redirect to login page
+- ✅ localStorage cleared
+
+**Manual Test:**
+```javascript
+// In browser console
+localStorage.removeItem('token')
+// Then try to place a bet
+```
+
+---
+
+### **Scenario 10: WebSocket Reconnection**
+
+**Steps:**
+1. Login and connect
+2. Stop the server
+3. Wait 5 seconds
+4. Restart the server
+
+**Expected Results:**
+- ✅ "WebSocket closed" message
+- ✅ "Attempting to reconnect" messages
+- ✅ Exponential backoff (1s, 2s, 4s, 8s, 16s)
+- ✅ Successful reconnection when server is back
+- ✅ Automatic re-authentication
+- ✅ Game state synchronized
+
+---
+
+## 🔍 DEBUGGING TIPS
+
+### **Check WebSocket Messages**
+```javascript
+// In browser console, monitor WebSocket traffic
+const ws = window.gameWebSocket;
+ws.addEventListener('message', (event) => {
+  console.log('📨 Received:', JSON.parse(event.data));
+});
+```
+
+### **Check Game State**
+```javascript
+// Access game state from context (if exposed)
+// Or check server logs for state changes
+```
+
+### **Check Balance Updates**
+```javascript
+// Monitor balance changes
+const checkBalance = () => {
+  const user = JSON.parse(localStorage.getItem('user'));
+  console.log('Current balance:', user.balance);
 };
-ws.onmessage = (e) => console.log('Message:', e.data);
+checkBalance();
 ```
-4. **✅ PASS:** Should receive `auth_error` message
-5. **✅ PASS:** Connection should close immediately
-6. **✅ PASS:** Should NOT receive `authenticated` message
 
----
-
-## ✅ TEST SUITE 5: ERROR HANDLING
-
-### Test 5.1: Missing Token from Backend
-**Expected Result:** Clear error message if token not received
-
-1. Temporarily modify backend to not send token (optional test)
-2. Try to login
-3. **✅ PASS:** Should show error: "Authentication failed - no token received"
-4. **✅ PASS:** Should NOT proceed to game
-5. **✅ PASS:** Console should show: "❌ No token received from server"
-
-### Test 5.2: Invalid Token in WebSocket
-**Expected Result:** Graceful handling of invalid token
-
-1. Login successfully
-2. Manually corrupt token in localStorage:
-```javascript
-localStorage.setItem('token', 'invalid-token-xyz');
+### **Check Server Logs**
+```bash
+# Server should log all important events:
+# - WebSocket connections
+# - Authentication attempts
+# - Bet placements
+# - Card dealing
+# - Winner detection
+# - Balance updates
+# - Errors
 ```
-3. Refresh page or navigate to `/game`
-4. **✅ PASS:** Should see auth error notification
-5. **✅ PASS:** Should redirect to login after 2 seconds
-6. **✅ PASS:** localStorage should be cleared
 
 ---
 
-## ✅ TEST SUITE 6: USER EXPERIENCE
+## 🐛 COMMON ISSUES & SOLUTIONS
 
-### Test 6.1: Admin Profile Data Not Fetched
-**Expected Result:** Admins don't trigger unnecessary API calls
+### **Issue: WebSocket won't connect**
+**Solution:**
+1. Check server is running
+2. Check CORS settings in server
+3. Check WebSocket URL in client
+4. Check browser console for errors
 
-1. Login as admin
-2. Open Network tab in DevTools
-3. Navigate to `/admin`
-4. **✅ PASS:** Console should show: "ℹ️ Skipping profile data fetch for admin user"
-5. **✅ PASS:** Should NOT see API calls to:
-   - `/api/user/profile`
-   - `/api/user/analytics`
-   - `/api/user/bonus-info`
-   - `/api/user/referral-data`
+### **Issue: Token not stored**
+**Solution:**
+1. Check login response includes token
+2. Check localStorage is enabled
+3. Check browser privacy settings
 
-### Test 6.2: Player Profile Data Fetched
-**Expected Result:** Players get their profile data loaded
+### **Issue: Balance not updating**
+**Solution:**
+1. Check WebSocket connection
+2. Check server logs for errors
+3. Check database function `update_balance_atomic` exists
+4. Check Supabase connection
 
-1. Login as player
-2. Open Network tab in DevTools
-3. Navigate to `/game`
-4. **✅ PASS:** Console should show: "✅ Initializing player profile data"
-5. **✅ PASS:** Should see API calls to profile endpoints
-6. **✅ PASS:** No errors in console
+### **Issue: Winner not detected**
+**Solution:**
+1. Check card format (e.g., "K♠" not "K-spades")
+2. Check opening card is set
+3. Check server logs for winner detection
+4. Verify `checkWinner()` function is called
 
----
-
-## 📊 TEST RESULTS CHECKLIST
-
-### Critical Fixes
-- [ ] ✅ Admin login works without validation error
-- [ ] ✅ Password validation requires 8+ chars with complexity
-- [ ] ✅ Token always stored in player login
-- [ ] ✅ Token always stored in player signup
-- [ ] ✅ Token always stored in admin login
-- [ ] ✅ Profile route requires authentication
-- [ ] ✅ WebSocket requires authentication (no anonymous)
-
-### High Priority Fixes
-- [ ] ✅ WebSocket auth errors handled gracefully
-- [ ] ✅ Invalid token causes redirect to login
-- [ ] ✅ localStorage cleared on auth failure
-
-### Medium Priority Fixes
-- [ ] ✅ Admin users don't fetch profile data
-- [ ] ✅ Player users fetch profile data correctly
+### **Issue: Round not progressing**
+**Solution:**
+1. Check `isRoundComplete()` logic
+2. Check card counts (Andar/Bahar)
+3. Check server logs for transition messages
+4. Verify timer is working
 
 ---
 
-## 🐛 TROUBLESHOOTING
+## 📊 PERFORMANCE TESTING
 
-### Issue: Admin login still fails
-**Check:**
-- Backend is running
-- Admin credentials are correct
-- Check console for actual error message
-- Verify backend `/api/auth/admin-login` endpoint works
+### **Load Test: Multiple Players**
+1. Open 5+ browser tabs
+2. Login different players in each
+3. All place bets simultaneously
+4. Check for race conditions
 
-### Issue: Token not stored
-**Check:**
-- Backend is returning token in response
-- Check Network tab for response structure
-- Console should show token storage logs
-- Verify no JavaScript errors
+**Expected:**
+- ✅ All bets processed correctly
+- ✅ No duplicate balance deductions
+- ✅ All clients receive updates
+- ✅ No server crashes
 
-### Issue: WebSocket won't connect
-**Check:**
-- Backend WebSocket server is running
-- Check WebSocket URL in console
-- Verify token exists in localStorage
-- Check for CORS issues
+### **Stress Test: Rapid Actions**
+1. Rapidly place multiple bets
+2. Rapidly deal multiple cards
+3. Check system stability
 
-### Issue: Redirects not working
-**Check:**
-- React Router (wouter) is working
-- No JavaScript errors blocking execution
-- Check console for redirect logs
+**Expected:**
+- ✅ Rate limiting prevents abuse
+- ✅ Server handles load
+- ✅ No data corruption
 
 ---
 
-## ✅ SUCCESS CRITERIA
+## ✅ FINAL CHECKLIST
 
-All tests should PASS with these results:
+Before deploying to production:
 
-1. **Authentication:**
-   - ✅ Player can register with valid password
-   - ✅ Player can login successfully
-   - ✅ Admin can login successfully
-   - ✅ Tokens stored in all cases
-
-2. **Security:**
-   - ✅ Profile route protected
-   - ✅ Admin routes protected
-   - ✅ WebSocket requires auth
-   - ✅ No anonymous access
-
-3. **Error Handling:**
-   - ✅ Clear error messages
-   - ✅ Graceful auth failures
-   - ✅ Proper redirects
-
-4. **User Experience:**
-   - ✅ No unnecessary API calls
-   - ✅ Smooth navigation
-   - ✅ Clear feedback
+- [ ] All test scenarios pass
+- [ ] No console errors
+- [ ] WebSocket stable
+- [ ] Balance updates correct
+- [ ] Winner detection works
+- [ ] Round progression works
+- [ ] Error handling works
+- [ ] Token expiration works
+- [ ] Reconnection works
+- [ ] Multiple players work
+- [ ] Admin controls work
+- [ ] Database functions exist
+- [ ] Environment variables set
+- [ ] CORS configured
+- [ ] SSL/TLS enabled (production)
 
 ---
 
-## 📝 REPORTING ISSUES
+## 🎯 AUTOMATED TESTING (Future)
 
-If any test fails, report with:
-1. Test number that failed
-2. Expected behavior
-3. Actual behavior
-4. Console errors (if any)
-5. Network tab errors (if any)
-6. Screenshots (if helpful)
+Consider adding:
+- Unit tests for game logic
+- Integration tests for API endpoints
+- E2E tests with Playwright/Cypress
+- Load tests with Artillery/k6
 
 ---
 
-**Testing Complete!** ✅
-
-If all tests pass, the application is ready for production deployment.
-
----
-
-*Last Updated: October 27, 2025*  
-*Version: 1.0*
+**Happy Testing! 🎮**

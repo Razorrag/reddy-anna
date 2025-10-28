@@ -30,7 +30,7 @@ const validateAdminAccess = (req: any, res: any, next: any) => {
  * Get current unified stream configuration
  * Public (authenticated users can view, but sensitive data hidden for non-admins)
  */
-router.get('/config', requireAuth, async (req, res) => {
+router.get('/config', async (req, res) => {
   try {
     const config = await streamStorage.getStreamConfig();
     
@@ -42,7 +42,7 @@ router.get('/config', requireAuth, async (req, res) => {
     }
 
     // Hide sensitive data from non-admin users
-    if (req.user?.role !== 'admin') {
+    if (!req.user || req.user.role !== 'admin') {
       const publicConfig = {
         id: config.id,
         activeMethod: config.activeMethod,
@@ -450,7 +450,7 @@ router.get('/sessions', requireAuth, validateAdminAccess, async (req, res) => {
  * GET /api/unified-stream/webrtc/active
  * Get active WebRTC streams (Public)
  */
-router.get('/webrtc/active', requireAuth, async (req, res) => {
+router.get('/webrtc/active', async (req, res) => {
   try {
     const activeStreams = webrtcSignaling.getActiveStreams();
     

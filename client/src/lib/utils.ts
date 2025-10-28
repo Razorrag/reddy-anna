@@ -251,3 +251,56 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
     return false;
   }
 };
+
+/**
+ * Centralized logout function to properly clear all authentication data
+ * and redirect to appropriate login page
+ */
+export const logout = async (redirectTo?: 'user' | 'admin' | string) => {
+  // Clear all possible authentication-related localStorage items
+  const authKeys = [
+    'user',
+    'token',
+    'isLoggedIn',
+    'userRole',
+    'admin',
+    'isAdminLoggedIn',
+    'adminRole'
+  ];
+  
+  authKeys.forEach(key => {
+    localStorage.removeItem(key);
+  });
+  
+  // Determine redirect path
+  let redirectPath = '/';
+  
+  if (redirectTo === 'user') {
+    redirectPath = '/login';
+  } else if (redirectTo === 'admin') {
+    redirectPath = '/admin-login';
+  } else if (typeof redirectTo === 'string') {
+    redirectPath = redirectTo;
+  }
+  
+  // Make logout API call (best effort - don't wait for response)
+  try {
+    const apiResponse = await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    // We don't need to wait for the response, just fire and forget
+    console.log('Logout API call sent');
+  } catch (error) {
+    console.log('Logout API call failed (expected if already logged out)', error);
+  }
+  
+  // Redirect after a brief delay to ensure cleanup
+  setTimeout(() => {
+    window.location.href = redirectPath;
+  }, 100);
+};

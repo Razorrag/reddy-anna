@@ -29,7 +29,7 @@ const validateAdminAccess = (req: any, res: any, next: any) => {
  * Get current stream configuration
  * Public (authenticated users can view, but sensitive data hidden for non-admins)
  */
-router.get('/config', requireAuth, async (req, res) => {
+router.get('/config', async (req, res) => {
   try {
     const config = await streamStorage.getStreamConfig();
     
@@ -41,7 +41,7 @@ router.get('/config', requireAuth, async (req, res) => {
     }
 
     // Hide sensitive data from non-admin users
-    if (req.user?.role !== 'admin') {
+    if (!req.user || req.user.role !== 'admin') {
       const publicConfig = {
         id: config.id,
         activeMethod: config.activeMethod,
@@ -49,7 +49,9 @@ router.get('/config', requireAuth, async (req, res) => {
         streamTitle: config.streamTitle,
         rtmpPlayerUrl: config.rtmpPlayerUrl,
         webrtcRoomId: config.webrtcRoomId,
-        viewerCount: config.viewerCount
+        viewerCount: config.viewerCount,
+        totalViews: config.totalViews,
+        streamDurationSeconds: config.streamDurationSeconds
       };
       
       return res.json({

@@ -188,7 +188,7 @@ export const registerUser = async (userData: {
     const hashedPassword = await hashPassword(sanitizedData.password);
     
     // Create new user with phone as both ID and phone number
-    const defaultBalance = parseFloat(process.env.DEFAULT_BALANCE || "100000.00");
+    const defaultBalance = parseFloat(process.env.DEFAULT_BALANCE || "0.00");
     
     try {
       const newUser = await storage.createUser({

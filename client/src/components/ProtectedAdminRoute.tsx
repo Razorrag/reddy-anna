@@ -38,11 +38,12 @@ export const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({ childr
             return;
           } else {
             // User is logged in but not as admin (probably a player)
-            console.log('❌ User is logged in as:', user.role, '- Access denied to admin routes');
+            // Allow access to admin login page - players might want to log in as admin
+            console.log('ℹ️ User is logged in as:', user.role, '- Still allowing access to admin routes');
+            // Don't redirect to unauthorized page, just continue to let them access admin login
             setIsAdmin(false);
             setIsChecking(false);
-            // Redirect to unauthorized page instead of admin login
-            setLocation('/unauthorized');
+            // Allow the admin login page to be accessed
             return;
           }
         } catch (error) {

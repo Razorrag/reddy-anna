@@ -149,7 +149,7 @@ const StreamPlayer: React.FC<StreamPlayerProps> = ({
       {config.activeMethod === 'rtmp' ? (
         <RTMPStream config={config} />
       ) : config.activeMethod === 'webrtc' ? (
-        <WebRTCStream config={config} />
+        <WebRTCStreamWebSocket config={config} />
       ) : (
         <NoStream config={config} />
       )}
@@ -370,21 +370,22 @@ const WebRTCStreamWebSocket: React.FC<{ config: StreamConfig }> = ({ config }) =
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [hasFrame, setHasFrame] = useState(false);
-  const { ws } = useWebSocket();
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
 
   useEffect(() => {
     console.log('🌐 WebRTC Stream initialized');
 
-    // Listen for stream frames from WebSocket
-    const handleMessage = (event: MessageEvent) => {
+    // Listen for stream frames from WebSocket using the event system
+    const handleStreamFrame = (event: Event) => {
       try {
-        const message = JSON.parse(event.data);
+        const detail = (event as CustomEvent).detail;
         
-        if (message.type === 'stream_frame' && message.data?.frame) {
+        if (detail?.frame) {
           // Display the frame
           if (imgRef.current) {
-            imgRef.current.src = message.data.frame;
+            imgRef.current.src = detail.frame;
             setHasFrame(true);
+            setConnectionState('connected');
           }
         }
       } catch (error) {
@@ -392,19 +393,96 @@ const WebRTCStreamWebSocket: React.FC<{ config: StreamConfig }> = ({ config }) =
       }
     };
 
-    if (ws) {
-      ws.addEventListener('message', handleMessage);
-    }
-
-    return () => {
-      if (ws) {
-        ws.removeEventListener('message', handleMessage);
+    // Listen for stream status updates
+    const handleStreamStatus = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.status) {
+        switch(detail.status) {
+          case 'online':
+            setConnectionState('connected');
+            break;
+          case 'connecting':
+            setConnectionState('connecting');
+            break;
+          case 'offline':
+          case 'error':
+            setConnectionState('disconnected');
+            break;
+        }
       }
     };
-  }, [ws]);
+
+    // Listen for stream start/stop events
+    const handleStreamStart = () => {
+      setConnectionState('connecting');
+    };
+
+    const handleStreamStop = () => {
+      setConnectionState('disconnected');
+      setHasFrame(false);
+    };
+
+    // Add event listeners
+    window.addEventListener('stream_frame', handleStreamFrame);
+    window.addEventListener('stream_status', handleStreamStatus);
+    window.addEventListener('stream_start', handleStreamStart);
+    window.addEventListener('stream_stop', handleStreamStop);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('stream_frame', handleStreamFrame);
+      window.removeEventListener('stream_status', handleStreamStatus);
+      window.removeEventListener('stream_start', handleStreamStart);
+      window.removeEventListener('stream_stop', handleStreamStop);
+    };
+  }, []);
+
+  // Show connection status overlay
+  const renderStatusOverlay = () => {
+    if (connectionState === 'connected' && hasFrame) return null;
+
+    let statusText = '';
+    let statusIcon = null;
+    let statusDetails = '';
+
+    switch (connectionState) {
+      case 'connecting':
+        statusText = 'Connecting to stream...';
+        statusIcon = <Wifi className="w-16 h-16 text-gold mb-4 mx-auto animate-pulse" />;
+        statusDetails = 'Establishing WebRTC connection';
+        break;
+      case 'disconnected':
+        statusText = 'Stream Disconnected';
+        statusIcon = <WifiOff className="w-16 h-16 text-gray-400 mb-4 mx-auto" />;
+        statusDetails = 'Waiting for stream to start';
+        break;
+      case 'error':
+        statusText = 'Connection Error';
+        statusIcon = <WifiOff className="w-16 h-16 text-red-400 mb-4 mx-auto" />;
+        statusDetails = 'Please try again later';
+        break;
+      default:
+        if (!hasFrame) {
+          statusText = 'WebRTC Stream Active';
+          statusIcon = <Wifi className="w-16 h-16 text-gold mb-4 mx-auto animate-pulse" />;
+          statusDetails = 'Waiting for frames...';
+        }
+    }
+
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-black z-10">
+        <div className="text-center p-6">
+          {statusIcon}
+          <p className="text-white text-lg mb-2">{statusText}</p>
+          <p className="text-gray-400 text-sm">{statusDetails}</p>
+          <p className="text-gray-400 text-sm mt-2">Resolution: {config.webrtcResolution}</p>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="absolute inset-0 w-full h-full bg-black flex items-center justify-center">
+    <div className="absolute inset-0 w-full h-full bg-black">
       {/* Stream display */}
       <img
         ref={imgRef}
@@ -413,17 +491,8 @@ const WebRTCStreamWebSocket: React.FC<{ config: StreamConfig }> = ({ config }) =
         alt="Live Stream"
       />
       
-      {/* Loading state */}
-      {!hasFrame && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <Wifi className="w-16 h-16 text-gold mb-4 mx-auto animate-pulse" />
-            <p className="text-white text-lg mb-2">WebRTC Stream Active</p>
-            <p className="text-gray-400 text-sm">Waiting for frames...</p>
-            <p className="text-gray-400 text-sm mt-2">Resolution: {config.webrtcResolution}</p>
-          </div>
-        </div>
-      )}
+      {/* Status overlay */}
+      {renderStatusOverlay()}
     </div>
   );
 };

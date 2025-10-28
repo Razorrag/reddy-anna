@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '../../lib/utils';
+import { logout } from '../../lib/utils'; // Import centralized logout function
 import { getNavigationClass, getButtonClass } from '../../lib/theme-utils';
 import { useAuth } from '../../contexts/AppContext';
 import UserProfileButton from '../UserProfile/UserProfileButton';
@@ -109,12 +110,7 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
             Profile
           </Link>
           <button
-            onClick={() => {
-              localStorage.removeItem('user');
-              localStorage.removeItem('isLoggedIn');
-              localStorage.removeItem('userRole');
-              window.location.href = '/';
-            }}
+            onClick={() => logout()}
             className="text-white hover:text-gold transition-colors"
           >
             Logout
@@ -129,12 +125,7 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
       return (
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => {
-              localStorage.removeItem('admin');
-              localStorage.removeItem('isAdminLoggedIn');
-              localStorage.removeItem('adminRole');
-              window.location.href = '/';
-            }}
+            onClick={() => logout()}
             className="text-white hover:text-gold transition-colors"
           >
             Logout

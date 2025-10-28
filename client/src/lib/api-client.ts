@@ -49,13 +49,33 @@ class APIClient {
     if (!response.ok) {
       // Handle authentication errors
       if (response.status === 401) {
-        // Token expired or invalid - clear and redirect to login
+        // Token expired or invalid - clear and redirect appropriately
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('admin');
+        localStorage.removeItem('isAdminLoggedIn');
+        localStorage.removeItem('adminRole');
+        
+        // Determine where to redirect based on current context
+        const currentPath = window.location.pathname;
+        let redirectPath = '/login'; // Default to user login
+        
+        // If trying to access admin routes or already on admin-related paths, redirect to admin login
+        if (currentPath.includes('/admin') || currentPath === '/admin-login') {
+          redirectPath = '/admin-login';
+        }
+        // If already on login pages, don't redirect
+        else if (currentPath === '/login' || currentPath === '/signup') {
+          // Stay on current page, just clear the tokens
+          return response.json().catch(() => ({} as any)); // Return empty if JSON fails
+        }
         
         // Only redirect if not already on login page
-        if (!window.location.pathname.includes('/login')) {
-          window.location.href = '/login';
+        // Use exact match instead of includes to avoid issues with /admin-login containing /login
+        if (currentPath !== '/login' && currentPath !== '/admin-login' && currentPath !== '/signup') {
+          window.location.href = redirectPath;
         }
         
         throw new Error('Authentication required. Please login again.');
