@@ -9,16 +9,18 @@ CREATE TABLE IF NOT EXISTS users (
     full_name TEXT,
     role TEXT DEFAULT 'player',
     status TEXT DEFAULT 'active',
-    balance TEXT DEFAULT '100000.00',
-    total_winnings TEXT DEFAULT '0.00',
-    total_losses TEXT DEFAULT '0.00',
+    balance DECIMAL(15, 2) DEFAULT 100000.00,
+    total_winnings DECIMAL(15, 2) DEFAULT 0.00,
+    total_losses DECIMAL(15, 2) DEFAULT 0.00,
     games_played INTEGER DEFAULT 0,
     games_won INTEGER DEFAULT 0,
     phone_verified BOOLEAN DEFAULT false,
-    referral_code TEXT,
-    original_deposit_amount TEXT DEFAULT '0.00',
-    deposit_bonus_available TEXT DEFAULT '0.00',
-    referral_bonus_available TEXT DEFAULT '0.00',
+    referral_code TEXT, -- Referral code used during signup
+    referral_code_generated TEXT UNIQUE, -- Auto-generated referral code for sharing
+    original_deposit_amount DECIMAL(15, 2) DEFAULT 0.00,
+    deposit_bonus_available DECIMAL(15, 2) DEFAULT 0.00,
+    referral_bonus_available DECIMAL(15, 2) DEFAULT 0.00,
+    total_bonus_earned DECIMAL(15, 2) DEFAULT 0.00,
     last_login TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -257,4 +259,93 @@ GRANT ALL PRIVILEGES ON TABLE daily_game_statistics TO service_role;
 GRANT ALL PRIVILEGES ON TABLE monthly_game_statistics TO service_role;
 GRANT ALL PRIVILEGES ON TABLE yearly_game_statistics TO service_role;
 GRANT ALL PRIVILEGES ON TABLE user_referrals TO service_role;
+GRANT ALL PRIVILEGES ON TABLE user_transactions TO service_role;
+
+-- Create function to generate unique referral code
+CREATE OR REPLACE FUNCTION generate_referral_code(p_user_id TEXT)
+RETURNS TEXT AS $$
+DECLARE
+  referral_code TEXT;
+  code_exists BOOLEAN;
+  temp_code TEXT;
+BEGIN
+  -- Loop until we find a unique code
+  LOOP
+    -- Generate a random 8-character alphanumeric code
+    temp_code := UPPER(SUBSTRING(MD5(RANDOM()::TEXT || p_user_id || NOW()::TEXT) FROM 1 FOR 8));
+    
+    -- Check if code already exists
+    SELECT EXISTS(
+      SELECT 1 FROM users WHERE referral_code_generated = temp_code
+    ) INTO code_exists;
+    
+    IF NOT code_exists THEN
+      referral_code := temp_code;
+      EXIT;
+    END IF;
+  END LOOP;
+  
+  -- Update user with referral code
+  UPDATE users
+  SET referral_code_generated = referral_code
+  WHERE id = p_user_id;
+  
+  RETURN referral_code;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create function for atomic balance updates
+CREATE OR REPLACE FUNCTION update_balance_atomic(
+  p_user_id TEXT,
+  p_amount_change NUMERIC
+)
+RETURNS TABLE(
+  success BOOLEAN,
+  new_balance NUMERIC,
+  error_message TEXT
+) AS $$
+DECLARE
+  v_current_balance NUMERIC;
+  v_new_balance NUMERIC;
+BEGIN
+  -- Lock the row for update
+  SELECT balance INTO v_current_balance
+  FROM users
+  WHERE id = p_user_id
+  FOR UPDATE;
+  
+  -- Check if user exists
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT FALSE, 0::NUMERIC, 'User not found'::TEXT;
+    RETURN;
+  END IF;
+  
+  -- Calculate new balance
+  v_new_balance := v_current_balance + p_amount_change;
+  
+  -- Check for negative balance
+  IF v_new_balance < 0 THEN
+    RETURN QUERY SELECT FALSE, v_current_balance, 'Insufficient balance'::TEXT;
+    RETURN;
+  END IF;
+  
+  -- Update balance
+  UPDATE users
+  SET balance = v_new_balance,
+      updated_at = NOW()
+  WHERE id = p_user_id;
+  
+  RETURN QUERY SELECT TRUE, v_new_balance, NULL::TEXT;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+CREATE INDEX IF NOT EXISTS idx_users_referral_code_generated ON users(referral_code_generated);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_player_bets_user_id ON player_bets(user_id);
+CREATE INDEX IF NOT EXISTS idx_player_bets_game_id ON player_bets(game_id);
+CREATE INDEX IF NOT EXISTS idx_user_referrals_referrer ON user_referrals(referrer_user_id);
+CREATE INDEX IF NOT EXISTS idx_user_referrals_referred ON user_referrals(referred_user_id);
+CREATE INDEX IF NOT EXISTS idx_user_transactions_user_id ON user_transactions(user_id);
 GRANT ALL PRIVILEGES ON TABLE user_transactions TO service_role;

@@ -1,153 +1,135 @@
-// Removed circular dependency - now self-contained
+/**
+ * API Client with Automatic Token Management
+ * 
+ * This utility automatically adds authentication tokens to all API requests
+ * No manual token handling needed in components
+ */
 
-// Enhanced API client with error handling and interceptors
-class ApiClient {
+interface RequestOptions extends RequestInit {
+  skipAuth?: boolean; // Skip authentication for public endpoints
+}
+
+class APIClient {
   private baseURL: string;
-  private defaultHeaders: Record<string, string>;
 
   constructor() {
-    // CRITICAL: Use RELATIVE path so proxy works
-    // This will make requests to /api which gets proxied to backend
+    // Use relative URLs - Vite proxy handles routing in development
     this.baseURL = '/api';
-    
-    this.defaultHeaders = {
+  }
+
+  /**
+   * Get authentication token from localStorage
+   */
+  private getToken(): string | null {
+    return localStorage.getItem('token');
+  }
+
+  /**
+   * Get default headers with authentication
+   */
+  private getHeaders(skipAuth: boolean = false): HeadersInit {
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
     };
-    
-    console.log(`API Client initialized with baseURL: ${this.baseURL}`);
-    console.log(`Requests will be made to: ${window.location.origin}${this.baseURL}`);
+
+    if (!skipAuth) {
+      const token = this.getToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+
+    return headers;
+  }
+
+  /**
+   * Handle API response
+   */
+  private async handleResponse<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      // Handle authentication errors
+      if (response.status === 401) {
+        // Token expired or invalid - clear and redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        // Only redirect if not already on login page
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
+        
+        throw new Error('Authentication required. Please login again.');
+      }
+
+      if (response.status === 403) {
+        throw new Error('Access denied. Insufficient permissions.');
+      }
+
+      // Try to get error message from response
+      try {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'Request failed');
+      } catch {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+    }
+
+    return response.json();
   }
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestOptions = {}
   ): Promise<T> {
-    // CRITICAL FIX: Remove /api prefix from endpoint if present to prevent double prefix
-    // Since baseURL already includes /api, endpoints should not start with /api
-    let cleanEndpoint = endpoint;
-    if (endpoint.startsWith('/api/')) {
-      cleanEndpoint = endpoint.substring(5); // Remove '/api/' to prevent /api/api/
-      console.warn(`⚠️ Endpoint started with /api/, automatically removed: ${endpoint} → ${cleanEndpoint}`);
-    }
+    const { skipAuth, ...fetchOptions } = options;
     
-    // Ensure endpoint starts with /
-    if (!cleanEndpoint.startsWith('/')) {
-      cleanEndpoint = '/' + cleanEndpoint;
-    }
-    
-    // CRITICAL: Use relative URL so proxy works
-    const url = `${this.baseURL}${cleanEndpoint}`;
-    
-    console.log(`Making request to: ${url}`); // DEBUG LOG
-    
-    const config: RequestInit = {
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      ...fetchOptions,
+      credentials: 'include',
       headers: {
-        ...this.defaultHeaders,
-        ...options.headers,
+        ...this.getHeaders(skipAuth),
+        ...fetchOptions.headers,
       },
-      credentials: 'include', // Important for session cookies
-      ...options,
-    };
-
-    try {
-      const response = await fetch(url, config);
-      
-      console.log(`Response status: ${response.status} for ${url}`); // DEBUG LOG
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
-        console.error(`API Error: ${errorMsg}`); // DEBUG LOG
-        throw new Error(errorMsg);
-      }
-
-      const data = await response.json();
-      console.log(`Response data:`, data); // DEBUG LOG
-      return data;
-    } catch (error) {
-      console.error(`API Error (${endpoint}):`, error);
-      throw error;
-    }
-  }
-
-  async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
-    // Don't double up the baseURL - request() already adds it
-    let url = endpoint;
-    
-    if (params) {
-      const searchParams = new URLSearchParams();
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
-        }
-      });
-      url += '?' + searchParams.toString();
-    }
-
-    return this.request<T>(url, {
-      method: 'GET',
     });
+
+    return this.handleResponse<T>(response);
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<T> {
+  async get<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'GET' });
+  }
+
+  async post<T>(endpoint: string, data?: any, options: RequestOptions = {}): Promise<T> {
     return this.request<T>(endpoint, {
+      ...options,
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async put<T>(endpoint: string, data?: any): Promise<T> {
+  async put<T>(endpoint: string, data?: any, options: RequestOptions = {}): Promise<T> {
     return this.request<T>(endpoint, {
+      ...options,
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async patch<T>(endpoint: string, data?: any): Promise<T> {
+  async patch<T>(endpoint: string, data?: any, options: RequestOptions = {}): Promise<T> {
     return this.request<T>(endpoint, {
+      ...options,
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: 'DELETE',
-    });
-  }
-
-  // Game-specific methods
-  async getGameState() {
-    return this.get('/game/current');
-  }
-
-  async getGameHistory() {
-    return this.get('/game/history');
-  }
-
-  // Auth methods
-  async login(credentials: { phone: string; password: string }) {
-    console.log('Sending login request to backend:', credentials); // DEBUG LOG
-    return this.post('/auth/login', credentials);
-  }
-
-  async adminLogin(credentials: { username: string; password: string }) {
-    console.log('Sending admin login request to backend:', credentials); // DEBUG LOG
-    return this.post('/auth/admin-login', credentials);
-  }
-
-  async logout() {
-    return this.post('/auth/logout');
-  }
-
-  async register(userData: { name: string; phone: string; password: string; confirmPassword: string }) {
-    console.log('Sending registration request to backend:', userData); // DEBUG LOG
-    return this.post('/auth/register', userData);
+  async delete<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
 }
 
-// Create singleton instance
-export const apiClient = new ApiClient();
+// Export singleton instance
+export const apiClient = new APIClient();
 
 export interface ApiResponse<T = any> {
   success: boolean;

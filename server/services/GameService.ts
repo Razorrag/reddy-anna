@@ -120,13 +120,7 @@ export class GameService {
       throw new Error(`Maximum bet is ₹${this.MAX_BET}`);
     }
 
-    // 5. Validate user has sufficient balance
-    const currentBalance = parseFloat(user.balance);
-    if (currentBalance < amount) {
-      throw new Error(`Insufficient balance. You have ₹${currentBalance}, but bet is ₹${amount}`);
-    }
-
-    // 6. Check for duplicate bets in same round
+    // 5. Check for duplicate bets in same round (before balance check)
     const existingBets = await stateManager.getAllBets(gameId);
     const userBetsThisRound = existingBets.filter(
       bet => bet.userId === userId && bet.round === round && bet.side === side
@@ -136,9 +130,16 @@ export class GameService {
       throw new Error('You have already placed a bet on this side for this round');
     }
 
-    // 7. Deduct balance from user
-    const newBalance = currentBalance - amount;
-    await storage.updateUser(userId, { balance: newBalance.toFixed(2) });
+    // 6. Deduct balance atomically (prevents race conditions)
+    try {
+      await storage.updateUserBalance(userId, -amount);
+    } catch (error: any) {
+      if (error.message?.includes('Insufficient balance')) {
+        const currentBalance = parseFloat(user.balance);
+        throw new Error(`Insufficient balance. You have ₹${currentBalance}, but bet is ₹${amount}`);
+      }
+      throw error;
+    }
 
     // 8. Record bet in database
     const bet = await storage.createBet({

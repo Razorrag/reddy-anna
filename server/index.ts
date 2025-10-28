@@ -4,8 +4,6 @@ import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
-import session from 'express-session';
-import MemoryStore from 'memorystore';
 import cors from 'cors';
 import path from 'path';
 import { registerRoutes } from "./routes";
@@ -13,14 +11,13 @@ import { setupVite, serveStatic, log } from "./vite";
 
 // Validate all required environment variables
 const requiredEnvVars = [
-  'SESSION_SECRET',
+  'JWT_SECRET',  // JWT is now required (removed sessions)
   'SUPABASE_URL',
   'SUPABASE_SERVICE_KEY'
 ];
 
 // Optional but recommended variables
 const optionalEnvVars = [
-  'JWT_SECRET',
   'JWT_EXPIRES_IN',
   'PORT',
   'CORS_ORIGIN',
@@ -44,7 +41,7 @@ if (missingOptionalVars.length > 0) {
 
 // Debug environment variables
 console.log('✅ NODE_ENV:', process.env.NODE_ENV);
-console.log('✅ Using local memory storage for development');
+console.log('✅ JWT Authentication enabled');
 console.log('✅ All required environment variables are set');
 
 const app = express();
@@ -145,34 +142,14 @@ app.use((req, res, next) => {
 
 log('✅ Security headers configured');
 
-// Session middleware configuration
-const MemoryStoreSession = MemoryStore(session);
-
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production-IMPORTANT',
-  resave: false,
-  saveUninitialized: false,
-  store: new MemoryStoreSession({
-    checkPeriod: 86400000 // prune expired entries every 24h
-  }),
-  cookie: {
-    secure: process.env.NODE_ENV === 'production', // SECURITY: true in production (HTTPS only)
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax' // Strict in production
-  }
-}));
-
-log('✅ Session middleware configured');
-
-// Attach session user to req.user for all requests (only if session exists)
-app.use((req, res, next) => {
-  if (req.session && (req.session as any).user) {
-    (req as any).user = (req.session as any).user;
-    console.log('✅ User attached from session:', (req as any).user?.id);
-  }
-  next();
-});
+// 🔐 JWT-ONLY AUTHENTICATION - Sessions removed for stateless auth
+// All authentication now handled via JWT tokens in Authorization header
+// This provides:
+// - Stateless authentication (scalable across multiple servers)
+// - Consistent auth for HTTP and WebSocket
+// - No server-side session storage needed
+// - Better performance and security
+log('✅ JWT-only authentication configured (sessions disabled)');
 
 app.use((req, res, next) => {
   const start = Date.now();

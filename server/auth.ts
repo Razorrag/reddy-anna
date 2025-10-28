@@ -161,19 +161,19 @@ export const registerUser = async (userData: {
         phone: sanitizedData.phone,
         password_hash: hashedPassword,
         full_name: sanitizedData.name,
-        balance: defaultBalance.toFixed(2), // Format as string with 2 decimal places
+        balance: defaultBalance,
         referral_code: sanitizedData.referralCode || null,
         role: 'player',
         status: 'active',
-        total_winnings: "0.00", // Use string format
-        total_losses: "0.00", // Use string format
+        total_winnings: 0,
+        total_losses: 0,
         games_played: 0,
         games_won: 0,
         phone_verified: false,
-        original_deposit_amount: defaultBalance.toFixed(2), // Format as string with 2 decimal places
-        deposit_bonus_available: "0.00", // Use string format
-        referral_bonus_available: "0.00", // Use string format
-        total_bonus_earned: "0.00", // Use string format
+        original_deposit_amount: defaultBalance,
+        deposit_bonus_available: 0,
+        referral_bonus_available: 0,
+        total_bonus_earned: 0,
         last_login: new Date()
       });
 
@@ -451,60 +451,53 @@ export const changePassword = async (
   }
 };
 
-// 🛡️ REQUIRE AUTH MIDDLEWARE
+// 🛡️ REQUIRE AUTH MIDDLEWARE - JWT ONLY
 export const requireAuth = (req: any, res: any, next: any) => {
-  // Check session authentication first
-  if (req.session && (req.session as any).user) {
-    req.user = (req.session as any).user;
-    console.log('✅ Authenticated via session:', req.user.id);
-    return next();
-  }
-  
   // Check for token in Authorization header
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.startsWith('Bearer ')
     ? authHeader.substring(7)
     : null;
   
-  // Check token authentication
-  if (token) {
-    try {
-      const decoded = verifyToken(token);
-      
-      // Ensure this is an access token, not a refresh token
-      if (decoded.type !== 'access') {
-        console.error('❌ Invalid token type:', decoded.type);
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid token type. Please use an access token.'
-        });
-      }
-      
-      req.user = {
-        id: decoded.id,
-        phone: decoded.phone,
-        username: decoded.username,
-        role: decoded.role
-      };
-      console.log('✅ Authenticated via JWT token:', req.user.id);
-      return next();
-    } catch (error) {
-      console.error('❌ Token validation error:', error);
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid or expired token. Please login again.'
-      });
-    }
+  // JWT token authentication (ONLY method)
+  if (!token) {
+    console.log('❌ Authentication required - no token provided');
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required. Please login to continue.',
+      code: 'NO_TOKEN'
+    });
   }
   
-  // 🔐 SECURITY: No valid authentication found - REJECT REQUEST
-  console.log('❌ Authentication required - no valid session or token');
-  
-  // Return 401 Unauthorized
-  return res.status(401).json({
-    success: false,
-    error: 'Authentication required. Please login to continue.'
-  });
+  try {
+    const decoded = verifyToken(token);
+    
+    // Ensure this is an access token, not a refresh token
+    if (decoded.type !== 'access') {
+      console.error('❌ Invalid token type:', decoded.type);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token type. Please use an access token.',
+        code: 'INVALID_TOKEN_TYPE'
+      });
+    }
+    
+    req.user = {
+      id: decoded.id,
+      phone: decoded.phone,
+      username: decoded.username,
+      role: decoded.role
+    };
+    console.log('✅ Authenticated via JWT token:', req.user.id, `(${req.user.role})`);
+    return next();
+  } catch (error) {
+    console.error('❌ Token validation error:', error);
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid or expired token. Please login again.',
+      code: 'TOKEN_INVALID'
+    });
+  }
 };
 
 // 👑 REQUIRE ROLE MIDDLEWARE

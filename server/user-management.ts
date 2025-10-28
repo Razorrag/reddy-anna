@@ -260,12 +260,21 @@ export const createUserManually = async (
     const newUser = await storage.createUser({
       phone: userData.phone,
       password_hash: hashedPassword,
-      name: userData.name,
       full_name: userData.name,
       role: userData.role || 'player',
       status: userData.status || 'active',
-      balance: (userData.initialBalance || 100000).toString(),
-      referral_code: userData.referralCode, // Store referral code if provided
+      balance: userData.initialBalance || 100000,
+      total_winnings: 0,
+      total_losses: 0,
+      games_played: 0,
+      games_won: 0,
+      phone_verified: false,
+      referral_code: userData.referralCode || null,
+      original_deposit_amount: userData.initialBalance || 100000,
+      deposit_bonus_available: 0,
+      referral_bonus_available: 0,
+      total_bonus_earned: 0,
+      last_login: null
     } as any);
 
     // Log the creation (we'll implement this when we add the database table)

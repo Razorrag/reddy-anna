@@ -1,8 +1,12 @@
 // StreamPlayer.tsx - Unified Stream Player Component
 // Simplified player component that handles both RTMP and WebRTC streaming methods
+// Supports both RTMP and WebRTC streaming
+// Auto-detects stream type and displays accordingly
+// Receives WebRTC frames via WebSocket
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Eye, Wifi, WifiOff } from 'lucide-react';
+import { useWebSocket } from '../contexts/WebSocketContext';
 
 interface StreamConfig {
   activeMethod: 'rtmp' | 'webrtc' | 'none';
@@ -357,6 +361,69 @@ const WebRTCStream: React.FC<{ config: StreamConfig }> = ({ config }) => {
       />
       
       {renderStatusOverlay()}
+    </div>
+  );
+};
+
+// WebRTC Stream Component - Receives frames via WebSocket
+const WebRTCStreamWebSocket: React.FC<{ config: StreamConfig }> = ({ config }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [hasFrame, setHasFrame] = useState(false);
+  const { ws } = useWebSocket();
+
+  useEffect(() => {
+    console.log('🌐 WebRTC Stream initialized');
+
+    // Listen for stream frames from WebSocket
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+        
+        if (message.type === 'stream_frame' && message.data?.frame) {
+          // Display the frame
+          if (imgRef.current) {
+            imgRef.current.src = message.data.frame;
+            setHasFrame(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error processing stream frame:', error);
+      }
+    };
+
+    if (ws) {
+      ws.addEventListener('message', handleMessage);
+    }
+
+    return () => {
+      if (ws) {
+        ws.removeEventListener('message', handleMessage);
+      }
+    };
+  }, [ws]);
+
+  return (
+    <div className="absolute inset-0 w-full h-full bg-black flex items-center justify-center">
+      {/* Stream display */}
+      <img
+        ref={imgRef}
+        className="w-full h-full object-contain"
+        style={{ display: hasFrame ? 'block' : 'none' }}
+        alt="Live Stream"
+      />
+      
+      {/* Loading state */}
+      {!hasFrame && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center">
+            <Wifi className="w-16 h-16 text-gold mb-4 mx-auto animate-pulse" />
+            <p className="text-white text-lg mb-2">WebRTC Stream Active</p>
+            <p className="text-gray-400 text-sm">Waiting for frames...</p>
+            <p className="text-gray-400 text-sm mt-2">Resolution: {config.webrtcResolution}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

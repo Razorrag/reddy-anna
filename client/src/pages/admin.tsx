@@ -17,7 +17,8 @@ import {
   GamepadIcon,
   TrendingUp,
   Activity,
-  MessageSquare
+  MessageSquare,
+  Video
 } from "lucide-react";
 
 export default function Admin() {
@@ -90,6 +91,22 @@ export default function Admin() {
       <div className="max-w-7xl mx-auto">
         <h2 className="text-2xl font-bold text-gold mb-6">📊 Management Features</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Stream Settings */}
+          <Card 
+            className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer"
+            onClick={() => setLocation('/admin-stream-settings')}
+          >
+            <CardHeader>
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <Video className="w-8 h-8 text-white" />
+              </div>
+              <CardTitle className="text-center text-gold text-xl mb-2">Stream Settings</CardTitle>
+              <CardDescription className="text-center text-gray-400">
+                Configure WebRTC & RTMP streaming
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
           {/* Game Control */}
           <Card 
             className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer"

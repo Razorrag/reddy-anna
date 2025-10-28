@@ -1379,9 +1379,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await registerUser(req.body);
       if (result.success) {
         auditLogger('user_registration', result.user?.id, { ip: req.ip });
+        console.log('✅ Registration successful, returning token');
         res.status(201).json({
           success: true,
-          user: result.user
+          user: result.user,
+          token: result.user?.token // Ensure token is returned
         });
       } else {
         res.status(400).json({
@@ -1411,25 +1413,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const result = await loginUser(phone, password);
       if (result.success && result.user) {
-        // Set user in session for proper authentication
-        if (req.session) {
-          (req.session as any).user = {
-            id: result.user.id,
-            phone: result.user.phone,
-            role: result.user.role,
-            username: result.user.phone // Using phone as username
-          };
-          (req.session as any).userId = result.user.id;
-          (req.session as any).isLoggedIn = true;
-        }
-        
-        // Also set on request object for immediate use
-        (req as any).user = (req.session as any).user;
-        
         auditLogger('user_login', result.user.id, { ip: req.ip });
+        console.log('✅ Login successful, returning token');
         res.json({
           success: true,
-          user: result.user
+          user: result.user,
+          token: result.user.token // Ensure token is returned
         });
       } else {
         res.status(401).json({
@@ -1459,22 +1448,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const result = await loginAdmin(username, password);
       if (result.success && result.admin) {
-        // Set user in session for proper authentication
-        if (req.session) {
-          (req.session as any).user = {
-            id: result.admin.id,
-            username: result.admin.username,
-            role: result.admin.role,
-            phone: result.admin.username // Using username which is typically the phone for admin
-          };
-          (req.session as any).adminId = result.admin.id;
-          (req.session as any).isLoggedIn = true;
-        }
-        
-        // Also set on request object for immediate use
-        (req as any).user = (req.session as any).user;
-        
         auditLogger('admin_login', result.admin.id, { ip: req.ip });
+        console.log('✅ Admin login successful, returning token');
         res.json({
           success: true,
           admin: result.admin,
@@ -1570,26 +1545,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Logout endpoint (now public, handled by middleware above)
+  // Logout endpoint (JWT-only - client clears token from localStorage)
   app.post("/api/auth/logout", (req, res) => {
-    // Clear session
-    if (req.session) {
-      req.session.destroy((err) => {
-        if (err) {
-          console.error('Error destroying session:', err);
-        }
-      });
-    }
-    
-    // Clear user from request
-    (req as any).user = null;
+    // With JWT, logout is handled client-side by removing token from localStorage
+    // Server doesn't need to do anything (stateless)
+    console.log('✅ Logout request received (client will clear token)');
     
     res.json({
       success: true,
       message: 'Logged out successfully'
     });
-  });
-  
+  });  
+
   // Stream Routes - Dual streaming (RTMP and WebRTC)
   app.use("/api/stream", streamRoutes);
   

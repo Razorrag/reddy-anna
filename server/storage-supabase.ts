@@ -322,6 +322,9 @@ export class SupabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = insertUser.id || (insertUser as any).phone || insertUser.phone; // Use provided ID or phone number as ID
     
+    // Get default balance from environment or use 100000
+    const defaultBalance = process.env.DEFAULT_BALANCE || "100000.00";
+    
     const user = {
       id,
       phone: insertUser.phone,
@@ -329,18 +332,18 @@ export class SupabaseStorage implements IStorage {
       full_name: insertUser.full_name || (insertUser as any).name || insertUser.phone,
       role: insertUser.role || (insertUser as any).role || 'player',
       status: insertUser.status || (insertUser as any).status || 'active',
-      balance: insertUser.balance.toString() || "100000.00", // Keep as string to match schema
-      total_winnings: insertUser.total_winnings.toString() || "0.00",
-      total_losses: insertUser.total_losses.toString() || "0.00",
+      balance: insertUser.balance ? insertUser.balance.toString() : defaultBalance,
+      total_winnings: insertUser.total_winnings ? insertUser.total_winnings.toString() : "0.00",
+      total_losses: insertUser.total_losses ? insertUser.total_losses.toString() : "0.00",
       games_played: insertUser.games_played || 0,
       games_won: insertUser.games_won || 0,
       phone_verified: insertUser.phone_verified || false,
-      referral_code: insertUser.referral_code || (insertUser as any).referral_code || null, // Store referral code if provided
+      referral_code: insertUser.referral_code || (insertUser as any).referral_code || null,
       referral_code_generated: null, // Will be generated later
-      original_deposit_amount: insertUser.original_deposit_amount.toString() || "0.00",
-      deposit_bonus_available: insertUser.deposit_bonus_available.toString() || "0.00",
-      referral_bonus_available: insertUser.referral_bonus_available.toString() || "0.00",
-      total_bonus_earned: insertUser.total_bonus_earned.toString() || "0.00",
+      original_deposit_amount: insertUser.original_deposit_amount ? insertUser.original_deposit_amount.toString() : defaultBalance,
+      deposit_bonus_available: insertUser.deposit_bonus_available ? insertUser.deposit_bonus_available.toString() : "0.00",
+      referral_bonus_available: insertUser.referral_bonus_available ? insertUser.referral_bonus_available.toString() : "0.00",
+      total_bonus_earned: insertUser.total_bonus_earned ? insertUser.total_bonus_earned.toString() : "0.00",
       last_login: insertUser.last_login || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
