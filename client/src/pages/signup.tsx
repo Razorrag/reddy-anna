@@ -88,7 +88,6 @@ export default function Signup() {
 
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userRole', 'player');
 
       // CRITICAL: Ensure token is stored (check multiple sources)
       const token = response.token || response.user?.token;

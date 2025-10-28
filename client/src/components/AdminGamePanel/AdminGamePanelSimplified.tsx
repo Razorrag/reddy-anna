@@ -98,10 +98,15 @@ const AdminGamePanelSimplified: React.FC = () => {
         <div className="grid grid-cols-12 gap-6">
           {/* Left Side - Card Selection (Takes 8 columns) */}
           <div className="col-span-8">
-            {gameState.phase === 'waiting' ? (
+            {gameState.phase === 'idle' ? (
               <OpeningCardSelector />
             ) : (
-              <CardDealingPanel />
+              <CardDealingPanel
+                round={gameState.currentRound}
+                phase={gameState.phase}
+                andarCards={gameState.andarCards}
+                baharCards={gameState.baharCards}
+              />
             )}
           </div>
 
@@ -111,17 +116,17 @@ const AdminGamePanelSimplified: React.FC = () => {
             <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 backdrop-blur-sm rounded-xl border border-gold/30 p-6 text-center">
               <div className="text-sm text-gray-300 mb-2">Betting Time</div>
               <div className="text-6xl font-bold text-gold">
-                {gameState.timerSeconds}s
+                {gameState.countdownTimer}s
               </div>
               <div className="text-xs text-gray-400 mt-2">Round {gameState.currentRound}</div>
             </div>
 
             {/* Opening Card */}
-            {gameState.openingCard && (
+            {gameState.selectedOpeningCard && (
               <div className="bg-gradient-to-br from-amber-900/50 to-orange-900/50 backdrop-blur-sm rounded-xl border border-gold/30 p-6 text-center">
                 <div className="text-sm text-gray-300 mb-3">Opening Card</div>
                 <div className="text-7xl font-bold">
-                  {gameState.openingCard}
+                  {gameState.selectedOpeningCard.display}
                 </div>
               </div>
             )}
@@ -144,7 +149,7 @@ const AdminGamePanelSimplified: React.FC = () => {
                     🎴 Dealing cards - Click cards to reveal
                   </div>
                 )}
-                {gameState.phase === 'waiting' && (
+                {gameState.phase === 'idle' && (
                   <div className="text-purple-400 font-bold text-lg">
                     ⏳ Select opening card to start
                   </div>
@@ -180,6 +185,7 @@ const AdminGamePanelSimplified: React.FC = () => {
           winner={celebrationData.winner}
           winningCard={celebrationData.winningCard}
           round={celebrationData.round}
+          payoutMessage={celebrationData.payoutMessage || ''}
           onComplete={handleCelebrationComplete}
         />
       )}

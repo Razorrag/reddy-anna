@@ -3,32 +3,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
-import { 
-  Users, 
-  DollarSign, 
-  MessageSquare, 
-  BarChart3, 
-  Settings, 
-  RefreshCw,
-  Search,
-  Filter,
-  Download,
-  Plus,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  Eye,
-  EyeOff
-} from 'lucide-react';
+import { RefreshCw, Plus } from 'lucide-react';
 
 import { AdminRequestsTable } from './AdminRequestsTable';
 import { RequestStatsCards } from './RequestStatsCards';
 import { RequestFilters } from './RequestFilters';
 import { ManualRequestModal } from './ManualRequestModal';
 import { ExportButton } from './ExportButton';
-import { WebSocketStatus } from './WebSocketStatus';
+import { WebSocketStatus } from '../WebSocketStatus';
+import { useToast } from '../../hooks/use-toast';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface AdminDashboardProps {
   className?: string;
@@ -78,10 +62,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
   const { data: requestsData, isLoading: requestsLoading, refetch: refetchRequests } = useQuery({
     queryKey: ['admin-requests', page, limit, filters],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-        ...filters
+      const params = new URLSearchParams();
+      params.set('page', page.toString());
+      params.set('limit', limit.toString());
+      
+      // Add filters if they exist
+      Object.keys(filters).forEach(key => {
+        const value = (filters as any)[key];
+        if (value !== undefined && value !== null && value !== '') {
+          params.set(key, value.toString());
+        }
       });
 
       const response = await fetch(`/api/admin/requests?${params}`);
@@ -109,12 +99,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
       return response.json().then(data => data.data);
     },
     onSuccess: () => {
-      toast.success('Request status updated successfully');
+      showToast({
+        title: "Success",
+        description: "Request status updated successfully",
+      });
       refetchRequests();
       refetchStats();
     },
     onError: (error: Error) => {
-      toast.error(`Failed to update request status: ${error.message}`);
+      showToast({
+        title: "Error",
+        description: `Failed to update request status: ${error.message}`,
+        variant: "destructive",
+      });
     }
   });
 
@@ -134,12 +131,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
       return response.json().then(data => data.data);
     },
     onSuccess: () => {
-      toast.success('Request processed successfully');
+      showToast({
+        title: "Success",
+        description: "Request processed successfully",
+      });
       refetchRequests();
       refetchStats();
     },
     onError: (error: Error) => {
-      toast.error(`Failed to process request: ${error.message}`);
+      showToast({
+        title: "Error",
+        description: `Failed to process request: ${error.message}`,
+        variant: "destructive",
+      });
     }
   });
 
@@ -167,12 +171,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
       }
 
       const result = await response.json();
-      toast.success('Manual request created successfully');
+      showToast({
+        title: "Success",
+        description: "Manual request created successfully",
+      });
       setShowManualRequestModal(false);
       refetchRequests();
       refetchStats();
     } catch (error: any) {
-      toast.error(`Failed to create manual request: ${error.message}`);
+      showToast({
+        title: "Error",
+        description: `Failed to create manual request: ${error.message}`,
+        variant: "destructive",
+      });
     }
   }, [refetchRequests, refetchStats]);
 
@@ -183,6 +194,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
   }, []);
 
   // WebSocket connection setup
+  const { token } = useAuth();
+  const { toast: showToast } = useToast();
+  
   useEffect(() => {
     const setupWebSocket = () => {
       const ws = new WebSocket(`ws://${window.location.host}/ws`);
@@ -192,7 +206,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
         setWebsocketConnected(true);
         
         // Send authentication
-        const token = localStorage.getItem('token');
         if (token) {
           ws.send(JSON.stringify({
             type: 'authenticate',
@@ -210,14 +223,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
           if (message.type === 'admin_notification') {
             // Handle real-time notifications
             if (message.event === 'new_request') {
-              toast.info(`New ${message.data.request.request_type} request received`);
+              showToast({
+                title: "New Request",
+                description: `New ${message.data.request.request_type} request received`,
+              });
               refetchRequests();
               refetchStats();
             } else if (message.event === 'request_status_update') {
-              toast.success(`Request ${message.data.request.id} status updated`);
+              showToast({
+                title: "Status Updated",
+                description: `Request ${message.data.request.id} status updated`,
+              });
               refetchRequests();
             } else if (message.event === 'request_processed') {
-              toast.success(`Request ${message.data.request.id} processed`);
+              showToast({
+                title: "Request Processed",
+                description: `Request ${message.data.request.id} processed`,
+              });
               refetchRequests();
               refetchStats();
             }

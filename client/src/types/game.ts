@@ -67,7 +67,7 @@ export interface GameHistoryEntry {
 }
 
 export interface WebSocketMessage {
-  type: 'gameState' | 'betPlaced' | 'gameResult' | 'timerUpdate' | 'error' | 'connection' | 'authenticated' | 'auth_error' | 'sync_game_state' | 'opening_card_set' | 'opening_card_confirmed' | 'card_dealt' | 'timer_start' | 'timer_update' | 'timer_stop' | 'betting_stats' | 'start_round_2' | 'start_final_draw' | 'game_complete' | 'game_reset' | 'phase_change' | 'balance_update' | 'user_bets_update' | 'payout_received' | 'game_start' | 'deal_card' | 'bet_placed' | 'betting_locked' | 'round_complete' | 'card_animation' | 'confetti_trigger' | 'haptic_feedback' | 'accessibility_update' | 'notification' | 'save_cards' | 'reveal_cards' | 'deal_single_card' | 'cards_saved' | 'realtime_stats_update' | 'analytics_update' | 'admin_bet_update' | 'game_bets_update';
+  type: 'gameState' | 'betPlaced' | 'gameResult' | 'timerUpdate' | 'error' | 'connection' | 'authenticated' | 'auth_error' | 'sync_game_state' | 'opening_card_set' | 'opening_card_confirmed' | 'card_dealt' | 'timer_start' | 'timer_update' | 'timer_stop' | 'betting_stats' | 'start_round_2' | 'start_final_draw' | 'game_complete' | 'game_reset' | 'phase_change' | 'balance_update' | 'user_bets_update' | 'payout_received' | 'game_start' | 'deal_card' | 'bet_placed' | 'betting_locked' | 'round_complete' | 'card_animation' | 'confetti_trigger' | 'haptic_feedback' | 'accessibility_update' | 'notification' | 'save_cards' | 'reveal_cards' | 'deal_single_card' | 'cards_saved' | 'realtime_stats_update' | 'analytics_update' | 'admin_bet_update' | 'game_bets_update' | 'stream_start' | 'stream_frame' | 'stream_stop';
   data: any;
   timestamp?: Date;
 }

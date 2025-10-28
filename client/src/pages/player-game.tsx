@@ -11,9 +11,8 @@ import { useGameState } from '../contexts/GameStateContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
-import { apiClient } from '../lib/api-client';
+import { apiClient } from '../lib/apiClient';
 import MobileGameLayout from '../components/MobileGameLayout/MobileGameLayout';
-import StreamPlayer from '../components/StreamPlayer';
 import { GameHistoryModal } from '../components/GameHistoryModal';
 import { WalletModal } from '../components/WalletModal';
 import RoundTransition from '../components/RoundTransition';
@@ -22,7 +21,7 @@ import type { BetSide } from '../types/game';
 
 const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
-  const { gameState, placeBet, updatePlayerWallet } = useGameState();
+  const { gameState, updatePlayerWallet } = useGameState();
   const { placeBet: placeBetWebSocket } = useWebSocket();
 
   // Get user data from AuthContext
@@ -53,10 +52,6 @@ const PlayerGame: React.FC = () => {
   const [showRoundTransition, setShowRoundTransition] = useState(false);
   const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
-  const [userBets, setUserBets] = useState({
-    round1: { andar: 0, bahar: 0 },
-    round2: { andar: 0, bahar: 0 }
-  });
 
   // Available bet amounts - matching schema limits (1000-100000)
   const betAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
@@ -146,29 +141,22 @@ const PlayerGame: React.FC = () => {
   const handleDeposit = useCallback(async (amount: number) => {
     try {
       // Use the apiClient which handles authentication automatically
-      const data = await apiClient.post<any>('/payment/process', {
-        userId: user.id,
+      const data = await apiClient.post<any>('/payment-requests', {
         amount: amount,
-        method: { type: 'upi' }, // Default to UPI for game deposits
-        type: 'deposit'
+        paymentMethod: 'UPI',
+        requestType: 'deposit'
       });
 
       if (data.success) {
-        // Update user balance via AuthContext after successful deposit
-        if (user) {
-          const updatedBalance = data.user?.balance || (userData.balance + amount);
-          setUserBalance(updatedBalance);
-          updatePlayerWallet(updatedBalance);
-        }
-        showNotification(`Successfully deposited ₹${amount.toLocaleString('en-IN')}`, 'success');
+        showNotification(`Successfully submitted deposit request for ₹${amount.toLocaleString('en-IN')}. Awaiting admin approval.`, 'success');
       } else {
-        showNotification(data.error || 'Deposit failed', 'error');
+        showNotification(data.error || 'Deposit request failed', 'error');
       }
     } catch (error: any) {
-      showNotification(error.message || 'Deposit failed', 'error');
+      showNotification(error.message || 'Deposit request failed', 'error');
       console.error('Deposit error:', error);
     }
-  }, [user.id, updatePlayerWallet, showNotification]);
+  }, [updatePlayerWallet, showNotification]);
 
   // Handle withdraw
   const handleWithdraw = useCallback(async (amount: number) => {
@@ -179,29 +167,22 @@ const PlayerGame: React.FC = () => {
 
     try {
       // Use the apiClient which handles authentication automatically
-      const data = await apiClient.post<any>('/payment/process', {
-        userId: user.id,
+      const data = await apiClient.post<any>('/payment-requests', {
         amount: amount,
-        method: { type: 'upi' }, // Default to UPI for game withdrawals
-        type: 'withdrawal'
+        paymentMethod: 'Bank Transfer',
+        requestType: 'withdrawal'
       });
 
       if (data.success) {
-        // Update user balance via AuthContext after successful withdrawal
-        if (user) {
-          const updatedBalance = data.user?.balance || (userData.balance - amount);
-          setUserBalance(updatedBalance);
-          updatePlayerWallet(updatedBalance);
-        }
-        showNotification(`Successfully withdrew ₹${amount.toLocaleString('en-IN')}`, 'success');
+        showNotification(`Successfully submitted withdrawal request for ₹${amount.toLocaleString('en-IN')}. Awaiting admin approval.`, 'success');
       } else {
-        showNotification(data.error || 'Withdrawal failed', 'error');
+        showNotification(data.error || 'Withdrawal request failed', 'error');
       }
     } catch (error: any) {
-      showNotification(error.message || 'Withdrawal failed', 'error');
+      showNotification(error.message || 'Withdrawal request failed', 'error');
       console.error('Withdrawal error:', error);
     }
-  }, [user.id, userBalance, updatePlayerWallet, showNotification]);
+  }, [userBalance, updatePlayerWallet, showNotification]);
 
   // Handle history click
   const handleHistoryClick = useCallback(() => {
@@ -214,15 +195,7 @@ const PlayerGame: React.FC = () => {
     if (gameState.playerWallet !== undefined) {
       setUserBalance(gameState.playerWallet);
     }
-    
-    // Update user bets when round bets change
-    if (gameState.round1Bets) {
-      setUserBets(prev => ({ ...prev, round1: gameState.round1Bets }));
-    }
-    if (gameState.round2Bets) {
-      setUserBets(prev => ({ ...prev, round2: gameState.round2Bets }));
-    }
-  }, [gameState.playerWallet, gameState.round1Bets, gameState.round2Bets]);
+  }, [gameState.playerWallet]);
 
   // Detect round changes and trigger transition animation
   useEffect(() => {
@@ -331,8 +304,7 @@ const PlayerGame: React.FC = () => {
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
         userBalance={userBalance || 0}
-        onDeposit={handleDeposit}
-        onWithdraw={handleWithdraw}
+        onBalanceUpdate={setUserBalance}
       />
 
       {/* No Winner Transition - Shows before round transition */}

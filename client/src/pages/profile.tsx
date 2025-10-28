@@ -13,15 +13,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useAuth } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
-import { UserProfileModal } from '@/components/UserProfile/UserProfileModal';
 import { WalletModal } from '@/components/WalletModal';
 
 const Profile: React.FC = () => {
@@ -32,15 +30,12 @@ const Profile: React.FC = () => {
     fetchTransactions,
     fetchGameHistory,
     updateProfile,
-    deposit,
-    withdraw,
     fetchReferralData,
     claimBonus
   } = useUserProfile();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showWalletModal, setShowWalletModal] = useState(false);
-  const [walletMode, setWalletMode] = useState<'deposit' | 'withdraw'>('deposit');
   const [editingProfile, setEditingProfile] = useState(false);
   const [claimingBonus, setClaimingBonus] = useState(false);
   const [profileForm, setProfileForm] = useState({
@@ -115,15 +110,6 @@ const Profile: React.FC = () => {
     }
   };
 
-  const handleDeposit = (amount: number) => {
-    deposit(amount, 'upi');
-    setShowWalletModal(false);
-  };
-
-  const handleWithdraw = (amount: number) => {
-    withdraw(amount, 'bank_transfer');
-    setShowWalletModal(false);
-  };
 
   const handleClaimBonus = async () => {
     try {
@@ -136,8 +122,7 @@ const Profile: React.FC = () => {
     }
   };
 
-  const openWalletModal = (mode: 'deposit' | 'withdraw') => {
-    setWalletMode(mode);
+  const openWalletModal = () => {
     setShowWalletModal(true);
   };
 
@@ -175,14 +160,14 @@ const Profile: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center gap-4">
             <Avatar className="w-16 h-16">
-              <AvatarImage src={profileState.user?.profilePicture} alt={user.username} />
+              <AvatarImage src={profileState.user?.profilePicture} alt={user?.username || 'User'} />
               <AvatarFallback className="bg-gold/20 text-gold text-xl font-semibold">
-                {user.username.slice(0, 2).toUpperCase()}
+                {user?.username?.slice(0, 2).toUpperCase() || '??'}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gold">{user.username}</h1>
-              <p className="text-white/80">{user.email}</p>
+              <h1 className="text-2xl font-bold text-gold">{user?.full_name || user?.phone}</h1>
+              <p className="text-white/80">{user?.phone}</p>
             </div>
             <Button
               onClick={() => window.history.back()}
@@ -262,14 +247,14 @@ const Profile: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <Button
-                      onClick={() => openWalletModal('deposit')}
+                      onClick={openWalletModal}
                       className="bg-green-600 hover:bg-green-700 text-white"
                     >
                       <TrendingUp className="w-4 h-4 mr-2" />
                       Add Funds
                     </Button>
                     <Button
-                      onClick={() => openWalletModal('withdraw')}
+                      onClick={openWalletModal}
                       className="bg-red-600 hover:bg-red-700 text-white"
                     >
                       <TrendingDown className="w-4 h-4 mr-2" />
@@ -364,7 +349,7 @@ const Profile: React.FC = () => {
                       <Label htmlFor="email" className="text-gold">Email</Label>
                       <Input
                         id="email"
-                        value={user.email}
+                        value={user.phone}
                         disabled
                         className="bg-black/30 border-gold/20 text-white/60"
                       />
@@ -859,8 +844,6 @@ const Profile: React.FC = () => {
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
         userBalance={analytics?.currentBalance || 0}
-        onDeposit={handleDeposit}
-        onWithdraw={handleWithdraw}
       />
     </div>
   );

@@ -8,11 +8,9 @@ import {
   Settings, 
   LogOut,
   TrendingUp,
-  Eye,
   CreditCard,
   Gamepad2,
   UserPlus,
-  X
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
@@ -24,7 +22,7 @@ interface UserProfileButtonProps {
 }
 
 export const UserProfileButton: React.FC<UserProfileButtonProps> = ({ className = '' }) => {
-  const { user, isAuthenticated, setAuthStatus } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const { state: profileState, fetchAnalytics } = useUserProfile();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -49,9 +47,7 @@ export const UserProfileButton: React.FC<UserProfileButtonProps> = ({ className 
   }, [isDropdownOpen, isAuthenticated, fetchAnalytics, profileState.analytics]);
 
   const handleLogout = () => {
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('user');
-    setAuthStatus(false, true);
+    logout();
     setIsDropdownOpen(false);
   };
 
@@ -63,7 +59,7 @@ export const UserProfileButton: React.FC<UserProfileButtonProps> = ({ className 
     return null;
   }
 
-  const userInitials = user.username
+  const userInitials = (user.username || user.full_name || user.phone || 'U')
     .split(' ')
     .map((word: string) => word.charAt(0).toUpperCase())
     .join('')
@@ -78,14 +74,14 @@ export const UserProfileButton: React.FC<UserProfileButtonProps> = ({ className 
         className="flex items-center gap-2 px-3 py-2 h-auto hover:bg-gold/10 text-white hover:text-gold transition-colors"
       >
         <Avatar className="w-8 h-8">
-          <AvatarImage src={user.profilePicture} alt={user.username} />
+          <AvatarImage src="/default-avatar.png" alt={user.username || user.full_name || user.phone || 'User'} />
           <AvatarFallback className="bg-gold/20 text-gold text-sm font-semibold">
             {userInitials}
           </AvatarFallback>
         </Avatar>
         
         <div className="hidden md:block text-left">
-          <div className="text-sm font-medium text-white">{user.username}</div>
+          <div className="text-sm font-medium text-white">{user.username || user.full_name || user.phone}</div>
           {profileState.analytics && (
             <div className="text-xs text-gold">
               {formatCurrency(profileState.analytics.currentBalance)}
@@ -103,14 +99,14 @@ export const UserProfileButton: React.FC<UserProfileButtonProps> = ({ className 
           <div className="p-4 border-b border-gold/20">
             <div className="flex items-center gap-3">
               <Avatar className="w-12 h-12">
-                <AvatarImage src={user.profilePicture} alt={user.username} />
+                <AvatarImage src="/default-avatar.png" alt={user.username || user.full_name || user.phone || 'User'} />
                 <AvatarFallback className="bg-gold/20 text-gold text-lg font-semibold">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1">
-                <div className="text-white font-semibold">{user.username}</div>
-                <div className="text-gold text-sm">{user.email}</div>
+                <div className="text-white font-semibold">{user.username || user.full_name || user.phone}</div>
+                <div className="text-gold text-sm">{user.phone}</div>
                 {profileState.analytics && (
                   <div className="text-white/80 text-xs mt-1">
                     Balance: {formatCurrency(profileState.analytics.currentBalance)}
