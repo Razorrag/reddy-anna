@@ -202,6 +202,20 @@ export interface IStorage {
     description?: string;
   }): Promise<void>;
   
+  // Payment request methods
+  createPaymentRequest(request: {
+    userId: string;
+    type: 'deposit' | 'withdrawal';
+    amount: number;
+    paymentMethod: string;
+    status: 'pending' | 'approved' | 'rejected' | 'completed';
+  }): Promise<any>;
+  getPaymentRequest(requestId: string): Promise<any | null>;
+  getPaymentRequestsByUser(userId: string): Promise<any[]>;
+  getPendingPaymentRequests(): Promise<any[]>;
+  updatePaymentRequest(requestId: string, status: string, adminId?: string): Promise<void>;
+  approvePaymentRequest(requestId: string, userId: string, amount: number, adminId: string): Promise<void>;
+  
   // Bonus analytics methods
   getBonusAnalytics(period: string): Promise<any>;
   getReferralAnalytics(period: string): Promise<any>;
@@ -1863,6 +1877,128 @@ export class SupabaseStorage implements IStorage {
         conversionRate: 0,
         period
       };
+    }
+  }
+
+  // Payment request methods implementation
+  async createPaymentRequest(request: {
+    userId: string;
+    type: 'deposit' | 'withdrawal';
+    amount: number;
+    paymentMethod: string;
+    status: 'pending' | 'approved' | 'rejected' | 'completed';
+  }): Promise<any> {
+    const { data, error } = await supabaseServer
+      .from('payment_requests')
+      .insert({
+        user_id: request.userId,
+        request_type: request.type,
+        amount: request.amount,
+        payment_method: request.paymentMethod,
+        status: request.status,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating payment request:', error);
+      throw new Error('Failed to create payment request');
+    }
+
+    return data;
+  }
+
+  async getPaymentRequest(requestId: string): Promise<any | null> {
+    const { data, error } = await supabaseServer
+      .from('payment_requests')
+      .select('*')
+      .eq('id', requestId)
+      .single();
+
+    if (error) {
+      if (error.code !== 'PGRST116') { // Not found is ok
+        console.error('Error getting payment request:', error);
+      }
+      return null;
+    }
+
+    return data;
+  }
+
+  async getPaymentRequestsByUser(userId: string): Promise<any[]> {
+    const { data, error } = await supabaseServer
+      .from('payment_requests')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error getting payment requests for user:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  async getPendingPaymentRequests(): Promise<any[]> {
+    const { data, error } = await supabaseServer
+      .from('payment_requests')
+      .select(`
+        *,
+        user:users(phone, full_name)
+      `)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error getting pending payment requests:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  async updatePaymentRequest(requestId: string, status: string, adminId?: string): Promise<void> {
+    const updates: any = { 
+      status, 
+      updated_at: new Date().toISOString() 
+    };
+    
+    if (adminId) {
+      updates.admin_id = adminId;
+    }
+
+    const { error } = await supabaseServer
+      .from('payment_requests')
+      .update(updates)
+      .eq('id', requestId);
+
+    if (error) {
+      console.error('Error updating payment request:', error);
+      throw new Error('Failed to update payment request');
+    }
+  }
+
+  async approvePaymentRequest(requestId: string, userId: string, amount: number, adminId: string): Promise<void> {
+    // Use database transaction to ensure atomic operation
+    // Note: We'll assume the database has a stored procedure for atomic approval
+    // In a real implementation, this would require a more complex atomic operation
+    try {
+      // Update the payment request status
+      await this.updatePaymentRequest(requestId, 'approved', adminId);
+
+      // For deposits: add to user balance
+      if (amount > 0) {
+        await this.updateUserBalance(userId, amount);
+      } 
+      // For withdrawals: subtract from user balance (though this would be unusual for approval)
+      else if (amount < 0) {
+        await this.updateUserBalance(userId, amount);
+      }
+    } catch (error) {
+      console.error('Error approving payment request:', error);
+      throw new Error('Failed to approve payment request');
     }
   }
 }

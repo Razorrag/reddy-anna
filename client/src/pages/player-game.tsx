@@ -10,6 +10,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useGameState } from '../contexts/GameStateContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
 import { apiClient } from '../lib/api-client';
 import MobileGameLayout from '../components/MobileGameLayout/MobileGameLayout';
 import StreamPlayer from '../components/StreamPlayer';
@@ -24,35 +25,28 @@ const PlayerGame: React.FC = () => {
   const { gameState, placeBet, updatePlayerWallet } = useGameState();
   const { placeBet: placeBetWebSocket } = useWebSocket();
 
-  // Get user data from localStorage
-  const getUserData = () => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      return {
-        id: user.id || user.phone,
-        username: user.full_name || 'Player',
-        phone: user.phone,
-        balance: user.balance || 0
-      };
-    }
-    // No user logged in - should not reach here due to ProtectedRoute
-    return null;
-  };
-
-  const user = getUserData();
+  // Get user data from AuthContext
+  const { user, isAuthenticated } = useAuth();
   
   // Redirect if no user (shouldn't happen due to ProtectedRoute)
-  if (!user) {
+  if (!user || !isAuthenticated) {
     window.location.href = '/login';
     return null;
   }
+  
+  // Ensure user has required properties
+  const userData = {
+    id: user.id || user.phone,
+    username: user.full_name || user.username || 'Player',
+    phone: user.phone,
+    balance: user.balance || 0
+  };
   
   // Local state
   const [selectedBetAmount, setSelectedBetAmount] = useState(2500);
   const [selectedPosition, setSelectedPosition] = useState<BetSide | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
-  const [userBalance, setUserBalance] = useState(user.balance); // Use user's balance from localStorage
+  const [userBalance, setUserBalance] = useState(user.balance || 0); // Use user's balance from AuthContext
   const [showChipSelector, setShowChipSelector] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -67,37 +61,12 @@ const PlayerGame: React.FC = () => {
   // Available bet amounts - matching schema limits (1000-100000)
   const betAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
 
-  // Update user balance from localStorage on component mount and when localStorage changes
+  // Update user balance from AuthContext on component mount and when user changes
   useEffect(() => {
-    const updateBalanceFromStorage = () => {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const userData = JSON.parse(userStr);
-        const newBalance = userData.balance || 0;
-        setUserBalance(newBalance);
-      }
-    };
-
-    // Initial balance update
-    updateBalanceFromStorage();
-
-    // Listen for storage changes (in case user logs in/out in another tab)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'user') {
-        updateBalanceFromStorage();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    // Also check periodically for localStorage changes (for same-tab updates)
-    const interval = setInterval(updateBalanceFromStorage, 1000);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, []);
+    if (user) {
+      setUserBalance(user.balance || 0);
+    }
+  }, [user]);
 
   // Update the handlePlaceBet function to properly use WebSocket
   const handlePlaceBet = useCallback(async (position: BetSide) => {
@@ -185,15 +154,11 @@ const PlayerGame: React.FC = () => {
       });
 
       if (data.success) {
-        // Update user balance in localStorage after successful deposit
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          const userData = JSON.parse(userStr);
-          // Update the balance to match server response if available, otherwise increment
-          userData.balance = data.user?.balance || (userData.balance + amount);
-          localStorage.setItem('user', JSON.stringify(userData));
-          setUserBalance(userData.balance);
-          updatePlayerWallet(userData.balance);
+        // Update user balance via AuthContext after successful deposit
+        if (user) {
+          const updatedBalance = data.user?.balance || (userData.balance + amount);
+          setUserBalance(updatedBalance);
+          updatePlayerWallet(updatedBalance);
         }
         showNotification(`Successfully deposited ₹${amount.toLocaleString('en-IN')}`, 'success');
       } else {
@@ -207,7 +172,7 @@ const PlayerGame: React.FC = () => {
 
   // Handle withdraw
   const handleWithdraw = useCallback(async (amount: number) => {
-    if (amount > userBalance) {
+    if (amount > userBalance || !user) {
       showNotification('Insufficient balance', 'error');
       return;
     }
@@ -222,15 +187,11 @@ const PlayerGame: React.FC = () => {
       });
 
       if (data.success) {
-        // Update user balance in localStorage after successful withdrawal
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          const userData = JSON.parse(userStr);
-          // Update the balance to match server response if available, otherwise decrement
-          userData.balance = data.user?.balance || (userData.balance - amount);
-          localStorage.setItem('user', JSON.stringify(userData));
-          setUserBalance(userData.balance);
-          updatePlayerWallet(userData.balance);
+        // Update user balance via AuthContext after successful withdrawal
+        if (user) {
+          const updatedBalance = data.user?.balance || (userData.balance - amount);
+          setUserBalance(updatedBalance);
+          updatePlayerWallet(updatedBalance);
         }
         showNotification(`Successfully withdrew ₹${amount.toLocaleString('en-IN')}`, 'success');
       } else {
@@ -341,8 +302,8 @@ const PlayerGame: React.FC = () => {
     <>
       <MobileGameLayout
         gameState={gameState}
-        user={user}
-        userBalance={userBalance}
+        user={userData}
+        userBalance={userBalance || 0}
         selectedBetAmount={selectedBetAmount}
         selectedPosition={selectedPosition}
         betAmounts={betAmounts}
@@ -369,7 +330,7 @@ const PlayerGame: React.FC = () => {
       <WalletModal
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
-        userBalance={userBalance}
+        userBalance={userBalance || 0}
         onDeposit={handleDeposit}
         onWithdraw={handleWithdraw}
       />

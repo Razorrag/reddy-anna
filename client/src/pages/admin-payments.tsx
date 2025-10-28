@@ -19,88 +19,44 @@ import {
   ArrowDownLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiClient } from "@/lib/api-client";
 
-interface Transaction {
+interface PaymentRequest {
   id: string;
-  userId: string;
-  username: string;
-  type: 'deposit' | 'withdraw';
+  user_id: string;
+  phone: string;
+  full_name: string;
+  request_type: 'deposit' | 'withdrawal';
   amount: number;
-  method: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  timestamp: string;
-  details: string;
+  payment_method: string;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  created_at: string;
+  updated_at?: string;
 }
 
 export default function AdminPayments() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [isLoaded, setIsLoaded] = useState(false);
+  const [loadingRequests, setLoadingRequests] = useState(true);
 
   useEffect(() => {
-    // Simulate loading transactions data
-    setTimeout(() => {
-      setTransactions([
-        {
-          id: '1',
-          userId: 'user1',
-          username: 'player123',
-          type: 'deposit',
-          amount: 5000,
-          method: 'UPI',
-          status: 'completed',
-          timestamp: '2024-01-20 14:30:00',
-          details: 'Google Pay - player123@okaxis'
-        },
-        {
-          id: '2',
-          userId: 'user2',
-          username: 'bettor789',
-          type: 'withdraw',
-          amount: 25000,
-          method: 'Bank Transfer',
-          status: 'pending',
-          timestamp: '2024-01-20 13:45:00',
-          details: 'HDFC Bank - XX1234'
-        },
-        {
-          id: '3',
-          userId: 'user3',
-          username: 'luckyone',
-          type: 'deposit',
-          amount: 10000,
-          method: 'UPI',
-          status: 'processing',
-          timestamp: '2024-01-20 12:15:00',
-          details: 'PhonePe - luckyone@paytm'
-        },
-        {
-          id: '4',
-          userId: 'user4',
-          username: 'gamer456',
-          type: 'withdraw',
-          amount: 15000,
-          method: 'UPI',
-          status: 'failed',
-          timestamp: '2024-01-20 11:30:00',
-          details: 'Paytm - gamer456@paytm'
-        },
-        {
-          id: '5',
-          userId: 'user5',
-          username: 'testuser',
-          type: 'deposit',
-          amount: 2000,
-          method: 'Wallet',
-          status: 'completed',
-          timestamp: '2024-01-20 10:45:00',
-          details: 'Paytm Wallet'
-        }
-      ]);
-      setIsLoaded(true);
-    }, 1000);
+    const fetchPaymentRequests = async () => {
+      try {
+        setLoadingRequests(true);
+        const response = await apiClient.get('/admin/payment-requests/pending');
+        setPaymentRequests(response.data || []);
+      } catch (error) {
+        console.error('Failed to fetch payment requests:', error);
+      } finally {
+        setLoadingRequests(false);
+        setIsLoaded(true);
+      }
+    };
+
+    fetchPaymentRequests();
   }, []);
 
   const formatCurrency = (amount: number) => {
@@ -110,11 +66,14 @@ export default function AdminPayments() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
-        return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Completed</Badge>;
-      case 'processing':
-        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Processing</Badge>;
+      case 'approved':
+        return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Approved</Badge>;
+      case 'rejected':
+        return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Rejected</Badge>;
       case 'pending':
         return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Pending</Badge>;
+      case 'processing':
+        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Processing</Badge>;
       case 'failed':
         return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Failed</Badge>;
       default:
@@ -128,23 +87,46 @@ export default function AdminPayments() {
       <ArrowUpRight className="w-4 h-4 text-red-400" />;
   };
 
-  const filteredTransactions = transactions.filter(transaction => {
-    const matchesSearch = transaction.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         transaction.details.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || transaction.status === statusFilter;
-    const matchesType = typeFilter === 'all' || transaction.type === typeFilter;
+  const handleApprove = async (requestId: string) => {
+    try {
+      await apiClient.patch(`/admin/payment-requests/${requestId}/approve`);
+      // Refresh the request list
+      const response = await apiClient.get('/admin/payment-requests/pending');
+      setPaymentRequests(response.data || []);
+    } catch (error) {
+      console.error('Failed to approve request:', error);
+    }
+  };
+
+  const handleReject = async (requestId: string) => {
+    try {
+      await apiClient.patch(`/admin/payment-requests/${requestId}/reject`);
+      // Refresh the request list
+      const response = await apiClient.get('/admin/payment-requests/pending');
+      setPaymentRequests(response.data || []);
+    } catch (error) {
+      console.error('Failed to reject request:', error);
+    }
+  };
+
+  const filteredRequests = paymentRequests.filter(request => {
+    const username = request.full_name || request.phone;
+    const matchesSearch = username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         request.payment_method.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || request.status === statusFilter;
+    const matchesType = typeFilter === 'all' || request.request_type === typeFilter;
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const totalDeposits = transactions
-    .filter(t => t.type === 'deposit' && t.status === 'completed')
-    .reduce((sum, t) => sum + t.amount, 0);
+  const totalDeposits = paymentRequests
+    .filter(r => r.request_type === 'deposit' && r.status === 'approved')
+    .reduce((sum, r) => sum + r.amount, 0);
 
-  const totalWithdrawals = transactions
-    .filter(t => t.type === 'withdraw' && t.status === 'completed')
-    .reduce((sum, t) => sum + t.amount, 0);
+  const totalWithdrawals = paymentRequests
+    .filter(r => r.request_type === 'withdrawal' && r.status === 'approved')
+    .reduce((sum, r) => sum + r.amount, 0);
 
-  const pendingRequests = transactions.filter(t => t.status === 'pending').length;
+  const pendingRequests = paymentRequests.filter(r => r.status === 'pending').length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-4">
@@ -154,15 +136,26 @@ export default function AdminPayments() {
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Today's Transactions</h1>
-            <p className="text-purple-200">Manage deposits and withdrawals for today</p>
+            <h1 className="text-4xl font-bold text-white mb-2">Payment Requests</h1>
+            <p className="text-purple-200">Manage deposit and withdrawal requests</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10">
-              <Filter className="w-4 h-4 mr-2" />
-              Export Data
-            </Button>
-            <Button variant="outline" className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10">
+            <Button 
+              variant="outline" 
+              className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10"
+              onClick={async () => {
+                // Refresh the payment requests
+                try {
+                  setLoadingRequests(true);
+                  const response = await apiClient.get('/admin/payment-requests/pending');
+                  setPaymentRequests(response.data || []);
+                } catch (error) {
+                  console.error('Failed to refresh payment requests:', error);
+                } finally {
+                  setLoadingRequests(false);
+                }
+              }}
+            >
               <Activity className="w-4 h-4 mr-2" />
               Refresh
             </Button>
@@ -186,7 +179,7 @@ export default function AdminPayments() {
             <CardContent>
               <div className="text-2xl font-bold text-green-400">{formatCurrency(totalDeposits)}</div>
               <p className="text-xs text-purple-300">
-                Completed today
+                Approved today
               </p>
             </CardContent>
           </Card>
@@ -199,7 +192,7 @@ export default function AdminPayments() {
             <CardContent>
               <div className="text-2xl font-bold text-red-400">{formatCurrency(totalWithdrawals)}</div>
               <p className="text-xs text-purple-300">
-                Completed today
+                Approved today
               </p>
             </CardContent>
           </Card>
@@ -227,7 +220,7 @@ export default function AdminPayments() {
               <div className="relative flex-1 w-full">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-200 w-4 h-4" />
                 <Input
-                  placeholder="Search by username or payment details..."
+                  placeholder="Search by username or payment method..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 bg-purple-950/30 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400"
@@ -241,7 +234,7 @@ export default function AdminPayments() {
                 >
                   <option value="all">All Types</option>
                   <option value="deposit">Deposits</option>
-                  <option value="withdraw">Withdrawals</option>
+                  <option value="withdrawal">Withdrawals</option>
                 </select>
                 <select
                   value={statusFilter}
@@ -250,9 +243,8 @@ export default function AdminPayments() {
                 >
                   <option value="all">All Status</option>
                   <option value="pending">Pending</option>
-                  <option value="processing">Processing</option>
-                  <option value="completed">Completed</option>
-                  <option value="failed">Failed</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
                 </select>
               </div>
             </div>
@@ -260,56 +252,62 @@ export default function AdminPayments() {
         </Card>
       </div>
 
-      {/* Transactions Table */}
+      {/* Payment Requests List */}
       <div className="max-w-7xl mx-auto">
         <Card className="bg-black/50 border-gold/30 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-gold">Transaction History</CardTitle>
+            <CardTitle className="text-gold">Payment Requests</CardTitle>
             <CardDescription className="text-white/80">
-              All deposits and withdrawals for today
+              Approve or reject deposit and withdrawal requests
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {filteredTransactions.map((transaction) => (
-                <div key={transaction.id} className="p-6 bg-black/30 rounded-lg border border-gold/20 hover:border-gold/40 transition-colors">
+              {loadingRequests ? (
+                <div className="text-center py-12">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gold mb-4"></div>
+                  <p className="text-white/60">Loading payment requests...</p>
+                </div>
+              ) : filteredRequests.map((request) => (
+                <div key={request.id} className="p-6 bg-black/30 rounded-lg border border-gold/20 hover:border-gold/40 transition-colors">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        transaction.type === 'deposit'
+                        request.request_type === 'deposit'
                           ? 'bg-green-500/20 border border-green-500/30'
                           : 'bg-red-500/20 border border-red-500/30'
                       }`}>
-                        {getTypeIcon(transaction.type)}
+                        {getTypeIcon(request.request_type)}
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="text-lg font-semibold text-white">{transaction.username}</h3>
-                          {getStatusBadge(transaction.status)}
+                          <h3 className="text-lg font-semibold text-white">{request.full_name || request.phone}</h3>
+                          {getStatusBadge(request.status)}
                         </div>
-                        <p className="text-white/60 text-sm">{transaction.details}</p>
-                        <p className="text-white/40 text-xs">{transaction.timestamp}</p>
+                        <p className="text-white/60 text-sm">{request.payment_method}</p>
+                        <p className="text-white/40 text-xs">{new Date(request.created_at).toLocaleString()}</p>
                       </div>
                     </div>
 
                     <div className="text-right">
                       <div className={`text-xl font-bold mb-1 ${
-                        transaction.type === 'deposit' ? 'text-green-400' : 'text-red-400'
+                        request.request_type === 'deposit' ? 'text-green-400' : 'text-red-400'
                       }`}>
-                        {transaction.type === 'deposit' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                        {request.request_type === 'deposit' ? '+' : '-'}{formatCurrency(request.amount)}
                       </div>
                       <div className="text-sm text-white/60">
-                        {transaction.method}
+                        ID: {request.id.substring(0, 8)}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex justify-end gap-2 pt-4 border-t border-gold/20">
-                    {transaction.status === 'pending' && (
+                    {request.status === 'pending' && (
                       <>
                         <Button
                           size="sm"
                           className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => handleApprove(request.id)}
                         >
                           <CheckCircle className="w-4 h-4 mr-1" />
                           Approve
@@ -318,6 +316,7 @@ export default function AdminPayments() {
                           size="sm"
                           variant="outline"
                           className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                          onClick={() => handleReject(request.id)}
                         >
                           <XCircle className="w-4 h-4 mr-1" />
                           Reject
@@ -336,10 +335,10 @@ export default function AdminPayments() {
               ))}
             </div>
 
-            {filteredTransactions.length === 0 && (
+            {!loadingRequests && filteredRequests.length === 0 && (
               <div className="text-center py-12">
                 <CreditCard className="w-16 h-16 text-gold/30 mx-auto mb-4" />
-                <p className="text-white/60">No transactions found matching your criteria.</p>
+                <p className="text-white/60">No payment requests found matching your criteria.</p>
               </div>
             )}
           </CardContent>

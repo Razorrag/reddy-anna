@@ -2,24 +2,24 @@ import { X, Wallet, ArrowDownToLine, ArrowUpFromLine, Gift, TrendingUp } from "l
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { apiClient } from "@/lib/api-client";
 
 interface WalletModalProps {
   isOpen: boolean;
   onClose: () => void;
   userBalance: number;
-  onDeposit: (amount: number) => void;
-  onWithdraw: (amount: number) => void;
+  onBalanceUpdate?: (newBalance: number) => void; // Optional callback for balance updates
 }
 
 export function WalletModal({
   isOpen,
   onClose,
   userBalance,
-  onDeposit,
-  onWithdraw
+  onBalanceUpdate
 }: WalletModalProps) {
   const [amount, setAmount] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
+  const [isLoading, setIsLoading] = useState(false);
   const { state: userProfileState, claimBonus } = useUserProfile();
 
   if (!isOpen) return null;
@@ -30,23 +30,37 @@ export function WalletModal({
     setAmount(value.toString());
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const numAmount = parseInt(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       return;
     }
 
-    if (activeTab === 'deposit') {
-      onDeposit(numAmount);
-    } else {
-      if (numAmount > userBalance) {
-        return;
-      }
-      onWithdraw(numAmount);
-    }
+    setIsLoading(true);
+    try {
+      // Create payment request instead of direct balance update
+      const response = await apiClient.post('/payment-requests', {
+        amount: numAmount,
+        paymentMethod: activeTab === 'deposit' ? 'UPI' : 'Bank Transfer', // Default method
+        requestType: activeTab
+      });
 
-    setAmount("");
-    onClose();
+      if (response.success) {
+        // Show success message
+        // In a real implementation, you'd use a proper toast notification system
+        alert(`${activeTab === 'deposit' ? 'Deposit' : 'Withdrawal'} request submitted successfully! Awaiting admin approval.`);
+        
+        setAmount("");
+        onClose();
+      } else {
+        alert(`Failed to submit ${activeTab} request: ${response.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      console.error(`${activeTab} request failed:`, error);
+      alert(`Failed to submit ${activeTab} request: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -213,22 +227,31 @@ export function WalletModal({
           {/* Action Button */}
           <Button
             onClick={handleSubmit}
-            disabled={!amount || parseInt(amount) <= 0 || (activeTab === 'withdraw' && parseInt(amount) > userBalance)}
+            disabled={isLoading || !amount || parseInt(amount) <= 0 || (activeTab === 'withdraw' && parseInt(amount) > userBalance)}
             className={`w-full py-6 text-lg font-bold rounded-lg transition-all ${
               activeTab === 'deposit'
                 ? 'bg-green-500 hover:bg-green-600 text-white'
                 : 'bg-red-500 hover:bg-red-600 text-white'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            {activeTab === 'deposit' ? (
-              <>
-                <ArrowDownToLine className="w-5 h-5 mr-2" />
-                Deposit ₹{amount || '0'}
-              </>
+            {isLoading ? (
+              <div className="flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                Processing...
+              </div>
             ) : (
               <>
-                <ArrowUpFromLine className="w-5 h-5 mr-2" />
-                Withdraw ₹{amount || '0'}
+                {activeTab === 'deposit' ? (
+                  <>
+                    <ArrowDownToLine className="w-5 h-5 mr-2" />
+                    Request Deposit ₹{amount || '0'}
+                  </>
+                ) : (
+                  <>
+                    <ArrowUpFromLine className="w-5 h-5 mr-2" />
+                    Request Withdraw ₹{amount || '0'}
+                  </>
+                )}
               </>
             )}
           </Button>

@@ -355,21 +355,22 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post('/payment/process', {
+      // Create payment request instead of direct balance processing
+      const response = await apiClient.post('/payment-requests', {
         amount,
-        method: { type: method },
-        type: 'deposit'
+        paymentMethod: { type: method },
+        requestType: 'deposit'
       }) as any;
       
       if (response.success) {
-        // Add transaction to local state
+        // Add transaction to local state as pending
         const newTransaction: Transaction = {
-          id: response.data?.transactionId || `deposit-${Date.now()}`,
+          id: response.data?.requestId || `request-${Date.now()}`,
           type: 'deposit',
           amount,
           status: 'pending',
           paymentMethod: method,
-          description: `Deposit of ₹${amount.toLocaleString('en-IN')}`,
+          description: `Deposit request of ₹${amount.toLocaleString('en-IN')}`,
           createdAt: new Date()
         };
         
@@ -380,9 +381,9 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         
         return response;
       }
-      throw new Error(response.error || 'Failed to process deposit');
+      throw new Error(response.error || 'Failed to submit deposit request');
     } catch (error: any) {
-      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to process deposit' });
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to submit deposit request' });
       throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -393,21 +394,21 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post('/payment/process', {
+      const response = await apiClient.post('/payment-requests', {
         amount,
-        method: { type: method },
-        type: 'withdrawal'
+        paymentMethod: { type: method },
+        requestType: 'withdrawal'
       }) as any;
       
       if (response.success) {
-        // Add transaction to local state
+        // Add transaction to local state as pending
         const newTransaction: Transaction = {
-          id: response.data?.transactionId || `withdrawal-${Date.now()}`,
+          id: response.data?.requestId || `request-${Date.now()}`,
           type: 'withdrawal',
           amount,
           status: 'pending',
           paymentMethod: method,
-          description: `Withdrawal of ₹${amount.toLocaleString('en-IN')}`,
+          description: `Withdrawal request of ₹${amount.toLocaleString('en-IN')}`,
           createdAt: new Date()
         };
         
@@ -418,9 +419,9 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         
         return response;
       }
-      throw new Error(response.error || 'Failed to process withdrawal');
+      throw new Error(response.error || 'Failed to submit withdrawal request');
     } catch (error: any) {
-      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to process withdrawal' });
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to submit withdrawal request' });
       throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });

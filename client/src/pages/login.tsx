@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, EyeOff, User, AlertCircle, Shield } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -15,9 +16,21 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // --- ADD THIS BLOCK ---
+    // Force disconnect any existing WebSocket connection to prevent auth conflicts
+    const existingWs = (window as any).gameWebSocket;
+    if (existingWs) {
+      console.log('Force-disconnecting existing WebSocket before player login...');
+      existingWs.close(1000, 'User re-authenticating as player');
+      delete (window as any).gameWebSocket;
+    }
+    // --- END OF FIX ---
+
     setIsLoading(true);
     setError('');
 
@@ -31,7 +44,7 @@ export default function Login() {
         password: formData.password
       }, { skipAuth: true });
 
-      // Store user data in localStorage using UNIFIED storage keys
+      // Prepare user data for auth context
       const userData = {
         id: response.user?.id || response.id,
         phone: response.user?.phone || formData.phone,
@@ -39,10 +52,6 @@ export default function Login() {
         role: response.user?.role || 'player'
       };
 
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userRole', userData.role);
-      
       // CRITICAL: Ensure token is stored (check multiple sources)
       const token = response.token || response.user?.token;
       if (!token) {
@@ -50,8 +59,10 @@ export default function Login() {
         setError('Authentication failed - no token received. Please try again.');
         return;
       }
-      localStorage.setItem('token', token);
-      console.log('✅ Token stored successfully');
+
+      // Use auth context to handle login
+      login(userData, token);
+      console.log('✅ Login successful');
 
       // Redirect to game
       window.location.href = '/game';

@@ -52,17 +52,19 @@ export const processPayment = async (request: PaymentRequest): Promise<PaymentRe
         error = result.error;
       }
     } else if (request.type === 'withdraw') {
-      // Check if user has sufficient balance for withdrawal
-      if (parseFloat(user.balance) < request.amount) {
-        return { success: false, status: 'failed', error: 'Insufficient balance' };
-      }
-      
-      // Process withdrawal based on method
+      // Process withdrawal based on method - this will use atomic operations to check balance and deduct
       const result = await processWithdraw(request, user);
       if (result.success) {
+        // Use atomic operation to deduct amount from user balance - this checks balance and deducts in one operation
+        try {
+          await storage.updateUserBalance(request.userId, -request.amount);
+        } catch (balanceError: any) {
+          if (balanceError.message?.includes('Insufficient balance')) {
+            return { success: false, status: 'failed', error: 'Insufficient balance' };
+          }
+          throw balanceError;
+        }
         status = 'success';
-        // Deduct amount from user balance
-        await storage.updateUserBalance(request.userId, -request.amount);
       } else {
         status = 'failed';
         error = result.error;

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, ReactNode } fr
 import { GameState, initializeGameState } from '@/components/GameLogic/GameLogic';
 import type { RoundBets } from '../types/game';
 import { storage } from '../lib/utils';
+import { useAuth } from './AuthContext';
 
 // Define PlayerBets interface (extends UserBets with currentBet)
 interface PlayerBets {
@@ -12,14 +13,11 @@ interface PlayerBets {
 
 // Define context state type
 interface AppState {
-  user: any | null;
   gameState: GameState;
   playerBets: PlayerBets;
   notifications: Array<{ id: string; message: string; type: 'success' | 'error' | 'warning' | 'info'; timestamp: number }>;
   selectedChip: number | null;
   chipAmounts: number[];
-  isAuthenticated: boolean;
-  authChecked: boolean;
   loading: boolean;
   theme: 'light' | 'dark';
   language: 'en' | 'hi' | 'te';
@@ -27,13 +25,11 @@ interface AppState {
 
 // Define action types
 type AppAction =
-  | { type: 'SET_USER'; payload: any }
   | { type: 'SET_GAME_STATE'; payload: Partial<GameState> }
   | { type: 'ADD_NOTIFICATION'; payload: { message: string; type: 'success' | 'error' | 'warning' | 'info' } }
   | { type: 'REMOVE_NOTIFICATION'; payload: string }
   | { type: 'PLACE_BET'; side: 'andar' | 'bahar'; amount: number }
   | { type: 'SET_SELECTED_CHIP'; payload: number }
-  | { type: 'SET_AUTH_STATUS'; payload: { isAuthenticated: boolean; authChecked: boolean } }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_THEME'; payload: 'light' | 'dark' }
   | { type: 'SET_LANGUAGE'; payload: 'en' | 'hi' | 'te' }
@@ -41,7 +37,6 @@ type AppAction =
 
 // Initialize state
 const initialState: AppState = {
-  user: null,
   gameState: initializeGameState(),
   playerBets: {
     round1: { andar: 0, bahar: 0 },
@@ -51,8 +46,6 @@ const initialState: AppState = {
   notifications: [],
   selectedChip: null,
   chipAmounts: [100, 500, 1000, 5000, 10000, 25000, 50000, 100000],
-  isAuthenticated: false,
-  authChecked: false,
   loading: false,
   theme: 'dark',
   language: 'en'
@@ -61,9 +54,6 @@ const initialState: AppState = {
 // Reducer function
 const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
-    case 'SET_USER':
-      return { ...state, user: action.payload };
-      
     case 'SET_GAME_STATE':
       return { ...state, gameState: { ...state.gameState, ...action.payload } };
       
@@ -116,13 +106,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case 'SET_SELECTED_CHIP':
       return { ...state, selectedChip: action.payload };
       
-    case 'SET_AUTH_STATUS':
-      return { 
-        ...state, 
-        isAuthenticated: action.payload.isAuthenticated,
-        authChecked: action.payload.authChecked
-      };
-      
     case 'SET_LOADING':
       return { ...state, loading: action.payload };
       
@@ -138,7 +121,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         chipAmounts: state.chipAmounts, // Keep chip amounts
         theme: state.theme, // Keep theme
         language: state.language, // Keep language
-        authChecked: false // Need to recheck auth status
       };
       
     default:
@@ -154,8 +136,6 @@ const AppContext = createContext<{
   removeNotification: (id: string) => void;
   placeBet: (side: 'andar' | 'bahar', amount: number) => void;
   setSelectedChip: (amount: number) => void;
-  setUser: (user: any) => void;
-  setAuthStatus: (isAuthenticated: boolean, authChecked: boolean) => void;
   setLoading: (loading: boolean) => void;
   setTheme: (theme: 'light' | 'dark') => void;
   setLanguage: (language: 'en' | 'hi' | 'te') => void;
@@ -165,6 +145,7 @@ const AppContext = createContext<{
 // App provider component
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const { state: authState } = useAuth(); // Get auth state from unified AuthContext
   
   // Load saved preferences on mount
   useEffect(() => {
@@ -188,35 +169,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     storage.set('language', state.language);
   }, [state.language]);
-  
-  // Check authentication status on app load
-  useEffect(() => {
-    const checkAuth = async () => {
-      // Check for authentication using the same keys as login/signup pages
-      const isLoggedIn = storage.get<string>('isLoggedIn');
-      const userData = storage.get<string>('user');
-      
-      if (isLoggedIn === 'true' && userData) {
-        try {
-          // Parse user data from localStorage
-          const user = JSON.parse(userData);
-          dispatch({ type: 'SET_USER', payload: user });
-          dispatch({ type: 'SET_AUTH_STATUS', payload: { isAuthenticated: true, authChecked: true } });
-        } catch (error) {
-          console.error('Failed to parse user data:', error);
-          dispatch({ type: 'SET_AUTH_STATUS', payload: { isAuthenticated: false, authChecked: true } });
-          // Clear invalid data
-          storage.remove('isLoggedIn');
-          storage.remove('user');
-          storage.remove('userRole');
-        }
-      } else {
-        dispatch({ type: 'SET_AUTH_STATUS', payload: { isAuthenticated: false, authChecked: true } });
-      }
-    };
-    
-    checkAuth();
-  }, []);
   
   // Auto-remove notifications after 5 seconds
   useEffect(() => {
@@ -258,13 +210,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     dispatch({ type: 'SET_SELECTED_CHIP', payload: amount });
   };
   
-  const setUser = (user: any) => {
-    dispatch({ type: 'SET_USER', payload: user });
-  };
-  
-  const setAuthStatus = (isAuthenticated: boolean, authChecked: boolean) => {
-    dispatch({ type: 'SET_AUTH_STATUS', payload: { isAuthenticated, authChecked } });
-  };
+
   
   const setLoading = (loading: boolean) => {
     dispatch({ type: 'SET_LOADING', payload: loading });
@@ -289,8 +235,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     removeNotification,
     placeBet,
     setSelectedChip,
-    setUser,
-    setAuthStatus,
     setLoading,
     setTheme,
     setLanguage,
@@ -314,15 +258,13 @@ export const useApp = () => {
 };
 
 // Custom hooks for specific parts of the state
-export const useAuth = () => {
-  const { state, setUser, setAuthStatus } = useApp();
+export const useAppAuth = () => {
+  const { state } = useApp();
   return {
     user: state.user,
     isAuthenticated: state.isAuthenticated,
     authChecked: state.authChecked,
-    loading: state.loading,
-    setUser,
-    setAuthStatus
+    loading: state.loading
   };
 };
 

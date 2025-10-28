@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Play, Pause, MonitorPlay, Video, Settings, Eye, Copy, WifiOff, Wifi } from 'lucide-react';
 
 interface StreamConfig {
@@ -24,6 +25,7 @@ interface StreamConfig {
 
 const AdminStreamControl: React.FC = () => {
   const { showNotification } = useNotification();
+  const { token } = useAuth();
   const [streamConfig, setStreamConfig] = useState<StreamConfig>({
     activeMethod: 'rtmp',
     streamStatus: 'offline',
@@ -51,10 +53,10 @@ const AdminStreamControl: React.FC = () => {
 
   const loadConfig = async () => {
     try {
-      const response = await fetch('/api/stream/config', { 
+      const response = await fetch('/api/stream/config', {
         credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       const data = await response.json();
@@ -94,9 +96,9 @@ const AdminStreamControl: React.FC = () => {
     try {
       const response = await fetch('/api/stream/config', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           method: 'rtmp',
@@ -129,9 +131,9 @@ const AdminStreamControl: React.FC = () => {
     try {
       const response = await fetch('/api/stream/config', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           method: 'webrtc',
@@ -165,9 +167,9 @@ const AdminStreamControl: React.FC = () => {
     try {
       const response = await fetch('/api/stream/status', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ status })
       });
@@ -266,6 +268,7 @@ const AdminStreamControl: React.FC = () => {
       {streamConfig.activeMethod === 'rtmp' && (
         <RTMPSettings
           config={streamConfig}
+          setConfig={setStreamConfig}
           onSave={saveRTMPConfig}
           onToggleStatus={toggleStreamStatus}
           onCopy={copyToClipboard}
@@ -279,6 +282,7 @@ const AdminStreamControl: React.FC = () => {
       {streamConfig.activeMethod === 'webrtc' && (
         <WebRTCSettings
           config={streamConfig}
+          setConfig={setStreamConfig}
           onSave={saveWebRTCConfig}
           onToggleStatus={toggleStreamStatus}
           isLoading={isLoading}
@@ -299,13 +303,14 @@ const AdminStreamControl: React.FC = () => {
 // RTMP Settings Component
 const RTMPSettings: React.FC<{
   config: StreamConfig;
+  setConfig: React.Dispatch<React.SetStateAction<StreamConfig>>;
   onSave: () => void;
   onToggleStatus: (status: 'online' | 'offline') => void;
   onCopy: (text: string, label: string) => void;
   showKey: boolean;
   setShowKey: (show: boolean) => void;
   isLoading: boolean;
-}> = ({ config, onSave, onToggleStatus, onCopy, showKey, setShowKey, isLoading }) => {
+}> = ({ config, setConfig, onSave, onToggleStatus, onCopy, showKey, setShowKey, isLoading }) => {
   return (
     <div className="space-y-6">
       {/* RTMP Configuration */}
@@ -321,7 +326,7 @@ const RTMPSettings: React.FC<{
               <input
                 type="text"
                 value={config.rtmpServerUrl}
-                onChange={(e) => setStreamConfig(prev => ({ ...prev, rtmpServerUrl: e.target.value }))}
+                onChange={(e) => setConfig(prev => ({ ...prev, rtmpServerUrl: e.target.value }))}
                 className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-gold"
                 placeholder="rtmp://your-server/live"
               />
@@ -340,7 +345,7 @@ const RTMPSettings: React.FC<{
               <input
                 type={showKey ? 'text' : 'password'}
                 value={config.rtmpStreamKey}
-                onChange={(e) => setStreamConfig(prev => ({ ...prev, rtmpStreamKey: e.target.value }))}
+                onChange={(e) => setConfig(prev => ({ ...prev, rtmpStreamKey: e.target.value }))}
                 className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-gold"
                 placeholder="your-stream-key"
               />
@@ -401,10 +406,11 @@ const RTMPSettings: React.FC<{
 // WebRTC Settings Component
 const WebRTCSettings: React.FC<{
   config: StreamConfig;
+  setConfig: React.Dispatch<React.SetStateAction<StreamConfig>>;
   onSave: () => void;
   onToggleStatus: (status: 'online' | 'offline') => void;
   isLoading: boolean;
-}> = ({ config, onSave, onToggleStatus, isLoading }) => {
+}> = ({ config, setConfig, onSave, onToggleStatus, isLoading }) => {
   return (
     <div className="space-y-6">
       {/* Quality Settings */}
@@ -418,7 +424,7 @@ const WebRTCSettings: React.FC<{
             <label className="block text-sm font-medium text-gray-300 mb-2">Resolution</label>
             <select
               value={config.webrtcResolution}
-              onChange={(e) => setStreamConfig(prev => ({ ...prev, webrtcResolution: e.target.value }))}
+              onChange={(e) => setConfig(prev => ({ ...prev, webrtcResolution: e.target.value }))}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-gold"
             >
               <option value="480p">480p</option>
@@ -431,7 +437,7 @@ const WebRTCSettings: React.FC<{
             <label className="block text-sm font-medium text-gray-300 mb-2">FPS</label>
             <select
               value={config.webrtcFps}
-              onChange={(e) => setStreamConfig(prev => ({ ...prev, webrtcFps: parseInt(e.target.value) }))}
+              onChange={(e) => setConfig(prev => ({ ...prev, webrtcFps: parseInt(e.target.value) }))}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-gold"
             >
               <option value={15}>15 FPS</option>
@@ -445,7 +451,7 @@ const WebRTCSettings: React.FC<{
             <input
               type="number"
               value={config.webrtcBitrate}
-              onChange={(e) => setStreamConfig(prev => ({ ...prev, webrtcBitrate: parseInt(e.target.value) }))}
+              onChange={(e) => setConfig(prev => ({ ...prev, webrtcBitrate: parseInt(e.target.value) }))}
               min="500"
               max="10000"
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-gold"

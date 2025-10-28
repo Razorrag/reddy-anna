@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import React from 'react';
 import { useLocation } from 'wouter';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedAdminRouteProps {
   children: React.ReactNode;
@@ -17,53 +18,34 @@ interface ProtectedAdminRouteProps {
  * - If no one is logged in → Redirect to /admin-login
  */
 export const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({ children }) => {
-  const [location, setLocation] = useLocation();
-  const [isChecking, setIsChecking] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [, setLocation] = useLocation();
+  const { state: authState } = useAuth();
+  
+  // Check if user has admin role
+  const isAdmin = authState.isAuthenticated && 
+    authState.user && 
+    (authState.user.role === 'admin' || authState.user.role === 'super_admin');
+    
+  // Check if user is logged in but not an admin
+  const isPlayer = authState.isAuthenticated && 
+    authState.user && 
+    authState.user.role === 'player';
 
-  useEffect(() => {
-    // Check if user is authenticated as admin using UNIFIED storage
-    const checkAdminAuth = () => {
-      const userStr = localStorage.getItem('user');
-      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      const token = localStorage.getItem('token'); // Check if token exists
-      
-      if (userStr && isLoggedIn && token) {
-        try {
-          const user = JSON.parse(userStr);
-          // Check if user has admin or super_admin role
-          if (user && (user.role === 'admin' || user.role === 'super_admin')) {
-            setIsAdmin(true);
-            setIsChecking(false);
-            console.log('✅ Admin authenticated:', user.role);
-            return;
-          } else {
-            // User is logged in but not as admin (probably a player)
-            // Redirect to unauthorized page
-            console.log('❌ User is logged in as:', user.role, '- Redirecting to unauthorized page');
-            setIsAdmin(false);
-            setIsChecking(false);
-            setLocation('/unauthorized');
-            return;
-          }
-        } catch (error) {
-          console.error('Error parsing user data:', error);
-        }
-      } else {
-        console.log('❌ No user logged in - redirecting to admin login');
+  // Redirect based on user role
+  React.useEffect(() => {
+    if (authState.authChecked) {
+      if (!authState.isAuthenticated) {
+        // User not logged in at all
+        setLocation('/admin-login');
+      } else if (isPlayer) {
+        // Player logged in, redirect to unauthorized
+        setLocation('/unauthorized');
       }
-      
-      // If not logged in at all, redirect to admin login page
-      setIsAdmin(false);
-      setIsChecking(false);
-      setLocation('/admin-login');
-    };
+    }
+  }, [authState.authChecked, authState.isAuthenticated, isPlayer, setLocation]);
 
-    checkAdminAuth();
-  }, [setLocation]);
-
-  // Show loading while checking authentication
-  if (isChecking) {
+  // Show loading while checking authentication status
+  if (!authState.authChecked) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="text-white text-xl">Loading...</div>

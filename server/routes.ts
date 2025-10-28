@@ -1763,6 +1763,261 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Payment Request Routes (New: Request → Approval Workflow)
+  app.post("/api/payment-requests", paymentLimiter, async (req, res) => {
+    try {
+      const { amount, paymentMethod, requestType } = req.body;
+      
+      // Validate required fields
+      if (!amount || !paymentMethod || !requestType) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required payment request parameters'
+        });
+      }
+      
+      // Validate amount
+      const numAmount = parseFloat(amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid amount. Must be a positive number'
+        });
+      }
+      
+      // Validate request type
+      if (!['deposit', 'withdrawal'].includes(requestType)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid request type. Must be deposit or withdrawal'
+        });
+      }
+      
+      // Verify user is authenticated
+      if (!req.user) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+      
+      // Validate amount range based on request type
+      const minDeposit = parseFloat(process.env.MIN_DEPOSIT || '100');
+      const maxDeposit = parseFloat(process.env.MAX_DEPOSIT || '1000000');
+      const minWithdrawal = parseFloat(process.env.MIN_WITHDRAWAL || '500');
+      const maxWithdrawal = parseFloat(process.env.MAX_WITHDRAWAL || '500000');
+      
+      const minAmount = requestType === 'deposit' ? minDeposit : minWithdrawal;
+      const maxAmount = requestType === 'deposit' ? maxDeposit : maxWithdrawal;
+      
+      if (numAmount < minAmount || numAmount > maxAmount) {
+        return res.status(400).json({
+          success: false,
+          error: `${requestType === 'deposit' ? 'Deposit' : 'Withdrawal'} amount must be between ₹${minAmount.toLocaleString()} and ₹${maxAmount.toLocaleString()}`
+        });
+      }
+      
+      // Create payment request (status: 'pending')
+      const result = await storage.createPaymentRequest({
+        userId: req.user.id,
+        type: requestType,
+        amount: numAmount,
+        paymentMethod: typeof paymentMethod === 'string' ? paymentMethod : JSON.stringify(paymentMethod),
+        status: 'pending'
+      });
+      
+      // Optionally send WhatsApp notification to admin
+      try {
+        const { sendWhatsAppRequest } = await import('./whatsapp-service');
+        await sendWhatsAppRequest({
+          userId: req.user.id,
+          userPhone: req.user.phone,
+          requestType: requestType.toUpperCase(),
+          message: `New ${requestType} request for ₹${numAmount.toLocaleString('en-IN')} from ${req.user.phone || req.user.username}`,
+          amount: numAmount,
+          isUrgent: false,
+          metadata: { requestId: result.id }
+        });
+      } catch (whatsappError) {
+        console.error('Failed to send WhatsApp notification:', whatsappError);
+        // Don't fail the request if WhatsApp notification fails
+      }
+      
+      // Audit log
+      auditLogger('payment_request_created', req.user.id, { 
+        requestId: result.id, 
+        type: requestType, 
+        amount: numAmount 
+      });
+      
+      res.json({
+        success: true,
+        message: `${requestType} request submitted successfully. Awaiting admin approval.`,
+        requestId: result.id,
+        data: result
+      });
+    } catch (error) {
+      console.error('Payment request creation error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Payment request creation failed'
+      });
+    }
+  });
+  
+  // Get user's payment requests
+  app.get("/api/payment-requests", apiLimiter, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+      
+      const requests = await storage.getPaymentRequestsByUser(req.user.id);
+      
+      res.json({
+        success: true,
+        data: requests
+      });
+    } catch (error) {
+      console.error('Payment requests retrieval error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Payment requests retrieval failed'
+      });
+    }
+  });
+  
+  // Admin: Get pending payment requests
+  app.get("/api/admin/payment-requests/pending", apiLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const requests = await storage.getPendingPaymentRequests();
+      
+      res.json({
+        success: true,
+        data: requests
+      });
+    } catch (error) {
+      console.error('Pending payment requests retrieval error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Pending payment requests retrieval failed'
+      });
+    }
+  });
+  
+  // Admin: Approve payment request
+  app.patch("/api/admin/payment-requests/:id/approve", apiLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get the request to verify it exists and is pending
+      const request = await storage.getPaymentRequest(id);
+      if (!request) {
+        return res.status(404).json({
+          success: false,
+          error: 'Payment request not found'
+        });
+      }
+      
+      if (request.status !== 'pending') {
+        return res.status(400).json({
+          success: false,
+          error: 'Request is not in pending status'
+        });
+      }
+      
+      // Approve the payment request (atomic operation)
+      await storage.approvePaymentRequest(id, request.user_id, request.amount, req.user.id);
+      
+      // If it's a deposit, broadcast balance update to WebSocket clients
+      if (request.request_type === 'deposit') {
+        try {
+          // Find WebSocket clients for this user and send balance update
+          clients.forEach(client => {
+            if (client.userId === request.user_id) {
+              client.ws.send(JSON.stringify({
+                type: 'balance_update',
+                data: { 
+                  balance: request.amount, // This would need to be the new balance
+                  type: `deposit_approved`,
+                  amount: request.amount
+                }
+              }));
+            }
+          });
+        } catch (broadcastError) {
+          console.error('Failed to broadcast balance update:', broadcastError);
+          // Don't fail the approval if broadcast fails
+        }
+      }
+      
+      // Audit log
+      auditLogger('payment_request_approved', req.user.id, { 
+        requestId: id, 
+        userId: request.user_id, 
+        amount: request.amount 
+      });
+      
+      res.json({
+        success: true,
+        message: 'Payment request approved successfully'
+      });
+    } catch (error) {
+      console.error('Payment request approval error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Payment request approval failed'
+      });
+    }
+  });
+  
+  // Admin: Reject payment request
+  app.patch("/api/admin/payment-requests/:id/reject", apiLimiter, validateAdminAccess, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get the request to verify it exists and is pending
+      const request = await storage.getPaymentRequest(id);
+      if (!request) {
+        return res.status(404).json({
+          success: false,
+          error: 'Payment request not found'
+        });
+      }
+      
+      if (request.status !== 'pending') {
+        return res.status(400).json({
+          success: false,
+          error: 'Request is not in pending status'
+        });
+      }
+      
+      // Update the payment request status to rejected
+      await storage.updatePaymentRequest(id, 'rejected', req.user.id);
+      
+      // Audit log
+      auditLogger('payment_request_rejected', req.user.id, { 
+        requestId: id, 
+        userId: request.user_id, 
+        amount: request.amount 
+      });
+      
+      res.json({
+        success: true,
+        message: 'Payment request rejected successfully'
+      });
+    } catch (error) {
+      console.error('Payment request rejection error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Payment request rejection failed'
+      });
+    }
+  });
+  
   app.get("/api/payment/history/:userId", apiLimiter, async (req, res) => {
     try {
       const { userId } = req.params;

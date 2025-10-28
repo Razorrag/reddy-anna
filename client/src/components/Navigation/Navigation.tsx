@@ -3,7 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { cn } from '../../lib/utils';
 import { logout } from '../../lib/utils'; // Import centralized logout function
 import { getNavigationClass, getButtonClass } from '../../lib/theme-utils';
-import { useAuth } from '../../contexts/AppContext';
+import { useAuth } from '../../contexts/AuthContext';
 import UserProfileButton from '../UserProfile/UserProfileButton';
 
 interface NavigationProps {
@@ -86,29 +86,35 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
   );
 
   const renderAuthLinks = () => {
-    // Check if user is logged in from localStorage
-    const userStr = localStorage.getItem('user');
-    const adminStr = localStorage.getItem('admin');
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    const isAdminLoggedIn = localStorage.getItem('isAdminLoggedIn') === 'true';
+    const { user, isAuthenticated } = useAuth();
     
-    if (isLoggedIn && userStr) {
-      const user = JSON.parse(userStr);
-      // Regular user is logged in
+    if (isAuthenticated && user) {
+      // User is logged in
       return (
         <div className="flex items-center space-x-3">
-          <Link
-            to="/game"
-            className={getButtonClass('primary')}
-          >
-            Play Game
-          </Link>
-          <Link
-            to="/profile"
-            className="text-white hover:text-gold transition-colors"
-          >
-            Profile
-          </Link>
+          {user.role === 'admin' ? (
+            <Link
+              to="/admin"
+              className={getButtonClass('primary')}
+            >
+              Admin Panel
+            </Link>
+          ) : (
+            <Link
+              to="/game"
+              className={getButtonClass('primary')}
+            >
+              Play Game
+            </Link>
+          )}
+          {user.role === 'player' && (
+            <Link
+              to="/profile"
+              className="text-white hover:text-gold transition-colors"
+            >
+              Profile
+            </Link>
+          )}
           <button
             onClick={() => logout()}
             className="text-white hover:text-gold transition-colors"
@@ -119,30 +125,9 @@ const Navigation: React.FC<NavigationProps> = ({ isScrolled = false }) => {
       );
     }
     
-    if (isAdminLoggedIn && adminStr) {
-      const admin = JSON.parse(adminStr);
-      // Admin is logged in - no visible links
-      return (
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => logout()}
-            className="text-white hover:text-gold transition-colors"
-          >
-            Logout
-          </button>
-        </div>
-      );
-    }
-    
-    // No one is logged in - show login options without admin
+    // No one is logged in - show login options
     return (
       <div className="flex items-center space-x-3">
-        <Link
-          to="/game"
-          className={getButtonClass('primary')}
-        >
-          Play Game
-        </Link>
         <Link
           to="/login"
           className={getButtonClass('secondary')}

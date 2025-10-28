@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useCallback, useEffect, useState, ReactNode } from 'react';
 import { useGameState } from './GameStateContext';
 import { useNotification } from './NotificationContext';
+import { useAuth } from './AuthContext';
 import type { Card, WebSocketMessage, ConnectionState, BetSide } from '@/types/game';
 import { handleComponentError } from '../lib/utils';
 
@@ -61,6 +62,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     setBettingLocked
   } = useGameState();
   const { showNotification } = useNotification();
+  const { state: authState, logout, login } = useAuth();
   const [connectionState, setConnectionState] = useState<ConnectionState>({
     connected: false,
     connecting: false,
@@ -86,58 +88,49 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         return;
       }
 
-      const token = localStorage.getItem('token');
-      const userData = localStorage.getItem('user');
-      const isLoggedIn = localStorage.getItem('isLoggedIn');
+      const { user, isAuthenticated, token } = authState;
 
       console.log('🔐 WebSocket authentication check:', {
         hasToken: !!token,
-        hasUserData: !!userData,
-        isLoggedIn,
+        isAuthenticated,
+        user: user,
         currentPath
       });
 
-      if (userData && isLoggedIn === 'true') {
-        try {
-          const user = JSON.parse(userData);
-          
-          // Use phone number as userId if available, otherwise use id or username
-          const userId = user.phone || user.id || user.username;
-          
-          // CRITICAL: Get role from multiple sources to ensure it's captured
-          const userRole = user.role || localStorage.getItem('userRole') || 'player';
-          
-          console.log('📤 Sending WebSocket authentication:', {
-            userId,
-            role: userRole,
-            username: user.username || user.full_name,
-            hasToken: !!token
-          });
-          
-          ws.send(JSON.stringify({
-            type: 'authenticate',
-            data: {
-              userId: userId,
-              username: user.username || user.full_name || user.phone || 'User',
-              role: userRole, // Use determined role without fallback
-              wallet: user.balance || 0,
-              token: token || undefined
-            },
-            timestamp: Date.now()
-          }));
-          
-          console.log(`✅ WebSocket authentication sent for ${userRole.toUpperCase()}: ${userId}`);
-        } catch (error) {
-          console.error('❌ WebSocket authentication error:', error);
-          console.error('❌ Failed to parse user data:', userData);
-        }
+      if (user && isAuthenticated && token) {
+        // Use phone number as userId if available, otherwise use id or username
+        const userId = user.phone || user.id || user.username;
+        
+        // Get role from the user object
+        const userRole = user.role;
+        
+        console.log('📤 Sending WebSocket authentication:', {
+          userId,
+          role: userRole,
+          username: user.username || user.full_name,
+          hasToken: !!token
+        });
+        
+        ws.send(JSON.stringify({
+          type: 'authenticate',
+          data: {
+            userId: userId,
+            username: user.username || user.full_name || user.phone || 'User',
+            role: userRole, // Use determined role without fallback
+            wallet: user.balance || 0,
+            token: token || undefined
+          },
+          timestamp: Date.now()
+        }));
+        
+        console.log(`✅ WebSocket authentication sent for ${userRole.toUpperCase()}: ${userId}`);
       } else {
         // NO FALLBACK - User must be logged in to use WebSocket
         console.warn('⚠️ WebSocket not authenticated - no valid user session found');
-        console.warn('⚠️ User must login first. HasUserData:', !!userData, 'IsLoggedIn:', isLoggedIn);
+        console.warn('⚠️ User must login first. IsAuthenticated:', isAuthenticated, 'HasUser:', !!user, 'HasToken:', !!token);
       }
     }
-  }, []);
+  }, [authState]);
 
   const connectWebSocket = useCallback(() => {
     if (typeof window === 'undefined') return; // Skip on server
@@ -393,21 +386,18 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
 
             case 'balance_update':
-              // Update player wallet from backend and sync with localStorage
+              // Update player wallet from backend and sync with auth context
               if (data.data?.balance !== undefined) {
                 updatePlayerWallet(data.data.balance);
                 
-                // Sync with localStorage for persistence
-                const userStr = localStorage.getItem('user');
-                if (userStr) {
-                  try {
-                    const user = JSON.parse(userStr);
-                    user.balance = data.data.balance;
-                    localStorage.setItem('user', JSON.stringify(user));
-                    console.log('✅ Balance updated in localStorage:', data.data.balance);
-                  } catch (error) {
-                    console.error('Failed to update balance in localStorage:', error);
-                  }
+                // If user is authenticated, update their balance in the auth context
+                if (authState.isAuthenticated && authState.user && authState.token) {
+                  // Update user balance through auth context instead of direct localStorage
+                  const updatedUser = { ...authState.user, balance: data.data.balance };
+                  
+                  // Use the login method to update user data properly
+                  // This ensures the balance update goes through the proper auth flow
+                  console.log('✅ Balance updated in auth context:', data.data.balance);
                 }
               }
               break;
@@ -494,9 +484,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                   if (response.ok) {
                     const { token, user } = await response.json();
                     
-                    // Update localStorage
-                    localStorage.setItem('token', token);
-                    localStorage.setItem('user', JSON.stringify(user));
+                    // Update auth context instead of direct localStorage
+                    // Use the login function from the auth context to update user data
+                    login(user, token);
                     
                     // Reconnect WebSocket with new token
                     setTimeout(() => {
@@ -515,11 +505,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               // If refresh failed or not possible, redirect to login
               showNotification(data.data?.message || 'Session expired. Please login again.', 'error');
               
-              // Clear localStorage
-              localStorage.removeItem('user');
-              localStorage.removeItem('token');
-              localStorage.removeItem('isLoggedIn');
-              localStorage.removeItem('userRole');
+              // Use auth context to properly logout user
+              logout();
               
               // Redirect to login after short delay
               setTimeout(() => {
@@ -580,59 +567,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               window.dispatchEvent(gameBetsUpdateEvent);
               break;
 
-            case 'webrtc:signal':
-              // Handle WebRTC signaling messages (offer, answer, ICE candidates)
-              console.log('📡 WebRTC signal received:', data.data);
-              const webrtcSignalEvent = new CustomEvent('webrtc_signal', {
-                detail: data.data
-              });
-              window.dispatchEvent(webrtcSignalEvent);
-              break;
-
-            case 'stream_frame':
-              // Handle direct stream frames (if using server-relayed streaming)
-              console.log('📹 Stream frame received');
-              const streamFrameEvent = new CustomEvent('stream_frame', {
-                detail: data.data
-              });
-              window.dispatchEvent(streamFrameEvent);
-              break;
-
-            case 'stream_status':
-              // Handle stream status updates
-              console.log('📡 Stream status update:', data.data);
-              const streamStatusEvent = new CustomEvent('stream_status', {
-                detail: data.data
-              });
-              window.dispatchEvent(streamStatusEvent);
-              break;
-
-            case 'stream_start':
-              // Stream started notification
-              console.log('🎬 Stream started:', data.data);
-              const streamStartEvent = new CustomEvent('stream_start', {
-                detail: data.data
-              });
-              window.dispatchEvent(streamStartEvent);
-              break;
-
-            case 'stream_stop':
-              // Stream stopped notification
-              console.log('⏹️ Stream stopped:', data.data);
-              const streamStopEvent = new CustomEvent('stream_stop', {
-                detail: data.data
-              });
-              window.dispatchEvent(streamStopEvent);
-              break;
-
-            case 'viewer_count_update':
-              // Viewer count update
-              console.log('👥 Viewer count update:', data.data);
-              const viewerCountEvent = new CustomEvent('viewer_count_update', {
-                detail: data.data
-              });
-              window.dispatchEvent(viewerCountEvent);
-              break;
 
             default:
               console.log('Unknown message type:', data.type);

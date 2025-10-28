@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Eye, EyeOff, Shield, AlertCircle } from "lucide-react";
 // import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function AdminLogin() {
   const [formData, setFormData] = useState({
@@ -16,9 +17,21 @@ export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // --- ADD THIS BLOCK ---
+    // Force disconnect any existing WebSocket connection to prevent auth conflicts
+    const existingWs = (window as any).gameWebSocket;
+    if (existingWs) {
+      console.log('Force-disconnecting existing WebSocket before admin login...');
+      existingWs.close(1000, 'User re-authenticating as admin');
+      delete (window as any).gameWebSocket;
+    }
+    // --- END OF FIX ---
+
     setIsLoading(true);
     setError('');
 
@@ -54,7 +67,7 @@ export default function AdminLogin() {
         return;
       }
 
-      // Set admin user data in localStorage using UNIFIED storage keys
+      // Prepare admin user data for auth context
       const adminData = {
         id: response.admin?.id || response.id,
         username: response.admin?.username || formData.username,
@@ -62,11 +75,6 @@ export default function AdminLogin() {
         role: response.admin?.role || 'admin'
       };
 
-      // Use same keys as player login for unified authentication
-      localStorage.setItem('user', JSON.stringify(adminData));
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userRole', adminData.role);
-      
       // CRITICAL: Ensure token is stored (check multiple sources)
       const token = response.token || response.admin?.token;
       if (!token) {
@@ -74,13 +82,10 @@ export default function AdminLogin() {
         setError('Authentication failed - no token received. Please try again.');
         return;
       }
-      localStorage.setItem('token', token);
-      console.log('✅ Admin token stored successfully');
 
-      // Clear old admin-specific keys (legacy cleanup)
-      localStorage.removeItem('admin');
-      localStorage.removeItem('isAdminLoggedIn');
-      localStorage.removeItem('adminRole');
+      // Use auth context to handle login
+      login(adminData, token);
+      console.log('✅ Admin login successful');
 
       // Redirect to admin panel after successful login
       window.location.href = '/admin';

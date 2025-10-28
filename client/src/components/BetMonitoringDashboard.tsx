@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Edit3, Users, Clock, TrendingUp, TrendingDown } from "lucide-react";
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Bet {
   id: string;
@@ -52,6 +53,7 @@ const BetMonitoringDashboard: React.FC = () => {
   const [gameId, setGameId] = useState<string>('');
   
   const { sendWebSocketMessage } = useWebSocket();
+  const { token } = useAuth();
 
   const fetchBets = useCallback(async () => {
     if (!gameId) return;
@@ -60,7 +62,7 @@ const BetMonitoringDashboard: React.FC = () => {
       setLoading(true);
       const response = await fetch(`/api/admin/games/${gameId}/bets`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -84,7 +86,7 @@ const BetMonitoringDashboard: React.FC = () => {
       setLoading(true);
       const response = await fetch(`/api/admin/search-bets?phone=${encodeURIComponent(searchTerm)}${gameId ? `&gameId=${gameId}` : ''}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -111,7 +113,7 @@ const BetMonitoringDashboard: React.FC = () => {
       const response = await fetch(`/api/admin/bets/${updateForm.betId}`, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

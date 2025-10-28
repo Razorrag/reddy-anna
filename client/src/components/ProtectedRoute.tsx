@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useLocation } from 'wouter';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedRouteProps {
   component?: React.ComponentType<any>;
@@ -13,94 +14,31 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAuth = true
 }) => {
   const [, setLocation] = useLocation();
-  const [isChecking, setIsChecking] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { state: authState, refreshUser } = useAuth();
   
-  useEffect(() => {
-    // Check if user is authenticated using UNIFIED storage
-    const checkAuth = async () => {
-      const userStr = localStorage.getItem('user');
-      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      const token = localStorage.getItem('token'); // Check if token exists
-      
-      if (userStr && isLoggedIn && token) {
-        try {
-          const user = JSON.parse(userStr);
-          // Allow both players AND admins (admins need to see player experience)
-          if (user && (user.role === 'player' || user.role === 'admin' || user.role === 'super_admin')) {
-            // Optionally make a quick test request to validate token is still valid
-            try {
-              // Try to fetch user profile to validate token
-              const response = await fetch('/api/user/profile', {
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json'
-                }
-              });
-              
-              if (response.ok) {
-                setIsAuthenticated(true);
-                setIsChecking(false);
-                console.log(`✅ User authenticated: ${user.role}`);
-                return;
-              } else {
-                // Token is invalid/expired, clear localStorage and redirect
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                localStorage.removeItem('isLoggedIn');
-                localStorage.removeItem('userRole');
-                console.log('❌ Token is invalid/expired - redirected to login');
-                setIsAuthenticated(false);
-                setIsChecking(false);
-                setLocation('/login');
-                return;
-              }
-            } catch (fetchError) {
-              console.error('Error validating token:', fetchError);
-              // If there's an error validating token, clear localStorage and redirect
-              localStorage.removeItem('token');
-              localStorage.removeItem('user');
-              localStorage.removeItem('isLoggedIn');
-              localStorage.removeItem('userRole');
-              setIsAuthenticated(false);
-              setIsChecking(false);
-              setLocation('/login');
-              return;
-            }
-          } else {
-            console.log('❌ User has invalid role:', user.role);
-          }
-        } catch (error) {
-          console.error('Error parsing user data:', error);
-        }
-      } else {
-        console.log('❌ No user logged in');
-      }
-      
-      // If not authenticated as player, redirect to login
-      if (requireAuth) {
-        setIsAuthenticated(false);
-        setIsChecking(false);
-        setLocation('/login');
-      } else {
-        setIsChecking(false);
-      }
-    };
+  // Check if user has player role (allow both players and admins)
+  const isPlayer = authState.isAuthenticated && 
+    authState.user && 
+    (authState.user.role === 'player' || authState.user.role === 'admin' || authState.user.role === 'super_admin');
 
-    checkAuth();
-  }, [requireAuth, setLocation]);
-  
-  // Show loading while checking authentication
-  if (isChecking) {
+  // Redirect unauthenticated users
+  React.useEffect(() => {
+    if (requireAuth && !isPlayer && authState.authChecked) {
+      setLocation('/login');
+    }
+  }, [requireAuth, isPlayer, authState.authChecked, setLocation]);
+
+  // Show loading while checking authentication status
+  if (!authState.authChecked) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="text-white text-xl">Loading...</div>
       </div>
     );
   }
-  
-  // If authentication is required but user is not authenticated, show nothing (will redirect)
-  if (requireAuth && !isAuthenticated) {
+
+  // If authentication is required but user is not authenticated, redirect happens via useEffect
+  if (requireAuth && !isPlayer) {
     return null;
   }
   

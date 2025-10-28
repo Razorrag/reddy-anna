@@ -132,9 +132,7 @@ function App() {
   return (
     <ErrorBoundary>
       <AppProviders>
-        <UserProfileProvider>
-          <Router />
-        </UserProfileProvider>
+        <Router />
       </AppProviders>
     </ErrorBoundary>
   );

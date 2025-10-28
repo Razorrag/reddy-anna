@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 import type {
   Card,
   GamePhase,
@@ -254,27 +255,26 @@ const GameStateContext = createContext<GameStateContextType | undefined>(undefin
 export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [gameState, dispatch] = useReducer(gameReducer, initialState);
 
-  // Initialize from localStorage or auth with improved error handling
+  // Initialize from AuthContext with improved error handling
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
+    const initializeFromAuth = () => {
+      const { user, isAuthenticated } = useAuth();
+      
+      if (isAuthenticated && user) {
         dispatch({
           type: 'SET_USER_DATA',
           payload: {
-            userId: parsedUser.id || parsedUser.userId,
-            username: parsedUser.username || parsedUser.name,
-            wallet: parsedUser.wallet || parsedUser.balance || 50000 // default balance
+            userId: user.id || user.phone || 'user',
+            username: user.username || user.full_name || user.phone || 'Player',
+            wallet: user.balance || 50000 // default balance
           }
         });
         dispatch({
           type: 'SET_USER_ROLE',
-          payload: parsedUser.role || parsedUser.userRole || 'player'
+          payload: user.role === 'super_admin' ? 'admin' : (user.role || 'player')
         });
-      } catch (e) {
-        console.error('Failed to parse user data from localStorage', e);
-        // Initialize with default values
+      } else {
+        // Initialize with default guest user
         dispatch({
           type: 'SET_USER_DATA',
           payload: {
@@ -283,9 +283,19 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
             wallet: 50000
           }
         });
+        dispatch({
+          type: 'SET_USER_ROLE',
+          payload: 'player'
+        });
       }
-    } else {
-      // Initialize with default guest user
+    };
+
+    // Try to initialize immediately
+    try {
+      initializeFromAuth();
+    } catch (e) {
+      console.error('Failed to initialize from auth context', e);
+      // Fallback to default values
       dispatch({
         type: 'SET_USER_DATA',
         payload: {
@@ -293,6 +303,10 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
           username: 'Guest Player',
           wallet: 50000
         }
+      });
+      dispatch({
+        type: 'SET_USER_ROLE',
+        payload: 'player'
       });
     }
   }, []);
@@ -372,12 +386,8 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const setUserData = (userData: { userId: string; username: string; wallet: number }) => {
     dispatch({ type: 'SET_USER_DATA', payload: userData });
-    localStorage.setItem('user', JSON.stringify({
-      userId: userData.userId,
-      username: userData.username,
-      wallet: userData.wallet,
-      role: 'player'
-    }));
+    // Don't write to localStorage directly - let AuthContext handle persistence
+    // The role is now managed by AuthContext, not hardcoded as 'player'
   };
 
   const updatePlayerRoundBets = (round: GameRound, bets: RoundBets) => {

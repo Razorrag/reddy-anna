@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { webrtcClient } from '../lib/webrtc-client';
 import { Play, Pause, MonitorPlay, Video, Settings, Eye, Copy, WifiOff, Wifi, RefreshCw } from 'lucide-react';
@@ -42,6 +43,7 @@ interface StreamConfig {
 
 const UnifiedStreamControl: React.FC = () => {
   const { showNotification } = useNotification();
+  const { token } = useAuth();
   const [config, setConfig] = useState<StreamConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -91,7 +93,7 @@ const UnifiedStreamControl: React.FC = () => {
       const res = await fetch('/api/stream/config', { 
         credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       const data = await res.json();
@@ -124,7 +126,7 @@ const UnifiedStreamControl: React.FC = () => {
       const res = await fetch('/api/stream/sessions', { 
         credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       const data = await res.json();
@@ -138,7 +140,6 @@ const UnifiedStreamControl: React.FC = () => {
   };
 
   const setupWebSocket = () => {
-    const token = localStorage.getItem('admin_token');
     if (!token) return;
 
     try {
@@ -238,8 +239,8 @@ const UnifiedStreamControl: React.FC = () => {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
-        }, 
+          'Authorization': `Bearer ${token}`
+        },
         credentials: 'include', 
         body: JSON.stringify({ method }) 
       });
@@ -267,8 +268,8 @@ const UnifiedStreamControl: React.FC = () => {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
-        }, 
+          'Authorization': `Bearer ${token}`
+        },
         credentials: 'include', 
         body: JSON.stringify(rtmpForm) 
       });
@@ -293,8 +294,8 @@ const UnifiedStreamControl: React.FC = () => {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
-        }, 
+          'Authorization': `Bearer ${token}`
+        },
         credentials: 'include', 
         body: JSON.stringify(webrtcForm) 
       });
@@ -346,8 +347,8 @@ const UnifiedStreamControl: React.FC = () => {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
-        }, 
+          'Authorization': `Bearer ${token}`
+        },
         credentials: 'include', 
         body: JSON.stringify({ method: 'webrtc', status: 'online' }) 
       });
@@ -373,8 +374,8 @@ const UnifiedStreamControl: React.FC = () => {
       method: 'POST', 
       headers: { 
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
-      }, 
+        'Authorization': `Bearer ${token}`
+      },
       credentials: 'include', 
       body: JSON.stringify({ method: 'webrtc', status: 'offline' }) 
     });
@@ -402,8 +403,8 @@ const UnifiedStreamControl: React.FC = () => {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
-        }, 
+          'Authorization': `Bearer ${token}`
+        },
         credentials: 'include', 
         body: JSON.stringify({ title: config.streamTitle }) 
       });

@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
+import { useAuth } from '@/contexts/AuthContext';
+import {
   ArrowLeft,
   Calendar,
   Filter,
@@ -18,6 +19,7 @@ import {
 import { GameAnalytics } from '@/types/game';
 
 const GameHistoryPage: React.FC = () => {
+  const { token } = useAuth();
   const [history, setHistory] = useState<GameAnalytics[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +69,7 @@ const GameHistoryPage: React.FC = () => {
       
       const response = await fetch(`/api/admin/game-history?${params}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       

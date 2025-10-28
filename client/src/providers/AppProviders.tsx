@@ -7,6 +7,7 @@ import { GameProvider } from '../contexts/GameContext';
 import { GameStateProvider } from '../contexts/GameStateContext';
 import { WebSocketProvider } from '../contexts/WebSocketContext';
 import { NotificationProvider } from '../contexts/NotificationContext';
+import { AuthProvider } from '../contexts/AuthContext';
 import { queryClient } from '../lib/queryClient';
 
 interface AppProvidersProps {
@@ -18,17 +19,19 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <AppProvider>
-          <GameProvider>
-            <GameStateProvider>
-              <NotificationProvider>
-                <WebSocketProvider>
-                  {children}
-                </WebSocketProvider>
-              </NotificationProvider>
-            </GameStateProvider>
-          </GameProvider>
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider>
+            <GameProvider>
+              <GameStateProvider>
+                <NotificationProvider>
+                  <WebSocketProvider>
+                    {children}
+                  </WebSocketProvider>
+                </NotificationProvider>
+              </GameStateProvider>
+            </GameProvider>
+          </AppProvider>
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

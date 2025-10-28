@@ -14,6 +14,7 @@ import {
   WifiOff
 } from "lucide-react";
 import { DailyAnalytics, MonthlyAnalytics, YearlyAnalytics, RealtimeStats } from '@/types/game';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AnalyticsDashboardProps {
   showBelowControls?: boolean;
@@ -37,6 +38,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
     return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
+  const { token } = useAuth();
+
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
@@ -45,7 +48,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
       // Fetch real-time stats
       const realtimeResponse = await fetch('/api/admin/realtime-stats', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -60,7 +63,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
       // Fetch daily stats
       const dailyResponse = await fetch('/api/admin/analytics?period=daily', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -72,7 +75,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
       // Fetch monthly stats
       const monthlyResponse = await fetch(`/api/admin/analytics?period=monthly&month=${selectedMonth}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -84,7 +87,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
       // Fetch yearly stats
       const yearlyResponse = await fetch(`/api/admin/analytics?period=yearly&year=${selectedYear}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       

@@ -130,12 +130,15 @@ export class GameService {
       throw new Error('You have already placed a bet on this side for this round');
     }
 
-    // 6. Deduct balance atomically (prevents race conditions)
+    // 6. Deduct balance atomically with full validation in a single operation (prevents race conditions)
     try {
+      // This operation checks balance AND updates it atomically in the database
       await storage.updateUserBalance(userId, -amount);
     } catch (error: any) {
       if (error.message?.includes('Insufficient balance')) {
-        const currentBalance = parseFloat(user.balance);
+        // Fetch fresh balance to provide accurate error message
+        const freshUser = await storage.getUser(userId);
+        const currentBalance = parseFloat(freshUser?.balance || '0');
         throw new Error(`Insufficient balance. You have ₹${currentBalance}, but bet is ₹${amount}`);
       }
       throw error;

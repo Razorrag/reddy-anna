@@ -14,7 +14,7 @@ import {
   UserPlus,
   X
 } from 'lucide-react';
-import { useAuth } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -51,7 +51,6 @@ export const UserProfileButton: React.FC<UserProfileButtonProps> = ({ className 
   const handleLogout = () => {
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('user');
-    localStorage.removeItem('userRole');
     setAuthStatus(false, true);
     setIsDropdownOpen(false);
   };
@@ -66,7 +65,7 @@ export const UserProfileButton: React.FC<UserProfileButtonProps> = ({ className 
 
   const userInitials = user.username
     .split(' ')
-    .map(word => word.charAt(0).toUpperCase())
+    .map((word: string) => word.charAt(0).toUpperCase())
     .join('')
     .slice(0, 2);
 

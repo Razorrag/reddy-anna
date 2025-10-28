@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
 import { GamePhase } from '../types/game';
 import { Wifi, Gamepad2, Zap, Settings } from 'lucide-react';
 import { useStreamWebSocket } from '../hooks/useStreamWebSocket';
@@ -35,11 +36,8 @@ const GameStreamIntegration: React.FC<StreamIntegrationProps> = ({
     autoPauseOnIdle: true
   });
 
-  // Get admin token - try multiple possible storage keys
-  const token = localStorage.getItem('admin_token') || 
-                localStorage.getItem('token') || 
-                sessionStorage.getItem('admin_token') ||
-                sessionStorage.getItem('token') || null;
+  // Get token from AuthContext
+  const { user, isAuthenticated, token } = useAuth();
 
   // Initialize WebSocket connection only if we have a token
   const { isConnected } = useStreamWebSocket({
@@ -75,7 +73,7 @@ const GameStreamIntegration: React.FC<StreamIntegrationProps> = ({
       const res = await fetch('/api/stream/config', {
         credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -123,7 +121,7 @@ const GameStreamIntegration: React.FC<StreamIntegrationProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         },
         credentials: 'include',
         body: JSON.stringify({ title })
@@ -164,7 +162,7 @@ const GameStreamIntegration: React.FC<StreamIntegrationProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          'Authorization': `Bearer ${token}`
         },
         credentials: 'include',
         body: JSON.stringify({})
