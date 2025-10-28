@@ -1815,10 +1815,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/user/profile", generalLimiter, async (req, res) => {
     try {
       if (!req.user || !req.user.id) {
-        return res.status(401).json({ success: false, error: 'Authentication required' });
+        return res.status(401).json({ 
+          success: false, 
+          error: 'Authentication required' 
+        });
       }
       const result = await getUserDetails(req.user.id);
-      res.json(result);
+      if (result.success) {
+        res.json(result);
+      } else {
+        // If user not found, return 404, otherwise return the error
+        const statusCode = result.error?.includes('not found') ? 404 : 400;
+        res.status(statusCode).json(result);
+      }
     } catch (error) {
       console.error('User details error:', error);
       res.status(500).json({
@@ -2829,44 +2838,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/user/balance", async (req, res) => {
     try {
-      // For development, temporarily allow access
-      // In production, add proper auth checking
-      const userStr = req.headers.authorization?.replace('Bearer ', '');
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr);
-          // Set req.user for consistency with other routes
-          req.user = {
-            id: user.id || 'test-user',
-            phone: user.phone,
-            username: user.username,
-            role: user.role || 'player'
-          };
-          res.json({ balance: user.balance || 100000.00 });
-        } catch (e) {
-          // Set a default user for fallback
-          req.user = {
-            id: 'default-user',
-            phone: 'default',
-            username: 'default',
-            role: 'player'
-          };
-          res.json({ balance: 100000.00 }); // Default to ₹100,000
-        }
-      } else {
-        // For now, allow without auth for testing
-        // Set a default user for consistency
-        req.user = {
-          id: 'anonymous-user',
-          phone: 'anonymous',
-          username: 'anonymous',
-          role: 'player'
-        };
-        res.json({ balance: 100000.00 }); // Default to ₹100,000
+      // The unified requireAuth middleware should have set req.user
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ 
+          success: false, 
+          error: 'Authentication required' 
+        });
       }
+      
+      const userId = req.user.id;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'User not found' 
+        });
+      }
+      
+      res.json({ 
+        balance: parseFloat(user.balance) 
+      });
     } catch (error) {
       console.error("Get balance error:", error);
-      res.status(500).json({ error: "Failed to get balance" });
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to get balance" 
+      });
     }
   });
 

@@ -322,8 +322,8 @@ export class SupabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = insertUser.id || (insertUser as any).phone || insertUser.phone; // Use provided ID or phone number as ID
     
-    // Get default balance from environment or use 100000
-    const defaultBalance = process.env.DEFAULT_BALANCE || "100000.00";
+    // Get default balance from environment - use 0.00 if not set
+    const defaultBalance = process.env.DEFAULT_BALANCE || "0.00";
     
     const user = {
       id,

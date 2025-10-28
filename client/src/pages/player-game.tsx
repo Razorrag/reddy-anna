@@ -173,22 +173,91 @@ const PlayerGame: React.FC = () => {
   }, []);
 
   // Handle deposit
-  const handleDeposit = useCallback((amount: number) => {
-    setUserBalance((prev: number) => prev + amount);
-    updatePlayerWallet(userBalance + amount);
-    showNotification(`Successfully deposited ₹${amount.toLocaleString('en-IN')}`, 'success');
-  }, [userBalance, updatePlayerWallet, showNotification]);
+  const handleDeposit = useCallback(async (amount: number) => {
+    try {
+      // Use the same API client as UserProfileContext
+      const response = await fetch('/api/payment/process', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          amount: amount,
+          method: { type: 'upi' }, // Default to UPI for game deposits
+          type: 'deposit'
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update user balance in localStorage after successful deposit
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          // Update the balance to match server response if available, otherwise increment
+          userData.balance = data.user?.balance || (userData.balance + amount);
+          localStorage.setItem('user', JSON.stringify(userData));
+          setUserBalance(userData.balance);
+          updatePlayerWallet(userData.balance);
+        }
+        showNotification(`Successfully deposited ₹${amount.toLocaleString('en-IN')}`, 'success');
+      } else {
+        showNotification(data.error || 'Deposit failed', 'error');
+      }
+    } catch (error) {
+      showNotification('Deposit failed', 'error');
+      console.error('Deposit error:', error);
+    }
+  }, [user.id, updatePlayerWallet, showNotification]);
 
   // Handle withdraw
-  const handleWithdraw = useCallback((amount: number) => {
+  const handleWithdraw = useCallback(async (amount: number) => {
     if (amount > userBalance) {
       showNotification('Insufficient balance', 'error');
       return;
     }
-    setUserBalance((prev: number) => prev - amount);
-    updatePlayerWallet(userBalance - amount);
-    showNotification(`Successfully withdrew ₹${amount.toLocaleString('en-IN')}`, 'success');
-  }, [userBalance, updatePlayerWallet, showNotification]);
+
+    try {
+      // Use the same API client as UserProfileContext
+      const response = await fetch('/api/payment/process', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          amount: amount,
+          method: { type: 'upi' }, // Default to UPI for game withdrawals
+          type: 'withdrawal'
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update user balance in localStorage after successful withdrawal
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          // Update the balance to match server response if available, otherwise decrement
+          userData.balance = data.user?.balance || (userData.balance - amount);
+          localStorage.setItem('user', JSON.stringify(userData));
+          setUserBalance(userData.balance);
+          updatePlayerWallet(userData.balance);
+        }
+        showNotification(`Successfully withdrew ₹${amount.toLocaleString('en-IN')}`, 'success');
+      } else {
+        showNotification(data.error || 'Withdrawal failed', 'error');
+      }
+    } catch (error) {
+      showNotification('Withdrawal failed', 'error');
+      console.error('Withdrawal error:', error);
+    }
+  }, [user.id, userBalance, updatePlayerWallet, showNotification]);
 
   // Handle history click
   const handleHistoryClick = useCallback(() => {

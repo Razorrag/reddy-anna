@@ -18,19 +18,55 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   
   useEffect(() => {
     // Check if user is authenticated using UNIFIED storage
-    const checkAuth = () => {
+    const checkAuth = async () => {
       const userStr = localStorage.getItem('user');
       const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      const token = localStorage.getItem('token'); // Check if token exists
       
-      if (userStr && isLoggedIn) {
+      if (userStr && isLoggedIn && token) {
         try {
           const user = JSON.parse(userStr);
           // Allow both players AND admins (admins need to see player experience)
           if (user && (user.role === 'player' || user.role === 'admin' || user.role === 'super_admin')) {
-            setIsAuthenticated(true);
-            setIsChecking(false);
-            console.log(`✅ User authenticated: ${user.role}`);
-            return;
+            // Optionally make a quick test request to validate token is still valid
+            try {
+              // Try to fetch user profile to validate token
+              const response = await fetch('/api/user/profile', {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              if (response.ok) {
+                setIsAuthenticated(true);
+                setIsChecking(false);
+                console.log(`✅ User authenticated: ${user.role}`);
+                return;
+              } else {
+                // Token is invalid/expired, clear localStorage and redirect
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('userRole');
+                console.log('❌ Token is invalid/expired - redirected to login');
+                setIsAuthenticated(false);
+                setIsChecking(false);
+                setLocation('/login');
+                return;
+              }
+            } catch (fetchError) {
+              console.error('Error validating token:', fetchError);
+              // If there's an error validating token, clear localStorage and redirect
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              localStorage.removeItem('isLoggedIn');
+              localStorage.removeItem('userRole');
+              setIsAuthenticated(false);
+              setIsChecking(false);
+              setLocation('/login');
+              return;
+            }
           } else {
             console.log('❌ User has invalid role:', user.role);
           }

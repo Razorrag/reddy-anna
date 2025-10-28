@@ -26,8 +26,9 @@ export const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({ childr
     const checkAdminAuth = () => {
       const userStr = localStorage.getItem('user');
       const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      const token = localStorage.getItem('token'); // Check if token exists
       
-      if (userStr && isLoggedIn) {
+      if (userStr && isLoggedIn && token) {
         try {
           const user = JSON.parse(userStr);
           // Check if user has admin or super_admin role
@@ -38,12 +39,11 @@ export const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({ childr
             return;
           } else {
             // User is logged in but not as admin (probably a player)
-            // Allow access to admin login page - players might want to log in as admin
-            console.log('ℹ️ User is logged in as:', user.role, '- Still allowing access to admin routes');
-            // Don't redirect to unauthorized page, just continue to let them access admin login
+            // Redirect to unauthorized page
+            console.log('❌ User is logged in as:', user.role, '- Redirecting to unauthorized page');
             setIsAdmin(false);
             setIsChecking(false);
-            // Allow the admin login page to be accessed
+            setLocation('/unauthorized');
             return;
           }
         } catch (error) {
