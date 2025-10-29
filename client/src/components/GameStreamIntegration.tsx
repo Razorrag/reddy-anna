@@ -178,6 +178,52 @@ const GameStreamIntegration: React.FC<StreamIntegrationProps> = ({
     }
   };
 
+  const startScreenShare = async () => {
+    try {
+      // Send WebSocket message to start screen sharing
+      const ws = (window as any).gameWebSocket;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'screen_share_start',
+          data: {
+            adminId: user?.id || user?.phone,
+            timestamp: Date.now(),
+            gameId: 'default-game'
+          }
+        }));
+        showNotification('🖥️ Screen sharing started for players', 'success');
+      } else {
+        showNotification('❌ WebSocket not connected. Cannot start screen sharing.', 'error');
+      }
+    } catch (error) {
+      showNotification('❌ Failed to start screen sharing', 'error');
+      console.error('Screen share error:', error);
+    }
+  };
+
+  const stopScreenShare = async () => {
+    try {
+      // Send WebSocket message to stop screen sharing
+      const ws = (window as any).gameWebSocket;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'screen_share_stop',
+          data: {
+            adminId: user?.id || user?.phone,
+            timestamp: Date.now(),
+            gameId: 'default-game'
+          }
+        }));
+        showNotification('🖥️ Screen sharing stopped for players', 'info');
+      } else {
+        showNotification('❌ WebSocket not connected. Cannot stop screen sharing.', 'error');
+      }
+    } catch (error) {
+      showNotification('❌ Failed to stop screen sharing', 'error');
+      console.error('Screen share stop error:', error);
+    }
+  };
+
   const getStreamStatusColor = () => {
     switch (streamStatus) {
       case 'online': return 'text-green-400';
@@ -350,6 +396,22 @@ const GameStreamIntegration: React.FC<StreamIntegrationProps> = ({
               className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 disabled:from-gray-600 text-white rounded-lg font-semibold"
             >
               Stop Stream
+            </button>
+          </div>
+          
+          {/* Screen Sharing Controls */}
+          <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-600">
+            <button
+              onClick={startScreenShare}
+              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2"
+            >
+              🖥️ Start Screen Share
+            </button>
+            <button
+              onClick={stopScreenShare}
+              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2"
+            >
+              🛑 Stop Screen Share
             </button>
           </div>
         </div>

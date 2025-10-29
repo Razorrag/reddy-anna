@@ -35,18 +35,8 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/admin-login" component={AdminLogin} />
       
-      {/* Player Game Routes - Require authentication */}
+      {/* Player Game Route - Single canonical route */}
       <Route path="/play">
-        <ProtectedRoute>
-          <PlayerGame />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/player-game">
-        <ProtectedRoute>
-          <PlayerGame />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/game">
         <ProtectedRoute>
           <PlayerGame />
         </ProtectedRoute>
@@ -66,17 +56,9 @@ function Router() {
           <Admin />
         </ProtectedAdminRoute>
       </Route>
+      {/* Admin Game Route - Single canonical route */}
+      {/* Admin Game Route - Single canonical route */}
       <Route path="/admin-game">
-        <ProtectedAdminRoute>
-          <AdminGame />
-        </ProtectedAdminRoute>
-      </Route>
-      <Route path="/game-admin">
-        <ProtectedAdminRoute>
-          <AdminGame />
-        </ProtectedAdminRoute>
-      </Route>
-      <Route path="/admin-control">
         <ProtectedAdminRoute>
           <AdminGame />
         </ProtectedAdminRoute>

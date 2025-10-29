@@ -86,6 +86,7 @@ export interface UpdateBet {
 }
 import { randomUUID } from "crypto";
 import { supabaseServer } from "./lib/supabaseServer";
+import { parseBalance } from "../shared/utils/balanceUtils";
 
 export interface IStorage {
   // User operations
@@ -151,6 +152,7 @@ export interface IStorage {
   // Stream settings operations
   getStreamSettings(): Promise<StreamSettings[]>;
   updateStreamSetting(key: string, value: string): Promise<void>;
+  getStreamConfig(): Promise<any>; // Legacy method for compatibility
   
   // Analytics methods
   saveGameStatistics(stats: Omit<GameStatistics, 'id' | 'createdAt'>): Promise<GameStatistics>;
@@ -223,12 +225,9 @@ export interface IStorage {
 }
 
 export class SupabaseStorage implements IStorage {
-  // Helper function to convert decimal balance to number
+  // Helper function to convert decimal balance to number - now using shared utility
   private parseBalance(balance: any): number {
-    if (typeof balance === 'string') {
-      return parseFloat(balance) || 0;
-    }
-    return Number(balance) || 0;
+    return parseBalance(balance);
   }
 
   // User operations
@@ -588,7 +587,7 @@ export class SupabaseStorage implements IStorage {
 
   // Update createUser to use phone as ID with configurable default balance
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = insertUser.id || (insertUser as any).phone || insertUser.phone; // Use provided ID or phone number as ID
+    const id = (insertUser as any).phone || 'anonymous'; // Use phone number as ID
     
     // Get default balance from environment - use 0.00 if not set
     const defaultBalance = process.env.DEFAULT_BALANCE || "0.00";
@@ -1320,44 +1319,34 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getUserGameHistory(userId: string): Promise<any[]> {
-    // Get user's bets and join with game history to get results
+    // Use the user_game_history_view to get complete game history with total_cards
     const { data, error } = await supabaseServer
-      .from('player_bets')
-      .select(`
-        *,
-        game_sessions!inner(
-          opening_card,
-          winner,
-          winning_card,
-          total_cards,
-          round,
-          status
-        )
-      `)
+      .from('user_game_history_view')
+      .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('bet_created_at', { ascending: false });
 
     if (error) {
       console.error('Error getting user game history:', error);
       return [];
     }
 
-    // Transform the data to include game results
+    // Transform the data to match the expected format
     return (data || []).map((bet: any) => ({
-      id: bet.id,
+      id: bet.bet_id,
       gameId: bet.game_id,
-      openingCard: bet.game_sessions?.opening_card,
-      winner: bet.game_sessions?.winner,
+      openingCard: bet.opening_card,
+      winner: bet.winner,
       yourBet: {
-        side: bet.side,
-        amount: bet.amount,
-        round: bet.round
+        side: bet.bet_side,
+        amount: bet.bet_amount,
+        round: bet.bet_round
       },
-      result: bet.game_sessions?.winner === bet.side ? 'win' : 'loss',
-      payout: bet.game_sessions?.winner === bet.side ? bet.amount * 2 : 0,
-      totalCards: bet.game_sessions?.total_cards || 0,
-      round: bet.game_sessions?.round || 1,
-      createdAt: bet.created_at
+      result: bet.winner === bet.bet_side ? 'win' : 'loss',
+      payout: bet.winner === bet.bet_side ? parseFloat(bet.bet_amount) * 2 : 0,
+      totalCards: bet.total_cards || 0, // Now correctly gets total_cards from game_history
+      round: bet.game_round || 1,
+      createdAt: bet.bet_created_at
     }));
   }
   
@@ -1454,6 +1443,37 @@ export class SupabaseStorage implements IStorage {
       throw error;
     } else {
       console.log(`✅ Successfully saved to database: ${key} = ${value}`);
+    }
+  }
+
+  // Legacy method for compatibility - returns unified stream configuration
+  async getStreamConfig(): Promise<any> {
+    try {
+      const streamSettings = await this.getStreamSettings();
+      
+      // Build configuration from settings with defaults
+      const settingsMap = new Map(streamSettings.map(s => [s.settingKey, s.settingValue]));
+      
+      return {
+        activeMethod: settingsMap.get('active_method') || 'none',
+        streamStatus: settingsMap.get('stream_status') || 'offline',
+        streamTitle: settingsMap.get('stream_title') || 'Andar Bahar Live',
+        rtmpServerUrl: settingsMap.get('rtmp_server_url') || '',
+        rtmpStreamKey: settingsMap.get('rtmp_stream_key') || '',
+        webrtcResolution: settingsMap.get('webrtc_resolution') || '1280x720',
+        webrtcFps: parseInt(settingsMap.get('webrtc_fps') || '30'),
+        webrtcBitrate: parseInt(settingsMap.get('webrtc_bitrate') || '2500'),
+        streamWidth: parseInt(settingsMap.get('stream_width') || '1280'),
+        streamHeight: parseInt(settingsMap.get('stream_height') || '720'),
+        showStream: settingsMap.get('show_stream') === 'true',
+        viewerCount: parseInt(settingsMap.get('viewer_count') || '0'),
+        rtmpLastCheck: settingsMap.get('rtmp_last_check') || null,
+        webrtcLastCheck: settingsMap.get('webrtc_last_check') || null,
+        createdAt: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error getting stream config:', error);
+      return null;
     }
   }
 
@@ -2025,8 +2045,15 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabaseServer
       .from('user_referrals')
       .select(`
-        *,
-        referred_user:users(id, phone, full_name, created_at)
+        id,
+        referrer_user_id,
+        referred_user_id,
+        deposit_amount,
+        bonus_amount,
+        bonus_applied,
+        bonus_applied_at,
+        created_at,
+        updated_at
       `)
       .eq('referrer_user_id', userId)
       .order('created_at', { ascending: false });
@@ -2036,7 +2063,32 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
 
-    return data as UserReferral[] || [];
+    // Manually fetch referred user details to avoid embedding conflicts
+    const referrals = data || [];
+    const referralsWithUserInfo = await Promise.all(
+      referrals.map(async (referral) => {
+        try {
+          const { data: userData, error: userError } = await supabaseServer
+            .from('users')
+            .select('id, phone, full_name, created_at')
+            .eq('id', referral.referred_user_id)
+            .single();
+
+          return {
+            ...referral,
+            referred_user: userData || null
+          };
+        } catch (error) {
+          console.error('Error fetching referred user details:', error);
+          return {
+            ...referral,
+            referred_user: null
+          };
+        }
+      })
+    );
+
+    return referralsWithUserInfo as UserReferral[] || [];
   }
 
   async checkAndApplyReferralBonus(userId: string, depositAmount: number): Promise<void> {

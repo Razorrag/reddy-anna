@@ -393,6 +393,39 @@ export interface PlayerBetHistoryUpdateMessage extends WebSocketMessage {
   };
 }
 
+// Screen sharing message types
+export interface ScreenShareStartMessage extends WebSocketMessage {
+  type: 'screen_share_start';
+  data: {
+    message: string;
+    timestamp: number;
+  };
+}
+
+export interface ScreenShareStopMessage extends WebSocketMessage {
+  type: 'screen_share_stop';
+  data: {
+    message: string;
+    timestamp: number;
+  };
+}
+
+export interface ScreenShareStartedMessage extends WebSocketMessage {
+  type: 'screen_share_started';
+  data: {
+    message: string;
+    timestamp: number;
+  };
+}
+
+export interface ScreenShareStoppedMessage extends WebSocketMessage {
+  type: 'screen_share_stopped';
+  data: {
+    message: string;
+    timestamp: number;
+  };
+}
+
 // GameState interface
 export interface GameState {
   gameId: string;

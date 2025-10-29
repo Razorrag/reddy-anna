@@ -1,209 +1,146 @@
 /**
- * VideoArea - Enhanced video stream area with circular countdown timer overlay
+ * VideoArea - Game Video and Timer Display Component
  *
- * Features:
- * - Circular countdown timer with yellow stroke
- * - Round number display
- * - Pulse effect when <5 seconds
- * - Phase-specific colors (betting/dealing)
- * - Smooth timer animations
- * - Unified StreamPlayer for both RTMP and WebRTC streaming
+ * Displays the game stream/video area with timer, opening card, and game status.
+ * This is the central visual component of the game interface.
+ * Integrates screen sharing from admin to show live game action.
  */
 
-import React, { useEffect, useState } from 'react';
-import { useGameState } from '@/contexts/GameStateContext';
-import StreamPlayer from '../StreamPlayer';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface VideoAreaProps {
   className?: string;
+  gameState: any; // Use any to handle different GameState structures
 }
 
-const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
-  const { gameState } = useGameState();
-  
-  // Use the gameState.timer directly
-  const localTimer = gameState.countdownTimer;
-  const [isPulsing, setIsPulsing] = useState(false);
-  
-  const streamTitle = 'Andar Bahar Live';
+const VideoArea: React.FC<VideoAreaProps> = ({ className, gameState }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isScreenShareActive, setIsScreenShareActive] = useState(false);
+  const [screenShareStream, setScreenShareStream] = useState<MediaStream | null>(null);
+  const [screenShareError, setScreenShareError] = useState<string | null>(null);
 
-  // Handle pulse effect when less than 5 seconds
+  // Handle screen share events from WebSocket context
   useEffect(() => {
-    if (localTimer <= 5 && localTimer > 0) {
-      setIsPulsing(true);
-    } else {
-      setIsPulsing(false);
-    }
-  }, [localTimer]);
+    const handleScreenShareStart = (event: CustomEvent) => {
+      console.log('🖥️ Screen sharing started by admin');
+      setIsScreenShareActive(true);
+      setScreenShareError(null);
+    };
 
-  // Get timer color based on phase
-  const getTimerColor = () => {
-    switch (gameState.phase) {
-      case 'betting':
-        return localTimer <= 5 ? '#EF4444' : '#FFD100'; // Red when urgent, yellow normally
-      case 'dealing':
-        return '#10B981'; // Green for dealing
-      case 'complete':
-        return '#8B5CF6'; // Purple for complete
-      default:
-        return '#6B7280'; // Gray for idle
-    }
-  };
+    const handleScreenShareStop = (event: CustomEvent) => {
+      console.log('🛑 Screen sharing stopped by admin');
+      setIsScreenShareActive(false);
+      setScreenShareError(null);
+    };
 
-  // Get phase text
-  const getPhaseText = () => {
-    switch (gameState.phase) {
-      case 'betting':
-        return 'Betting';
-      case 'dealing':
-        return gameState.currentRound === 3 ? 'Final Draw' : 'Dealing';
-      case 'complete':
-        return 'Complete';
-      default:
-        return 'Waiting';
-    }
-  };
+    // Listen for screen share events dispatched by WebSocketContext
+    window.addEventListener('screen-share-start', handleScreenShareStart as EventListener);
+    window.addEventListener('screen-share-stop', handleScreenShareStop as EventListener);
+    
+    return () => {
+      window.removeEventListener('screen-share-start', handleScreenShareStart as EventListener);
+      window.removeEventListener('screen-share-stop', handleScreenShareStop as EventListener);
+    };
+  }, []);
 
-  // Calculate timer progress for circular display
-  const getTimerProgress = () => {
-    if (gameState.phase !== 'betting') return 0;
-    const maxTime = 30; // 30 seconds for betting
-    return Math.max(0, (maxTime - localTimer) / maxTime);
-  };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (screenShareStream) {
+        screenShareStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [screenShareStream]);
 
   return (
-    <div className={`relative bg-black rounded-lg overflow-hidden ${className}`}>
-      {/* Live Video Stream */}
-      <div className="relative aspect-video">
-        <StreamPlayer
-          isLive={gameState.phase !== 'idle'}
-          className="w-full h-full"
-        />
-
-        {/* Game Status Overlay - Removed to keep video clean */}
-
-        {/* Dealing Animation - Removed duplicate, using left badge instead */}
-
-        {/* Overlay Gradient for better text visibility */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
-      </div>
-
-      {/* Circular Timer Overlay - CENTER OF SCREEN - ONLY VISIBLE DURING BETTING */}
-      {gameState.phase === 'betting' && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-auto">
-          <div className={`relative transition-all duration-300 ${
-            gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
-          }`}>
-            {/* Large Circular Timer */}
-            <div className="relative w-32 h-32">
-              <svg className="transform -rotate-90 w-32 h-32">
-                {/* Background circle */}
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="58"
-                  stroke="rgba(0, 0, 0, 0.5)"
-                  strokeWidth="8"
-                  fill="rgba(0, 0, 0, 0.3)"
-                />
-                {/* Progress circle - only show during betting */}
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="58"
-                  stroke={getTimerColor()}
-                  strokeWidth="8"
-                  fill="none"
-                  strokeDasharray={`${2 * Math.PI * 58}`}
-                  strokeDashoffset={`${2 * Math.PI * 58 * (1 - getTimerProgress())}`}
-                  className="transition-all duration-1000 ease-linear"
-                />
-              </svg>
-              {/* Timer text */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-white font-bold text-4xl drop-shadow-lg">
-                  {localTimer > 0 ? localTimer : '--'}
-                </div>
+    <div className={`video-area relative ${className || ''}`}>
+      {/* Stream Player */}
+      <div className="stream-container w-full h-full relative bg-gray-900">
+        {/* Screen Share Video - Show when active */}
+        {isScreenShareActive ? (
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="w-full h-full object-cover"
+            onLoadedMetadata={() => console.log('Screen share video loaded')}
+          />
+        ) : (
+          /* Mock Stream Content - Show when no screen share */
+          <div className="stream-placeholder w-full h-full flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-6xl mb-4">⏳</div>
+              <div className="text-lg font-semibold text-gray-400">
+                {process.env.NODE_ENV === 'development'
+                  ? 'Stream Placeholder (Development Mode)'
+                  : 'Live Stream Loading...'
+                }
+              </div>
+              <div className="text-sm text-gray-500 mt-2">
+                {isScreenShareActive ? 'Admin screen sharing active' : 'Admin will start the game shortly'}
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Special indicator for non-betting phases to show game state */}
-      {gameState.phase !== 'betting' && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center pointer-events-none">
-          {gameState.phase === 'dealing' && (
-            <div className="text-6xl animate-pulse text-green-400 font-bold">🎴</div>
-          )}
-          {gameState.phase === 'complete' && gameState.gameWinner && (
-            <div className="text-center bg-black/70 backdrop-blur-sm rounded-xl p-4 border-2 border-yellow-500/50">
-              <div className="text-2xl font-bold text-yellow-400 mb-2">
-                {gameState.gameWinner === 'andar' ? 'ANDAR WON!' : 'BAHAR WON!'}
-              </div>
-              {gameState.winningCard && (
-                <div className="text-white text-lg">{gameState.winningCard.display}</div>
-              )}
+        {/* Timer Overlay - Only show when in betting phase */}
+        {gameState.phase === 'betting' && (
+          <div className="timer-overlay absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            <div className="timer-circle w-32 h-32 bg-red-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+              {gameState.countdownTimer}
             </div>
-          )}
-          {(gameState.phase === 'idle' || gameState.phase === 'opening') && (
-            <div className="text-4xl text-gray-400 font-bold">⏳</div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* Phase Indicator with Round Number */}
-      <div className="absolute top-4 left-4">
-        <div className="bg-black/80 px-3 py-2 rounded-lg border border-yellow-400 backdrop-blur-sm">
-          <div className="text-yellow-400 text-lg font-bold">
+        {/* Opening Card Overlay */}
+        {gameState.selectedOpeningCard && (
+          <div className="opening-card-overlay absolute top-4 left-4">
+            <div className="opening-card bg-white text-black px-3 py-1 rounded text-sm font-bold">
+              Opening: {gameState.selectedOpeningCard.display || gameState.selectedOpeningCard.id}
+            </div>
+          </div>
+        )}
+
+        {/* Game Status Overlay */}
+        <div className="game-status-overlay absolute top-4 right-4">
+          <div className={`status-badge px-3 py-1 rounded text-sm font-semibold ${
+            gameState.phase === 'betting' ? 'bg-green-600' :
+            gameState.phase === 'dealing' ? 'bg-yellow-600' :
+            gameState.phase === 'complete' ? 'bg-blue-600' :
+            'bg-gray-600'
+          }`}>
+            {gameState.phase === 'betting' ? 'Betting Open' :
+             gameState.phase === 'dealing' ? 'Dealing Cards' :
+             gameState.phase === 'complete' ? 'Game Complete' :
+             'Waiting'}
+          </div>
+        </div>
+
+        {/* Round Indicator */}
+        <div className="round-indicator absolute bottom-4 left-4">
+          <div className="round-badge bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold">
             ROUND {gameState.currentRound}
           </div>
-          <div className="text-white text-sm font-semibold">
-            {getPhaseText()}
-          </div>
-          {gameState.phase === 'betting' && (
-            <div className="text-gray-400 text-xs">
-              {localTimer}s remaining
-            </div>
-          )}
         </div>
+
+        {/* Screen Share Status Indicator */}
+        {isScreenShareActive && (
+          <div className="screen-share-indicator absolute top-4 left-1/2 transform -translate-x-1/2">
+            <div className="flex items-center bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold">
+              <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></div>
+              SCREEN SHARING
+            </div>
+          </div>
+        )}
+
+        {/* Error Display */}
+        {screenShareError && (
+          <div className="screen-share-error absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-red-600 text-white px-4 py-2 rounded text-sm">
+            {screenShareError}
+          </div>
+        )}
       </div>
-
-      {/* Betting Locked Indicator */}
-      {gameState.bettingLocked && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-          <div className="bg-red-600/90 px-6 py-3 rounded-lg border-2 border-red-400 backdrop-blur-sm animate-bounce">
-            <div className="text-white font-bold text-lg">
-              BETTING LOCKED
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Game Status Overlay */}
-      {gameState.phase === 'complete' && gameState.gameWinner && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="text-center">
-            <div className="text-4xl font-bold mb-2">
-              {gameState.gameWinner === 'andar' ? (
-                <span className="text-red-500">ANDAR WON!</span>
-              ) : gameState.currentRound === 1 ? (
-                <span className="text-blue-500">BABA WON!</span>
-              ) : gameState.currentRound === 2 ? (
-                <span className="text-blue-500">SHOOT WON!</span>
-              ) : (
-                <span className="text-blue-500">BAHAR WON!</span>
-              )}
-            </div>
-            {gameState.winningCard && (
-              <div className="text-yellow-400 text-lg">
-                Winning Card: {gameState.winningCard.display}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
     </div>
   );
 };

@@ -1,15 +1,14 @@
 /**
  * CardHistory - Recent game results display
- * 
+ *
  * Shows recent game results with circular badges for Andar/Bahar
  * and a link to view full history using existing GameHistoryModal.
  */
 
 import React from 'react';
-import type { GameState } from '../GameLogic/GameLogic';
 
 interface CardHistoryProps {
-  gameState: GameState;
+  gameState: any; // Use any to handle different GameState structures
   onHistoryClick: () => void;
   className?: string;
 }

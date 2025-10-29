@@ -127,10 +127,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Check authentication status on app load
   useEffect(() => {
     checkAuthStatus();
-  }, []);
+    
+    // In development mode, create a test user if none exists
+    if (process.env.NODE_ENV === 'development' && !state.authChecked) {
+      const timer = setTimeout(() => {
+        if (!state.user && !state.isAuthenticated) {
+          console.log('🔄 Creating development test user');
+          const testUser: User = {
+            id: 'dev-user-1',
+            phone: '9999999999',
+            balance: 100000,
+            role: 'player',
+            username: 'DevPlayer',
+            full_name: 'Development Player'
+          };
+          login(testUser, 'dev-token-fake-jwt-token');
+        }
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [state.authChecked, state.user, state.isAuthenticated]);
 
   // Check if user is authenticated using localStorage
   const checkAuthStatus = () => {
+    // Check for admin session first (higher priority)
+    const adminUserStr = localStorage.getItem('admin_user');
+    const isAdminLoggedIn = localStorage.getItem('isAdminLoggedIn') === 'true';
+    const adminToken = localStorage.getItem('admin_token');
+
+    if (adminUserStr && isAdminLoggedIn && adminToken) {
+      try {
+        const user: User = JSON.parse(adminUserStr);
+        dispatch({ type: 'AUTH_SUCCESS', payload: { user, token: adminToken } });
+        return;
+      } catch (error) {
+        console.error('Failed to parse admin user data:', error);
+        // Clear admin session and try user session
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_user');
+        localStorage.removeItem('isAdminLoggedIn');
+      }
+    }
+
+    // Check for regular user session
     const userStr = localStorage.getItem('user');
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
     const token = localStorage.getItem('token');
@@ -151,12 +191,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Login function
-  const login = (userData: User, token: string) => {
+  // Login function - enhanced to handle both user and admin sessions
+  const login = (userData: User, token: string, isAdmin = false) => {
     try {
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('token', token);
+      if (isAdmin) {
+        // Store admin session with separate keys
+        localStorage.setItem('admin_user', JSON.stringify(userData));
+        localStorage.setItem('isAdminLoggedIn', 'true');
+        localStorage.setItem('admin_token', token);
+        
+        // Clear regular user session to avoid conflicts
+        localStorage.removeItem('user');
+        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('token');
+      } else {
+        // Store regular user session
+        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('token', token);
+        
+        // Clear admin session to avoid conflicts
+        localStorage.removeItem('admin_user');
+        localStorage.removeItem('isAdminLoggedIn');
+        localStorage.removeItem('admin_token');
+      }
+      
       dispatch({ type: 'AUTH_SUCCESS', payload: { user: userData, token } });
     } catch (error) {
       console.error('Login error:', error);
@@ -164,12 +223,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Logout function
+  // Logout function - enhanced to handle both user and admin sessions
   const logout = () => {
-    // Remove all auth-related data from localStorage
+    // Remove all auth-related data from localStorage for both user and admin
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('isLoggedIn');
+    
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+    localStorage.removeItem('isAdminLoggedIn');
     
     dispatch({ type: 'LOGOUT' });
   };
@@ -179,7 +242,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     dispatch({ type: 'CLEAR_ERROR' });
   };
 
-  // Refresh user data from API
+  // Refresh user data from API - enhanced to handle both user and admin sessions
   const refreshUser = async () => {
     if (!state.user || !state.isAuthenticated || !state.token) return;
 
@@ -205,7 +268,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Add any other fields that might have changed
         };
 
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        // Update localStorage based on session type
+        const isAdminSession = localStorage.getItem('isAdminLoggedIn') === 'true';
+        if (isAdminSession) {
+          localStorage.setItem('admin_user', JSON.stringify(updatedUser));
+        } else {
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+        
         dispatch({ type: 'AUTH_SUCCESS', payload: { user: updatedUser, token } });
       } else {
         // Token might be invalid/expired
@@ -219,7 +289,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Add balance update method
+  // Add balance update method - enhanced to handle both user and admin sessions
   const updateBalance = useCallback(async (newBalance: number, source: string = 'api', transactionType?: string, amount?: number) => {
     if (state.user) {
       const updatedUser = {
@@ -227,8 +297,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         balance: newBalance
       };
       
-      // Update localStorage
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      // Update localStorage based on session type
+      const isAdminSession = localStorage.getItem('isAdminLoggedIn') === 'true';
+      if (isAdminSession) {
+        localStorage.setItem('admin_user', JSON.stringify(updatedUser));
+      } else {
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
       
       // Update state
       dispatch({

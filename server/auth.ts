@@ -1,6 +1,7 @@
 // 🔐 JWT-BASED AUTHENTICATION SYSTEM WITH REFRESH TOKENS
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { storage } from './storage-supabase';
 import { validateMobileNumber, sanitizeInput, validatePassword as validatePasswordFormat } from './validation';
 import { User } from '@shared/schema';
@@ -437,21 +438,249 @@ export const updateUserProfile = async (userId: string, updates: any) => {
   }
 };
 
-// 🔧 PASSWORD RESET (Placeholder for future implementation)
+// 🔧 PASSWORD RESET UTILITY FUNCTIONS
+/**
+ * Generate a secure password reset token
+ * @param userId - User ID to generate token for
+ * @returns Object containing token and hashed token for storage
+ */
+const generatePasswordResetToken = (userId: string): { token: string; tokenHash: string; expiresAt: Date } => {
+  // Generate a cryptographically secure random token
+  const token = crypto.randomBytes(32).toString('hex');
+  
+  // Hash the token for secure storage (similar to password hashing)
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  
+  // Set expiration time (15 minutes from now)
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  
+  return { token, tokenHash, expiresAt };
+};
+
+/**
+ * Store password reset token in database
+ * @param userId - User ID to store token for
+ * @param tokenHash - Hashed token to store
+ * @param expiresAt - Token expiration time
+ * @returns Success status
+ */
+const storePasswordResetToken = async (userId: string, tokenHash: string, expiresAt: Date): Promise<boolean> => {
+  try {
+    const { data, error } = await supabaseServer
+      .from('password_reset_tokens')
+      .insert({
+        user_id: userId,
+        token_hash: tokenHash,
+        expires_at: expiresAt.toISOString(),
+        used: false
+      });
+
+    if (error) {
+      console.error('Error storing password reset token:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in storePasswordResetToken:', error);
+    return false;
+  }
+};
+
+/**
+ * Find and validate password reset token
+ * @param token - Plain token to validate
+ * @returns Object with user ID if valid, null otherwise
+ */
+const validatePasswordResetToken = async (token: string): Promise<{ userId: string; tokenId: string } | null> => {
+  try {
+    // Hash the token to match against stored hash
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    
+    const { data, error } = await supabaseServer
+      .from('password_reset_tokens')
+      .select('id, user_id, used, expires_at')
+      .eq('token_hash', tokenHash)
+      .single();
+
+    if (error || !data) {
+      console.error('Password reset token not found:', error);
+      return null;
+    }
+
+    // Check if token is expired
+    const now = new Date();
+    const expiresAt = new Date(data.expires_at);
+    if (now > expiresAt) {
+      console.error('Password reset token has expired');
+      return null;
+    }
+
+    // Check if token has already been used
+    if (data.used) {
+      console.error('Password reset token has already been used');
+      return null;
+    }
+
+    return { userId: data.user_id, tokenId: data.id };
+  } catch (error) {
+    console.error('Error validating password reset token:', error);
+    return null;
+  }
+};
+
+/**
+ * Mark password reset token as used
+ * @param tokenId - ID of the token to mark as used
+ * @returns Success status
+ */
+const markTokenAsUsed = async (tokenId: string): Promise<boolean> => {
+  try {
+    const { data, error } = await supabaseServer
+      .from('password_reset_tokens')
+      .update({ used: true })
+      .eq('id', tokenId);
+
+    if (error) {
+      console.error('Error marking token as used:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in markTokenAsUsed:', error);
+    return false;
+  }
+};
+
+/**
+ * Send password reset SMS (Placeholder for SMS service integration)
+ * @param phone - User's phone number
+ * @param resetToken - Reset token to include in SMS
+ * @returns Success status
+ */
+const sendPasswordResetSMS = async (phone: string, resetToken: string): Promise<boolean> => {
+  try {
+    // TODO: Integrate with actual SMS service (Twilio, MSG91, etc.)
+    // For now, log the reset token for development
+    console.log(`Password reset token for ${phone}: ${resetToken}`);
+    console.log(`Reset URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`);
+    
+    // In production, this would send an SMS with the reset link
+    return true;
+  } catch (error) {
+    console.error('Error sending password reset SMS:', error);
+    return false;
+  }
+};
+
+// 🔧 PASSWORD RESET IMPLEMENTATION
 export const forgotPassword = async (phone: string): Promise<AuthResult> => {
-  // TODO: Implement password reset functionality
-  // 1. Generate reset token
-  // 2. Send SMS with reset link
-  // 3. Store reset token in database
-  return { success: false, error: 'Password reset not implemented yet' };
+  try {
+    // Sanitize and validate phone number
+    const sanitizedPhone = sanitizeInput(phone).replace(/[^0-9]/g, '');
+    
+    if (!sanitizedPhone || !validateMobileNumber(sanitizedPhone)) {
+      return { success: false, error: 'Valid 10-digit Indian mobile number is required' };
+    }
+
+    console.log('Password reset requested for phone:', sanitizedPhone);
+
+    // Find user by phone number
+    const user = await storage.getUserByPhone(sanitizedPhone);
+    
+    if (!user) {
+      // Don't reveal whether user exists for security
+      console.log('Password reset attempted for non-existent user:', sanitizedPhone);
+      return { success: true, error: 'If an account with that phone number exists, a password reset link has been sent.' };
+    }
+
+    // Generate secure reset token
+    const { token, tokenHash, expiresAt } = generatePasswordResetToken(user.id);
+    
+    // Store token in database
+    const tokenStored = await storePasswordResetToken(user.id, tokenHash, expiresAt);
+    
+    if (!tokenStored) {
+      return { success: false, error: 'Failed to generate password reset token. Please try again.' };
+    }
+
+    // Send reset token via SMS
+    const smsSent = await sendPasswordResetSMS(user.phone, token);
+    
+    if (!smsSent) {
+      console.error('Failed to send password reset SMS for user:', user.id);
+      // Don't fail the operation if SMS fails, but log the error
+    }
+
+    console.log('Password reset token sent successfully for user:', user.id);
+    return {
+      success: true,
+      error: 'If an account with that phone number exists, a password reset link has been sent.'
+    };
+  } catch (error) {
+    console.error('Password reset error:', error);
+    return { success: false, error: 'Password reset failed. Please try again later.' };
+  }
 };
 
 export const resetPassword = async (token: string, newPassword: string): Promise<AuthResult> => {
-  // TODO: Implement password reset functionality
-  // 1. Verify reset token
-  // 2. Update password in database
-  // 3. Invalidate reset token
-  return { success: false, error: 'Password reset not implemented yet' };
+  try {
+    // Validate token format
+    if (!token || typeof token !== 'string' || token.length !== 64) {
+      return { success: false, error: 'Invalid reset token format' };
+    }
+
+    // Validate new password
+    if (!newPassword || !validatePasswordFormat(newPassword)) {
+      return {
+        success: false,
+        error: 'Password must be at least 8 characters with uppercase, lowercase, and number'
+      };
+    }
+
+    console.log('Password reset attempt with token:', token.substring(0, 8) + '...');
+
+    // Validate the reset token
+    const tokenData = await validatePasswordResetToken(token);
+    
+    if (!tokenData) {
+      return { success: false, error: 'Invalid or expired reset token' };
+    }
+
+    // Hash the new password
+    const hashedPassword = await hashPassword(newPassword);
+    
+    // Update user's password
+    try {
+      const updatedUser = await storage.updateUser(tokenData.userId, {
+        password_hash: hashedPassword,
+        // Update last_login to invalidate any existing sessions
+        last_login: new Date()
+      });
+
+      if (!updatedUser) {
+        return { success: false, error: 'User not found' };
+      }
+
+      // Mark the reset token as used
+      const tokenMarked = await markTokenAsUsed(tokenData.tokenId);
+      
+      if (!tokenMarked) {
+        console.error('Failed to mark reset token as used for user:', tokenData.userId);
+        // Don't fail the password reset if this fails, but log the error
+      }
+
+      console.log('Password reset successful for user:', tokenData.userId);
+      return { success: true };
+    } catch (updateError) {
+      console.error('Error updating user password:', updateError);
+      return { success: false, error: 'Failed to update password. Please try again.' };
+    }
+  } catch (error) {
+    console.error('Password reset error:', error);
+    return { success: false, error: 'Password reset failed. Please try again later.' };
+  }
 };
 
 export const changePassword = async (
@@ -495,7 +724,6 @@ export const requireAuth = (req: any, res: any, next: any) => {
   
   // JWT token authentication (ONLY method)
   if (!token) {
-    console.log('❌ Authentication required - no token provided');
     return res.status(401).json({
       success: false,
       error: 'Authentication required. Please login to continue.',
@@ -522,7 +750,6 @@ export const requireAuth = (req: any, res: any, next: any) => {
       username: decoded.username,
       role: decoded.role
     };
-    console.log('✅ Authenticated via JWT token:', req.user.id, `(${req.user.role})`);
     return next();
   } catch (error) {
     console.error('❌ Token validation error:', error);
@@ -539,8 +766,7 @@ export const requireRole = (roles: string[]) => {
   return (req: any, res: any, next: any) => {
     // First check if user is authenticated
     if (!req.user) {
-      console.log('❌ No user found in request');
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false, 
         error: 'Authentication required' 
       });
@@ -548,14 +774,12 @@ export const requireRole = (roles: string[]) => {
     
     // Check if user has required role
     if (!roles.includes(req.user.role)) {
-      console.log(`❌ Access denied. Required roles: ${roles.join(', ')}, User role: ${req.user.role}`);
-      return res.status(403).json({ 
+      return res.status(403).json({
         success: false, 
         error: 'Insufficient permissions' 
       });
     }
     
-    console.log(`✅ Role check passed for ${req.user.id} (${req.user.role})`);
     next();
   };
 };

@@ -66,7 +66,7 @@ export default function Login() {
 
       // Redirect to game after a short delay to allow WebSocket to authenticate
       setTimeout(() => {
-        window.location.href = '/player-game';
+        window.location.href = '/play';
       }, 1000);
     } catch (err: any) {
       console.error('Login error:', err);

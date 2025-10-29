@@ -125,7 +125,7 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [state.currentBalance, updateBalance]);
 
-  // Initialize balance from localStorage
+  // Initialize balance from localStorage and refresh from API
   useEffect(() => {
     const userStr = localStorage.getItem('user');
     if (userStr) {
@@ -133,12 +133,46 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         const user = JSON.parse(userStr);
         if (user.balance !== undefined) {
           updateBalance(user.balance, 'localStorage');
+          
+          // Immediately refresh from API to ensure accuracy
+          refreshBalance();
         }
       } catch (error) {
         console.error('Failed to parse user balance from localStorage:', error);
       }
     }
-  }, [updateBalance]);
+  }, [updateBalance, refreshBalance]);
+
+  // Load balance when user becomes available via AuthContext
+  useEffect(() => {
+    const checkUserBalance = () => {
+      const userStr = localStorage.getItem('user');
+      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      
+      if (userStr && isLoggedIn) {
+        try {
+          const user = JSON.parse(userStr);
+          if (user.id && user.balance !== undefined) {
+            // User is available, ensure balance is current
+            if (state.currentBalance === 0 || Date.now() - state.lastUpdated > 5000) {
+              console.log('🔄 Loading balance for authenticated user');
+              refreshBalance();
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check user balance:', error);
+        }
+      }
+    };
+
+    // Check immediately
+    checkUserBalance();
+    
+    // Check periodically
+    const interval = setInterval(checkUserBalance, 10000); // Every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, [refreshBalance, state.currentBalance, state.lastUpdated]);
 
   // Listen for WebSocket balance updates
   useEffect(() => {

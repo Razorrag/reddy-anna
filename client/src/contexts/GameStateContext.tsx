@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { useBalance } from './BalanceContext';
 import { apiClient } from '@/lib/api-client';
@@ -15,7 +15,7 @@ import type {
 } from '@/types/game';
 
 // Enhanced GameState interface using shared types
-interface GameState {
+export interface GameState {
   // Game identification
   id: string;
   gameId: string;
@@ -335,17 +335,21 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     return gameState.playerWallet;
   }, [gameState.playerWallet, updateBalance]);
 
+  // Use ref to track current balance to avoid dependency on gameState.playerWallet
+  const currentBalanceRef = useRef(gameState.playerWallet);
+
   // Listen for balance updates from BalanceContext
   useEffect(() => {
     const handleBalanceUpdate = (event: CustomEvent) => {
       const { balance: newBalance, source } = event.detail;
       
       // Convert to number if it's a string
-      const balanceAsNumber = typeof newBalance === 'string' 
-        ? parseFloat(newBalance) 
+      const balanceAsNumber = typeof newBalance === 'string'
+        ? parseFloat(newBalance)
         : Number(newBalance);
       
-      if (!isNaN(balanceAsNumber) && balanceAsNumber !== gameState.playerWallet) {
+      if (!isNaN(balanceAsNumber) && balanceAsNumber !== currentBalanceRef.current) {
+        currentBalanceRef.current = balanceAsNumber;
         dispatch({
           type: 'UPDATE_PLAYER_WALLET',
           payload: balanceAsNumber
@@ -357,11 +361,12 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       const { balance: newBalance } = event.detail;
       
       // Convert to number if it's a string
-      const balanceAsNumber = typeof newBalance === 'string' 
-        ? parseFloat(newBalance) 
+      const balanceAsNumber = typeof newBalance === 'string'
+        ? parseFloat(newBalance)
         : Number(newBalance);
       
-      if (!isNaN(balanceAsNumber) && balanceAsNumber !== gameState.playerWallet) {
+      if (!isNaN(balanceAsNumber) && balanceAsNumber !== currentBalanceRef.current) {
+        currentBalanceRef.current = balanceAsNumber;
         dispatch({
           type: 'UPDATE_PLAYER_WALLET',
           payload: balanceAsNumber
@@ -376,7 +381,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
       window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
     };
-  }, [gameState.playerWallet]);
+  }, []); // Empty dependency array - no longer depends on gameState.playerWallet
 
   // Add periodic balance refresh
   useEffect(() => {
@@ -388,6 +393,11 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     return () => clearInterval(interval);
   }, [auth.isAuthenticated, gameState.isGameActive, refreshBalanceFromAPI]);
+
+  // Update ref when gameState.playerWallet changes from other sources
+  useEffect(() => {
+    currentBalanceRef.current = gameState.playerWallet;
+  }, [gameState.playerWallet]);
 
   // Dispatchers for all actions
   const setGameId = (id: string) => {

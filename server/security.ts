@@ -2,8 +2,7 @@
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
-import xss from 'xss-clean';
-import hpp from 'hpp';
+// Security middleware imports
 import cors from 'cors';
 import { Request, Response, NextFunction } from 'express';
 
@@ -24,7 +23,7 @@ export const authLimiter = rateLimit({
     return req.ip ? trustedIPs.includes(req.ip) : false;
   },
   // Handle proxy headers properly to avoid xForwardedFor errors
-  trustProxy: true, // Trust first proxy (common in production)
+  // Security middleware configuration
 });
 
 export const generalLimiter = rateLimit({
@@ -42,7 +41,6 @@ export const generalLimiter = rateLimit({
     return skipPaths.some(path => req.path.startsWith(path));
   },
   // Handle proxy headers properly to avoid xForwardedFor errors
-  trustProxy: true,
 });
 
 export const apiLimiter = rateLimit({
@@ -60,7 +58,6 @@ export const apiLimiter = rateLimit({
     return skipPaths.some(path => req.path.startsWith(path));
   },
   // Handle proxy headers properly to avoid xForwardedFor errors
-  trustProxy: true,
 });
 
 // Game-specific rate limiter (more lenient for real-time gaming)
@@ -74,7 +71,6 @@ export const gameLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Handle proxy headers properly to avoid xForwardedFor errors
-  trustProxy: true,
 });
 
 export const paymentLimiter = rateLimit({
@@ -87,7 +83,6 @@ export const paymentLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Handle proxy headers properly to avoid xForwardedFor errors
-  trustProxy: true,
 });
 
 // Helmet security headers configuration
@@ -162,25 +157,13 @@ export const sanitizeInput = mongoSanitize({
   replaceWith: '_',
 });
 
-// XSS protection
-export const xssProtection = xss({
-  whiteList: {}, // No HTML tags allowed
-  stripIgnoreTag: true,
-  stripIgnoreTagBody: ['script'],
-});
-
-// HPP (HTTP Parameter Pollution) protection
-export const parameterPollutionProtection = hpp({
-  whitelist: ['sort', 'fields', 'page', 'limit'],
-});
+// Security middleware functions
 
 // Security middleware stack
 export const securityMiddleware = [
   securityHeaders,
   cors(corsOptions),
   sanitizeInput,
-  xssProtection,
-  parameterPollutionProtection,
   generalLimiter,
 ];
 
@@ -328,7 +311,6 @@ export const validateAdminAccess = (req: Request, res: Response, next: NextFunct
   
   // 🔐 SECURITY: Check if user exists (NO DEV MODE BYPASS)
   if (!user) {
-    console.log('❌ Admin access denied: No authenticated user');
     return res.status(401).json({
       success: false,
       error: 'Authentication required. Please login as admin.'
@@ -337,14 +319,12 @@ export const validateAdminAccess = (req: Request, res: Response, next: NextFunct
   
   // 🔐 SECURITY: Verify admin role (NO EXCEPTIONS)
   if (user.role !== 'admin' && user.role !== 'super_admin') {
-    console.log(`❌ Admin access denied: User ${user.id} has role '${user.role}' (requires 'admin' or 'super_admin')`);
     return res.status(403).json({
       success: false,
       error: 'Admin access required. Your role does not have permission.'
     });
   }
   
-  console.log(`✅ Admin access granted: ${user.id} (${user.role})`);
   next();
 };
 

@@ -112,7 +112,6 @@ const Profile: React.FC = () => {
     }
   };
 
-
   const handleClaimBonus = async () => {
     try {
       setClaimingBonus(true);
@@ -240,20 +239,20 @@ const Profile: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <div className="text-white/60 text-xs">Today</div>
-                      <div className={`text-lg font-semibold ${analytics?.todayProfit !== undefined && analytics.todayProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {analytics ? (analytics.todayProfit >= 0 ? '+' : '') + formatCurrency(analytics.todayProfit) : 'Loading...'}
+                      <div className={`text-lg font-semibold ${(analytics?.todayProfit ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {analytics ? ((analytics?.todayProfit ?? 0) >= 0 ? '+' : '') + formatCurrency(analytics?.todayProfit ?? 0) : 'Loading...'}
                       </div>
                     </div>
                     <div>
                       <div className="text-white/60 text-xs">Weekly</div>
-                      <div className={`text-lg font-semibold ${analytics?.weeklyProfit !== undefined && analytics.weeklyProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {analytics ? (analytics.weeklyProfit >= 0 ? '+' : '') + formatCurrency(analytics.weeklyProfit) : 'Loading...'}
+                      <div className={`text-lg font-semibold ${(analytics?.weeklyProfit ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {analytics ? ((analytics?.weeklyProfit ?? 0) >= 0 ? '+' : '') + formatCurrency(analytics?.weeklyProfit ?? 0) : 'Loading...'}
                       </div>
                     </div>
                     <div>
                       <div className="text-white/60 text-xs">Monthly</div>
-                      <div className={`text-lg font-semibold ${analytics?.monthlyProfit !== undefined && analytics.monthlyProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {analytics ? (analytics.monthlyProfit >= 0 ? '+' : '') + formatCurrency(analytics.monthlyProfit) : 'Loading...'}
+                      <div className={`text-lg font-semibold ${(analytics?.monthlyProfit ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {analytics ? ((analytics?.monthlyProfit ?? 0) >= 0 ? '+' : '') + formatCurrency(analytics?.monthlyProfit ?? 0) : 'Loading...'}
                       </div>
                     </div>
                   </div>
@@ -286,19 +285,19 @@ const Profile: React.FC = () => {
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-white/80">Games Played</span>
-                      <span className="text-white font-bold">{analytics ? analytics.gamesPlayed.toLocaleString() : 'Loading...'}</span>
+                      <span className="text-white font-bold">{analytics ? analytics?.gamesPlayed?.toLocaleString() : 'Loading...'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/80">Win Rate</span>
-                      <span className="text-gold font-bold">{analytics ? analytics.winRate.toFixed(1) + '%' : 'Loading...'}</span>
+                      <span className="text-gold font-bold">{analytics ? analytics?.winRate?.toFixed(1) + '%' : 'Loading...'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/80">Biggest Win</span>
-                      <span className="text-green-400 font-bold">{analytics ? formatCurrency(analytics.biggestWin) : 'Loading...'}</span>
+                      <span className="text-green-400 font-bold">{analytics ? formatCurrency(analytics?.biggestWin ?? 0) : 'Loading...'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/80">Average Bet</span>
-                      <span className="text-white font-bold">{analytics ? formatCurrency(analytics.averageBet) : 'Loading...'}</span>
+                      <span className="text-white font-bold">{analytics ? formatCurrency(analytics?.averageBet ?? 0) : 'Loading...'}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -310,19 +309,19 @@ const Profile: React.FC = () => {
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-white/80">Total Deposits</span>
-                      <span className="text-green-400 font-bold">{analytics ? formatCurrency(analytics.totalDeposits) : 'Loading...'}</span>
+                      <span className="text-green-400 font-bold">{analytics ? formatCurrency(analytics?.totalDeposits ?? 0) : 'Loading...'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/80">Total Withdrawals</span>
-                      <span className="text-red-400 font-bold">{analytics ? formatCurrency(analytics.totalWithdrawals) : 'Loading...'}</span>
+                      <span className="text-red-400 font-bold">{analytics ? formatCurrency(analytics?.totalWithdrawals ?? 0) : 'Loading...'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/80">Total Winnings</span>
-                      <span className="text-blue-400 font-bold">{analytics ? formatCurrency(analytics.totalWinnings) : 'Loading...'}</span>
+                      <span className="text-blue-400 font-bold">{analytics ? formatCurrency(analytics?.totalWinnings ?? 0) : 'Loading...'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/80">Total Losses</span>
-                      <span className="text-red-400 font-bold">{analytics ? formatCurrency(analytics.totalLosses) : 'Loading...'}</span>
+                      <span className="text-red-400 font-bold">{analytics ? formatCurrency(analytics?.totalLosses ?? 0) : 'Loading...'}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -362,7 +361,7 @@ const Profile: React.FC = () => {
                       <Label htmlFor="email" className="text-gold">Email</Label>
                       <Input
                         id="email"
-                        value={user.phone}
+                        value={user?.phone || ''}
                         disabled
                         className="bg-black/30 border-gold/20 text-white/60"
                       />
@@ -662,10 +661,10 @@ const Profile: React.FC = () => {
                   <div className="p-4 bg-gold/10 rounded-lg border border-gold/30">
                     <div className="text-center">
                       <div className="text-3xl font-bold text-gold mb-2">
-                        {profileState.user?.referralCode || 'REDDY' + user.id.slice(-6).toUpperCase()}
+                        {profileState.user?.referralCode || (user?.id ? 'REDDY' + user?.id.slice(-6).toUpperCase() : 'LOADING')}
                       </div>
                       <Button
-                        onClick={() => copyToClipboard(profileState.user?.referralCode || 'REDDY' + user.id.slice(-6).toUpperCase())}
+                        onClick={() => copyToClipboard(profileState.user?.referralCode || (user?.id ? 'REDDY' + user?.id.slice(-6).toUpperCase() : 'LOADING'))}
                         variant="outline"
                         className="border-gold/30 text-gold hover:bg-gold/10"
                       >
@@ -718,7 +717,7 @@ const Profile: React.FC = () => {
                       <div className="text-white/60 text-sm">Available Deposit Bonus</div>
                     </div>
                   </div>
-                  {(profileState.bonusInfo?.referralBonus && profileState.bonusInfo.referralBonus > 0 || profileState.bonusInfo?.depositBonus && profileState.bonusInfo.depositBonus > 0) && (
+                  {(((profileState.bonusInfo?.referralBonus ?? 0) > 0) || ((profileState.bonusInfo?.depositBonus ?? 0) > 0)) && (
                     <div className="text-center pt-2">
                       <Button
                         onClick={handleClaimBonus}
@@ -744,14 +743,14 @@ const Profile: React.FC = () => {
             </div>
 
             {/* Referred Users List */}
-            {profileState.referralData?.referredUsers && profileState.referralData.referredUsers.length > 0 && (
+            {profileState.referralData?.referredUsers && (profileState.referralData?.referredUsers?.length ?? 0) > 0 && (
               <Card className="bg-black/50 border-gold/30">
                 <CardHeader>
                   <CardTitle className="text-gold">Referred Users</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {profileState.referralData.referredUsers.map((referral, index) => (
+                    {profileState.referralData?.referredUsers.map((referral, index) => (
                       <div key={index} className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-gold/10">
                         <div className="flex items-center gap-4">
                           <Avatar className="w-10 h-10">
@@ -871,6 +870,712 @@ const Profile: React.FC = () => {
     window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
     return () => window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
   }, []);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900">
+      {/* Header */}
+      <div className="bg-black/50 border-b border-gold/30">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center gap-4">
+            <Avatar className="w-16 h-16">
+              <AvatarImage src={profileState.user?.profilePicture} alt={user?.username || 'User'} />
+              <AvatarFallback className="bg-gold/20 text-gold text-xl font-semibold">
+                {user?.username?.slice(0, 2).toUpperCase() || '??'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-gold">{user?.full_name || user?.phone}</h1>
+              <p className="text-white/80">{user?.phone}</p>
+            </div>
+            <Button
+              onClick={() => window.history.back()}
+              variant="outline"
+              className="border-gold/30 text-gold hover:bg-gold/10"
+            >
+              <ChevronLeft className="w-4 h-4 mr-2" />
+              Back
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-6 bg-black/50 border-gold/30">
+            <TabsTrigger value="overview" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="profile" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="transactions" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
+              Transactions
+            </TabsTrigger>
+            <TabsTrigger value="game-history" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
+              Game History
+            </TabsTrigger>
+            <TabsTrigger value="referral" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
+              Referral
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
+              Settings
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Balance Card */}
+              <Card className="lg:col-span-2 bg-gradient-to-r from-gold/10 to-yellow-600/10 border-gold/30">
+                <CardHeader>
+                  <CardTitle className="text-gold flex items-center gap-2 text-xl">
+                    <Wallet className="w-6 h-6" />
+                    Account Overview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div>
+                    <div className="text-white/80 text-sm mb-2">Current Balance</div>
+                    <div className="text-4xl font-bold text-gold">
+                      {formatCurrency(balance)}
+                    </div>
+                    <div className="mt-2">
+                      <Button
+                        onClick={refreshBalance}
+                        variant="outline"
+                        size="sm"
+                        className="border-gold/30 text-gold hover:bg-gold/10"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Refresh Balance
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-white/60 text-xs">Today</div>
+                      <div className={`text-lg font-semibold ${(analytics?.todayProfit ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {analytics ? ((analytics?.todayProfit ?? 0) >= 0 ? '+' : '') + formatCurrency(analytics?.todayProfit ?? 0) : 'Loading...'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-white/60 text-xs">Weekly</div>
+                      <div className={`text-lg font-semibold ${(analytics?.weeklyProfit ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {analytics ? ((analytics?.weeklyProfit ?? 0) >= 0 ? '+' : '') + formatCurrency(analytics?.weeklyProfit ?? 0) : 'Loading...'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-white/60 text-xs">Monthly</div>
+                      <div className={`text-lg font-semibold ${(analytics?.monthlyProfit ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {analytics ? ((analytics?.monthlyProfit ?? 0) >= 0 ? '+' : '') + formatCurrency(analytics?.monthlyProfit ?? 0) : 'Loading...'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button
+                      onClick={openWalletModal}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <TrendingUp className="w-4 h-4 mr-2" />
+                      Add Funds
+                    </Button>
+                    <Button
+                      onClick={openWalletModal}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      <TrendingDown className="w-4 h-4 mr-2" />
+                      Withdraw
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Quick Stats */}
+              <div className="space-y-4">
+                <Card className="bg-black/50 border-gold/20">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-gold text-lg">Statistics</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80">Games Played</span>
+                      <span className="text-white font-bold">{analytics ? analytics?.gamesPlayed?.toLocaleString() : 'Loading...'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80">Win Rate</span>
+                      <span className="text-gold font-bold">{analytics ? analytics?.winRate?.toFixed(1) + '%' : 'Loading...'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80">Biggest Win</span>
+                      <span className="text-green-400 font-bold">{analytics ? formatCurrency(analytics?.biggestWin ?? 0) : 'Loading...'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80">Average Bet</span>
+                      <span className="text-white font-bold">{analytics ? formatCurrency(analytics?.averageBet ?? 0) : 'Loading...'}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-black/50 border-gold/20">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-gold text-lg">Totals</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80">Total Deposits</span>
+                      <span className="text-green-400 font-bold">{analytics ? formatCurrency(analytics?.totalDeposits ?? 0) : 'Loading...'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80">Total Withdrawals</span>
+                      <span className="text-red-400 font-bold">{analytics ? formatCurrency(analytics?.totalWithdrawals ?? 0) : 'Loading...'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80">Total Winnings</span>
+                      <span className="text-blue-400 font-bold">{analytics ? formatCurrency(analytics?.totalWinnings ?? 0) : 'Loading...'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80">Total Losses</span>
+                      <span className="text-red-400 font-bold">{analytics ? formatCurrency(analytics?.totalLosses ?? 0) : 'Loading...'}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Profile Tab */}
+          <TabsContent value="profile" className="space-y-6">
+            <Card className="bg-black/50 border-gold/30">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-gold">Personal Information</CardTitle>
+                  <Button
+                    onClick={() => setEditingProfile(!editingProfile)}
+                    variant={editingProfile ? "default" : "outline"}
+                    className={editingProfile ? "bg-green-600 hover:bg-green-700" : "border-gold/30 text-gold hover:bg-gold/10"}
+                  >
+                    {editingProfile ? 'Save Changes' : 'Edit Profile'}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="fullName" className="text-gold">Full Name</Label>
+                      <Input
+                        id="fullName"
+                        value={profileForm.fullName}
+                        onChange={(e) => setProfileForm(prev => ({ ...prev, fullName: e.target.value }))}
+                        disabled={!editingProfile}
+                        className="bg-black/50 border-gold/30 text-white"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="email" className="text-gold">Email</Label>
+                      <Input
+                        id="email"
+                        value={user?.phone || ''}
+                        disabled
+                        className="bg-black/30 border-gold/20 text-white/60"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="mobile" className="text-gold">Mobile Number</Label>
+                      <Input
+                        id="mobile"
+                        value={profileForm.mobile}
+                        onChange={(e) => setProfileForm(prev => ({ ...prev, mobile: e.target.value }))}
+                        disabled={!editingProfile}
+                        className="bg-black/50 border-gold/30 text-white"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="dateOfBirth" className="text-gold">Date of Birth</Label>
+                      <Input
+                        id="dateOfBirth"
+                        type="date"
+                        value={profileForm.dateOfBirth}
+                        onChange={(e) => setProfileForm(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                        disabled={!editingProfile}
+                        className="bg-black/50 border-gold/30 text-white"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="gender" className="text-gold">Gender</Label>
+                      <Select
+                        value={profileForm.gender}
+                        onValueChange={(value) => setProfileForm(prev => ({ ...prev, gender: value }))}
+                        disabled={!editingProfile}
+                      >
+                        <SelectTrigger className="bg-black/50 border-gold/30 text-white">
+                          <SelectValue placeholder="Select gender" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-black/90 border-gold/30">
+                          <SelectItem value="male">Male</SelectItem>
+                          <SelectItem value="female">Female</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="address" className="text-gold">Address</Label>
+                      <Input
+                        id="address"
+                        value={profileForm.address}
+                        onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))}
+                        disabled={!editingProfile}
+                        className="bg-black/50 border-gold/30 text-white"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="city" className="text-gold">City</Label>
+                        <Input
+                          id="city"
+                          value={profileForm.city}
+                          onChange={(e) => setProfileForm(prev => ({ ...prev, city: e.target.value }))}
+                          disabled={!editingProfile}
+                          className="bg-black/50 border-gold/30 text-white"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="state" className="text-gold">State</Label>
+                        <Input
+                          id="state"
+                          value={profileForm.state}
+                          onChange={(e) => setProfileForm(prev => ({ ...prev, state: e.target.value }))}
+                          disabled={!editingProfile}
+                          className="bg-black/50 border-gold/30 text-white"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="pincode" className="text-gold">Pincode</Label>
+                        <Input
+                          id="pincode"
+                          value={profileForm.pincode}
+                          onChange={(e) => setProfileForm(prev => ({ ...prev, pincode: e.target.value }))}
+                          disabled={!editingProfile}
+                          className="bg-black/50 border-gold/30 text-white"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="country" className="text-gold">Country</Label>
+                        <Input
+                          id="country"
+                          value={profileForm.country}
+                          onChange={(e) => setProfileForm(prev => ({ ...prev, country: e.target.value }))}
+                          disabled={!editingProfile}
+                          className="bg-black/50 border-gold/30 text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {editingProfile && (
+                  <div className="flex gap-4 pt-4 border-t border-gold/20">
+                    <Button
+                      onClick={handleProfileUpdate}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Save Changes
+                    </Button>
+                    <Button
+                      onClick={() => setEditingProfile(false)}
+                      variant="outline"
+                      className="border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Transactions Tab */}
+          <TabsContent value="transactions" className="space-y-6">
+            <Card className="bg-black/50 border-gold/30">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-gold">Transaction History</CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      <Filter className="w-4 h-4 mr-2" />
+                      Filter
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Export
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {profileState.loading ? (
+                  <div className="text-center py-8 text-white">Loading transactions...</div>
+                ) : profileState.transactions.length === 0 ? (
+                  <div className="text-center py-8 text-white/60">No transactions found</div>
+                ) : (
+                  <div className="space-y-3">
+                    {profileState.transactions.map((transaction) => (
+                      <div key={transaction.id} className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-gold/10">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-3 h-3 rounded-full ${
+                            transaction.type === 'deposit' ? 'bg-green-400' :
+                            transaction.type === 'withdrawal' ? 'bg-red-400' :
+                            transaction.type === 'win' ? 'bg-blue-400' :
+                            'bg-gray-400'
+                          }`} />
+                          <div>
+                            <div className="text-white font-medium capitalize">{transaction.type}</div>
+                            <div className="text-white/60 text-sm">{transaction.description}</div>
+                            <div className="text-white/40 text-xs">{formatDate(transaction.createdAt)}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`font-bold text-lg ${
+                            transaction.type === 'deposit' || transaction.type === 'win' ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {transaction.type === 'deposit' || transaction.type === 'win' ? '+' : '-'}
+                            {formatCurrency(transaction.amount)}
+                          </div>
+                          <Badge variant="outline" className="text-xs">
+                            {transaction.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {profileState.pagination.transactions.hasMore && (
+                      <div className="text-center pt-4">
+                        <Button
+                          onClick={loadMoreTransactions}
+                          variant="outline"
+                          className="border-gold/30 text-gold hover:bg-gold/10"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Load More
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Game History Tab */}
+          <TabsContent value="game-history" className="space-y-6">
+            <Card className="bg-black/50 border-gold/30">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-gold">Game History</CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      <Filter className="w-4 h-4 mr-2" />
+                      Filter
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Export
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {profileState.loading ? (
+                  <div className="text-center py-8 text-white">Loading game history...</div>
+                ) : profileState.gameHistory.length === 0 ? (
+                  <div className="text-center py-8 text-white/60">No games found</div>
+                ) : (
+                  <div className="space-y-3">
+                    {profileState.gameHistory.map((game) => (
+                      <div key={game.id} className="p-4 bg-black/30 rounded-lg border border-gold/10">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-3 h-3 rounded-full ${
+                              game.result === 'win' ? 'bg-green-400' : 'bg-red-400'
+                            }`} />
+                            <div>
+                              <div className="text-white font-medium">
+                                Game #{game.gameId.slice(-6)} - {game.winner.toUpperCase()} Won
+                              </div>
+                              <div className="text-white/60 text-sm">
+                                Opening Card: {game.openingCard} | Your Bet: {game.yourBet.side.toUpperCase()} ₹{game.yourBet.amount}
+                              </div>
+                              <div className="text-white/40 text-xs">{formatDate(game.createdAt)}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`font-bold text-lg ${
+                              game.result === 'win' ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {game.result === 'win' ? '+' : '-'}
+                              {formatCurrency(game.yourBet.amount)}
+                            </div>
+                            {game.result === 'win' && (
+                              <div className="text-green-400 text-sm">
+                                Payout: {formatCurrency(game.payout)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {profileState.pagination.gameHistory.hasMore && (
+                      <div className="text-center pt-4">
+                        <Button
+                          onClick={loadMoreGameHistory}
+                          variant="outline"
+                          className="border-gold/30 text-gold hover:bg-gold/10"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Load More
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Referral Tab */}
+          <TabsContent value="referral" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="bg-black/50 border-gold/30">
+                <CardHeader>
+                  <CardTitle className="text-gold">Your Referral Code</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 bg-gold/10 rounded-lg border border-gold/30">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-gold mb-2">
+                        {profileState.user?.referralCode || (user?.id ? 'REDDY' + user?.id.slice(-6).toUpperCase() : 'LOADING')}
+                      </div>
+                      <Button
+                        onClick={() => copyToClipboard(profileState.user?.referralCode || (user?.id ? 'REDDY' + user?.id.slice(-6).toUpperCase() : 'LOADING'))}
+                        variant="outline"
+                        className="border-gold/30 text-gold hover:bg-gold/10"
+                      >
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy Code
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="text-sm text-white/80">
+                    <p className="mb-2">Share your referral code with friends and earn bonuses when they sign up and play!</p>
+                    <ul className="list-disc list-inside space-y-1 text-white/60">
+                      <li>Friend gets 5% bonus on their first deposit</li>
+                      <li>You get 1% bonus when they make their first deposit</li>
+                      <li>Bonus is automatically credited to your account</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-black/50 border-gold/30">
+                <CardHeader>
+                  <CardTitle className="text-gold">Referral Statistics</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-4 bg-black/30 rounded-lg">
+                      <div className="text-2xl font-bold text-gold">
+                        {profileState.referralData?.totalReferrals || 0}
+                      </div>
+                      <div className="text-white/60 text-sm">Total Referrals</div>
+                    </div>
+                    <div className="text-center p-4 bg-black/30 rounded-lg">
+                      <div className="text-2xl font-bold text-green-400">
+                        {formatCurrency(profileState.referralData?.totalReferralEarnings || 0)}
+                      </div>
+                      <div className="text-white/60 text-sm">Referral Earnings</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-4 bg-black/30 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-400">
+                        {formatCurrency(profileState.bonusInfo?.referralBonus || 0)}
+                      </div>
+                      <div className="text-white/60 text-sm">Available Referral Bonus</div>
+                    </div>
+                    <div className="text-center p-4 bg-black/30 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-400">
+                        {formatCurrency(profileState.bonusInfo?.depositBonus || 0)}
+                      </div>
+                      <div className="text-white/60 text-sm">Available Deposit Bonus</div>
+                    </div>
+                  </div>
+                  {(((profileState.bonusInfo?.referralBonus ?? 0) > 0) || ((profileState.bonusInfo?.depositBonus ?? 0) > 0)) && (
+                    <div className="text-center pt-2">
+                      <Button
+                        onClick={handleClaimBonus}
+                        disabled={claimingBonus}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {claimingBonus ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Claiming...
+                          </>
+                        ) : (
+                          <>
+                            <TrendingUp className="w-4 h-4 mr-2" />
+                            Claim Available Bonus ({formatCurrency((profileState.bonusInfo?.referralBonus || 0) + (profileState.bonusInfo?.depositBonus || 0))})
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Referred Users List */}
+            {profileState.referralData?.referredUsers && (profileState.referralData?.referredUsers?.length ?? 0) > 0 && (
+              <Card className="bg-black/50 border-gold/30">
+                <CardHeader>
+                  <CardTitle className="text-gold">Referred Users</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {profileState.referralData?.referredUsers.map((referral, index) => (
+                      <div key={index} className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-gold/10">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="w-10 h-10">
+                            <AvatarFallback className="bg-gold/20 text-gold text-sm font-semibold">
+                              {referral.username.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="text-white font-medium">{referral.username}</div>
+                            <div className="text-white/60 text-sm">Joined: {formatDate(referral.createdAt)}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-green-400 font-bold">
+                            +{formatCurrency(referral.bonusEarned || 0)}
+                          </div>
+                          <div className="text-white/60 text-sm">
+                            {referral.hasDeposited ? 'Deposited' : 'Pending Deposit'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6">
+            <Card className="bg-black/50 border-gold/30">
+              <CardHeader>
+                <CardTitle className="text-gold">Account Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gold">Security</h3>
+                  <div className="space-y-3">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      Change Password
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      Enable Two-Factor Authentication
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gold">Preferences</h3>
+                  <div className="space-y-3">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      Notification Settings
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      Language Preferences
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      Theme Settings
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gold">Data & Privacy</h3>
+                  <div className="space-y-3">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      Download My Data
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start border-red-30 text-red-400 hover:bg-red-500/10"
+                    >
+                      Delete Account
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Wallet Modal */}
+      <WalletModal
+        isOpen={showWalletModal}
+        onClose={() => setShowWalletModal(false)}
+        userBalance={balance}
+      />
+    </div>
+  );
 };
 
 export default Profile;

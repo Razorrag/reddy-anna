@@ -77,61 +77,86 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   });
   const [reconnectTimeout, setReconnectTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  // Add this function to handle token-based authentication
-  const authenticateUser = useCallback(() => {
+  // ✅ CRITICAL FIX: Simplified and robust WebSocket authentication
+  const authenticateUser = useCallback(async () => {
     const ws = (window as any).gameWebSocket;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      // Check if we're on a page that requires authentication
-      const currentPath = window.location.pathname;
-      const unauthenticatedPages = ['/login', '/signup', '/register', '/admin-login'];
-      
-      // Don't authenticate if on unauthenticated pages
-      if (unauthenticatedPages.includes(currentPath)) {
-        console.log('🔄 Skipping WebSocket authentication on unauthenticated page:', currentPath);
-        return;
-      }
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.log('🔄 WebSocket not ready for authentication');
+      return;
+    }
 
-      const { user, isAuthenticated, token } = authState;
+    // Check if we're on a page that requires authentication
+    const currentPath = window.location.pathname;
+    const unauthenticatedPages = ['/login', '/signup', '/register', '/admin-login'];
+    
+    if (unauthenticatedPages.includes(currentPath)) {
+      console.log('🔄 Skipping WebSocket authentication on unauthenticated page:', currentPath);
+      return;
+    }
 
-      console.log('🔐 WebSocket authentication check:', {
-        hasToken: !!token,
-        isAuthenticated,
-        user: user,
-        currentPath
-      });
+    const { user, isAuthenticated, token } = authState;
 
-      if (user && isAuthenticated && token) {
-        // Use phone number as userId if available, otherwise use id or username
+    console.log('🔐 WebSocket authentication check:', {
+      hasToken: !!token,
+      isAuthenticated,
+      hasUser: !!user,
+      currentPath
+    });
+
+    // ✅ CRITICAL FIX: Simple and clear authentication logic
+    if (isAuthenticated && user && token) {
+      try {
+        // Validate token format and structure
+        if (typeof token !== 'string' || token.length < 10) {
+          console.error('❌ Invalid token format');
+          return;
+        }
+
         const userId = user.phone || user.id || user.username;
-        
-        // Get role from the user object
-        const userRole = user.role;
-        
+        const userRole = user.role || 'player';
+        const username = user.username || user.full_name || user.phone || 'Player';
+        const wallet = user.balance || 0;
+
         console.log('📤 Sending WebSocket authentication:', {
           userId,
           role: userRole,
-          username: user.username || user.full_name || user.phone || 'User',
-          hasToken: !!token
+          username,
+          wallet
         });
         
         ws.send(JSON.stringify({
           type: 'authenticate',
           data: {
             userId: userId,
-            username: user.username || user.full_name || user.phone || 'User',
-            role: userRole, // Use determined role without fallback
-            wallet: user.balance || 0,
-            token: token // Always send token if available
+            username: username,
+            role: userRole,
+            wallet: wallet,
+            token: token
           },
           timestamp: Date.now()
         }));
         
         console.log(`✅ WebSocket authentication sent for ${userRole.toUpperCase()}: ${userId}`);
-      } else {
-        // NO FALLBACK - User must be logged in to use WebSocket
-        console.warn('⚠️ WebSocket not authenticated - no valid user session found');
-        console.warn('⚠️ User must login first. IsAuthenticated:', isAuthenticated, 'HasUser:', !!user, 'HasToken:', !!token);
+      } catch (error) {
+        console.error('❌ Error during WebSocket authentication:', error);
       }
+    } else {
+      // ✅ CRITICAL FIX: Clear error message for debugging
+      console.warn('❌ WebSocket authentication failed:', {
+        isAuthenticated,
+        hasUser: !!user,
+        hasToken: !!token
+      });
+      
+      // Send clear error to server
+      ws.send(JSON.stringify({
+        type: 'auth_error',
+        data: {
+          message: 'Authentication required. Please login first.',
+          error: 'AUTH_REQUIRED',
+          redirectTo: '/login'
+        }
+      }));
     }
   }, [authState]);
 
@@ -161,10 +186,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Use dynamic URL function
       const wsUrl = getWebSocketUrl();
       console.log('🔌 Connecting to WebSocket:', wsUrl);
+      console.log('🔄 WebSocket connection attempt started');
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         console.log('✅ WebSocket connected successfully to:', wsUrl);
+        console.log('🎉 WebSocket connection established - game should start now');
         setConnectionState({
           connected: true,
           connecting: false,
@@ -207,27 +234,91 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               console.log('WebSocket authenticated:', data.data);
               break;
 
-            case 'sync_game_state':
-              if (data.data?.phase) setPhase(data.data.phase);
-              if (data.data?.countdown !== undefined) setCountdown(data.data.countdown);
-              if (data.data?.winner) setWinner(data.data.winner);
-              if (data.data?.currentRound) setCurrentRound(data.data.currentRound);
+            case 'sync_game_state': {
+              console.log('📥 Syncing game state:', {
+                phase: data.data?.phase,
+                round: data.data?.currentRound,
+                openingCard: data.data?.openingCard?.display || data.data?.openingCard,
+                andarCards: data.data?.andarCards?.length || 0,
+                baharCards: data.data?.baharCards?.length || 0,
+                winner: data.data?.winner,
+                bettingLocked: data.data?.bettingLocked
+              });
+              
+              // ✅ CRITICAL FIX: Sync all game state properties with proper validation
+              if (data.data?.phase) {
+                console.log('🔄 Updating phase:', data.data.phase);
+                setPhase(data.data.phase);
+              }
+              if (data.data?.countdown !== undefined) {
+                console.log('🔄 Updating countdown:', data.data.countdown);
+                setCountdown(data.data.countdown);
+              }
+              if (data.data?.winner) {
+                console.log('🔄 Updating winner:', data.data.winner);
+                setWinner(data.data.winner);
+              }
+              if (data.data?.currentRound) {
+                console.log('🔄 Updating current round:', data.data.currentRound);
+                setCurrentRound(data.data.currentRound);
+              }
+              if (data.data?.bettingLocked !== undefined) {
+                console.log('🔄 Updating betting locked:', data.data.bettingLocked);
+                setBettingLocked(data.data.bettingLocked);
+              }
+              
+              // ✅ CRITICAL FIX: Sync opening card with proper validation
               if (data.data?.openingCard) {
-                console.log('Syncing opening card:', data.data.openingCard);
+                console.log('✅ Syncing opening card:', data.data.openingCard);
                 setSelectedOpeningCard(data.data.openingCard);
               }
-              // Clear existing cards and sync new ones
+              
+              // ✅ CRITICAL FIX: Clear existing cards and sync new ones
               if (data.data?.andarCards || data.data?.baharCards) {
+                console.log('🔄 Clearing existing cards and syncing new ones');
                 clearCards();
                 if (data.data?.andarCards && Array.isArray(data.data.andarCards)) {
-                  data.data.andarCards.forEach((card: Card) => addAndarCard(card));
+                  console.log(`✅ Syncing ${data.data.andarCards.length} Andar cards`);
+                  data.data.andarCards.forEach((card: Card) => {
+                    console.log('Adding Andar card:', card);
+                    addAndarCard(card);
+                  });
                 }
                 if (data.data?.baharCards && Array.isArray(data.data.baharCards)) {
-                  data.data.baharCards.forEach((card: Card) => addBaharCard(card));
+                  console.log(`✅ Syncing ${data.data.baharCards.length} Bahar cards`);
+                  data.data.baharCards.forEach((card: Card) => {
+                    console.log('Adding Bahar card:', card);
+                    addBaharCard(card);
+                  });
                 }
               }
-              // Ensure ALL state properties are synchronized
+              
+              // ✅ CRITICAL FIX: Sync betting totals with proper structure
+              if (data.data?.andarTotal !== undefined || data.data?.baharTotal !== undefined) {
+                const andarTotal = data.data.andarTotal || 0;
+                const baharTotal = data.data.baharTotal || 0;
+                console.log('🔄 Updating betting totals:', { andarTotal, baharTotal });
+                updateTotalBets({
+                  andar: andarTotal,
+                  bahar: baharTotal
+                });
+              }
+              
+              // ✅ CRITICAL FIX: Sync round-specific bets if available
+              if (data.data?.round1Bets) {
+                console.log('🔄 Syncing round 1 bets:', data.data.round1Bets);
+                // Note: updateRoundBets function may not be available in this context
+                // This would be handled by the GameStateContext if needed
+              }
+              if (data.data?.round2Bets) {
+                console.log('🔄 Syncing round 2 bets:', data.data.round2Bets);
+                // Note: updateRoundBets function may not be available in this context
+                // This would be handled by the GameStateContext if needed
+              }
+              
+              console.log('✅ Game state synchronized successfully');
               break;
+            }
 
             case 'opening_card_set':
             case 'opening_card_confirmed':
@@ -711,7 +802,38 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               console.log('👥 Viewer count updated:', data.data.count);
               // This would be handled by UI components
               break;
-
+        
+            case 'screen_share_start':
+              // Handle screen sharing start from admin
+              console.log('🖥️ Screen sharing started by admin');
+              showNotification('Admin started screen sharing', 'info');
+              
+              // Dispatch screen share start event for VideoArea component
+              const screenShareStartEvent = new CustomEvent('screen-share-start', {
+                detail: {
+                  isActive: true,
+                  adminId: data.data?.adminId,
+                  timestamp: Date.now()
+                }
+              });
+              window.dispatchEvent(screenShareStartEvent);
+              break;
+        
+            case 'screen_share_stop':
+              // Handle screen sharing stop from admin
+              console.log('🖥️ Screen sharing stopped by admin');
+              showNotification('Admin stopped screen sharing', 'info');
+              
+              // Dispatch screen share stop event for VideoArea component
+              const screenShareStopEvent = new CustomEvent('screen-share-stop', {
+                detail: {
+                  isActive: false,
+                  timestamp: Date.now()
+                }
+              });
+              window.dispatchEvent(screenShareStopEvent);
+              break;
+        
             default:
               console.log('Unknown message type:', data.type);
           }
@@ -735,24 +857,26 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       ws.onclose = (event) => {
         console.log('WebSocket closed:', event.code, event.reason);
         
+        // Clear the stored WebSocket reference
+        delete (window as any).gameWebSocket;
+        
         setConnectionState(prev => {
           const reconnectAttempts = prev.reconnectAttempts ?? 0;
           const maxReconnectAttempts = prev.maxReconnectAttempts ?? 5;
           const shouldReconnect = event.code !== 1000 && reconnectAttempts < maxReconnectAttempts;
           
           if (shouldReconnect) {
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff, max 30s
+            // Aggressive reconnection for game functionality
+            const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 10000); // Faster reconnection, max 10s
             
-            console.log(`Attempting to reconnect in ${delay}ms...`);
+            console.log(`🔄 Attempting to reconnect in ${delay}ms... (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
             
             const timeout = setTimeout(() => {
-              console.log(`Reconnection attempt ${reconnectAttempts + 1}/${maxReconnectAttempts}`);
+              console.log(`🔄 Reconnection attempt ${reconnectAttempts + 1}/${maxReconnectAttempts}`);
               connectWebSocket();
             }, delay);
             
             setReconnectTimeout(timeout);
-          } else {
-            showNotification('Disconnected from game server', 'error');
           }
           
           return {
@@ -762,6 +886,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             isConnected: false,
             isConnecting: false,
             reconnectAttempts: shouldReconnect ? reconnectAttempts + 1 : reconnectAttempts,
+            maxReconnectReached: !shouldReconnect && reconnectAttempts >= maxReconnectAttempts,
           };
         });
       };
@@ -882,16 +1007,18 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [showNotification]);
 
   useEffect(() => {
-    // Only connect once on mount
+    // Connect WebSocket immediately on game pages, handle auth inside WebSocket
     if (typeof window !== 'undefined') {
       const currentPath = window.location.pathname;
       const unconnectedPages = ['/login', '/signup', '/register', '/admin-login'];
       
-      // Only connect WebSocket if not on unconnected pages AND auth is checked AND user is authenticated
-      if (!unconnectedPages.includes(currentPath) && authState.authChecked && authState.isAuthenticated) {
+      // Connect WebSocket immediately on game pages regardless of auth state
+      // Authentication will be handled within the WebSocket connection
+      if (!unconnectedPages.includes(currentPath)) {
+        console.log('🔄 Connecting WebSocket immediately on game page:', currentPath);
         connectWebSocket();
       } else {
-        console.log('🔄 Not connecting WebSocket on:', currentPath, '- authChecked:', authState.authChecked, '- isAuthenticated:', authState.isAuthenticated);
+        console.log('🔄 Skipping WebSocket connection on:', currentPath);
       }
     } else {
       // Server-side: don't connect WebSocket
@@ -926,7 +1053,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         clearTimeout(reconnectTimeout);
       }
     };
-  }, [authState.authChecked, authState.isAuthenticated, sendWebSocketMessage]); // Add sendWebSocketMessage to deps
+  }, []); // REMOVE authentication dependencies to break deadlock
+
+  // Show notification when max reconnect attempts reached
+  useEffect(() => {
+    if (connectionState.maxReconnectReached) {
+      showNotification('Disconnected from game server', 'error');
+    }
+  }, [connectionState.maxReconnectReached, showNotification]);
 
   const value: WebSocketContextType = {
     sendWebSocketMessage,

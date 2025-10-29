@@ -75,7 +75,7 @@ export const fetchUsers = async (filters: UserAdminFilters = {}): Promise<UsersR
       if (value !== undefined) params.append(key, value.toString());
     });
     
-    const response = await apiClient.get<UsersResponse>(`/admin/users?${params}`);
+    const response = await apiClient.get<UsersResponse>(`/api/admin/users?${params}`);
     return response;
   } catch (error) {
     console.error('Failed to fetch users:', error);
@@ -85,7 +85,7 @@ export const fetchUsers = async (filters: UserAdminFilters = {}): Promise<UsersR
 
 export const getUserDetails = async (userId: string): Promise<UserResponse> => {
   try {
-    const response = await apiClient.get<UserResponse>(`/admin/users/${userId}`);
+    const response = await apiClient.get<UserResponse>(`/api/admin/users/${userId}`);
     return response;
   } catch (error) {
     console.error('Failed to get user details:', error);
@@ -95,7 +95,7 @@ export const getUserDetails = async (userId: string): Promise<UserResponse> => {
 
 export const updateUserBalance = async (userId: string, update: UserBalanceUpdate): Promise<UserResponse> => {
   try {
-    const response = await apiClient.patch<UserResponse>(`/admin/users/${userId}/balance`, update);
+    const response = await apiClient.patch<UserResponse>(`/api/admin/users/${userId}/balance`, update);
     return response;
   } catch (error) {
     console.error('Failed to update balance:', error);
@@ -105,7 +105,7 @@ export const updateUserBalance = async (userId: string, update: UserBalanceUpdat
 
 export const updateUserStatus = async (userId: string, update: UserStatusUpdate): Promise<UserResponse> => {
   try {
-    const response = await apiClient.patch<UserResponse>(`/admin/users/${userId}/status`, update);
+    const response = await apiClient.patch<UserResponse>(`/api/admin/users/${userId}/status`, update);
     return response;
   } catch (error) {
     console.error('Failed to update status:', error);
@@ -115,7 +115,7 @@ export const updateUserStatus = async (userId: string, update: UserStatusUpdate)
 
 export const createUserManually = async (userData: UserCreateData): Promise<UserResponse> => {
   try {
-    const response = await apiClient.post<UserResponse>('/admin/users/create', userData);
+    const response = await apiClient.post<UserResponse>('/api/admin/users/create', userData);
     return response;
   } catch (error) {
     console.error('Failed to create user:', error);
@@ -126,7 +126,7 @@ export const createUserManually = async (userData: UserCreateData): Promise<User
 export const getUserStatistics = async (userId?: string): Promise<UserStatisticsResponse> => {
   try {
     const params = userId ? `?userId=${userId}` : '';
-    const response = await apiClient.get<UserStatisticsResponse>(`/admin/statistics${params}`);
+    const response = await apiClient.get<UserStatisticsResponse>(`/api/admin/statistics${params}`);
     return response;
   } catch (error) {
     console.error('Failed to get user statistics:', error);
@@ -136,7 +136,7 @@ export const getUserStatistics = async (userId?: string): Promise<UserStatistics
 
 export const getUserReferrals = async (userId: string): Promise<UsersResponse> => {
   try {
-    const response = await apiClient.get<UsersResponse>(`/admin/users/${userId}/referrals`);
+    const response = await apiClient.get<UsersResponse>(`/api/admin/users/${userId}/referrals`);
     return response;
   } catch (error) {
     console.error('Failed to get user referrals:', error);
@@ -150,7 +150,7 @@ export const bulkUpdateUserStatus = async (
   reason?: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const response = await apiClient.post<{ success: boolean; error?: string }>('/admin/users/bulk-status', {
+    const response = await apiClient.post<{ success: boolean; error?: string }>('/api/admin/users/bulk-status', {
       userIds,
       status,
       reason
@@ -169,7 +169,7 @@ export const exportUserData = async (filters: UserAdminFilters = {}): Promise<an
       if (value !== undefined) params.append(key, value.toString());
     });
     
-    const response = await apiClient.get(`/admin/users/export?${params}`);
+    const response = await apiClient.get(`/api/admin/users/export?${params}`);
     return response;
   } catch (error) {
     console.error('Failed to export user data:', error);

@@ -83,8 +83,8 @@ export default function AdminLogin() {
         return;
       }
 
-      // Use auth context to handle login
-      login(adminData, token);
+      // Use auth context to handle admin login with isAdmin flag
+      login(adminData, token, true); // true indicates this is an admin login
       console.log('✅ Admin login successful');
 
       // Redirect to admin panel after successful login

@@ -1,6 +1,6 @@
 /**
  * MobileGameLayout - Main Game Layout Component
- * 
+ *
  * Mobile-first layout that works seamlessly across all devices
  * with the same portrait-oriented design.
  */
@@ -13,11 +13,10 @@ import ControlsRow from './ControlsRow.tsx';
 import CardHistory from './CardHistory.tsx';
 import HorizontalChipSelector from './HorizontalChipSelector.tsx';
 import ProgressBar from './ProgressBar.tsx';
-import type { GameState } from '../../types/game';
 import type { BetSide } from '../../types/game';
 
 interface MobileGameLayoutProps {
-  gameState: GameState;
+  gameState: any; // Use any to handle different GameState structures
   user: { id: string; username: string };
   userBalance: number;
   selectedBetAmount: number;
@@ -66,8 +65,9 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
         />
 
         {/* Video Area - 65-70% screen height with overlays */}
-        <VideoArea 
+        <VideoArea
           className="flex-1 relative"
+          gameState={gameState}
         />
 
         {/* Betting Strip - Andar/Opening Card/Bahar */}

@@ -14,29 +14,93 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ENUM TYPES FOR DATA INTEGRITY
 -- ============================================
 
--- User role enum (prevents typos like "adminn" or "ADMIN")
-CREATE TYPE user_role AS ENUM ('player', 'admin', 'super_admin');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'user_role'
+  ) THEN
+    EXECUTE 'CREATE TYPE user_role AS ENUM (''player'', ''admin'', ''super_admin'')';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_enum
+    WHERE enumtypid = 'user_role'::regtype
+      AND enumlabel = 'super_admin'
+  ) THEN
+    ALTER TYPE user_role ADD VALUE 'super_admin';
+  END IF;
+END $$;
 
 -- User status enum
-CREATE TYPE user_status AS ENUM ('active', 'suspended', 'banned', 'inactive');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'user_status'
+  ) THEN
+    EXECUTE 'CREATE TYPE user_status AS ENUM (''active'', ''suspended'', ''banned'', ''inactive'')';
+  END IF;
+END $$;
 
 -- Game phase enum
-CREATE TYPE game_phase AS ENUM ('idle', 'betting', 'dealing', 'complete');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'game_phase'
+  ) THEN
+    EXECUTE 'CREATE TYPE game_phase AS ENUM (''idle'', ''betting'', ''dealing'', ''complete'')';
+  END IF;
+END $$;
 
 -- Game status enum
-CREATE TYPE game_status AS ENUM ('active', 'completed', 'cancelled');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'game_status'
+  ) THEN
+    EXECUTE 'CREATE TYPE game_status AS ENUM (''active'', ''completed'', ''cancelled'')';
+  END IF;
+END $$;
 
 -- Bet side enum
-CREATE TYPE bet_side AS ENUM ('andar', 'bahar');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'bet_side'
+  ) THEN
+    EXECUTE 'CREATE TYPE bet_side AS ENUM (''andar'', ''bahar'')';
+  END IF;
+END $$;
 
 -- Transaction type enum
-CREATE TYPE transaction_type AS ENUM ('deposit', 'withdrawal', 'bet', 'win', 'refund', 'bonus', 'commission', 'support');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'transaction_type'
+  ) THEN
+    EXECUTE 'CREATE TYPE transaction_type AS ENUM (''deposit'', ''withdrawal'', ''bet'', ''win'', ''refund'', ''bonus'', ''commission'', ''support'')';
+  END IF;
+END $$;
 
 -- Transaction status enum
-CREATE TYPE transaction_status AS ENUM ('pending', 'completed', 'failed', 'cancelled');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'transaction_status'
+  ) THEN
+    EXECUTE 'CREATE TYPE transaction_status AS ENUM (''pending'', ''completed'', ''failed'', ''cancelled'')';
+  END IF;
+END $$;
 
 -- Request status enum
-CREATE TYPE request_status AS ENUM ('pending', 'approved', 'rejected', 'processing', 'processed', 'completed');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'request_status'
+  ) THEN
+    EXECUTE 'CREATE TYPE request_status AS ENUM (''pending'', ''approved'', ''rejected'', ''processing'', ''processed'', ''completed'')';
+  END IF;
+END $$;
 
 -- ============================================
 -- CORE TABLES
@@ -652,7 +716,7 @@ WHERE NOT EXISTS (SELECT 1 FROM stream_config LIMIT 1);
 
 -- Admin Requests Summary View
 CREATE OR REPLACE VIEW admin_requests_summary AS
-SELECT 
+SELECT
     COUNT(*) as total_requests,
     COUNT(*) FILTER (WHERE status = 'pending') as pending_requests,
     COUNT(*) FILTER (WHERE status = 'pending' AND priority = 1) as high_priority_requests,
@@ -663,9 +727,33 @@ SELECT
 FROM admin_requests
 WHERE created_at >= NOW() - INTERVAL '24 hours';
 
+-- User Game History View - Fixes the total_cards issue by joining game_sessions with game_history
+CREATE OR REPLACE VIEW user_game_history_view AS
+SELECT
+    pb.id as bet_id,
+    pb.user_id,
+    pb.game_id,
+    pb.round as bet_round,
+    pb.side as bet_side,
+    pb.amount as bet_amount,
+    pb.status as bet_status,
+    pb.created_at as bet_created_at,
+    gs.opening_card,
+    gs.winner,
+    gs.winning_card,
+    COALESCE(gh.round, gs.current_round) as game_round,
+    gs.status as game_status,
+    gh.total_cards
+FROM player_bets pb
+JOIN game_sessions gs ON pb.game_id = gs.game_id
+LEFT JOIN game_history gh ON gs.game_id = gh.game_id
+WHERE gs.status = 'completed';
+
 -- ============================================
 -- DATABASE FUNCTIONS
 -- ============================================
+
+DROP FUNCTION IF EXISTS update_request_status(UUID, VARCHAR, request_status, TEXT);
 
 -- Function to handle request status changes with audit logging
 CREATE OR REPLACE FUNCTION update_request_status(
@@ -712,34 +800,143 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to update user balance and mark request as processed
+-- Drop existing function before recreating with updated definition
+DROP FUNCTION IF EXISTS update_balance_with_request(
+    UUID,
+    VARCHAR,
+    request_status,
+    TEXT
+);
+
+-- Function to update user balance and process request with JSON return
 CREATE OR REPLACE FUNCTION update_balance_with_request(
     p_request_id UUID,
     p_admin_id VARCHAR(36),
     p_new_status request_status,
     p_notes TEXT DEFAULT NULL
-) RETURNS admin_requests AS $$
+) RETURNS JSON AS $$
 DECLARE
-    v_request admin_requests%ROWTYPE;
-    v_user users%ROWTYPE;
+    v_request RECORD;
+    v_user RECORD;
+    v_old_balance DECIMAL(15, 2);
+    v_new_balance DECIMAL(15, 2);
+    v_result JSON;
 BEGIN
     -- Get the request
     SELECT * INTO v_request FROM admin_requests WHERE id = p_request_id;
     
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Request not found: %', p_request_id;
+    END IF;
+    
+    -- Check if request has already been processed
+    IF v_request.balance_updated = true THEN
+        RAISE EXCEPTION 'Request has already been processed and balance updated';
+    END IF;
+    
     -- Get the user
     SELECT * INTO v_user FROM users WHERE id = v_request.user_id;
     
-    -- Update request status
-    SELECT * INTO v_request FROM update_request_status(p_request_id, p_admin_id, p_new_status, p_notes);
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'User not found: %', v_request.user_id;
+    END IF;
+    
+    -- Update request status first
+    UPDATE admin_requests 
+    SET status = p_new_status,
+        admin_id = p_admin_id,
+        admin_notes = COALESCE(p_notes, admin_notes),
+        updated_at = NOW(),
+        processed_at = NOW()
+    WHERE id = p_request_id;
+    
+    -- Log status update in audit trail
+    INSERT INTO request_audit (
+        request_id,
+        admin_id,
+        action,
+        old_status,
+        new_status,
+        notes
+    ) VALUES (
+        p_request_id,
+        p_admin_id,
+        'status_update',
+        v_request.status,
+        p_new_status,
+        p_notes
+    );
     
     -- If approved and amount is set, update balance
     IF p_new_status = 'approved' AND v_request.amount IS NOT NULL THEN
-        -- Update user balance (deposit increases, withdrawal decreases)
-        IF v_request.request_type = 'deposit' THEN
-            UPDATE users SET balance = balance + v_request.amount
+        v_old_balance := v_user.balance;
+        
+        -- Update user balance based on request type
+        IF v_request.request_type = 'deposit' OR v_request.request_type = 'balance' THEN
+            -- Add funds to user balance
+            v_new_balance := v_old_balance + v_request.amount;
+            
+            -- Check for negative balance (shouldn't happen for deposits, but safety check)
+            IF v_new_balance < 0 THEN
+                RAISE EXCEPTION 'Invalid balance calculation. Old: %, Change: %', v_old_balance, v_request.amount;
+            END IF;
+            
+            UPDATE users 
+            SET balance = v_new_balance,
+                updated_at = NOW()
             WHERE id = v_request.user_id;
+            
+            -- Apply deposit bonus if applicable (5% default)
+            IF v_request.request_type = 'deposit' THEN
+                DECLARE
+                    v_bonus_amount DECIMAL(15, 2);
+                    v_bonus_percent DECIMAL(5, 2) := 5.0; -- 5% default bonus
+                BEGIN
+                    v_bonus_amount := ROUND(v_request.amount * (v_bonus_percent / 100.0), 2);
+                    
+                    -- Add bonus to user's deposit_bonus_available
+                    UPDATE users
+                    SET deposit_bonus_available = deposit_bonus_available + v_bonus_amount,
+                        total_bonus_earned = total_bonus_earned + v_bonus_amount,
+                        original_deposit_amount = original_deposit_amount + v_request.amount,
+                        updated_at = NOW()
+                    WHERE id = v_request.user_id;
+                    
+                    -- Log bonus transaction
+                    INSERT INTO user_transactions (
+                        user_id,
+                        transaction_type,
+                        amount,
+                        balance_before,
+                        balance_after,
+                        status,
+                        description,
+                        reference_id
+                    ) VALUES (
+                        v_request.user_id,
+                        'bonus',
+                        v_bonus_amount,
+                        v_old_balance,
+                        v_new_balance,
+                        'completed',
+                        'Deposit bonus (' || v_bonus_percent || '%) for deposit of ₹' || v_request.amount,
+                        'BONUS-' || p_request_id::text
+                    );
+                END;
+            END IF;
+            
         ELSIF v_request.request_type = 'withdrawal' THEN
-            UPDATE users SET balance = balance - v_request.amount
+            -- Subtract funds from user balance
+            v_new_balance := v_old_balance - v_request.amount;
+            
+            -- Check for negative balance
+            IF v_new_balance < 0 THEN
+                RAISE EXCEPTION 'Insufficient balance. Current: %, Withdrawal: %', v_old_balance, v_request.amount;
+            END IF;
+            
+            UPDATE users 
+            SET balance = v_new_balance,
+                updated_at = NOW()
             WHERE id = v_request.user_id;
         END IF;
         
@@ -749,7 +946,7 @@ BEGIN
             balance_update_amount = v_request.amount
         WHERE id = p_request_id;
         
-        -- Log the balance update action
+        -- Log the balance update in audit trail
         INSERT INTO request_audit (
             request_id,
             admin_id,
@@ -763,13 +960,53 @@ BEGIN
             'balance_update',
             p_new_status,
             p_new_status,
-            'Balance updated by ' || COALESCE(p_notes, 'Admin action')
+            'Balance updated: ' || v_old_balance || ' → ' || v_new_balance || ' (' || 
+            CASE 
+                WHEN v_request.request_type IN ('deposit', 'balance') THEN '+'
+                ELSE '-'
+            END || v_request.amount || '). ' || COALESCE(p_notes, '')
+        );
+        
+        -- Log transaction in user_transactions table
+        INSERT INTO user_transactions (
+            user_id,
+            transaction_type,
+            amount,
+            balance_before,
+            balance_after,
+            status,
+            description,
+            reference_id
+        ) VALUES (
+            v_request.user_id,
+            v_request.request_type,
+            v_request.amount,
+            v_old_balance,
+            v_new_balance,
+            'completed',
+            CASE 
+                WHEN v_request.request_type = 'deposit' THEN 'Deposit approved by admin'
+                WHEN v_request.request_type = 'withdrawal' THEN 'Withdrawal approved by admin'
+                WHEN v_request.request_type = 'balance' THEN 'Balance adjustment by admin'
+                ELSE 'Admin request processed'
+            END || COALESCE(' - ' || p_notes, ''),
+            'REQ-' || p_request_id::text
         );
     END IF;
     
-    RETURN v_request;
+    -- Return updated request as JSON
+    SELECT row_to_json(r.*) INTO v_result
+    FROM (SELECT * FROM admin_requests WHERE id = p_request_id) r;
+    
+    RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Drop existing atomic balance function before recreating
+DROP FUNCTION IF EXISTS update_balance_atomic(
+  VARCHAR,
+  DECIMAL
+);
 
 -- Atomic balance update function for race condition prevention
 CREATE OR REPLACE FUNCTION update_balance_atomic(
@@ -1016,7 +1253,7 @@ GRANT SELECT, INSERT, UPDATE ON admin_dashboard_settings TO authenticated;
 GRANT EXECUTE ON FUNCTION update_request_status TO authenticated;
 GRANT EXECUTE ON FUNCTION update_balance_with_request TO authenticated;
 GRANT EXECUTE ON FUNCTION update_updated_at_column TO authenticated;
-GRANT EXECUTE ON FUNCTION update_balance_atomic TO authenticated;
+GRANT EXECUTE ON FUNCTION update_balance_atomic(VARCHAR, DECIMAL) TO authenticated;
 GRANT EXECUTE ON FUNCTION cleanup_expired_tokens TO authenticated;
 
 -- ============================================
