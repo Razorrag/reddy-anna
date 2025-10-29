@@ -75,6 +75,7 @@ import {
 import { validateUserData } from './validation';
 import streamRoutes from './stream-routes';
 import { streamStorage } from './stream-storage';
+import { AdminRequestsSupabaseAPI } from './admin-requests-supabase';
 
 // WebSocket client tracking
 interface WSClient {
@@ -1736,6 +1737,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Stream Routes - Dual streaming (RTMP and WebRTC)
   app.use("/api/stream", streamRoutes);
+  
+  // Admin Requests API - Supabase Compatible
+  const adminRequestsAPI = new AdminRequestsSupabaseAPI();
+  app.use("/api/admin", validateAdminAccess, adminRequestsAPI.getRouter());
   
   // Payment Routes
   app.post("/api/payment/process", paymentLimiter, async (req, res) => {
