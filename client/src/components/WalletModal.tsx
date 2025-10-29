@@ -47,8 +47,28 @@ export function WalletModal({
 
       if (response.success) {
         // Show success message
-        // In a real implementation, you'd use a proper toast notification system
-        alert(`${activeTab === 'deposit' ? 'Deposit' : 'Withdrawal'} request submitted successfully! Awaiting admin approval.`);
+        alert(`${activeTab === 'deposit' ? 'Deposit' : 'Withdrawal'} request submitted successfully! Opening WhatsApp to contact admin...`);
+        
+        // CRITICAL FIX: Auto-open WhatsApp with pre-filled message
+        try {
+          const whatsappResponse = await apiClient.post('/whatsapp/send-request', {
+            userId: response.data.userId || 'unknown',
+            userPhone: response.data.userPhone || 'unknown',
+            requestType: activeTab.toUpperCase(),
+            message: `New ${activeTab} request for ₹${numAmount.toLocaleString('en-IN')}. Request ID: ${response.requestId}`,
+            amount: numAmount,
+            isUrgent: false,
+            metadata: { requestId: response.requestId }
+          });
+
+          if (whatsappResponse.success && whatsappResponse.whatsappUrl) {
+            // Open WhatsApp in new tab
+            window.open(whatsappResponse.whatsappUrl, '_blank');
+          }
+        } catch (whatsappError) {
+          console.error('WhatsApp notification failed (non-critical):', whatsappError);
+          // Don't fail the request if WhatsApp fails
+        }
         
         setAmount("");
         onClose();

@@ -11,8 +11,10 @@
 
 import React from 'react';
 import { useLocation } from 'wouter';
-import { User } from 'lucide-react';
+import { User, Gift } from 'lucide-react';
 import { useGameState } from '@/contexts/GameStateContext';
+import { useUserProfile } from '@/contexts/UserProfileContext';
+import { useNotification } from '@/contexts/NotificationContext';
 
 interface MobileTopBarProps {
   className?: string;
@@ -29,15 +31,42 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
 }) => {
   const { gameState: contextGameState } = useGameState();
   const [, setLocation] = useLocation();
+  const { state: profileState, claimBonus, fetchBonusInfo } = useUserProfile();
+  const { showNotification } = useNotification();
+  const [isClaiming, setIsClaiming] = React.useState(false);
   
   // Use props gameState if provided, otherwise use context
   const gameState = propsGameState || contextGameState;
 
   // Ensure balance is always a valid number and visible
   const displayBalance = typeof userBalance === 'number' ? userBalance : 0;
+  
+  // Get bonus info
+  const bonusInfo = profileState.bonusInfo;
+  const totalBonus = (bonusInfo?.depositBonus || 0) + (bonusInfo?.referralBonus || 0);
+  const hasBonus = totalBonus > 0;
 
   const handleProfileClick = () => {
     setLocation('/profile');
+  };
+
+  const handleClaimBonus = async () => {
+    if (isClaiming) return;
+    
+    setIsClaiming(true);
+    try {
+      const result = await claimBonus();
+      if (result.success) {
+        showNotification(`Bonus claimed! ₹${totalBonus.toLocaleString('en-IN')} added to your balance`, 'success');
+        await fetchBonusInfo(); // Refresh bonus info
+      } else {
+        showNotification(result.error || 'Failed to claim bonus', 'error');
+      }
+    } catch (error) {
+      showNotification('Failed to claim bonus', 'error');
+    } finally {
+      setIsClaiming(false);
+    }
   };
 
   return (
@@ -68,7 +97,7 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
             </div>
           </div>
 
-          {/* Right Side - Profile, Wallet */}
+          {/* Right Side - Profile, Bonus, Wallet */}
           <div className="flex items-center gap-2">
             {/* Profile Button */}
             <button
@@ -78,6 +107,21 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
             >
               <User className="w-5 h-5 text-gray-300" />
             </button>
+
+            {/* Bonus Chip - Show if bonus available */}
+            {hasBonus && (
+              <button
+                onClick={handleClaimBonus}
+                disabled={isClaiming}
+                className="flex items-center space-x-1.5 bg-gradient-to-r from-green-500/30 to-green-600/30 border-2 border-green-400 rounded-full px-3 py-1.5 hover:from-green-500/40 hover:to-green-600/40 hover:border-green-300 transition-all active:scale-95 shadow-lg shadow-green-500/20 animate-pulse"
+                title="Click to claim bonus"
+              >
+                <Gift className="w-4 h-4 text-green-300" />
+                <span className="text-green-300 font-bold text-sm">
+                  ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </span>
+              </button>
+            )}
 
             {/* Wallet Chip - Always Visible Balance */}
             <button

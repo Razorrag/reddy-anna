@@ -99,6 +99,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserBalance(userId: string, amountChange: number): Promise<void>;
   updateUser(userId: string, updates: any): Promise<User>;
+  updateUserGameStats(userId: string, won: boolean, betAmount: number, payoutAmount: number): Promise<void>;
   
   // Game session operations
   createGameSession(session: InsertGameSession): Promise<GameSession>;
@@ -222,6 +223,14 @@ export interface IStorage {
 }
 
 export class SupabaseStorage implements IStorage {
+  // Helper function to convert decimal balance to number
+  private parseBalance(balance: any): number {
+    if (typeof balance === 'string') {
+      return parseFloat(balance) || 0;
+    }
+    return Number(balance) || 0;
+  }
+
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     // Retry logic for failed fetches
@@ -243,6 +252,10 @@ export class SupabaseStorage implements IStorage {
           throw error;
         }
 
+        // Convert balance to number to fix type inconsistency
+        if (data && data.balance) {
+          data.balance = this.parseBalance(data.balance) as any;
+        }
         return data;
       } catch (error: any) {
         lastError = error;
@@ -291,6 +304,10 @@ export class SupabaseStorage implements IStorage {
           throw error;
         }
 
+        // Convert balance to number
+        if (data && data.balance) {
+          data.balance = this.parseBalance(data.balance) as any;
+        }
         return data;
       } catch (error: any) {
         lastError = error;
@@ -340,6 +357,10 @@ export class SupabaseStorage implements IStorage {
           throw error;
         }
 
+        // Convert balance to number
+        if (data && data.balance) {
+          data.balance = this.parseBalance(data.balance) as any;
+        }
         return data;
       } catch (error: any) {
         lastError = error;
@@ -483,6 +504,10 @@ export class SupabaseStorage implements IStorage {
           throw error;
         }
 
+        // Convert balance to number
+        if (data && data.balance) {
+          data.balance = this.parseBalance(data.balance) as any;
+        }
         return data;
       } catch (error: any) {
         lastError = error;
@@ -526,6 +551,14 @@ export class SupabaseStorage implements IStorage {
           throw error;
         }
 
+        // Convert balance to number for all users
+        if (data && Array.isArray(data)) {
+          data.forEach(user => {
+            if (user.balance) {
+              user.balance = this.parseBalance(user.balance) as any;
+            }
+          });
+        }
         return data || [];
       } catch (error: any) {
         lastError = error;
@@ -652,7 +685,7 @@ export class SupabaseStorage implements IStorage {
   }
 
   async updateUser(userId: string, updates: any): Promise<User> {
-    const { data, error } = await supabaseServer
+    const { data, error} = await supabaseServer
       .from('users')
       .update(updates)
       .eq('id', userId)
@@ -665,6 +698,52 @@ export class SupabaseStorage implements IStorage {
     }
 
     return data;
+  }
+
+  async updateUserGameStats(userId: string, won: boolean, betAmount: number, payoutAmount: number): Promise<void> {
+    try {
+      // Get current user stats
+      const user = await this.getUser(userId);
+      if (!user) {
+        console.error(`User ${userId} not found for stats update`);
+        return;
+      }
+
+      // Calculate new values
+      const gamesPlayed = (user.games_played || 0) + 1;
+      const gamesWon = won ? (user.games_won || 0) + 1 : (user.games_won || 0);
+      
+      // For winnings/losses: track the profit/loss, not the payout
+      const profitLoss = payoutAmount - betAmount;
+      const totalWinnings = profitLoss > 0 
+        ? (parseFloat(user.total_winnings as any) || 0) + profitLoss 
+        : (parseFloat(user.total_winnings as any) || 0);
+      const totalLosses = profitLoss < 0 
+        ? (parseFloat(user.total_losses as any) || 0) + Math.abs(profitLoss)
+        : (parseFloat(user.total_losses as any) || 0);
+
+      // Update user statistics
+      const { error } = await supabaseServer
+        .from('users')
+        .update({
+          games_played: gamesPlayed,
+          games_won: gamesWon,
+          total_winnings: totalWinnings.toString(),
+          total_losses: totalLosses.toString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) {
+        console.error(`Error updating game stats for user ${userId}:`, error);
+        throw error;
+      }
+
+      console.log(`✅ Updated game stats for user ${userId}: Games ${gamesPlayed}, Won ${gamesWon}, Winnings ${totalWinnings}, Losses ${totalLosses}`);
+    } catch (error) {
+      console.error('Error in updateUserGameStats:', error);
+      // Don't throw - we don't want to break the game flow if stats update fails
+    }
   }
 
   // Game session operations
@@ -2015,15 +2094,79 @@ export class SupabaseStorage implements IStorage {
   }
 
   async applyConditionalBonus(userId: string): Promise<boolean> {
-    const { data, error } = await supabaseServer
-      .rpc('check_conditional_bonus', { user_id_input: userId });
+    try {
+      // Get user data
+      const user = await this.getUserById(userId);
+      if (!user) {
+        console.log(`User ${userId} not found for conditional bonus check`);
+        return false;
+      }
 
-    if (error) {
-      console.error('Error applying conditional bonus:', error);
+      // Get conditional bonus threshold setting (default 30%)
+      const thresholdSetting = await this.getGameSetting('conditional_bonus_threshold');
+      const threshold = parseFloat(thresholdSetting || '30');
+
+      // Get original deposit amount
+      const originalDeposit = parseFloat(user.original_deposit_amount || '0');
+      if (originalDeposit === 0) {
+        console.log(`User ${userId} has no original deposit set`);
+        return false;
+      }
+
+      // Get current balance
+      const currentBalance = parseFloat(user.balance);
+
+      // Calculate percentage change from original deposit
+      const percentageChange = ((currentBalance - originalDeposit) / originalDeposit) * 100;
+      
+      console.log(`Conditional bonus check for user ${userId}:`, {
+        originalDeposit,
+        currentBalance,
+        percentageChange: percentageChange.toFixed(2) + '%',
+        threshold: `±${threshold}%`
+      });
+
+      // Check if balance has changed by ±threshold%
+      const thresholdReached = Math.abs(percentageChange) >= threshold;
+      
+      if (!thresholdReached) {
+        console.log(`Threshold not reached for user ${userId}`);
+        return false;
+      }
+
+      // Get available bonus
+      const bonusInfo = await this.getUserBonusInfo(userId);
+      if (bonusInfo.totalBonus === 0) {
+        console.log(`No bonus available for user ${userId}`);
+        return false;
+      }
+
+      console.log(`✅ Conditional bonus threshold reached! Auto-applying ₹${bonusInfo.totalBonus} for user ${userId}`);
+
+      // Auto-apply bonus to main balance
+      const balanceBefore = currentBalance;
+      await this.updateUserBalance(userId, bonusInfo.totalBonus);
+      
+      // Reset bonus amounts
+      await this.resetUserBonus(userId);
+      
+      // Log the transaction
+      await this.addTransaction({
+        userId,
+        transactionType: 'conditional_bonus_applied',
+        amount: bonusInfo.totalBonus,
+        balanceBefore,
+        balanceAfter: balanceBefore + bonusInfo.totalBonus,
+        referenceId: `conditional_bonus_${Date.now()}`,
+        description: `Conditional bonus auto-applied (${percentageChange > 0 ? '+' : ''}${percentageChange.toFixed(1)}% from original deposit)`
+      });
+
+      console.log(`✅ Conditional bonus of ₹${bonusInfo.totalBonus} applied to user ${userId}`);
+      return true;
+    } catch (error) {
+      console.error('Error in applyConditionalBonus:', error);
       return false;
     }
-
-    return data || false;
   }
 
   async addTransaction(transaction: {
@@ -2308,6 +2451,16 @@ export class SupabaseStorage implements IStorage {
       // For deposits: add to user balance
       if (amount > 0) {
         await this.updateUserBalance(userId, amount);
+        
+        // CRITICAL FIX: Apply deposit bonus when admin approves deposit
+        try {
+          const { applyDepositBonus } = await import('./payment');
+          await applyDepositBonus(userId, amount);
+          console.log(`✅ Deposit bonus applied for user ${userId} on admin-approved deposit of ₹${amount}`);
+        } catch (bonusError) {
+          console.error('⚠️ Failed to apply deposit bonus on approval:', bonusError);
+          // Don't fail the approval if bonus fails
+        }
       } 
       // For withdrawals: subtract from user balance (though this would be unusual for approval)
       else if (amount < 0) {

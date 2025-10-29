@@ -47,6 +47,15 @@ export const processPayment = async (request: PaymentRequest): Promise<PaymentRe
         status = 'success';
         // Add amount to user balance
         await storage.updateUserBalance(request.userId, request.amount);
+        
+        // CRITICAL FIX: Apply deposit bonus automatically
+        try {
+          await applyDepositBonus(request.userId, request.amount);
+          console.log(`✅ Deposit bonus applied for user ${request.userId} on deposit of ₹${request.amount}`);
+        } catch (bonusError) {
+          console.error('⚠️ Failed to apply deposit bonus:', bonusError);
+          // Don't fail the deposit if bonus fails
+        }
       } else {
         status = 'failed';
         error = result.error;

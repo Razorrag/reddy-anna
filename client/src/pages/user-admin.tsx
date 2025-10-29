@@ -444,6 +444,65 @@ export default function UserAdmin() {
         </div>
       </div>
 
+      {/* Profit/Loss Statistics */}
+      <div className="max-w-7xl mx-auto mb-8">
+        <h3 className="text-xl font-bold text-gold mb-4">💰 Financial Overview</h3>
+        <div className={cn(
+          "grid grid-cols-1 md:grid-cols-3 gap-6 transition-all duration-1000",
+          isLoaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+        )}>
+          <Card className="bg-black/40 border-green-500/30 backdrop-blur-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-green-400">Total Winnings</CardTitle>
+              <Trophy className="h-4 w-4 text-green-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-400">
+                {formatCurrency(users.reduce((sum, u) => sum + (u.totalWinnings || 0), 0))}
+              </div>
+              <p className="text-xs text-gray-400">
+                All users combined
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-black/40 border-red-500/30 backdrop-blur-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-red-400">Total Losses</CardTitle>
+              <Activity className="h-4 h-4 text-red-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-400">
+                {formatCurrency(users.reduce((sum, u) => sum + (u.totalLosses || 0), 0))}
+              </div>
+              <p className="text-xs text-gray-400">
+                All users combined
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gold">Net House Profit</CardTitle>
+              <CreditCard className="h-4 w-4 text-gold" />
+            </CardHeader>
+            <CardContent>
+              <div className={cn(
+                "text-2xl font-bold",
+                users.reduce((sum, u) => sum + ((u.totalLosses || 0) - (u.totalWinnings || 0)), 0) >= 0 
+                  ? "text-green-400" 
+                  : "text-red-400"
+              )}>
+                {formatCurrency(users.reduce((sum, u) => sum + ((u.totalLosses || 0) - (u.totalWinnings || 0)), 0))}
+              </div>
+              <p className="text-xs text-gray-400">
+                House earnings (losses - winnings)
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
       {/* Filters and Search */}
       <div className="max-w-7xl mx-auto mb-8">
         <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
@@ -543,6 +602,32 @@ export default function UserAdmin() {
                         <span className="text-purple-300">Win Rate:</span>
                         <span className="text-green-400 ml-2 font-semibold">
                           {user.gamesPlayed > 0 ? Math.round((user.gamesWon / user.gamesPlayed) * 100) : 0}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-purple-400/20">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-purple-300">Total Winnings:</span>
+                        <span className="text-green-400 ml-2 font-semibold">
+                          {formatCurrency(user.totalWinnings || 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-purple-300">Total Losses:</span>
+                        <span className="text-red-400 ml-2 font-semibold">
+                          {formatCurrency(user.totalLosses || 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-purple-300">Net Profit/Loss:</span>
+                        <span className={cn(
+                          "ml-2 font-semibold",
+                          ((user.totalWinnings || 0) - (user.totalLosses || 0)) >= 0 ? "text-green-400" : "text-red-400"
+                        )}>
+                          {formatCurrency((user.totalWinnings || 0) - (user.totalLosses || 0))}
                         </span>
                       </div>
                     </div>

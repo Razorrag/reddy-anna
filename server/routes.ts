@@ -856,11 +856,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 // FIXED: Update balance in database immediately to prevent double-spending
                 await storage.updateUserBalance(client.userId, -betAmount);
                 
-                // Send balance update via WebSocket
+                // Check conditional bonus threshold (auto-apply if ±30% from original deposit)
+                try {
+                  const bonusApplied = await storage.applyConditionalBonus(client.userId);
+                  if (bonusApplied) {
+                    console.log(`✅ Conditional bonus auto-applied for user ${client.userId} after bet`);
+                  }
+                } catch (bonusError) {
+                  console.error('⚠️ Error checking conditional bonus:', bonusError);
+                  // Don't fail bet if bonus check fails
+                }
+                
+                // Send balance update via WebSocket to the betting user
                 const newBalance = currentBalance - betAmount;
-                clients.forEach(client => {
-                  if (client.userId === client.userId && client.ws.readyState === WebSocket.OPEN) {
-                    client.ws.send(JSON.stringify({
+                const bettingUserId = client.userId;
+                clients.forEach(c => {
+                  if (c.userId === bettingUserId && c.ws.readyState === WebSocket.OPEN) {
+                    c.ws.send(JSON.stringify({
                       type: 'balance_update',
                       data: {
                         balance: newBalance,
@@ -3271,7 +3283,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const balance = parseFloat(user.balance) || 0;
+      // Balance is already a number from getUser() - no need to parse
+      const balance = Number(user.balance) || 0;
       console.log(`Balance endpoint - Retrieved balance for ${userId}: ${balance}`);
       
       res.json({
@@ -3628,6 +3641,10 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     payouts[userId] = payout;
     totalPayoutsAmount += payout;
     
+    // Calculate total bet amount for this user
+    const userTotalBet = bets.round1.andar + bets.round1.bahar + bets.round2.andar + bets.round2.bahar;
+    const userWon = payout > userTotalBet; // User won if payout > their total bet
+    
     // Only update database if not in test mode
     if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
       try {
@@ -3637,6 +3654,32 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         } else {
           const loserSide = winner === 'andar' ? 'bahar' : 'andar';
           await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, loserSide, 'lost');
+        }
+        
+        // CRITICAL FIX: Update user game statistics (total_winnings, total_losses, games_played, games_won)
+        await storage.updateUserGameStats(userId, userWon, userTotalBet, payout);
+        
+        // Check conditional bonus threshold (auto-apply if ±30% from original deposit)
+        try {
+          const bonusApplied = await storage.applyConditionalBonus(userId);
+          if (bonusApplied) {
+            console.log(`✅ Conditional bonus auto-applied for user ${userId} after game completion`);
+            // Notify user about bonus
+            clients.forEach(c => {
+              if (c.userId === userId && c.ws.readyState === WebSocket.OPEN) {
+                c.ws.send(JSON.stringify({
+                  type: 'conditional_bonus_applied',
+                  data: {
+                    message: 'Bonus automatically added to your balance!',
+                    timestamp: Date.now()
+                  }
+                }));
+              }
+            });
+          }
+        } catch (bonusError) {
+          console.error(`⚠️ Error checking conditional bonus for user ${userId}:`, bonusError);
+          // Don't fail payout if bonus check fails
         }
       } catch (error) {
         console.error(`⚠️ Error updating bet status for user ${userId}:`, error);
