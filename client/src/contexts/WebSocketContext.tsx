@@ -25,14 +25,22 @@ interface WebSocketContextType {
   connectWebSocket: () => void;
   disconnectWebSocket: () => void;
   connectionState: ConnectionState;
+  isConnected: boolean;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
 
 const getWebSocketUrl = (): string => {
   if (typeof window !== 'undefined') {
+    // ✅ FIXED: Always connect to the actual server in development
+    const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    if (isDevelopment) {
+      // In development, connect to the actual WebSocket server on port 5000
+      return 'ws://localhost:5000/ws';
+    }
+    
     // ✅ PRODUCTION-READY: Dynamic URL based on current page location
-    // Development: ws://localhost:3000/ws (client dev server, proxied to backend)
     // Production: wss://yourdomain.com/ws (direct connection)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
@@ -121,7 +129,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           userId,
           role: userRole,
           username,
-          wallet
+          wallet,
+          hasToken: !!token
         });
         
         ws.send(JSON.stringify({
@@ -317,6 +326,115 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               }
               
               console.log('✅ Game state synchronized successfully');
+              break;
+            }
+
+            case 'game:state': {
+              console.log('📥 Received game state:', data.data);
+              // Sync ALL game state properties with proper validation
+              if (data.data?.phase) {
+                console.log('🔄 Updating phase:', data.data.phase);
+                setPhase(data.data.phase);
+              }
+              if (data.data?.countdown !== undefined) {
+                console.log('🔄 Updating countdown:', data.data.countdown);
+                setCountdown(data.data.countdown);
+              }
+              if (data.data?.winner) {
+                console.log('🔄 Updating winner:', data.data.winner);
+                setWinner(data.data.winner);
+              }
+              if (data.data?.currentRound) {
+                console.log('🔄 Updating current round:', data.data.currentRound);
+                setCurrentRound(data.data.currentRound);
+              }
+              if (data.data?.bettingLocked !== undefined) {
+                console.log('🔄 Updating betting locked:', data.data.bettingLocked);
+                setBettingLocked(data.data.bettingLocked);
+              }
+              
+              // Sync opening card with proper validation
+              if (data.data?.openingCard) {
+                console.log('✅ Syncing opening card:', data.data.openingCard);
+                setSelectedOpeningCard(data.data.openingCard);
+              }
+              
+              // Clear existing cards and sync new ones
+              if (data.data?.andarCards || data.data?.baharCards) {
+                console.log('🔄 Clearing existing cards and syncing new ones');
+                clearCards();
+                if (data.data?.andarCards && Array.isArray(data.data.andarCards)) {
+                  console.log(`✅ Syncing ${data.data.andarCards.length} Andar cards`);
+                  data.data.andarCards.forEach((card: Card) => {
+                    console.log('Adding Andar card:', card);
+                    addAndarCard(card);
+                  });
+                }
+                if (data.data?.baharCards && Array.isArray(data.data.baharCards)) {
+                  console.log(`✅ Syncing ${data.data.baharCards.length} Bahar cards`);
+                  data.data.baharCards.forEach((card: Card) => {
+                    console.log('Adding Bahar card:', card);
+                    addBaharCard(card);
+                  });
+                }
+              }
+              
+              // Sync betting totals with proper structure
+              if (data.data?.andarTotal !== undefined || data.data?.baharTotal !== undefined) {
+                const andarTotal = data.data.andarTotal || 0;
+                const baharTotal = data.data.baharTotal || 0;
+                console.log('🔄 Updating betting totals:', { andarTotal, baharTotal });
+                updateTotalBets({
+                  andar: andarTotal,
+                  bahar: baharTotal
+                });
+              }
+              
+              console.log('✅ Complete game state synchronized');
+              break;
+            }
+
+            case 'game:card-dealt': {
+              console.log('📥 Card dealt by admin:', data.data);
+              // Handle individual card dealing from admin
+              if (data.data?.card && data.data?.side) {
+                if (data.data.side === 'andar') {
+                  addAndarCard(data.data.card);
+                  console.log('✅ Added to Andar:', data.data.card);
+                } else {
+                  addBaharCard(data.data.card);
+                  console.log('✅ Added to Bahar:', data.data.card);
+                }
+                
+                // Check if it's a winning card
+                if (data.data.isWinningCard) {
+                  showNotification(`${data.data.side.toUpperCase()} wins with ${data.data.card.display}!`, 'success');
+                }
+              }
+              break;
+            }
+
+            case 'game:bet-placed': {
+              console.log('📥 Bet placed by other player:', data.data);
+              // Update total bets display from other players
+              if (data.data?.side && data.data?.amount) {
+                console.log(`🔄 Updating total bets: ${data.data.side} +${data.data.amount}`);
+                // This would update the total bets from other players
+                const currentBets = data.data.side === 'andar' ? gameState.andarTotalBet : gameState.baharTotalBet;
+                const newTotal = currentBets + data.data.amount;
+                
+                if (data.data.side === 'andar') {
+                  updateTotalBets({
+                    andar: newTotal,
+                    bahar: gameState.baharTotalBet
+                  });
+                } else {
+                  updateTotalBets({
+                    andar: gameState.andarTotalBet,
+                    bahar: newTotal
+                  });
+                }
+              }
               break;
             }
 
@@ -925,7 +1043,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       // Send WebSocket message to start game (backend handles this)
       sendWebSocketMessage({
-        type: 'game_start',
+        type: 'admin:start-game',
         data: {
           openingCard: gameState.selectedOpeningCard,
           timer: customTime,
@@ -944,7 +1062,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       // Send WebSocket message to deal card
       sendWebSocketMessage({
-        type: 'deal_card',
+        type: 'admin:deal-card',
         data: {
           card: card,
           side: side,
@@ -975,11 +1093,11 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       
       // Send WebSocket message to place bet
       sendWebSocketMessage({
-        type: 'bet_placed',
+        type: 'player:bet',
         data: {
           side: side,
           amount: amount,
-          round: gameState.currentRound,
+          round: String(gameState.currentRound),
           gameId: 'default-game'
         }
       });
@@ -1012,17 +1130,17 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       const currentPath = window.location.pathname;
       const unconnectedPages = ['/login', '/signup', '/register', '/admin-login'];
       
-      // Connect WebSocket immediately on game pages regardless of auth state
-      // Authentication will be handled within the WebSocket connection
-      if (!unconnectedPages.includes(currentPath)) {
+      // ✅ FIXED: Always attempt WebSocket connection in development mode when server is available
+      // The server runs on port 5000, so we should connect when on localhost:3000 or similar
+      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const shouldConnect = !unconnectedPages.includes(currentPath);
+      
+      if (shouldConnect) {
         console.log('🔄 Connecting WebSocket immediately on game page:', currentPath);
         connectWebSocket();
       } else {
         console.log('🔄 Skipping WebSocket connection on:', currentPath);
       }
-    } else {
-      // Server-side: don't connect WebSocket
-      connectWebSocket();
     }
 
     // Setup event listeners for WebRTC answers
@@ -1070,6 +1188,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     connectWebSocket,
     disconnectWebSocket,
     connectionState,
+    isConnected: connectionState.isConnected || false,
   };
 
   return (

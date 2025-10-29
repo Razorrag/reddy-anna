@@ -110,7 +110,7 @@ interface AuthContextType {
   state: AuthState;
   
   // Methods
-  login: (userData: User, token: string) => void;
+  login: (userData: User, token: string, isAdmin?: boolean) => void;
   logout: () => void;
   checkAuthStatus: () => void;
   clearError: () => void;

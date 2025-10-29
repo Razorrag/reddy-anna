@@ -26,7 +26,7 @@ import type { BetSide } from '../types/game';
 const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
   const { gameState, updatePlayerWallet, setPhase, setCurrentRound, setCountdown } = useGameState();
-  const { placeBet: placeBetWebSocket } = useWebSocket();
+  const { placeBet: placeBetWebSocket, isConnected } = useWebSocket();
   const { balance, updateBalance } = useBalance();
 
   // Get user data from AuthContext
@@ -257,14 +257,14 @@ const PlayerGame: React.FC = () => {
       // Check if WebSocket is connected and request game state
       if (typeof window !== 'undefined') {
         const ws = (window as any).gameWebSocket;
-        if (ws && ws.readyState === WebSocket.OPEN) {
+        if (isConnected && ws && ws.readyState === WebSocket.OPEN) {
           console.log('✅ WebSocket connected - requesting game state sync');
           ws.send(JSON.stringify({
             type: 'game:subscribe',
             data: { gameId: 'default-game' }
           }));
         } else {
-          console.log('⚠️ WebSocket not connected - readyState:', ws?.readyState);
+          console.log('⚠️ WebSocket not connected - readyState:', ws?.readyState, 'isConnected:', isConnected);
         }
       }
     }
@@ -287,8 +287,8 @@ const PlayerGame: React.FC = () => {
       // Auto-start game after 1 second to allow WebSocket connection
       const autoStartTimer = setTimeout(() => {
         const ws = (window as any).gameWebSocket;
-        console.log('⏰ Auto-start timer fired - WebSocket readyState:', ws?.readyState);
-        if (ws && ws.readyState === WebSocket.OPEN) {
+        console.log('⏰ Auto-start timer fired - WebSocket readyState:', ws?.readyState, 'isConnected:', isConnected);
+        if (isConnected && ws && ws.readyState === WebSocket.OPEN) {
           console.log('✅ Auto-starting game with default opening card');
           ws.send(JSON.stringify({
             type: 'opening_card_set',
