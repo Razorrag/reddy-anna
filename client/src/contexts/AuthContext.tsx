@@ -116,6 +116,7 @@ interface AuthContextType {
   clearError: () => void;
   refreshUser: () => Promise<void>;
   updateBalance: (newBalance: number, source?: string, transactionType?: string, amount?: number) => Promise<void>;
+  refreshAccessToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -153,10 +154,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Login function
   const login = (userData: User, token: string) => {
+    console.log('AuthContext.login() called with:', { userData, token });
     try {
+      console.log('Storing token in localStorage');
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('token', token);
+      console.log('Token stored successfully');
       dispatch({ type: 'AUTH_SUCCESS', payload: { user: userData, token } });
     } catch (error) {
       console.error('Login error:', error);
@@ -243,19 +247,83 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [state.user, state.token]);
 
+  // Function to refresh access token using refresh token
+  const refreshAccessToken = useCallback(async (): Promise<string | null> => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      console.log('No refresh token found, cannot refresh access token.');
+      logout();
+      return null;
+    }
+
+    try {
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newAccessToken = data.token;
+        const newRefreshToken = data.refreshToken;
+
+        if (newAccessToken && newRefreshToken) {
+          localStorage.setItem('token', newAccessToken);
+          localStorage.setItem('refreshToken', newRefreshToken);
+          // Update auth state with new token
+          dispatch({
+            type: 'AUTH_SUCCESS',
+            payload: { user: state.user!, token: newAccessToken }
+          });
+          return newAccessToken;
+        } else {
+          console.error('Refresh token endpoint did not return new tokens.');
+          logout();
+          return null;
+        }
+      } else {
+        console.error('Failed to refresh token:', response.status, await response.text());
+        logout();
+        return null;
+      }
+    } catch (error) {
+      console.error('Error during token refresh:', error);
+      logout();
+      return null;
+    }
+  }, [state.user, logout]);
+
   // Listen for balance updates
   useEffect(() => {
     const handleBalanceUpdate = (event: CustomEvent) => {
-      const { balance: newBalance, source } = event.detail;
+      const { balance, source } = event.detail;
       
-      if (state.user && state.user.balance !== newBalance) {
-        updateBalance(newBalance, source);
+      // Only update if value actually changed and not from same source
+      if (balance !== state.user?.balance && source !== 'auth') {
+        const updatedUser = {
+          ...state.user,
+          balance: typeof balance === 'string' ? parseFloat(balance) : Number(balance)
+        };
+        
+        // Update localStorage
+        if (updatedUser.id) {
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+        
+        // Update state
+        dispatch({
+          type: 'AUTH_SUCCESS',
+          payload: { user: updatedUser, token: state.token || '' }
+        });
       }
     };
 
     window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
     return () => window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
-  }, [state.user, updateBalance]);
+  }, [state.user, state.token]);
 
   const value = {
     // Direct access properties

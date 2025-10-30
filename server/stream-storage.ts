@@ -12,6 +12,7 @@ export interface StreamConfig {
   activeMethod: 'rtmp' | 'webrtc';
   streamStatus: 'online' | 'offline' | 'connecting' | 'error';
   streamTitle: string;
+  showStream: boolean;
   
   // RTMP
   rtmpServerUrl: string;
@@ -447,6 +448,7 @@ export class StreamStorage {
       activeMethod: data.active_method,
       streamStatus: data.stream_status,
       streamTitle: data.stream_title,
+      showStream: data.show_stream,
       rtmpServerUrl: data.rtmp_server_url,
       rtmpStreamKey: data.rtmp_stream_key,
       rtmpPlayerUrl: data.rtmp_player_url,
@@ -466,6 +468,29 @@ export class StreamStorage {
       totalViews: data.total_views || 0,
       streamDurationSeconds: data.stream_duration_seconds || 0
     };
+  }
+
+  async updateShowStream(showStream: boolean): Promise<boolean> {
+    try {
+      const configId = await this.getConfigId();
+      if (!configId) return false;
+
+      const { error } = await supabaseServer
+        .from('stream_config')
+        .update({ show_stream: showStream })
+        .eq('id', configId);
+
+      if (error) {
+        console.error('❌ Error updating show stream:', error);
+        return false;
+      }
+
+      console.log(`✅ Show stream updated to: ${showStream}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Exception in updateShowStream:', error);
+      return false;
+    }
   }
 
   private mapToStreamSession(data: any): StreamSession {

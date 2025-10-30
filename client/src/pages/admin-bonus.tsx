@@ -55,6 +55,7 @@ interface BonusSettings {
   depositBonusPercent: number;
   referralBonusPercent: number;
   conditionalBonusThreshold: number;
+  adminWhatsappNumber: string;
 }
 
 export default function AdminBonus() {
@@ -64,7 +65,8 @@ export default function AdminBonus() {
   const [bonusSettings, setBonusSettings] = useState<BonusSettings>({
     depositBonusPercent: 5,
     referralBonusPercent: 1,
-    conditionalBonusThreshold: 30
+    conditionalBonusThreshold: 30,
+    adminWhatsappNumber: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -203,10 +205,25 @@ export default function AdminBonus() {
     .filter(r => r.status === 'completed')
     .reduce((sum, r) => sum + r.bonusAmount, 0);
 
-  const handleSaveSettings = () => {
-    // API call to save settings would go here
-    console.log('Saving bonus settings:', bonusSettings);
-    // Show success message
+  const handleSaveSettings = async () => {
+    try {
+      const response = await fetch('/api/game-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bonusSettings),
+      });
+      const data = await response.json();
+      if (data.success) {
+        showNotification('Settings saved successfully', 'success');
+      } else {
+        showNotification('Failed to save settings', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      showNotification('Failed to save settings', 'error');
+    }
   };
 
   return (
@@ -356,6 +373,18 @@ export default function AdminBonus() {
                     className="bg-purple-950/30 border-purple-400/30 text-white"
                   />
                   <p className="text-xs text-purple-300">Trigger bonus when balance deviates by this percentage</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="adminWhatsappNumber" className="text-purple-200">Admin WhatsApp Number</Label>
+                  <Input
+                    id="adminWhatsappNumber"
+                    type="text"
+                    value={bonusSettings.adminWhatsappNumber}
+                    onChange={(e) => setBonusSettings(prev => ({ ...prev, adminWhatsappNumber: e.target.value }))}
+                    className="bg-purple-950/30 border-purple-400/30 text-white"
+                  />
+                  <p className="text-xs text-purple-300">WhatsApp number for deposit/withdrawal requests</p>
                 </div>
               </div>
 

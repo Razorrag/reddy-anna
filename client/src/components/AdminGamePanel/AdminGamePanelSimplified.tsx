@@ -54,7 +54,7 @@ const AdminGamePanelSimplified: React.FC = () => {
     setIsResetting(true);
     sendWebSocketMessage({
       type: 'game_reset',
-      data: { gameId: gameState.gameId }
+      data: { message: 'Admin initiated game reset' }
     });
     
     showNotification('🔄 Game reset successfully', 'success');

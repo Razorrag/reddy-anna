@@ -8,6 +8,7 @@
 import express, { Router } from 'express';
 import { streamStorage } from './stream-storage';
 import { requireAuth } from './auth';
+import { validateAdminAccess } from './security'; // Import from central security
 import jwt from 'jsonwebtoken';
 
 const router: Router = express.Router();
@@ -36,19 +37,6 @@ const optionalAuth = (req: any, res: any, next: any) => {
     }
   }
   // Always continue to next middleware regardless of authentication status
-  next();
-};
-
-/**
- * Middleware to check admin access
- */
-const validateAdminAccess = (req: any, res: any, next: any) => {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({
-      success: false,
-      error: 'Admin access required'
-    });
-  }
   next();
 };
 
@@ -335,6 +323,43 @@ router.post('/title', requireAuth, validateAdminAccess, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to update stream title'
+    });
+  }
+});
+
+/**
+ * POST /api/stream/show
+ * Toggle stream visibility (Admin only)
+ */
+router.post('/show', requireAuth, validateAdminAccess, async (req, res) => {
+  try {
+    const { show } = req.body;
+
+    if (typeof show !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid show value. Must be a boolean'
+      });
+    }
+
+    const success = await streamStorage.updateShowStream(show);
+
+    if (!success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to update show stream'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Stream visibility updated to ${show}`
+    });
+  } catch (error) {
+    console.error('❌ Error updating show stream:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update show stream'
     });
   }
 });

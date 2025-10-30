@@ -53,8 +53,8 @@ const GameAdmin: React.FC = () => {
     setCountdown(30);
     
     sendWebSocketMessage({
-      type: 'start_round_2',
-      data: { gameId: 'default-game', timer: 30 }
+      type: 'phase_change',
+      data: { phase: 'betting', round: 2, message: 'Starting Round 2 betting with 30s' }
     });
     
     showNotification('Round 2 betting started!', 'success');
@@ -72,8 +72,8 @@ const GameAdmin: React.FC = () => {
     setCountdown(0); // No timer for round 3
     
     sendWebSocketMessage({
-      type: 'start_final_draw',
-      data: { gameId: 'default-game' }
+      type: 'phase_change',
+      data: { phase: 'dealing', round: 3, message: 'Starting Round 3 continuous draw' }
     });
     
     showNotification('Round 3 (Continuous Draw) started!', 'success');

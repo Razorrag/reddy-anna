@@ -1,14 +1,8 @@
-/**
- * StreamControlPanel - Dual Streaming Control
- * 
- * Provides both WebRTC screen sharing and RTMP streaming options
- * Admin can choose which method to use based on their needs
- */
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Monitor, Video, StopCircle, Settings, ExternalLink, Radio } from 'lucide-react';
+import { Monitor, Video, StopCircle, Settings, ExternalLink, Radio, Eye, EyeOff } from 'lucide-react';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useNotification } from '../../contexts/NotificationContext';
+import { apiClient } from '../../lib/apiClient'; // Import apiClient
 
 interface StreamControlPanelProps {
   className?: string;
@@ -18,27 +12,33 @@ type StreamMethod = 'webrtc' | 'rtmp' | 'none';
 
 const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' }) => {
   const { sendWebSocketMessage } = useWebSocket();
+
+
   const { showNotification } = useNotification();
   
-  // Stream state
   const [streamMethod, setStreamMethod] = useState<StreamMethod>('none');
   const [isStreaming, setIsStreaming] = useState(false);
   const [rtmpUrl, setRtmpUrl] = useState('');
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [showStream, setShowStream] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
 
-  // WebRTC Configuration
-  const rtcConfig: RTCConfiguration = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    ]
-  };
-
-  // Cleanup on unmount and setup WebRTC event listeners
   useEffect(() => {
-    // Listen for WebRTC answers from players
+    const fetchStreamConfig = async () => {
+      try {
+        const data = await apiClient.get<any>('/stream/config'); // Use apiClient.get
+        if (data.success) {
+          setShowStream(data.data.showStream);
+        }
+      } catch (error) {
+        console.error('Failed to fetch stream config:', error);
+      }
+    };
+    fetchStreamConfig();
+  }, []);
+
+  useEffect(() => {
     const handleWebRTCAnswer = (event: any) => {
       const { answer, playerId } = event.detail;
       handleAnswerReceived(answer, playerId);
@@ -59,7 +59,22 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     };
   }, []);
 
-  // Handle incoming WebRTC answer from player
+  const handleToggleShowStream = async () => {
+    try {
+      const newShowStream = !showStream;
+      const data = await apiClient.post<any>('/stream/show', { show: newShowStream }); // Use apiClient.post
+      if (data.success) {
+        setShowStream(newShowStream);
+        showNotification(`Stream is now ${newShowStream ? 'visible' : 'hidden'}`, 'success');
+      } else {
+        showNotification('Failed to update stream visibility', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to update stream visibility:', error);
+      showNotification('Failed to update stream visibility', 'error');
+    }
+  };
+
   const handleAnswerReceived = (answer: RTCSessionDescriptionInit, playerId: string) => {
     console.log('Handling WebRTC answer from player:', playerId);
     const pc = peerConnectionsRef.current.get('primary');
@@ -74,7 +89,6 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     }
   };
 
-  // Handle incoming ICE candidate from player
   const handleIceCandidateReceived = (candidate: RTCIceCandidateInit, fromPlayer: string) => {
     console.log('Handling ICE candidate from player:', fromPlayer);
     const pc = peerConnectionsRef.current.get('primary');
@@ -89,19 +103,15 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     }
   };
 
-  // Stop all streaming
   const stopAllStreaming = () => {
-    // Stop screen stream
     if (screenStream) {
       screenStream.getTracks().forEach(track => track.stop());
       setScreenStream(null);
     }
 
-    // Close all peer connections
     peerConnectionsRef.current.forEach(pc => pc.close());
     peerConnectionsRef.current.clear();
 
-    // Clear video
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
@@ -109,10 +119,8 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     setIsStreaming(false);
   };
 
-  // WebRTC Screen Share
   const startWebRTCScreenShare = async () => {
     try {
-      // Request screen sharing permission
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: 1920 },
@@ -126,28 +134,24 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
       setIsStreaming(true);
       setStreamMethod('webrtc');
 
-      // Display preview
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
 
-      // Notify server that WebRTC stream is starting
       sendWebSocketMessage({
-        type: 'stream_start',
+        type: 'stream_status',
         data: {
+          status: 'connecting',
           method: 'webrtc',
-          timestamp: Date.now()
         }
       });
 
-      // Handle stream end (when user stops sharing)
       stream.getVideoTracks()[0].onended = () => {
         stopWebRTCScreenShare();
       };
 
       showNotification('✅ Screen sharing started! Players can now see your screen.', 'success');
 
-      // Set up WebRTC connection
       const pc = setupWebRTCConnection(stream);
       if (pc) {
         peerConnectionsRef.current.set('primary', pc);
@@ -159,10 +163,8 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     }
   };
 
-  // Set up WebRTC connection for screen sharing
   const setupWebRTCConnection = (stream: MediaStream) => {
     try {
-      // Create RTCPeerConnection
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
@@ -170,36 +172,32 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
         ]
       });
 
-      // Add video track to peer connection
       stream.getVideoTracks().forEach(track => {
         pc.addTrack(track, stream);
       });
 
-      // Handle ICE candidates
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           sendWebSocketMessage({
             type: 'webrtc_ice_candidate',
             data: {
               candidate: event.candidate,
-              method: 'webrtc'
+              fromAdmin: true
             }
           });
         }
       };
 
-      // Create offer
       pc.createOffer()
         .then(offer => {
           return pc.setLocalDescription(offer);
         })
         .then(() => {
-          // Send offer via WebSocket
           sendWebSocketMessage({
             type: 'webrtc_offer',
             data: {
-              offer: pc.localDescription,
-              method: 'webrtc'
+              offer: pc.localDescription!,
+              adminId: '' // adminId is set on the server
             }
           });
         })
@@ -208,12 +206,10 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
           showNotification(`WebRTC setup failed: ${error.message}`, 'error');
         });
 
-      // Store the peer connection
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
 
-      // Keep track of this connection
       peerConnectionsRef.current.set('primary', pc);
       return pc;
     } catch (error) {
@@ -223,14 +219,12 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     }
   };
 
-  // Stop WebRTC screen share
   const stopWebRTCScreenShare = () => {
     if (screenStream) {
       screenStream.getTracks().forEach(track => track.stop());
       setScreenStream(null);
     }
 
-    // Close all peer connections
     peerConnectionsRef.current.forEach(pc => {
       pc.close();
     });
@@ -239,26 +233,22 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     setIsStreaming(false);
     setStreamMethod('none');
 
-    // Notify server
     sendWebSocketMessage({
-      type: 'stream_stop',
+      type: 'stream_status',
       data: {
-        method: 'webrtc',
-        timestamp: Date.now()
+        status: 'offline'
       }
     });
 
     showNotification('Screen sharing stopped', 'info');
   };
 
-  // Start RTMP streaming
   const startRTMPStream = () => {
     if (!rtmpUrl.trim()) {
       showNotification('❌ Please enter an RTMP stream URL', 'error');
       return;
     }
 
-    // Validate RTMP URL format
     if (!rtmpUrl.startsWith('rtmp://') && !rtmpUrl.startsWith('https://')) {
       showNotification('❌ Invalid stream URL. Must start with rtmp:// or https://', 'error');
       return;
@@ -267,30 +257,26 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     setIsStreaming(true);
     setStreamMethod('rtmp');
 
-    // Notify server and all players about RTMP stream
     sendWebSocketMessage({
-      type: 'stream_start',
+      type: 'stream_status',
       data: {
+        status: 'online',
         method: 'rtmp',
-        url: rtmpUrl,
-        timestamp: Date.now()
+        url: rtmpUrl
       }
     });
 
     showNotification('✅ RTMP stream activated! Players will see the stream.', 'success');
   };
 
-  // Stop RTMP streaming
   const stopRTMPStream = () => {
     setIsStreaming(false);
     setStreamMethod('none');
 
-    // Notify server
     sendWebSocketMessage({
-      type: 'stream_stop',
+      type: 'stream_status',
       data: {
-        method: 'rtmp',
-        timestamp: Date.now()
+        status: 'offline'
       }
     });
 
@@ -299,15 +285,23 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
 
   return (
     <div className={`bg-black/40 backdrop-blur-sm rounded-xl border border-gold/30 shadow-2xl p-6 ${className}`}>
-      <div className="flex items-center gap-3 mb-6">
-        <Video className="w-6 h-6 text-gold" />
-        <h2 className="text-2xl font-bold text-gold">Stream Control</h2>
-        {isStreaming && (
-          <span className="flex items-center gap-2 px-3 py-1 bg-red-600/30 border border-red-400 text-red-200 rounded-lg text-sm font-semibold animate-pulse">
-            <Radio className="w-4 h-4" />
-            LIVE
-          </span>
-        )}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Video className="w-6 h-6 text-gold" />
+          <h2 className="text-2xl font-bold text-gold">Stream Control</h2>
+          {isStreaming && (
+            <span className="flex items-center gap-2 px-3 py-1 bg-red-600/30 border border-red-400 text-red-200 rounded-lg text-sm font-semibold animate-pulse">
+              <Radio className="w-4 h-4" />
+              LIVE
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-400">Stream Visibility</span>
+          <button onClick={handleToggleShowStream} className={`p-2 rounded-full transition-colors ${showStream ? 'bg-green-500' : 'bg-gray-600'}`}>
+            {showStream ? <Eye className="w-5 h-5 text-white" /> : <EyeOff className="w-5 h-5 text-white" />}
+          </button>
+        </div>
       </div>
 
       {/* Stream Method Selection */}

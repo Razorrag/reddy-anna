@@ -94,6 +94,8 @@ const PlayerGame: React.FC = () => {
 
   // Update the handlePlaceBet function to properly use REST API for balance validation
   const handlePlaceBet = useCallback(async (position: BetSide) => {
+    if (isPlacingBet) return;
+
     if (selectedBetAmount === 0) {
       showNotification('Please select a chip first', 'error');
       return;
@@ -115,7 +117,6 @@ const PlayerGame: React.FC = () => {
     }
 
     setIsPlacingBet(true);
-
     try {
       // Validate balance before placing bet
       const balanceCheck = await apiClient.get<{success: boolean, balance: number | string, error?: string}>('/user/balance');
@@ -135,11 +136,16 @@ const PlayerGame: React.FC = () => {
         return;
       }
 
+      // Optimistically update balance
+      updateBalance(userBalance - selectedBetAmount, 'local');
+
       // Place bet via WebSocket for game logic
       await placeBetWebSocket(position, selectedBetAmount);
       
       showNotification(`Bet placed: ₹${selectedBetAmount} on ${position.toUpperCase()} (Round ${gameState.currentRound})`, 'success');
     } catch (error) {
+      // Revert balance if bet fails
+      updateBalance(userBalance, 'local');
       console.error('Failed to place bet:', error);
       showNotification('Failed to place bet', 'error');
     } finally {
@@ -197,6 +203,33 @@ const PlayerGame: React.FC = () => {
     setShowWalletModal(true);
   }, []);
 
+  const redirectToWhatsApp = async (requestType: string, amount: number) => {
+    // Use a fallback WhatsApp number if settings API is not available
+    const fallbackNumber = "919999999999"; // Replace with actual admin number
+    
+    // Try to get admin number from settings
+    try {
+      const response = await apiClient.get('/game-settings');
+      if (response.success && response.data?.admin_whatsapp_number) {
+        const adminPhoneNumber = response.data.admin_whatsapp_number;
+        const message = `User ${userData.phone} wants to ${requestType} ₹${amount}`;
+        const whatsappUrl = `https://wa.me/${adminPhoneNumber}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      } else {
+        // Fallback to default number
+        const message = `User ${userData.phone} wants to ${requestType} ₹${amount}`;
+        const whatsappUrl = `https://wa.me/${fallbackNumber}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Failed to fetch game settings, using fallback:', error);
+      // Use fallback number if API fails
+      const message = `User ${userData.phone} wants to ${requestType} ₹${amount}`;
+      const whatsappUrl = `https://wa.me/${fallbackNumber}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+    }
+  };
+
   // Handle deposit
   const handleDeposit = useCallback(async (amount: number) => {
     try {
@@ -209,6 +242,7 @@ const PlayerGame: React.FC = () => {
 
       if (data.success) {
         showNotification(`Successfully submitted deposit request for ₹${amount.toLocaleString('en-IN')}. Awaiting admin approval.`, 'success');
+        redirectToWhatsApp('deposit', amount);
       } else {
         showNotification(data.error || 'Deposit request failed', 'error');
       }
@@ -235,6 +269,7 @@ const PlayerGame: React.FC = () => {
 
       if (data.success) {
         showNotification(`Successfully submitted withdrawal request for ₹${amount.toLocaleString('en-IN')}. Awaiting admin approval.`, 'success');
+        redirectToWhatsApp('withdrawal', amount);
       } else {
         showNotification(data.error || 'Withdrawal request failed', 'error');
       }
@@ -360,26 +395,45 @@ const PlayerGame: React.FC = () => {
     },
   ];
 
+  // State to track if screen sharing is active
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+
+  // Listen for stream status updates to show/hide screen share
+  useEffect(() => {
+    const handleStreamStatus = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const status = customEvent.detail?.status;
+      console.log('Stream status received in player-game:', status);
+      setIsScreenSharing(status === 'online' || status === 'connecting');
+    };
+
+    window.addEventListener('stream_status_update', handleStreamStatus as EventListener);
+    return () => window.removeEventListener('stream_status_update', handleStreamStatus as EventListener);
+  }, []);
+
   return (
-    <>
-      <MobileGameLayout
-        gameState={gameState}
-        user={userData}
-        userBalance={userBalance || 0}
-        selectedBetAmount={selectedBetAmount}
-        selectedPosition={selectedPosition}
-        betAmounts={betAmounts}
-        onPositionSelect={handlePositionSelect}
-        onPlaceBet={handlePlaceBet}
-        onChipSelect={handleChipSelect}
-        onUndoBet={handleUndoBet}
-        onRebet={handleRebet}
-        onWalletClick={handleWalletClick}
-        onHistoryClick={handleHistoryClick}
-        onShowChipSelector={handleShowChipSelector}
-        showChipSelector={showChipSelector}
-        isPlacingBet={isPlacingBet}
-      />
+    <div className="relative">
+      <div className="relative top-0">
+        <MobileGameLayout
+          isScreenSharing={isScreenSharing}
+          gameState={gameState}
+          user={userData}
+          userBalance={userBalance || 0}
+          selectedBetAmount={selectedBetAmount}
+          selectedPosition={selectedPosition}
+          betAmounts={betAmounts}
+          onPositionSelect={handlePositionSelect}
+          onPlaceBet={handlePlaceBet}
+          onChipSelect={handleChipSelect}
+          onUndoBet={handleUndoBet}
+          onRebet={handleRebet}
+          onWalletClick={handleWalletClick}
+          onHistoryClick={handleHistoryClick}
+          onShowChipSelector={handleShowChipSelector}
+          showChipSelector={showChipSelector}
+          isPlacingBet={isPlacingBet}
+        />
+      </div>
 
       {/* Game History Modal */}
       <GameHistoryModal
@@ -426,7 +480,7 @@ const PlayerGame: React.FC = () => {
         }
         onComplete={() => setShowRoundNotification(false)}
       />
-    </>
+    </div>
   );
 };
 

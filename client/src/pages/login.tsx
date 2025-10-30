@@ -54,6 +54,7 @@ export default function Login() {
 
       // CRITICAL: Ensure token is stored (check multiple sources)
       const token = response.token || response.user?.token;
+      console.log('Token received from server:', token);
       if (!token) {
         console.error('❌ No token received from server');
         setError('Authentication failed - no token received. Please try again.');
@@ -61,13 +62,14 @@ export default function Login() {
       }
 
       // Use auth context to handle login
+      console.log('Storing token via AuthContext');
       login(userData, token);
-      console.log('✅ Login successful');
+      console.log('✅ Login successful - token stored');
 
-      // Redirect to game after a short delay to allow WebSocket to authenticate
+      // Redirect to game after a short delay to allow token processing
       setTimeout(() => {
         window.location.href = '/player-game';
-      }, 1000);
+      }, 2000);
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Invalid phone number or password');

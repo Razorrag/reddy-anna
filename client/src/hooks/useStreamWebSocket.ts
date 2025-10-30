@@ -5,7 +5,8 @@
  * Integrates with both the stream system and game state
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
+import WebSocketManager, { ConnectionStatus } from '../lib/WebSocketManager';
 
 interface StreamWebSocketHandlerProps {
   onStreamStatusChange?: (status: string) => void;
@@ -20,70 +21,17 @@ export const useStreamWebSocket = ({
   onGameEvent,
   token
 }: StreamWebSocketHandlerProps) => {
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const streamWebSocketManagerRef = useRef<WebSocketManager | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
-  const connect = () => {
-    if (!token) {
-      console.warn('No authentication token provided for WebSocket connection');
-      return;
-    }
-
-    // Determine the appropriate WebSocket URL based on environment
+  const getStreamWebSocketUrl = useCallback((): string => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.hostname}:5000/ws`;
-    
-    try {
-      wsRef.current = new WebSocket(`${wsUrl}?token=${encodeURIComponent(token)}`);
-      
-      wsRef.current.onopen = () => {
-        console.log('✅ Stream WebSocket connected');
-      };
-      
-      wsRef.current.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          handleWebSocketMessage(message);
-        } catch (error) {
-          console.error('Failed to parse WebSocket message:', error);
-        }
-      };
-      
-      wsRef.current.onclose = () => {
-        console.log('⚠️ Stream WebSocket disconnected');
-        // Attempt to reconnect after 3 seconds
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-        }
-        reconnectTimeoutRef.current = setTimeout(connect, 3000);
-      };
-      
-      wsRef.current.onerror = (error) => {
-        console.error('❌ Stream WebSocket error:', error);
-      };
-      
-    } catch (error) {
-      console.error('Failed to establish WebSocket connection:', error);
-      // Attempt to reconnect after 3 seconds
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      reconnectTimeoutRef.current = setTimeout(connect, 3000);
-    }
-  };
+    // Note: This assumes the streaming WebSocket is on port 5000, as per original code.
+    // If it should be on the same host as the main game WebSocket, adjust accordingly.
+    return `${wsProtocol}//${window.location.hostname}:5000/ws/stream`;
+  }, []);
 
-  const disconnect = () => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-  };
-
-  const handleWebSocketMessage = (message: any) => {
+  const handleWebSocketMessage = useCallback((message: any) => {
     switch (message.type) {
       case 'stream_status':
         onStreamStatusChange?.(message.data.status);
@@ -102,17 +50,63 @@ export const useStreamWebSocket = ({
       default:
         console.log('Received unknown WebSocket message:', message);
     }
-  };
+  }, [onStreamStatusChange, onViewerCountChange, onGameEvent]);
 
-  const sendStreamCommand = (command: string, data?: any) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: command, data }));
+  const initStreamWebSocketManager = useCallback(() => {
+    if (streamWebSocketManagerRef.current) return;
+
+    const wsUrl = getStreamWebSocketUrl();
+    streamWebSocketManagerRef.current = WebSocketManager.getInstance({
+      url: wsUrl,
+      reconnectInterval: 3000, // Use original reconnect interval
+      maxReconnectAttempts: 10, // Default max attempts
+      tokenProvider: async () => token || null, // Provide token if available
+      onMessage: (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (error) {
+          console.error('Failed to parse Stream WebSocket message:', error);
+        }
+      },
+      onOpen: () => {
+        console.log('✅ Stream WebSocket connected');
+        setIsConnected(true);
+      },
+      onClose: () => {
+        console.log('⚠️ Stream WebSocket disconnected');
+        setIsConnected(false);
+      },
+      onError: (event) => {
+        console.error('❌ Stream WebSocket error:', event);
+        setIsConnected(false);
+      },
+    });
+
+    streamWebSocketManagerRef.current.on('statusChange', (status: ConnectionStatus) => {
+      setIsConnected(status === ConnectionStatus.CONNECTED);
+    });
+  }, [getStreamWebSocketUrl, handleWebSocketMessage, token]);
+
+  const connect = useCallback(() => {
+    initStreamWebSocketManager();
+    streamWebSocketManagerRef.current?.connect();
+  }, [initStreamWebSocketManager]);
+
+  const disconnect = useCallback(() => {
+    streamWebSocketManagerRef.current?.disconnect();
+  }, []);
+
+  const sendStreamCommand = useCallback((command: string, data?: any) => {
+    if (streamWebSocketManagerRef.current) {
+      streamWebSocketManagerRef.current.send({ type: command, data });
     } else {
-      console.warn('WebSocket not connected, cannot send command:', command);
+      console.warn('Stream WebSocket not initialized or connected, cannot send command:', command);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    initStreamWebSocketManager();
     if (token) {
       connect();
     }
@@ -120,12 +114,12 @@ export const useStreamWebSocket = ({
     return () => {
       disconnect();
     };
-  }, [token]);
+  }, [token, connect, disconnect, initStreamWebSocketManager]);
 
   return {
     connect,
     disconnect,
     sendStreamCommand,
-    isConnected: wsRef.current?.readyState === WebSocket.OPEN
+    isConnected
   };
 };

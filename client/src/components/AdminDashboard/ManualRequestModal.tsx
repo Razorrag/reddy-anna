@@ -21,7 +21,8 @@ export const ManualRequestModal: React.FC<ManualRequestModalProps> = ({
     currency: 'INR',
     payment_method: '',
     utr_number: '',
-    priority: '3'
+    priority: '3',
+    reason: '' // New field for admin reason
   });
 
   const [loading, setLoading] = useState(false);
@@ -30,14 +31,49 @@ export const ManualRequestModal: React.FC<ManualRequestModalProps> = ({
     e.preventDefault();
     setLoading(true);
 
+    // Validate reason field
+    if (!formData.reason.trim()) {
+      alert('Please provide a reason for this admin action');
+      setLoading(false);
+      return;
+    }
+
     try {
-      await onSubmit({
-        ...formData,
-        amount: formData.amount ? parseFloat(formData.amount) : undefined,
-        priority: parseInt(formData.priority)
+      // Use the new admin direct payment endpoint
+      const response = await fetch('/api/admin/payment-requests/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}` // Include admin token
+        },
+        body: JSON.stringify({
+          ...formData,
+          amount: formData.amount ? parseFloat(formData.amount) : undefined,
+          priority: parseInt(formData.priority)
+        })
       });
-    } catch (error) {
-      console.error('Error creating manual request:', error);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create admin payment request');
+      }
+
+      const result = await response.json();
+      
+      // Show success message with details
+      alert(`✅ ${formData.request_type.toUpperCase()} created successfully!\n\nRequest ID: ${result.requestId}\nAmount: ₹${formData.amount}\nReason: ${formData.reason}`);
+      
+      // Call the original onSubmit callback if provided
+      if (onSubmit) {
+        await onSubmit(result);
+      }
+      
+      // Close modal on success
+      onClose();
+      
+    } catch (error: any) {
+      console.error('Error creating admin payment request:', error);
+      alert(`❌ Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -139,6 +175,19 @@ export const ManualRequestModal: React.FC<ManualRequestModalProps> = ({
           </div>
 
           <div className="form-group">
+            <label>Reason for Action *</label>
+            <textarea
+              name="reason"
+              value={formData.reason}
+              onChange={handleChange}
+              required
+              placeholder="Enter reason for this admin action (e.g., 'Bonus credit', 'Manual deposit', 'Balance correction')"
+              className="form-textarea"
+              rows={3}
+            />
+          </div>
+
+          <div className="form-group">
             <label>Priority</label>
             <select
               name="priority"
@@ -164,9 +213,9 @@ export const ManualRequestModal: React.FC<ManualRequestModalProps> = ({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={loading || !formData.user_phone}
+              disabled={loading || !formData.user_phone || !formData.reason.trim()}
             >
-              {loading ? 'Creating...' : 'Create Request'}
+              {loading ? 'Creating...' : 'Create & Process Request'}
             </button>
           </div>
         </form>

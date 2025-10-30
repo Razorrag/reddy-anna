@@ -19,6 +19,7 @@ interface AppState {
   selectedChip: number | null;
   chipAmounts: number[];
   loading: boolean;
+  authChecked: boolean;
   theme: 'light' | 'dark';
   language: 'en' | 'hi' | 'te';
 }
@@ -31,6 +32,7 @@ type AppAction =
   | { type: 'PLACE_BET'; side: 'andar' | 'bahar'; amount: number }
   | { type: 'SET_SELECTED_CHIP'; payload: number }
   | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_AUTH_CHECKED'; payload: boolean }
   | { type: 'SET_THEME'; payload: 'light' | 'dark' }
   | { type: 'SET_LANGUAGE'; payload: 'en' | 'hi' | 'te' }
   | { type: 'RESET_APP' };
@@ -47,6 +49,7 @@ const initialState: AppState = {
   selectedChip: null,
   chipAmounts: [100, 500, 1000, 5000, 10000, 25000, 50000, 100000],
   loading: false,
+  authChecked: false,
   theme: 'dark',
   language: 'en'
 };
@@ -56,10 +59,10 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
     case 'SET_GAME_STATE':
       return { ...state, gameState: { ...state.gameState, ...action.payload } };
-      
+
     case 'ADD_NOTIFICATION': {
       const newNotification = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         message: action.payload.message,
         type: action.payload.type,
         timestamp: Date.now()
@@ -109,6 +112,9 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case 'SET_LOADING':
       return { ...state, loading: action.payload };
       
+    case 'SET_AUTH_CHECKED':
+      return { ...state, authChecked: action.payload };
+      
     case 'SET_THEME':
       return { ...state, theme: action.payload };
       
@@ -119,6 +125,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...initialState,
         chipAmounts: state.chipAmounts, // Keep chip amounts
+        authChecked: state.authChecked, // Keep authChecked state
         theme: state.theme, // Keep theme
         language: state.language, // Keep language
       };
@@ -137,6 +144,7 @@ const AppContext = createContext<{
   placeBet: (side: 'andar' | 'bahar', amount: number) => void;
   setSelectedChip: (amount: number) => void;
   setLoading: (loading: boolean) => void;
+  setAuthChecked: (authChecked: boolean) => void;
   setTheme: (theme: 'light' | 'dark') => void;
   setLanguage: (language: 'en' | 'hi' | 'te') => void;
   resetApp: () => void;
@@ -146,6 +154,13 @@ const AppContext = createContext<{
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const { state: authState } = useAuth(); // Get auth state from unified AuthContext
+  
+  // Update authChecked when authState changes
+  useEffect(() => {
+    // Assuming authState has properties like isAuthenticated or user that indicate auth status
+    // Set authChecked to true once we've determined the auth status
+    dispatch({ type: 'SET_AUTH_CHECKED', payload: true });
+  }, [authState]);
   
   // Load saved preferences on mount
   useEffect(() => {
@@ -216,6 +231,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     dispatch({ type: 'SET_LOADING', payload: loading });
   };
   
+  const setAuthChecked = (authChecked: boolean) => {
+    dispatch({ type: 'SET_AUTH_CHECKED', payload: authChecked });
+  };
+  
   const setTheme = (theme: 'light' | 'dark') => {
     dispatch({ type: 'SET_THEME', payload: theme });
   };
@@ -236,6 +255,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     placeBet,
     setSelectedChip,
     setLoading,
+    setAuthChecked,
     setTheme,
     setLanguage,
     resetApp
@@ -261,9 +281,6 @@ export const useApp = () => {
 export const useAppAuth = () => {
   const { state } = useApp();
   return {
-    user: state.user,
-    isAuthenticated: state.isAuthenticated,
-    authChecked: state.authChecked,
     loading: state.loading
   };
 };

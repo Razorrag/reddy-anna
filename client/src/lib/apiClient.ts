@@ -174,6 +174,32 @@ class APIClient {
 
     return this.handleResponse<T>(response);
   }
+
+  /**
+   * Balance notification endpoint for WebSocket updates
+   */
+  async notifyBalanceUpdate(userId: string, balance: number, transactionType?: string, amount?: number): Promise<any> {
+    try {
+      const response = await fetch(`${this.baseURL}/user/balance-notify`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...this.getHeaders(false),  // Always include auth for this endpoint
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, balance, transactionType, amount })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Balance notification failed with status ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Balance notification error:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance
@@ -199,4 +225,7 @@ export default apiClient;
  *   side: 'andar',
  *   amount: 1000
  * });
+ * 
+ * // Notify balance update (token added automatically)
+ * const result = await apiClient.notifyBalanceUpdate('user123', 5000, 'win', 1000);
  */

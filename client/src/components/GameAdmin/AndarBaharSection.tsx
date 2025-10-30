@@ -52,15 +52,15 @@ const AndarBaharSection = () => {
   // Admin controls
   const startRound2 = () => {
     sendWebSocketMessage({
-      type: 'start_round_2',
-      data: { gameId: 'default-game' }
+      type: 'phase_change',
+      data: { phase: 'betting', round: 2, message: 'Starting Round 2 betting' }
     });
   };
 
   const startFinalDraw = () => {
     sendWebSocketMessage({
-      type: 'start_final_draw',
-      data: { gameId: 'default-game' }
+      type: 'phase_change',
+      data: { phase: 'dealing', round: 3, message: 'Starting Round 3 continuous draw' }
     });
   };
 

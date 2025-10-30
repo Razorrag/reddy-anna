@@ -12,6 +12,13 @@ export interface UserBets {
   round2: RoundBets;
 }
 
+// Define PlayerBets interface (extends UserBets with currentBet)
+export interface PlayerBets {
+  round1: RoundBets;
+  round2: RoundBets;
+  currentBet: number;
+}
+
 export interface GameState {
   id: string;
   openingCard: Card | null;

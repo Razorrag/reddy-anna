@@ -8,61 +8,31 @@
 import { WebSocket } from 'ws';
 import { gameService } from '../services/GameService';
 
-interface SocketClient {
+// WSClient interface to match the main routes.ts file
+interface WSClient {
   ws: WebSocket;
   userId: string;
-  role: 'admin' | 'player';
-  authenticated: boolean;
+  role: 'player' | 'admin';
+  wallet: number;
 }
 
 /**
  * Register all game-related socket handlers
+ * This function is now integrated with the main WebSocket connection in routes.ts
  */
-export function registerGameHandlers(client: SocketClient) {
-  const { ws, userId, role } = client;
-
-  // Player places a bet
-  ws.on('message', async (data) => {
-    try {
-      const message = JSON.parse(data.toString());
-
-      switch (message.type) {
-        case 'player:bet':
-          await handlePlayerBet(client, message.data);
-          break;
-
-        case 'admin:start-game':
-          await handleStartGame(client, message.data);
-          break;
-
-        case 'admin:deal-card':
-          await handleDealCard(client, message.data);
-          break;
-
-        case 'game:subscribe':
-          await handleGameSubscribe(client, message.data);
-          break;
-
-        default:
-          // Unknown message type
-          break;
-      }
-    } catch (error) {
-      console.error('Socket message error:', error);
-      sendError(ws, 'Failed to process message');
-    }
-  });
+export function registerGameHandlers() {
+  console.log('Game handlers registered - integrated with main WebSocket server');
 }
 
 /**
  * Handle player bet
  */
-async function handlePlayerBet(client: SocketClient, data: any) {
+export async function handlePlayerBet(client: WSClient, data: any) {
   const { ws, userId, role } = client;
 
   // Validate authentication
-  if (!client.authenticated) {
-    sendError(ws, 'Authentication required');
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.error('Client not connected');
     return;
   }
 
@@ -123,16 +93,23 @@ async function handlePlayerBet(client: SocketClient, data: any) {
       data: result,
     }));
 
-    // Broadcast bet to all clients
-    broadcastGameUpdate(gameId, {
-      type: 'game:bet-placed',
-      data: {
-        userId,
-        side,
-        amount,
-        round,
-      },
-    });
+    // Broadcast bet to all clients via the main routes.ts broadcast function
+    // We'll use the global broadcast function from the routes.ts file
+    if (typeof (global as any).broadcast !== 'undefined') {
+      (global as any).broadcast({
+        type: 'game:bet-placed',
+        data: {
+          userId,
+          side,
+          amount,
+          round,
+        },
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      // Fallback: log that global broadcast is not available
+      console.log('Global broadcast function not available, bet placed for user:', userId);
+    }
 
     console.log(`✅ Bet processed: ${userId} bet ₹${amount} on ${side}`);
   } catch (error: any) {
@@ -144,12 +121,12 @@ async function handlePlayerBet(client: SocketClient, data: any) {
 /**
  * Handle admin starting a game
  */
-async function handleStartGame(client: SocketClient, data: any) {
+export async function handleStartGame(client: WSClient, data: any) {
   const { ws, userId, role } = client;
 
   // Validate authentication
-  if (!client.authenticated) {
-    sendError(ws, 'Authentication required');
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.error('Client not connected');
     return;
   }
 
@@ -174,11 +151,17 @@ async function handleStartGame(client: SocketClient, data: any) {
       data: gameState,
     }));
 
-    // Broadcast to all clients
-    broadcastToAll({
-      type: 'game:started',
-      data: gameState,
-    });
+    // Broadcast to all clients via the main routes.ts broadcast function
+    if (typeof (global as any).broadcast !== 'undefined') {
+      (global as any).broadcast({
+        type: 'game_start',
+        data: gameState,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      // Fallback: log that global broadcast is not available
+      console.log('Global broadcast function not available, game started by admin:', userId);
+    }
 
     console.log(`✅ Game started by admin ${userId}`);
   } catch (error: any) {
@@ -190,12 +173,12 @@ async function handleStartGame(client: SocketClient, data: any) {
 /**
  * Handle admin dealing a card
  */
-async function handleDealCard(client: SocketClient, data: any) {
+export async function handleDealCard(client: WSClient, data: any) {
   const { ws, userId, role } = client;
 
   // Validate authentication
-  if (!client.authenticated) {
-    sendError(ws, 'Authentication required');
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.error('Client not connected');
     return;
   }
 
@@ -226,16 +209,22 @@ async function handleDealCard(client: SocketClient, data: any) {
       data: gameState,
     }));
 
-    // Broadcast to all clients
-    broadcastGameUpdate(data.gameId, {
-      type: 'game:card-dealt',
-      data: {
-        card: data.card,
-        side: data.side,
-        position: data.position,
-        gameState,
-      },
-    });
+    // Broadcast to all clients via the main routes.ts broadcast function
+    if (typeof (global as any).broadcast !== 'undefined') {
+      (global as any).broadcast({
+        type: 'card_dealt',
+        data: {
+          card: data.card,
+          side: data.side,
+          position: data.position,
+          isWinningCard: false  // We'll determine this appropriately
+        },
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      // Fallback: log that global broadcast is not available
+      console.log('Global broadcast function not available, card dealt by admin:', userId);
+    }
 
     console.log(`✅ Card dealt by admin ${userId}: ${data.card} on ${data.side}`);
   } catch (error: any) {
@@ -247,8 +236,13 @@ async function handleDealCard(client: SocketClient, data: any) {
 /**
  * Handle game subscription
  */
-async function handleGameSubscribe(client: SocketClient, data: any) {
+export async function handleGameSubscribe(client: WSClient, data: any) {
   const { ws } = client;
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.error('Client not connected');
+    return;
+  }
 
   try {
     const gameState = await gameService.getCurrentGame();
@@ -266,29 +260,11 @@ async function handleGameSubscribe(client: SocketClient, data: any) {
 /**
  * Send error message to client
  */
-function sendError(ws: WebSocket, message: string) {
+export function sendError(ws: WebSocket, message: string) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
       type: 'error',
-      message,
+      data: { message }
     }));
   }
-}
-
-/**
- * Broadcast message to all connected clients
- */
-function broadcastToAll(message: any) {
-  // This would be implemented in your main WebSocket server
-  // You'd need to maintain a list of all connected clients
-  console.log('Broadcasting to all clients:', message.type);
-}
-
-/**
- * Broadcast game update to all clients watching a specific game
- */
-function broadcastGameUpdate(gameId: string, message: any) {
-  // This would be implemented in your main WebSocket server
-  // You'd filter clients subscribed to this specific game
-  console.log(`Broadcasting game update for ${gameId}:`, message.type);
 }

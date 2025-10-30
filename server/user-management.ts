@@ -26,6 +26,8 @@ export interface UserManagementResponse {
   total?: number;
   error?: string;
   message?: string;
+  previousBalance?: number;
+  newBalance?: number;
 }
 
 export interface UserFilters {

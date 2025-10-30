@@ -70,6 +70,7 @@ export default function UserAdmin() {
     try {
       const response = await fetchUsers(filters);
       if (response.success) {
+        console.log('Users loaded:', response.users);
         setUsers(response.users);
       } else {
         toast({
@@ -551,7 +552,7 @@ export default function UserAdmin() {
                     <div className="flex items-center space-x-4">
                       <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-indigo-600 rounded-full flex items-center justify-center">
                         <span className="text-white font-bold text-lg">
-                          {user.fullName.charAt(0).toUpperCase()}
+                          {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
                         </span>
                       </div>
                       <div>

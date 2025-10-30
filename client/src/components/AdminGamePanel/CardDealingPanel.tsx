@@ -78,10 +78,12 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
       try {
         // Send card immediately to all players
         sendWebSocketMessage({
-          type: 'deal_single_card',
+          type: 'card_dealt',
           data: {
             card,
-            side: round3NextSide
+            side: round3NextSide,
+            position: (gameState.andarCards.length + gameState.baharCards.length), // position based on total cards dealt
+            isWinningCard: false
           }
         });
         
@@ -114,12 +116,14 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
     setDealingInProgress(true);
 
     try {
-      // Send individual card to backend using existing deal_card type
+      // Send individual card to backend using existing card_dealt type
       sendWebSocketMessage({
-        type: 'deal_card',
+        type: 'card_dealt',
         data: {
           card: selectedCard,
-          side: nextSide
+          side: nextSide,
+          position: (gameState.andarCards.length + gameState.baharCards.length), // position based on total cards dealt
+          isWinningCard: false
         }
       });
       

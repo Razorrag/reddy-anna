@@ -32,9 +32,9 @@ export default defineConfig({
           });
         }
       },
-      // CRITICAL: Proxy WebSocket connections to backend  
+      // CRITICAL: Proxy WebSocket connections to backend
       '/ws': {
-        target: 'http://localhost:5000',
+        target: 'ws://localhost:5000',
         ws: true,
         changeOrigin: true,
         secure: false,

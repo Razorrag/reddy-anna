@@ -23,8 +23,7 @@ export const authLimiter = rateLimit({
     const trustedIPs = process.env.TRUSTED_IPS?.split(',') || [];
     return req.ip ? trustedIPs.includes(req.ip) : false;
   },
-  // Handle proxy headers properly to avoid xForwardedFor errors
-  trustProxy: true, // Trust first proxy (common in production)
+
 });
 
 export const generalLimiter = rateLimit({
@@ -41,8 +40,7 @@ export const generalLimiter = rateLimit({
     const skipPaths = ['/ws', '/api/game/current', '/api/user/balance'];
     return skipPaths.some(path => req.path.startsWith(path));
   },
-  // Handle proxy headers properly to avoid xForwardedFor errors
-  trustProxy: true,
+
 });
 
 export const apiLimiter = rateLimit({
@@ -59,8 +57,6 @@ export const apiLimiter = rateLimit({
     const skipPaths = ['/ws', '/api/game/current', '/api/user/balance'];
     return skipPaths.some(path => req.path.startsWith(path));
   },
-  // Handle proxy headers properly to avoid xForwardedFor errors
-  trustProxy: true,
 });
 
 // Game-specific rate limiter (more lenient for real-time gaming)
@@ -73,8 +69,6 @@ export const gameLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Handle proxy headers properly to avoid xForwardedFor errors
-  trustProxy: true,
 });
 
 export const paymentLimiter = rateLimit({
@@ -86,8 +80,6 @@ export const paymentLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Handle proxy headers properly to avoid xForwardedFor errors
-  trustProxy: true,
 });
 
 // Helmet security headers configuration
@@ -163,11 +155,7 @@ export const sanitizeInput = mongoSanitize({
 });
 
 // XSS protection
-export const xssProtection = xss({
-  whiteList: {}, // No HTML tags allowed
-  stripIgnoreTag: true,
-  stripIgnoreTagBody: ['script'],
-});
+export const xssProtection = xss();
 
 // HPP (HTTP Parameter Pollution) protection
 export const parameterPollutionProtection = hpp({

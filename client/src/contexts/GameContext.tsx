@@ -18,7 +18,7 @@ type GameAction =
   | { type: 'START_ROUND'; round: number }
   | { type: 'RESET_GAME' }
   | { type: 'UPDATE_COUNTDOWN'; countdown: number }
-  | { type: 'SET_PHASE'; phase: 'idle' | 'betting' | 'dealing' | 'completed' };
+  | { type: 'SET_PHASE'; phase: 'idle' | 'betting' | 'dealing' | 'complete' };
 
 // Game state type
 interface GameContextType {
@@ -29,7 +29,7 @@ interface GameContextType {
   startNewGame: () => void;
   resetGame: () => void;
   updateCountdown: (countdown: number) => void;
-  setPhase: (phase: 'idle' | 'betting' | 'dealing' | 'completed') => void;
+  setPhase: (phase: 'idle' | 'betting' | 'dealing' | 'complete') => void;
 }
 
 // Reducer function
@@ -78,7 +78,7 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       return { 
         ...state, 
         winner: action.winner, 
-        phase: 'completed',
+        phase: 'complete',
         countdown: 0
       };
       
@@ -188,7 +188,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dispatch({ type: 'UPDATE_COUNTDOWN', countdown });
   };
   
-  const setPhase = (phase: 'idle' | 'betting' | 'dealing' | 'completed') => {
+  const setPhase = (phase: 'idle' | 'betting' | 'dealing' | 'complete') => {
     dispatch({ type: 'SET_PHASE', phase });
   };
   

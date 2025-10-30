@@ -1,5 +1,5 @@
-import React from "react";
-import { Eye, Wifi, WifiOff } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Eye, Wifi, WifiOff, Play, Pause, Volume2, VolumeX } from "lucide-react";
 
 interface VideoStreamProps {
   isLive?: boolean;
@@ -8,6 +8,7 @@ interface VideoStreamProps {
   streamUrl?: string;
   streamType?: 'rtmp' | 'webrtc' | 'none';
   onStreamStatusChange?: (status: 'connecting' | 'connected' | 'disconnected' | 'error') => void;
+  webrtcStream?: MediaStream | null;
 }
 
 export function VideoStream({
@@ -15,11 +16,16 @@ export function VideoStream({
   viewerCount = 0,
   title = 'Andar Bahar Live',
   streamUrl = '',
-  streamType = 'rtmp'
+  streamType = 'rtmp',
+  webrtcStream = null
 }: VideoStreamProps) {
-  const [status, setStatus] = React.useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isLive) {
       setStatus('connecting');
       // Simulate connection process, in real implementation would connect to actual stream
@@ -31,6 +37,17 @@ export function VideoStream({
       setStatus('disconnected');
     }
   }, [isLive]);
+
+  // Handle WebRTC stream when provided
+  useEffect(() => {
+    if (webrtcStream && videoRef.current) {
+      videoRef.current.srcObject = webrtcStream;
+      videoRef.current.play().catch(err => {
+        console.error('Failed to play WebRTC stream:', err);
+        setStatus('error');
+      });
+    }
+  }, [webrtcStream]);
 
   // Determine the appropriate player URL based on stream type and configuration
   const getPlayerUrl = () => {
@@ -45,6 +62,28 @@ export function VideoStream({
   };
 
   const playerUrl = getPlayerUrl();
+
+  // Control handlers
+  const handlePlayPause = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleMute = () => {
+    setIsMuted(!isMuted);
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+    }
+  };
+
+  const handleFullscreen = () => {
+    if (videoRef.current) {
+      if (!isFullscreen) {
+        videoRef.current.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    }
+  };
 
   // Show status overlay when not connected
   const renderStatusOverlay = () => {
@@ -87,6 +126,52 @@ export function VideoStream({
     );
   };
 
+  // Render WebRTC stream
+  const renderWebRTCStream = () => {
+    if (streamType !== 'webrtc') return null;
+
+    return (
+      <div className="relative w-full h-full">
+        <video
+          ref={videoRef}
+          autoPlay
+          muted={isMuted}
+          playsInline
+          className="w-full h-full object-contain bg-black"
+          onPlay={() => setStatus('connected')}
+          onPause={() => setStatus('disconnected')}
+          onError={() => setStatus('error')}
+        />
+        
+        {/* WebRTC Controls Overlay */}
+        <div className="absolute top-0 left-0 right-0 bottom-0 opacity-0 hover:opacity-100 transition-opacity duration-200">
+          <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between bg-black/50 backdrop-blur-sm p-2 rounded-lg">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePlayPause}
+                className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+              >
+                {isPlaying ? <Pause className="w-4 h-4 text-white" /> : <Play className="w-4 h-4 text-white" />}
+              </button>
+              <button
+                onClick={handleMute}
+                className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+              >
+                {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
+              </button>
+            </div>
+            <button
+              onClick={handleFullscreen}
+              className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors text-white text-xs"
+            >
+              Fullscreen
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl video-stream-container">
       {/* Stream Player */}
@@ -102,6 +187,9 @@ export function VideoStream({
           title={`${title} - ${streamType.toUpperCase()} Stream`}
         />
       )}
+
+      {/* WebRTC Stream */}
+      {renderWebRTCStream()}
 
       {/* Overlay: Status Information */}
       {renderStatusOverlay()}
@@ -136,6 +224,16 @@ export function VideoStream({
           </span>
         </div>
       </div>
+
+      {/* WebRTC Connection Status */}
+      {streamType === 'webrtc' && status !== 'connected' && (
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+          <div className="text-center text-white">
+            <div className="text-2xl mb-2">🌐</div>
+            <div className="text-sm">{status === 'connecting' ? 'Connecting...' : 'Waiting for stream'}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

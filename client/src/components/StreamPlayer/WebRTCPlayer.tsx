@@ -24,7 +24,27 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
     console.log('🌐 WebRTC Player initializing for room:', roomId);
     initializeWebRTC();
 
+    const handleOffer = async (event: any) => {
+      const { offer } = event.detail;
+      if (peerConnectionRef.current && offer) {
+        try {
+          await peerConnectionRef.current.setRemoteDescription(offer);
+          const answer = await peerConnectionRef.current.createAnswer();
+          await peerConnectionRef.current.setLocalDescription(answer);
+          sendWebSocketMessage({
+            type: 'webrtc_answer',
+            data: { answer },
+          });
+        } catch (error) {
+          console.error('Error handling WebRTC offer:', error);
+        }
+      }
+    };
+
+    window.addEventListener('webrtc_offer_received', handleOffer);
+
     return () => {
+      window.removeEventListener('webrtc_offer_received', handleOffer);
       cleanup();
     };
   }, [roomId]);

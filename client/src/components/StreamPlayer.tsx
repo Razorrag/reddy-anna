@@ -42,9 +42,19 @@ const StreamPlayer: React.FC<StreamPlayerProps> = ({
   useEffect(() => {
     fetchStreamConfig();
     
+    const handleStreamStatus = () => {
+      fetchStreamConfig();
+    };
+
+    window.addEventListener('stream_status', handleStreamStatus);
+
     // Poll for config updates every 30 seconds
     const interval = setInterval(fetchStreamConfig, 30000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('stream_status', handleStreamStatus);
+    };
   }, []);
 
   const fetchStreamConfig = async () => {
@@ -56,6 +66,7 @@ const StreamPlayer: React.FC<StreamPlayerProps> = ({
       }
 
       const data = await response.json();
+      console.log('Stream config data:', data);
       if (data.success && data.data) {
         setConfig(data.data);
         setError(null);
@@ -369,10 +380,8 @@ const WebRTCStream: React.FC<{ config: StreamConfig }> = ({ config }) => {
 const WebRTCStreamWebSocket: React.FC<{ config: StreamConfig }> = ({ config }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
-
   useEffect(() => {
-    console.log('🌐 WebRTC Stream initializing');
+    console.log('🌐 WebRTCStreamWebSocket mounted');
 
     // Initialize WebRTC connection
     initializeWebRTC();

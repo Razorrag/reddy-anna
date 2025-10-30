@@ -35,11 +35,11 @@ const RoundController: React.FC<RoundControllerProps> = ({
     setCountdown(30);
 
     sendWebSocketMessage({
-      type: 'start_round_2',
+      type: 'phase_change',
       data: {
-        gameId: 'default-game',
+        phase: 'betting',
         round: 2,
-        timer: 30
+        message: 'Starting Round 2 betting phase'
       }
     });
 
@@ -61,10 +61,11 @@ const RoundController: React.FC<RoundControllerProps> = ({
     setCountdown(0);
 
     sendWebSocketMessage({
-      type: 'start_final_draw',
+      type: 'phase_change',
       data: {
-        gameId: 'default-game',
-        round: 3
+        phase: 'dealing',
+        round: 3,
+        message: 'Starting Round 3 continuous draw phase'
       }
     });
 

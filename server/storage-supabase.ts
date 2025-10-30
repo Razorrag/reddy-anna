@@ -122,6 +122,7 @@ export interface IStorage {
   getBettingStats(gameId: string): Promise<{ andarTotal: number; baharTotal: number; andarCount: number; baharCount: number }>;
   getUserBets(userId: string, limit?: number, offset?: number): Promise<PlayerBet[]>;
   getUserGameHistory(userId: string): Promise<any[]>;
+  updateBet(gameId: string, userId: string, updates: Partial<UpdateBet>): Promise<void>;
   
   // Card operations
   dealCard(card: InsertDealtCard): Promise<DealtCard>;
@@ -143,6 +144,7 @@ export interface IStorage {
     default_deposit_bonus_percent: number;
     referral_bonus_percent: number;
     conditional_bonus_threshold: number;
+    admin_whatsapp_number: string;
   }>;
   updateGameSettings(settings: { minBet?: number; maxBet?: number; timerDuration?: number }): Promise<void>;
   getGameSetting(key: string): Promise<string | undefined>;
@@ -210,6 +212,7 @@ export interface IStorage {
     amount: number;
     paymentMethod: string;
     status: 'pending' | 'approved' | 'rejected' | 'completed';
+    adminNotes?: string;
   }): Promise<any>;
   getPaymentRequest(requestId: string): Promise<any | null>;
   getPaymentRequestsByUser(userId: string): Promise<any[]>;
@@ -217,7 +220,7 @@ export interface IStorage {
   updatePaymentRequest(requestId: string, status: string, adminId?: string): Promise<void>;
   approvePaymentRequest(requestId: string, userId: string, amount: number, adminId: string): Promise<void>;
   
-  // Bonus analytics methods
+  // Analytics methods
   getBonusAnalytics(period: string): Promise<any>;
   getReferralAnalytics(period: string): Promise<any>;
 }
@@ -588,7 +591,7 @@ export class SupabaseStorage implements IStorage {
 
   // Update createUser to use phone as ID with configurable default balance
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = insertUser.id || (insertUser as any).phone || insertUser.phone; // Use provided ID or phone number as ID
+    const id = (insertUser as any).id || insertUser.phone; // Use phone as ID if no explicit ID provided
     
     // Get default balance from environment - use 0.00 if not set
     const defaultBalance = process.env.DEFAULT_BALANCE || "0.00";
@@ -597,16 +600,16 @@ export class SupabaseStorage implements IStorage {
       id,
       phone: insertUser.phone,
       password_hash: insertUser.password_hash,
-      full_name: insertUser.full_name || (insertUser as any).name || insertUser.phone,
-      role: insertUser.role || (insertUser as any).role || 'player',
-      status: insertUser.status || (insertUser as any).status || 'active',
+      full_name: insertUser.full_name || insertUser.phone,
+      role: insertUser.role || 'player',
+      status: insertUser.status || 'active',
       balance: insertUser.balance ? insertUser.balance.toString() : defaultBalance,
       total_winnings: insertUser.total_winnings ? insertUser.total_winnings.toString() : "0.00",
       total_losses: insertUser.total_losses ? insertUser.total_losses.toString() : "0.00",
       games_played: insertUser.games_played || 0,
       games_won: insertUser.games_won || 0,
       phone_verified: insertUser.phone_verified || false,
-      referral_code: insertUser.referral_code || (insertUser as any).referral_code || null,
+      referral_code: insertUser.referral_code || null,
       referral_code_generated: null, // Will be generated later
       original_deposit_amount: insertUser.original_deposit_amount ? insertUser.original_deposit_amount.toString() : defaultBalance,
       deposit_bonus_available: insertUser.deposit_bonus_available ? insertUser.deposit_bonus_available.toString() : "0.00",
@@ -653,31 +656,44 @@ export class SupabaseStorage implements IStorage {
       return;
     }
     
-    // 🔒 SECURITY FIX: Use atomic balance update to prevent race conditions
+    // 🔒 SECURITY FIX: Use direct SQL update to prevent race conditions
     try {
-      const { data, error } = await supabaseServer.rpc('update_balance_atomic', {
-        p_user_id: userId,
-        p_amount_change: amountChange
-      });
+      // First, get the current balance
+      const { data: userData, error: fetchError } = await supabaseServer
+        .from('users')
+        .select('balance')
+        .eq('id', userId)
+        .single();
 
-      if (error) {
-        console.error('❌ Atomic balance update failed:', error);
-        
-        // Check for specific error types
-        if (error.message?.includes('User not found')) {
-          throw new Error('User not found');
-        }
-        if (error.message?.includes('Insufficient balance')) {
-          throw new Error('Insufficient balance');
-        }
-        
+      if (fetchError) {
+        console.error('❌ Failed to fetch user balance:', fetchError);
+        throw new Error('User not found');
+      }
+
+      if (!userData) {
+        throw new Error('User not found');
+      }
+
+      // Calculate new balance (ensure it doesn't go negative)
+      const currentBalance = parseFloat(userData.balance) || 0;
+      const newBalance = Math.max(0, currentBalance + amountChange);
+
+      // Update the balance
+      const { error: updateError } = await supabaseServer
+        .from('users')
+        .update({
+          balance: newBalance.toString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error('❌ Balance update failed:', updateError);
         throw new Error('Failed to update user balance');
       }
 
       // Log successful update
-      if (data !== null) {
-        console.log(`✅ Balance updated atomically for user ${userId}: ${data.new_balance}`);
-      }
+      console.log(`✅ Balance updated for user ${userId}: ${currentBalance} -> ${newBalance}`);
     } catch (error: any) {
       console.error('Error in updateUserBalance:', error);
       throw error;
@@ -979,16 +995,21 @@ export class SupabaseStorage implements IStorage {
       .from('player_bets')
       .insert({
         id: randomUUID(),
-        ...bet,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        user_id: bet.userId,
+        game_id: bet.gameId,
+        round: bet.round,
+        side: bet.side,
+        amount: bet.amount, // amount is now a number
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       })
       .select()
       .single();
 
     if (error) {
       console.error('Error creating bet:', error);
-      throw new Error('Failed to create bet');
+      throw new Error(`Failed to create bet: ${error.message}`);
     }
 
     return data;
@@ -1052,6 +1073,25 @@ export class SupabaseStorage implements IStorage {
     if (error) {
       console.error('Error updating bet status:', error);
       throw new Error('Failed to update bet status');
+    }
+  }
+
+  async updateBet(gameId: string, userId: string, updates: Partial<UpdateBet>): Promise<void> {
+    // Skip database update for anonymous users
+    if (userId === 'anonymous') {
+      console.log('⚠️ Skipping bet update for anonymous user');
+      return;
+    }
+    
+    const { error } = await supabaseServer
+      .from('player_bets')
+      .update({ ...updates, updated_at: new Date() }) // Use snake_case
+      .eq('game_id', gameId) // Use snake_case
+      .eq('user_id', userId); // Use snake_case
+
+    if (error) {
+      console.error('Error updating bet:', error);
+      throw new Error('Failed to update bet');
     }
   }
 
@@ -1329,7 +1369,6 @@ export class SupabaseStorage implements IStorage {
           opening_card,
           winner,
           winning_card,
-          total_cards,
           round,
           status
         )
@@ -1355,36 +1394,38 @@ export class SupabaseStorage implements IStorage {
       },
       result: bet.game_sessions?.winner === bet.side ? 'win' : 'loss',
       payout: bet.game_sessions?.winner === bet.side ? bet.amount * 2 : 0,
-      totalCards: bet.game_sessions?.total_cards || 0,
+      totalCards: 0, // Placeholder
       round: bet.game_sessions?.round || 1,
       createdAt: bet.created_at
     }));
   }
   
   // Settings operations
-  async getGameSettings(): Promise<{
-    minBet: number;
-    maxBet: number;
-    timerDuration: number;
-    default_deposit_bonus_percent: number;
-    referral_bonus_percent: number;
-    conditional_bonus_threshold: number;
-  }> {
-    // Get bonus settings from game_settings table
-    const defaultDepositBonusPercent = await this.getGameSetting('default_deposit_bonus_percent');
-    const referralBonusPercent = await this.getGameSetting('referral_bonus_percent');
-    const conditionalBonusThreshold = await this.getGameSetting('conditional_bonus_threshold');
-    
-    return {
-      minBet: 1000,
-      maxBet: 100000,
-      timerDuration: 30,
-      default_deposit_bonus_percent: parseFloat(defaultDepositBonusPercent || '5'),
-      referral_bonus_percent: parseFloat(referralBonusPercent || '1'),
-      conditional_bonus_threshold: parseFloat(conditionalBonusThreshold || '30')
-    };
-  }
-
+    async getGameSettings(): Promise<{ 
+      minBet: number; 
+      maxBet: number; 
+      timerDuration: number;
+      default_deposit_bonus_percent: number;
+      referral_bonus_percent: number;
+      conditional_bonus_threshold: number;
+      admin_whatsapp_number: string;
+    }> {
+      // Get bonus settings from game_settings table
+      const defaultDepositBonusPercent = await this.getGameSetting('default_deposit_bonus_percent');
+      const referralBonusPercent = await this.getGameSetting('referral_bonus_percent');
+      const conditionalBonusThreshold = await this.getGameSetting('conditional_bonus_threshold');
+      const adminWhatsappNumber = await this.getGameSetting('admin_whatsapp_number');
+      
+      return {
+        minBet: 1000,
+        maxBet: 100000,
+        timerDuration: 30,
+        default_deposit_bonus_percent: parseFloat(defaultDepositBonusPercent || '5'),
+        referral_bonus_percent: parseFloat(referralBonusPercent || '1'),
+        conditional_bonus_threshold: parseFloat(conditionalBonusThreshold || '30'),
+        admin_whatsapp_number: adminWhatsappNumber || ''
+      };
+    }
   async updateGameSettings(settings: { minBet?: number; maxBet?: number; timerDuration?: number }): Promise<void> {
     // For simplicity, just update the defaults
     // In practice, you'd store these in a settings table
@@ -1409,13 +1450,16 @@ export class SupabaseStorage implements IStorage {
   async updateGameSetting(key: string, value: string): Promise<void> {
     const { error } = await supabaseServer
       .from('game_settings')
-      .upsert({ setting_key: key, setting_value: value });
+      .update({ setting_value: value })
+      .eq('setting_key', key);
 
     if (error) {
       console.error('Error updating game setting:', error);
       throw error;
     }
   }
+
+
 
   // Stream settings operations
   async getStreamSettings(): Promise<StreamSettings[]> {
@@ -1836,7 +1880,7 @@ export class SupabaseStorage implements IStorage {
     const today = new Date().toISOString().split('T')[0];
     const { data, error } = await supabaseServer
       .from('game_sessions')
-      .select('*', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true})
       .eq('status', 'completed')
       .gte('created_at', today)
       .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
@@ -2024,19 +2068,14 @@ export class SupabaseStorage implements IStorage {
   async getUserReferrals(userId: string): Promise<UserReferral[]> {
     const { data, error } = await supabaseServer
       .from('user_referrals')
-      .select(`
-        *,
-        referred_user:users(id, phone, full_name, created_at)
-      `)
-      .eq('referrer_user_id', userId)
-      .order('created_at', { ascending: false });
+      .select('*, referred_user:users!user_referrals_referred_user_id_fkey(*)')
+      .eq('referrer_user_id', userId);
 
     if (error) {
       console.error('Error getting user referrals:', error);
-      return [];
+      throw error;
     }
-
-    return data as UserReferral[] || [];
+    return data || [];
   }
 
   async checkAndApplyReferralBonus(userId: string, depositAmount: number): Promise<void> {
@@ -2347,17 +2386,27 @@ export class SupabaseStorage implements IStorage {
     amount: number;
     paymentMethod: string;
     status: 'pending' | 'approved' | 'rejected' | 'completed';
+    adminNotes?: string;
   }): Promise<any> {
+    const id = randomUUID();
+    const now = new Date();
+    
+    // Map to database columns
+    const paymentRequest = {
+      id,
+      user_id: request.userId,
+      type: request.type,
+      amount: request.amount,
+      payment_method: request.paymentMethod,
+      status: request.status,
+      admin_notes: request.adminNotes || null,
+      created_at: now,
+      updated_at: now
+    };
+
     const { data, error } = await supabaseServer
       .from('payment_requests')
-      .insert({
-        user_id: request.userId,
-        request_type: request.type,
-        amount: request.amount,
-        payment_method: request.paymentMethod,
-        status: request.status,
-        created_at: new Date().toISOString()
-      })
+      .insert(paymentRequest)
       .select()
       .single();
 

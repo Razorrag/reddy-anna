@@ -1,251 +1,253 @@
-/**
- * PlayerStreamView - Component to display the admin's screen share
- * 
- * This component handles receiving the WebRTC stream from the admin
- * and displaying it to players during the game.
- */
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import { useGameState } from '../contexts/GameStateContext';
+import { useNotification } from '../contexts/NotificationContext';
 
 interface PlayerStreamViewProps {
   className?: string;
+  showControls?: boolean;
 }
 
-const PlayerStreamView: React.FC<PlayerStreamViewProps> = ({ className = '' }) => {
+const PlayerStreamView: React.FC<PlayerStreamViewProps> = ({ 
+  className = '', 
+  showControls = true 
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { sendWebSocketMessage } = useWebSocket();
-  const { gameState } = useGameState();
-  const [isStreaming, setIsStreaming] = useState(false);
+  const { showNotification } = useNotification();
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const [streamStatus, setStreamStatus] = useState<'offline' | 'connecting' | 'online'>('offline');
-  const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
 
-  // WebRTC Configuration
-  const rtcConfig: RTCConfiguration = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    ]
-  };
-
-  // Initialize WebRTC connection when component mounts
-  useEffect(() => {
-    // Listen for WebRTC events
-    const handleWebRTCOffer = (event: any) => {
-      const { offer, adminId } = event.detail;
-      handleOfferReceived(offer, adminId);
-    };
-
-    const handleWebRTCAnswer = (event: any) => {
-      const { answer } = event.detail;
-      handleAnswerReceived(answer);
-    };
-
-    const handleWebRTCIceCandidate = (event: any) => {
-      const { candidate, fromAdmin } = event.detail;
-      handleIceCandidateReceived(candidate, fromAdmin);
-    };
-
-    const handleStreamStatus = (event: any) => {
-      const { status } = event.detail;
-      setStreamStatus(status as any);
-      setIsStreaming(status === 'online' || status === 'connecting');
-    };
-
-    window.addEventListener('webrtc_offer_received', handleWebRTCOffer as EventListener);
-    window.addEventListener('webrtc_answer_received', handleWebRTCAnswer as EventListener);
-    window.addEventListener('webrtc_ice_candidate_received', handleWebRTCIceCandidate as EventListener);
-    
-    // Also listen for stream status updates via custom events
-    const streamStatusHandler = (event: any) => {
-      const status = event.detail?.status || event.detail;
-      if (status) {
-        setStreamStatus(status as any);
-        setIsStreaming(status === 'online' || status === 'connecting');
-      }
-    };
-    window.addEventListener('stream_status_update', streamStatusHandler as EventListener);
-
-    // Join stream when component mounts
-    sendWebSocketMessage({
-      type: 'stream_viewer_join',
-      data: {}
-    });
-
-    return () => {
-      // Leave stream when component unmounts
-      sendWebSocketMessage({
-        type: 'stream_viewer_leave',
-        data: {}
+  const initializeWebRTC = useCallback(async (offer: RTCSessionDescriptionInit) => {
+    try {
+      console.log('Initializing WebRTC connection with offer...');
+      
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          {
+            urls: 'stun:stun.l.google.com:19302',
+          },
+          {
+            urls: 'stun:stun1.l.google.com:19302',
+          }
+        ]
       });
 
-      // Clean up event listeners
-      window.removeEventListener('webrtc_offer_received', handleWebRTCOffer as EventListener);
-      window.removeEventListener('webrtc_answer_received', handleWebRTCAnswer as EventListener);
-      window.removeEventListener('webrtc_ice_candidate_received', handleWebRTCIceCandidate as EventListener);
-      window.removeEventListener('stream_status_update', streamStatusHandler as EventListener);
-
-      // Close peer connection if it exists
-      if (peerConnection) {
-        peerConnection.close();
-        setPeerConnection(null);
-      }
-
-      if (remoteStream) {
-        remoteStream.getTracks().forEach(track => track.stop());
-        setRemoteStream(null);
-      }
-    };
-  }, [peerConnection, remoteStream, sendWebSocketMessage]);
-
-  // Handle incoming WebRTC offer from admin
-  const handleOfferReceived = async (offer: RTCSessionDescriptionInit, adminId: string) => {
-    try {
-      console.log('Handling WebRTC offer from admin:', adminId);
-
-      // Create new peer connection if needed
-      if (!peerConnection) {
-        const pc = new RTCPeerConnection(rtcConfig);
-        
-        // Set up remote stream handling
-        pc.ontrack = (event) => {
-          console.log('Received remote track:', event.track.kind);
-          const newStream = new MediaStream([event.track]);
-          setRemoteStream(newStream);
-          
-          if (videoRef.current) {
-            videoRef.current.srcObject = newStream;
+      pc.ontrack = (event) => {
+        console.log('Received remote track:', event.track.kind);
+        if (event.track.kind === 'video' && videoRef.current) {
+          const [remoteStream] = event.streams;
+          if (remoteStream) {
+            videoRef.current.srcObject = remoteStream;
+            setIsPlaying(true);
+            setStreamStatus('online');
+            showNotification('Stream connected successfully!', 'success');
           }
-        };
+        }
+      };
 
-        // Handle ICE candidate generation
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            console.log('Sending ICE candidate to admin');
-            sendWebSocketMessage({
-              type: 'webrtc_ice_candidate',
-              data: {
-                candidate: event.candidate
-              }
-            });
-          }
-        };
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          console.log('Sending ICE candidate...');
+          sendWebSocketMessage({
+            type: 'webrtc_ice_candidate',
+            data: {
+              candidate: event.candidate,
+            }
+          });
+        }
+      };
 
-        setPeerConnection(pc);
-      }
+      pc.onconnectionstatechange = () => {
+        console.log('WebRTC connection state:', pc.connectionState);
+        switch (pc.connectionState) {
+          case 'connected':
+            setIsConnected(true);
+            setStreamStatus('online');
+            break;
+          case 'disconnected':
+          case 'failed':
+            setIsConnected(false);
+            setIsPlaying(false);
+            setStreamStatus('offline');
+            showNotification('Stream disconnected', 'warning');
+            break;
+          case 'connecting':
+            setStreamStatus('connecting');
+            break;
+        }
+      };
 
-      // Set remote description
-      await peerConnection!.setRemoteDescription(offer);
+      await pc.setRemoteDescription(offer);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
 
-      // Create answer
-      const answer = await peerConnection!.createAnswer();
-      await peerConnection!.setLocalDescription(answer);
-
-      // Send answer back to admin
       sendWebSocketMessage({
         type: 'webrtc_answer',
-        data: {
-          answer: peerConnection!.localDescription
-        }
+        data: { 
+          answer,
+          playerId: '' // Player ID is set on the server
+         },
       });
 
+      peerConnectionRef.current = pc;
+      setIsConnected(false);
+      setStreamStatus('connecting');
+
     } catch (error) {
-      console.error('Error handling WebRTC offer:', error);
+      console.error('Failed to initialize WebRTC:', error);
+      showNotification('Failed to connect to stream', 'error');
+      setStreamStatus('offline');
     }
-  };
+  }, [sendWebSocketMessage, showNotification]);
 
-  // Handle incoming WebRTC answer (shouldn't be needed for player view, but added for completeness)
-  const handleAnswerReceived = async (answer: RTCSessionDescriptionInit) => {
-    if (peerConnection && peerConnection.remoteDescription) {
-      try {
-        await peerConnection.setRemoteDescription(answer);
-        console.log('WebRTC answer set successfully');
-      } catch (error) {
-        console.error('Error setting remote answer:', error);
-      }
-    }
-  };
-
-  // Handle incoming ICE candidate
-  const handleIceCandidateReceived = (candidate: RTCIceCandidateInit, fromAdmin: boolean) => {
-    if (peerConnection && fromAdmin) {
-      try {
-        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        console.log('Added ICE candidate');
-      } catch (error) {
-        console.error('Error adding ICE candidate:', error);
-      }
-    }
-  };
-
-  // Handle stream status change
   useEffect(() => {
-    if (streamStatus === 'online') {
-      setIsStreaming(true);
-    } else {
-      setIsStreaming(false);
-      if (remoteStream) {
-        remoteStream.getTracks().forEach(track => track.stop());
-        setRemoteStream(null);
-        if (videoRef.current) {
-          videoRef.current.srcObject = null;
+    const handleOffer = (event: any) => {
+      initializeWebRTC(event.detail.offer);
+    };
+
+    const handleIceCandidate = (event: any) => {
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.addIceCandidate(event.detail.candidate);
+      }
+    };
+
+    window.addEventListener('webrtc_offer_received', handleOffer);
+    window.addEventListener('webrtc_ice_candidate_received', handleIceCandidate);
+
+    return () => {
+      window.removeEventListener('webrtc_offer_received', handleOffer);
+      window.removeEventListener('webrtc_ice_candidate_received', handleIceCandidate);
+    };
+  }, [initializeWebRTC]);
+
+  useEffect(() => {
+    const handleStreamStatus = (event: any) => {
+      const { status } = event.detail;
+      setStreamStatus(status);
+      if (status === 'offline') {
+        if (peerConnectionRef.current) {
+          peerConnectionRef.current.close();
+          peerConnectionRef.current = null;
         }
+        setIsConnected(false);
+        setIsPlaying(false);
+      }
+    };
+
+    window.addEventListener('stream_status_update', handleStreamStatus as EventListener);
+    
+    return () => {
+      window.removeEventListener('stream_status_update', handleStreamStatus as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+      }
+    };
+  }, []);
+
+  const togglePlayPause = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+        showNotification('Stream paused', 'info');
+      } else {
+        videoRef.current.play().catch(error => {
+          console.error('Failed to play stream:', error);
+          showNotification('Failed to play stream', 'error');
+        });
+        setIsPlaying(true);
+        showNotification('Stream resumed', 'success');
       }
     }
-  }, [streamStatus, remoteStream]);
+  };
+
+  const handleRetry = () => {
+    // Retry logic can be improved, for now, we just log it
+    console.log("Retry logic needs to be implemented");
+  };
 
   return (
-    <div className={`bg-black/30 backdrop-blur-sm rounded-xl border border-gray-600 p-4 ${className}`}>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-          <span className={`w-3 h-3 rounded-full ${isStreaming ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></span>
-          Admin Screen Share
-        </h3>
-        <span className={`px-2 py-1 rounded text-xs font-medium ${
-          streamStatus === 'online' ? 'bg-green-600/30 text-green-300' :
-          streamStatus === 'connecting' ? 'bg-yellow-600/30 text-yellow-300' :
-          'bg-gray-600/30 text-gray-300'
-        }`}>
-          {streamStatus.toUpperCase()}
-        </span>
-      </div>
-
-      {/* Stream display area */}
-      <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
-        {isStreaming ? (
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-full h-full object-contain bg-black"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
-            <div className="text-center p-4">
-              <div className="text-5xl mb-4">📺</div>
-              <p className="text-gray-400 text-lg">
-                {streamStatus === 'connecting' 
-                  ? 'Connecting to stream...' 
-                  : 'No active screen share'}
-              </p>
-              <p className="text-gray-500 text-sm mt-2">
-                {streamStatus === 'offline' 
-                  ? 'Admin has not started screen sharing' 
-                  : 'Establishing connection...'}
-              </p>
-            </div>
+    <div className={`relative bg-black rounded-lg overflow-hidden ${className}`}>
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        className="w-full h-full object-cover"
+        onLoadedData={() => {
+          setIsPlaying(true);
+        }}
+        onError={(error) => {
+          showNotification('Stream playback error', 'error');
+        }}
+      />
+      
+      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white">
+        {streamStatus === 'offline' && (
+          <div className="text-center">
+            <div className="text-4xl mb-4">?</div>
+            <div className="text-lg font-semibold mb-2">Stream Offline</div>
+            <div className="text-sm opacity-75">Waiting for admin to start streaming...</div>
+          </div>
+        )}
+        
+        {streamStatus === 'connecting' && (
+          <div className="text-center">
+            <div className="animate-spin text-4xl mb-4">?</div>
+            <div className="text-lg font-semibold mb-2">Connecting to Stream</div>
+            <div className="text-sm opacity-75">Please wait while we connect...</div>
+          </div>
+        )}
+        
+        {streamStatus === 'online' && !isPlaying && (
+          <div className="text-center">
+            <div className="text-4xl mb-4">⏸️</div>
+            <div className="text-lg font-semibold mb-2">Stream Paused</div>
+            <div className="text-sm opacity-75">Click to resume playback</div>
           </div>
         )}
       </div>
 
-      {/* Stream info */}
-      <div className="mt-3 text-xs text-gray-400 flex items-center justify-between">
-        <span>Stream quality: Auto</span>
-        <span>Mode: WebRTC</span>
-      </div>
+      {showControls && streamStatus === 'online' && (
+        <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+          <button
+            onClick={togglePlayPause}
+            className="bg-black bg-opacity-75 text-white p-2 rounded-full hover:bg-opacity-90 transition-all"
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? '⏸️' : '▶️'}
+          </button>
+          
+          <div className="flex space-x-2">
+            <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+              isConnected ? 'bg-green-500' : 'bg-red-500'
+            } text-white`}>
+              {isConnected ? 'Connected' : 'Connecting...'}
+            </div>
+            
+            <button
+              onClick={handleRetry}
+              className="bg-black bg-opacity-75 text-white p-2 rounded-full hover:bg-opacity-90 transition-all"
+              title="Retry Connection"
+            >
+              ?
+            </button>
+          </div>
+        </div>
+      )}
+
+      {streamStatus === 'online' && (
+        <div className="absolute top-4 right-4 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-xs">
+          HD Stream
+        </div>
+      )}
     </div>
   );
 };

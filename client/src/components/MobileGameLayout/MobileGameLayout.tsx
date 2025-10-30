@@ -33,6 +33,7 @@ interface MobileGameLayoutProps {
   onShowChipSelector: () => void;
   showChipSelector: boolean;
   isPlacingBet: boolean;
+  isScreenSharing: boolean;
 }
 
 const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
@@ -51,7 +52,8 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
   onHistoryClick,
   onShowChipSelector,
   showChipSelector,
-  isPlacingBet
+  isPlacingBet,
+  isScreenSharing
 }) => {
   return (
     <div className="game-container min-h-screen bg-black text-white overflow-hidden">
@@ -68,6 +70,7 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
         {/* Video Area - 65-70% screen height with overlays */}
         <VideoArea 
           className="flex-1 relative"
+          isScreenSharing={isScreenSharing}
         />
 
         {/* Betting Strip - Andar/Opening Card/Bahar */}

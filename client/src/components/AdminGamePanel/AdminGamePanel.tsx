@@ -66,7 +66,7 @@ const AdminGamePanel: React.FC = () => {
     // Notify backend - backend will broadcast to all clients including this one
     sendWebSocketMessage({
       type: 'game_reset',
-      data: { gameId: gameState.gameId }
+      data: { message: 'Admin initiated game reset' }
     });
     
     console.log('🔄 Admin reset initiated - waiting for backend broadcast');

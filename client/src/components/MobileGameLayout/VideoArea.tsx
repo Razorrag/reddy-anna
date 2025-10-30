@@ -16,9 +16,10 @@ import StreamPlayer from '../StreamPlayer';
 
 interface VideoAreaProps {
   className?: string;
+  isScreenSharing: boolean;
 }
 
-const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
+const VideoArea: React.FC<VideoAreaProps> = ({ className = '', isScreenSharing }) => {
   const { gameState } = useGameState();
   
   // Use the gameState.timer directly
@@ -75,10 +76,12 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '' }) => {
     <div className={`relative bg-black rounded-lg overflow-hidden ${className}`}>
       {/* Live Video Stream */}
       <div className="relative aspect-video">
-        <StreamPlayer
-          isLive={gameState.phase !== 'idle'}
-          className="w-full h-full"
-        />
+        {isScreenSharing && (
+          <StreamPlayer
+            isLive={gameState.phase !== 'idle'}
+            className="w-full h-full"
+          />
+        )}
 
         {/* Game Status Overlay - Removed to keep video clean */}
 
