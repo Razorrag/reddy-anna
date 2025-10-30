@@ -345,6 +345,7 @@ CREATE TABLE IF NOT EXISTS stream_config (
   active_method VARCHAR(10) NOT NULL DEFAULT 'rtmp' CHECK (active_method IN ('rtmp', 'webrtc')),
   stream_status VARCHAR(20) NOT NULL DEFAULT 'offline' CHECK (stream_status IN ('online', 'offline', 'connecting', 'error')),
   stream_title VARCHAR(255) DEFAULT 'Andar Bahar Live',
+  show_stream BOOLEAN DEFAULT true, -- Controls stream visibility to players
   
   -- RTMP Configuration
   rtmp_server_url VARCHAR(255) DEFAULT 'rtmp://live.restream.io/live',
@@ -527,6 +528,7 @@ CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires ON token_blacklist(expire
 -- Stream configuration indexes
 CREATE INDEX IF NOT EXISTS idx_stream_config_method ON stream_config(active_method);
 CREATE INDEX IF NOT EXISTS idx_stream_config_status ON stream_config(stream_status);
+CREATE INDEX IF NOT EXISTS idx_stream_config_show_stream ON stream_config(show_stream);
 CREATE INDEX IF NOT EXISTS idx_stream_sessions_method ON stream_sessions(stream_method);
 CREATE INDEX IF NOT EXISTS idx_stream_sessions_admin ON stream_sessions(admin_id);
 CREATE INDEX IF NOT EXISTS idx_stream_sessions_start ON stream_sessions(start_time DESC);
@@ -636,14 +638,16 @@ INSERT INTO stream_config (
     rtmp_server_url,
     rtmp_stream_key,
     stream_title,
-    stream_status
+    stream_status,
+    show_stream
 )
-SELECT 
+SELECT
     'rtmp',
     'rtmp://live.restream.io/live',
     're_10541509_eventd4960ba1734c49369fc0d114295801a0',
     'Andar Bahar Live',
-    'offline'
+    'offline',
+    true
 WHERE NOT EXISTS (SELECT 1 FROM stream_config LIMIT 1);
 
 -- ============================================

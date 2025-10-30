@@ -153,11 +153,16 @@ export class WebRTCClient {
       throw new Error('WebRTC client not initialized');
     }
 
-    await this.connection.peerConnection.setRemoteDescription(answer);
-    this.connection.status = 'connected';
-    
-    this.emit('connected');
-    console.log('✅ WebRTC connection established');
+    try {
+      await this.connection.peerConnection.setRemoteDescription(answer);
+      this.connection.status = 'connected';
+      
+      this.emit('connected');
+      console.log('✅ WebRTC connection established with answer');
+    } catch (error) {
+      console.error('❌ Failed to handle WebRTC answer:', error);
+      this.emit('error', error);
+    }
   }
 
   /**
@@ -183,6 +188,7 @@ export class WebRTCClient {
     if (this.connection) {
       this.connection.peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
+          console.log('🧊 ICE candidate generated:', event.candidate);
           callback(event.candidate);
         }
       };
@@ -310,6 +316,7 @@ export class WebRTCClient {
 
     // Handle track events
     peerConnection.ontrack = (event) => {
+      console.log('📺 Received remote track:', event.track.kind);
       this.emit('remote_track', event.track);
     };
 
@@ -317,6 +324,19 @@ export class WebRTCClient {
     peerConnection.ondatachannel = (event) => {
       this.connection!.dataChannel = event.channel;
       this.setupDataChannel(event.channel);
+    };
+
+    // Handle connection state changes
+    peerConnection.onconnectionstatechange = () => {
+      const state = peerConnection.connectionState;
+      console.log('🔌 WebRTC connection state:', state);
+      this.emit('status_change', state);
+    };
+
+    // Handle ICE connection state changes
+    peerConnection.oniceconnectionstatechange = () => {
+      const state = peerConnection.iceConnectionState;
+      console.log('🧊 ICE connection state:', state);
     };
 
     return peerConnection;

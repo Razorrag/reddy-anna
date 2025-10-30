@@ -17,7 +17,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
   andarCards,
   baharCards
 }) => {
-  const { sendWebSocketMessage } = useWebSocket();
+  const { dealCard } = useWebSocket();
   const { showNotification } = useNotification();
   const { gameState } = useGameState();
   
@@ -74,24 +74,16 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
     // Round 3: Immediate card drop (no confirmation needed)
     if (round === 3) {
       setDealingInProgress(true);
-      
+
       try {
-        // Send card immediately to all players
-        sendWebSocketMessage({
-          type: 'card_dealt',
-          data: {
-            card,
-            side: round3NextSide,
-            position: (gameState.andarCards.length + gameState.baharCards.length), // position based on total cards dealt
-            isWinningCard: false
-          }
-        });
-        
+        // Send card immediately using WebSocket context dealCard method
+        await dealCard(card, round3NextSide, (gameState.andarCards.length + gameState.baharCards.length));
+
         showNotification(`🎴 ${card.display} → ${round3NextSide.toUpperCase()}`, 'success');
-        
+
         // Alternate sides for next card
         setRound3NextSide(round3NextSide === 'bahar' ? 'andar' : 'bahar');
-        
+
         setTimeout(() => {
           setDealingInProgress(false);
         }, 500);
@@ -116,16 +108,8 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
     setDealingInProgress(true);
 
     try {
-      // Send individual card to backend using existing card_dealt type
-      sendWebSocketMessage({
-        type: 'card_dealt',
-        data: {
-          card: selectedCard,
-          side: nextSide,
-          position: (gameState.andarCards.length + gameState.baharCards.length), // position based on total cards dealt
-          isWinningCard: false
-        }
-      });
+      // Send individual card to backend using WebSocket context dealCard method
+      await dealCard(selectedCard, nextSide, (gameState.andarCards.length + gameState.baharCards.length));
       
       showNotification(`🎴 Dealing ${selectedCard.display} to ${nextSide.toUpperCase()}...`, 'success');
       

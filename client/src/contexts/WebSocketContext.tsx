@@ -19,6 +19,19 @@ import {
   AuthErrorMessage,
   StreamStatusMessage,
   NotificationMessage,
+  TokenRefreshMessage,
+  TokenRefreshedMessage,
+  TokenRefreshErrorMessage,
+  ActivityPingMessage,
+  ActivityPongMessage,
+  TokenExpiryWarningMessage,
+  TokenExpiredMessage,
+  InactivityWarningMessage,
+  BetErrorMessage,
+  BetConfirmedMessage,
+  StartGameMessage,
+  DealCardMessage,
+  PlaceBetMessage,
 } from '../../../shared/src/types/webSocket';
 import WebSocketManager, { ConnectionStatus } from '../lib/WebSocketManager';
 
@@ -84,12 +97,15 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         const decoded = JSON.parse(atob(token.split('.')[1]));
         if (decoded && decoded.exp) {
           const currentTime = Date.now() / 1000;
-          return decoded.exp < currentTime;
+          // Add 30 second buffer to prevent premature expiration
+          return decoded.exp < (currentTime - 30);
         }
       } catch (e) {
         console.error('Error decoding token for expiration check:', e);
+        // Don't assume expired if we can't decode - might be a different format
+        return false;
       }
-      return true; // Assume expired if cannot decode
+      return false;
     };
 
     if (currentToken) {
@@ -107,9 +123,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       }
     } else {
-      console.log('No token found, logging out.');
-      logout();
-      showNotification('Authentication required, please login.', 'error');
+      console.log('No token found in auth state - this is normal during initial load');
+      // Don't automatically logout - let ProtectedRoute handle the redirect
       return null;
     }
     return currentToken;
@@ -128,6 +143,148 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     switch (data.type) {
       case 'authenticated':
         console.log('WebSocket authenticated:', data.data);
+        // Handle game state synchronization for new connections
+        if (data.data.gameState) {
+          const {
+            phase,
+            countdownTimer,
+            timer,
+            winner,
+            currentRound,
+            openingCard,
+            andarCards,
+            baharCards,
+            round1Bets,
+            round2Bets,
+            userBets,
+            playerRound1Bets,
+            playerRound2Bets,
+            userBalance,
+            canBet,
+            isGameActive,
+            bettingLocked,
+            status
+          } = data.data.gameState;
+          
+          setPhase(phase as any);
+          setCountdown(countdownTimer || timer || 0);
+          setWinner(winner);
+          setCurrentRound(currentRound as any);
+          if (openingCard) setSelectedOpeningCard(openingCard);
+          clearCards();
+          andarCards?.forEach(addAndarCard);
+          baharCards?.forEach(addBaharCard);
+          if (round1Bets) updateTotalBets(round1Bets);
+          if (round2Bets) updateTotalBets(round2Bets);
+          if (userBets) {
+            updatePlayerRoundBets(1, userBets.round1);
+            updatePlayerRoundBets(2, userBets.round2);
+          }
+          if (playerRound1Bets) updatePlayerRoundBets(1, playerRound1Bets);
+          if (playerRound2Bets) updatePlayerRoundBets(2, playerRound2Bets);
+          if (userBalance !== undefined) updatePlayerWallet(userBalance);
+        }
+        break;
+        
+      case 'token_refreshed':
+        console.log('WebSocket token refreshed:', data.data);
+        // Token was refreshed successfully, no action needed
+        break;
+        
+      case 'token_refresh_error':
+        console.error('WebSocket token refresh error:', data.data);
+        showNotification(data.data.message || 'Token refresh failed', 'error');
+        logout();
+        break;
+        
+      case 'token_expiry_warning':
+        console.warn('Token expiry warning:', data.data);
+        showNotification(data.data.message || 'Token will expire soon', 'warning');
+        break;
+        
+      case 'token_expired':
+        console.error('Token expired:', data.data);
+        showNotification(data.data.message || 'Session expired', 'error');
+        logout();
+        break;
+        
+      case 'activity_pong':
+        // Update last activity timestamp from server
+        console.log('Activity pong received:', data.data);
+        break;
+        
+      case 'inactivity_warning':
+        console.warn('Inactivity warning:', data.data);
+        showNotification(data.data.message || 'You have been inactive', 'warning');
+        break;
+        
+      case 'bet_error':
+        console.error('Bet error:', data.data);
+        const errorMessage = data.data.message || 'Bet failed';
+        const errorType = data.data.code || 'BET_ERROR';
+        
+        // Show specific error messages based on error code
+        switch (errorType) {
+          case 'AUTH_REQUIRED':
+            showNotification('Authentication required. Please log in again.', 'error');
+            break;
+          case 'MISSING_FIELDS':
+            showNotification(`Missing required field: ${data.data.field || 'unknown'}`, 'error');
+            break;
+          case 'INVALID_SIDE':
+            showNotification('Invalid betting side. Please select Andar or Bahar.', 'error');
+            break;
+          case 'INVALID_AMOUNT':
+            showNotification(`Invalid bet amount: ${data.data.message || 'Please check your bet amount.'}`, 'error');
+            break;
+          case 'INVALID_ROUND':
+            showNotification(`Invalid round: ${data.data.message || 'Please wait for the correct round.'}`, 'error');
+            break;
+          case 'BETTING_CLOSED':
+            showNotification(`Betting is closed: ${data.data.message || 'Please wait for the next betting phase.'}`, 'error');
+            break;
+          case 'BETTING_LOCKED':
+            showNotification('Betting period has ended. Waiting for cards to be dealt.', 'error');
+            break;
+          case 'TIME_EXPIRED':
+            showNotification('Betting time is up!', 'error');
+            break;
+          case 'INVALID_ROUND_FOR_GAME':
+            showNotification(`Cannot place bet for this round. Current round: ${data.data.currentRound || 'unknown'}`, 'error');
+            break;
+          case 'MIN_BET_VIOLATION':
+            showNotification(`Minimum bet is ₹${data.data.minAmount || 1000}`, 'error');
+            break;
+          case 'MAX_BET_VIOLATION':
+            showNotification(`Maximum bet is ₹${data.data.maxAmount || 100000}`, 'error');
+            break;
+          case 'INSUFFICIENT_BALANCE':
+            showNotification(`Insufficient balance. You have ₹${data.data.currentBalance || 0}, but bet is ₹${data.data.required || 0}`, 'error');
+            break;
+          case 'DUPLICATE_BET':
+            showNotification(`You have already placed a bet on ${data.data.side?.toUpperCase() || 'this side'} for round ${data.data.round || 'this round'}`, 'error');
+            break;
+          case 'BALANCE_ERROR':
+            showNotification(`Balance error: ${data.data.message || 'Please check your balance.'}`, 'error');
+            break;
+          case 'BET_PROCESSING_ERROR':
+            showNotification(`Bet processing error: ${data.data.message || 'Please try again.'}`, 'error');
+            break;
+          default:
+            showNotification(errorMessage, 'error');
+        }
+        break;
+        
+      case 'bet_confirmed':
+        console.log('Bet confirmed:', data.data);
+        showNotification(`Bet placed: ₹${data.data.amount} on ${data.data.side}`, 'success');
+        updatePlayerWallet(data.data.newBalance);
+        const currentBets = data.data.round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
+        const newBets = {
+          ...currentBets,
+          [data.data.side]: currentBets[data.data.side as keyof typeof currentBets] + data.data.amount,
+        };
+        updatePlayerRoundBets(data.data.round as any, newBets);
         break;
 
       case 'sync_game_state': {
@@ -355,8 +512,22 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       ...message,
       timestamp: new Date().toISOString()
     };
-    webSocketManagerRef.current?.send(messageWithTimestamp);
-  }, []);
+    
+    // Enhanced connection state check before sending
+    if (!webSocketManagerRef.current) {
+      console.error('WebSocketManager: Cannot send message, manager not initialized', message);
+      return;
+    }
+    
+    const currentStatus = webSocketManagerRef.current.getStatus();
+    if (currentStatus !== ConnectionStatus.CONNECTED) {
+      console.error(`WebSocketManager: Cannot send message, not connected. Status: ${currentStatus}`, message);
+      showNotification('Connection to game server lost. Please refresh the page.', 'error');
+      return;
+    }
+    
+    webSocketManagerRef.current.send(messageWithTimestamp);
+  }, [showNotification]);
 
   const startGame = async () => {
     if (!gameState.selectedOpeningCard) {
@@ -364,46 +535,83 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
-    const customTime = 30;
+    // DEBUG: Log current auth state
+    console.log('🎮 START GAME REQUEST - Auth state:', {
+      userId: authState.user?.id,
+      userRole: authState.user?.role,
+      token: authState.token ? 'present' : 'missing',
+      isAuthenticated: authState.isAuthenticated
+    });
+
+    // Check if we have a proper role before sending admin commands
+    if (!authState.user?.role || authState.user?.role !== 'admin') {
+      showNotification(`Only admins can start games. Current role: ${authState.user?.role || 'unknown'}. Please login as admin.`, 'error');
+      return;
+    }
+
+    // Wait for WebSocket to be authenticated before sending
+    if (connectionStatus !== ConnectionStatus.CONNECTED) {
+      showNotification('Connecting to game server... Please wait.', 'warning');
+      return;
+    }
 
     try {
+      console.log('🎮 Starting game with opening card:', gameState.selectedOpeningCard);
       sendWebSocketMessage({
-        type: 'game_start',
+        type: 'start_game',
         data: {
           openingCard: gameState.selectedOpeningCard,
-          timer: customTime,
         }
       });
 
-      showNotification(`Game started with ${customTime} seconds!`, 'success');
+      showNotification('Game started! Betting phase is open.', 'success');
     } catch (error) {
       handleComponentError(error, 'startGame');
       showNotification('Failed to start game. Please try again.', 'error');
+      console.error('startGame error:', error);
     }
   };
 
   const dealCard = async (card: Card, side: BetSide, position: number) => {
+    // Check if we have admin role before sending admin commands
+    if (authState.user?.role !== 'admin') {
+      showNotification('Only admins can deal cards.', 'error');
+      return;
+    }
+
+    // Wait for WebSocket to be connected before sending
+    if (connectionStatus !== ConnectionStatus.CONNECTED) {
+      showNotification('Connecting to game server... Please wait.', 'warning');
+      return;
+    }
+
     try {
+      console.log(`🃏 Dealing card: ${card.display} on ${side} at position ${position}`);
       sendWebSocketMessage({
-        type: 'card_dealt',
+        type: 'deal_card',
         data: {
-          card: card,
+          gameId: gameState.gameId || 'default-game',
+          card: card.rank + card.suit,
           side: side,
-          position: position,
-          isWinningCard: false // This will be determined by the server
+          position: position
         }
       });
+
+      showNotification(`Dealt ${card.display} on ${side.toUpperCase()}`, 'success');
     } catch (error) {
       handleComponentError(error, 'dealCard');
       showNotification('Error dealing card', 'error');
+      console.error('dealCard error:', error);
     }
   };
 
   const placeBet = async (side: BetSide, amount: number) => {
     try {
+      // Add gameId to bet message (FIX: Missing gameId was causing server to reject bets)
       sendWebSocketMessage({
         type: 'place_bet',
         data: {
+          gameId: gameState.gameId || 'default-game',
           side,
           amount,
           round: gameState.currentRound,
@@ -421,11 +629,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     const initializeWebSocket = async () => {
       initWebSocketManager();
-      // Only connect if we have a valid token
-      const token = await getAuthToken();
-      if (token) {
-        webSocketManagerRef.current?.connect();
-      }
+      
+      // Always attempt to connect - WebSocketManager will handle authentication
+      // This ensures connection is established even if token is initially loading
+      webSocketManagerRef.current?.connect();
     };
     
     initializeWebSocket();

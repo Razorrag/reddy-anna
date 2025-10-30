@@ -63,7 +63,8 @@ export default function Login() {
 
       // Use auth context to handle login
       console.log('Storing token via AuthContext');
-      login(userData, token);
+      const refreshToken = response.refreshToken || response.user?.refreshToken;
+      login(userData, token, refreshToken);
       console.log('✅ Login successful - token stored');
 
       // Redirect to game after a short delay to allow token processing

@@ -209,7 +209,7 @@ const PlayerGame: React.FC = () => {
     
     // Try to get admin number from settings
     try {
-      const response = await apiClient.get('/game-settings');
+      const response = await apiClient.get('/game-settings') as any;
       if (response.success && response.data?.admin_whatsapp_number) {
         const adminPhoneNumber = response.data.admin_whatsapp_number;
         const message = `User ${userData.phone} wants to ${requestType} ₹${amount}`;
@@ -415,7 +415,7 @@ const PlayerGame: React.FC = () => {
     <div className="relative">
       <div className="relative top-0">
         <MobileGameLayout
-          isScreenSharing={isScreenSharing}
+          isScreenSharing={true}
           gameState={gameState}
           user={userData}
           userBalance={userBalance || 0}

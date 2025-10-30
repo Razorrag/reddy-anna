@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { useWebSocket } from '../contexts/WebSocketContext';
 import { webrtcClient } from '../lib/webrtc-client';
 import { Play, Pause, MonitorPlay, Video, Settings, Eye, Copy, WifiOff, Wifi, RefreshCw } from 'lucide-react';
 
@@ -44,6 +45,7 @@ interface StreamConfig {
 const UnifiedStreamControl: React.FC = () => {
   const { showNotification } = useNotification();
   const { token } = useAuth();
+  const { sendWebSocketMessage } = useWebSocket();
   const [config, setConfig] = useState<StreamConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -139,33 +141,11 @@ const UnifiedStreamControl: React.FC = () => {
     }
   };
 
+  // FIXED: Remove separate WebSocket setup - use existing game WebSocket
   const setupWebSocket = () => {
-    if (!token) return;
-
-    try {
-      wsRef.current = new WebSocket(`ws://localhost:3001?token=${token}`);
-      
-      wsRef.current.onopen = () => {
-        console.log('✅ WebSocket connected for unified streaming');
-      };
-      
-      wsRef.current.onmessage = (event) => {
-        handleWebSocketMessage(event.data);
-      };
-      
-      wsRef.current.onclose = () => {
-        console.log('⚠️ WebSocket disconnected');
-        // Attempt to reconnect after 3 seconds
-        setTimeout(setupWebSocket, 3000);
-      };
-      
-      wsRef.current.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
-      };
-      
-    } catch (error) {
-      console.error('Failed to setup WebSocket:', error);
-    }
+    console.log('🔗 Using existing game WebSocket for WebRTC signaling');
+    // No longer creating separate WebSocket connection
+    // WebRTC signaling will go through the main game WebSocket
   };
 
   const handleWebSocketMessage = (data: string) => {
@@ -339,18 +319,56 @@ const UnifiedStreamControl: React.FC = () => {
         showNotification(`❌ WebRTC error: ${error.message}`, 'error');
       });
       
+      // FIXED: Handle WebRTC answers from players
+      webrtcClient.on('answer', (answer: RTCSessionDescriptionInit) => {
+        console.log('📡 Received WebRTC answer from player');
+        webrtcClient.handleAnswer(answer);
+      });
+      
+      // FIXED: Handle ICE candidates from players
+      webrtcClient.onIceCandidate(async (candidate: RTCIceCandidate) => {
+        console.log('🧊 Sending ICE candidate to players');
+        sendWebSocketMessage({
+          type: 'webrtc_ice_candidate',
+          data: {
+            candidate: candidate,
+            streamId: webrtcClient.getStreamId()
+          }
+        });
+      });
+      
       // Start screen capture
       await webrtcClient.startCapture();
       
+      // CRITICAL FIX: Create and send WebRTC offer through game WebSocket
+      try {
+        const offer = await webrtcClient.createOffer();
+        console.log('📡 Sending WebRTC offer through game WebSocket');
+        
+        // Send through the main game WebSocket using the context
+        sendWebSocketMessage({
+          type: 'webrtc_offer',
+          data: {
+            offer: offer,
+            streamId: webrtcClient.getStreamId() || `stream-${Date.now()}`
+          }
+        });
+        
+        console.log('✅ WebRTC offer sent successfully');
+      } catch (offerError) {
+        console.error('❌ Failed to create/send WebRTC offer:', offerError);
+        showNotification('❌ Failed to start screen sharing', 'error');
+      }
+      
       // Update stream status
-      await fetch('/api/stream/status', { 
-        method: 'POST', 
-        headers: { 
+      await fetch('/api/stream/status', {
+        method: 'POST',
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        credentials: 'include', 
-        body: JSON.stringify({ method: 'webrtc', status: 'online' }) 
+        credentials: 'include',
+        body: JSON.stringify({ method: 'webrtc', status: 'online' })
       });
       
       showNotification('✅ Screen capture started', 'success');

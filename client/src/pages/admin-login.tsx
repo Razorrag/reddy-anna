@@ -71,7 +71,8 @@ export default function AdminLogin() {
       const adminData = {
         id: response.admin?.id || response.id,
         username: response.admin?.username || formData.username,
-        phone: response.admin?.username || formData.username, // Use username as phone for admin
+        phone: response.admin?.username || formData.username, // Admin "phone" is their username
+        balance: 0, // Admins don't have game balance
         role: response.admin?.role || 'admin'
       };
 
@@ -84,7 +85,8 @@ export default function AdminLogin() {
       }
 
       // Use auth context to handle login
-      login(adminData, token);
+      const refreshToken = response.refreshToken || response.admin?.refreshToken;
+      login(adminData, token, refreshToken);
       console.log('✅ Admin login successful');
 
       // Redirect to admin panel after successful login

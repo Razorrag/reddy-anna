@@ -64,6 +64,7 @@ interface WebSocketManagerOptions {
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
   tokenProvider?: () => Promise<string | null>;
+  refreshTokenProvider?: () => Promise<string | null>;
   onMessage?: (event: MessageEvent) => void;
   onOpen?: (event: Event) => void;
   onClose?: (event: CloseEvent) => void;
@@ -76,6 +77,9 @@ class WebSocketManager extends BrowserEventEmitter {
   private status: ConnectionStatus = ConnectionStatus.DISCONNECTED;
   private reconnectAttempts: number = 0;
   private reconnectTimeout: NodeJS.Timeout | null = null;
+  private activityPingInterval: NodeJS.Timeout | null = null;
+  private tokenRefreshTimeout: NodeJS.Timeout | null = null;
+  private lastActivityTime: number = 0;
   private options: WebSocketManagerOptions;
   private isExplicitlyClosed: boolean = false;
 
@@ -170,10 +174,81 @@ class WebSocketManager extends BrowserEventEmitter {
 
   public send(message: object): void {
     if (this.ws && this.status === ConnectionStatus.CONNECTED) {
-      this.ws.send(JSON.stringify(message));
+      try {
+        this.ws.send(JSON.stringify(message));
+        this.updateLastActivity(); // Update activity on message send
+        console.log('WebSocketManager: Message sent successfully:', (message as any).type || 'unknown');
+      } catch (error) {
+        console.error('WebSocketManager: Error sending message:', error);
+        this.emit('error', error);
+      }
     } else {
-      console.warn('WebSocketManager: Cannot send message, WebSocket not connected.', message);
+      console.warn('WebSocketManager: Cannot send message, WebSocket not connected.', {
+        message,
+        status: this.status,
+        wsState: this.ws?.readyState
+      });
       this.emit('warning', 'WebSocket not connected, message not sent.');
+    }
+  }
+  
+  public refreshToken(): void {
+    if (this.ws && this.status === ConnectionStatus.CONNECTED) {
+      if (this.options.refreshTokenProvider) {
+        this.options.refreshTokenProvider().then(refreshToken => {
+          if (refreshToken) {
+            this.send({ type: 'token_refresh', data: { refreshToken } });
+          } else {
+            console.warn('WebSocketManager: No refresh token available');
+          }
+        }).catch(error => {
+          console.error('WebSocketManager: Error getting refresh token:', error);
+        });
+      }
+    } else {
+      console.warn('WebSocketManager: Cannot refresh token, not connected');
+    }
+  }
+  
+  public sendActivityPing(): void {
+    if (this.ws && this.status === ConnectionStatus.CONNECTED) {
+      this.send({ type: 'activity_ping', data: {} });
+    }
+  }
+  
+  private updateLastActivity(): void {
+    this.lastActivityTime = Date.now();
+  }
+  
+  private startActivityMonitoring(): void {
+    // Send activity ping every 2 minutes
+    this.activityPingInterval = setInterval(() => {
+      this.sendActivityPing();
+    }, 2 * 60 * 1000);
+  }
+  
+  private stopActivityMonitoring(): void {
+    if (this.activityPingInterval) {
+      clearInterval(this.activityPingInterval);
+      this.activityPingInterval = null;
+    }
+  }
+  
+  private scheduleTokenRefresh(): void {
+    // Schedule token refresh 5 minutes before expiry
+    if (this.tokenRefreshTimeout) {
+      clearTimeout(this.tokenRefreshTimeout);
+    }
+    
+    this.tokenRefreshTimeout = setTimeout(() => {
+      this.refreshToken();
+    }, 5 * 60 * 1000); // 5 minutes
+  }
+  
+  private stopTokenRefresh(): void {
+    if (this.tokenRefreshTimeout) {
+      clearTimeout(this.tokenRefreshTimeout);
+      this.tokenRefreshTimeout = null;
     }
   }
 
@@ -191,7 +266,12 @@ class WebSocketManager extends BrowserEventEmitter {
     this.reconnectAttempts = 0; // Reset attempts on successful connection
     this.options.onOpen?.(event);
     this.emit('open', event);
-
+    
+    // Start activity monitoring and token refresh scheduling
+    this.startActivityMonitoring();
+    this.scheduleTokenRefresh();
+    this.updateLastActivity();
+ 
     // If tokenProvider is used and token was not sent in URL, send authenticate message
     // This logic might need to be more sophisticated depending on server expectations
     if (this.options.tokenProvider) {
@@ -215,6 +295,10 @@ class WebSocketManager extends BrowserEventEmitter {
     this.ws = null;
     this.options.onClose?.(event);
     this.emit('close', event);
+    
+    // Stop activity monitoring and token refresh
+    this.stopActivityMonitoring();
+    this.stopTokenRefresh();
 
     if (!this.isExplicitlyClosed) {
       this.setStatus(ConnectionStatus.RECONNECTING);

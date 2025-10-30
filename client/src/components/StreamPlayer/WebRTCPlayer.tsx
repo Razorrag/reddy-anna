@@ -24,30 +24,54 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
     console.log('🌐 WebRTC Player initializing for room:', roomId);
     initializeWebRTC();
 
+    // FIXED: Handle WebRTC offers directly from WebSocket messages
+    // The WebSocketContext already dispatches 'webrtc_offer_received' events
     const handleOffer = async (event: any) => {
       const { offer } = event.detail;
+      console.log('📡 Received WebRTC offer:', offer);
+      
       if (peerConnectionRef.current && offer) {
         try {
           await peerConnectionRef.current.setRemoteDescription(offer);
           const answer = await peerConnectionRef.current.createAnswer();
           await peerConnectionRef.current.setLocalDescription(answer);
+          
+          console.log('📤 Sending WebRTC answer');
           sendWebSocketMessage({
             type: 'webrtc_answer',
             data: { answer },
           });
         } catch (error) {
-          console.error('Error handling WebRTC offer:', error);
+          console.error('❌ Error handling WebRTC offer:', error);
         }
       }
     };
 
+    // Listen for WebRTC offers from WebSocket context
     window.addEventListener('webrtc_offer_received', handleOffer);
+    
+    // Also handle ICE candidates
+    const handleIceCandidate = async (event: any) => {
+      const { candidate } = event.detail;
+      console.log('🧊 Received ICE candidate:', candidate);
+      
+      if (peerConnectionRef.current && candidate) {
+        try {
+          await peerConnectionRef.current.addIceCandidate(candidate);
+        } catch (error) {
+          console.error('❌ Error adding ICE candidate:', error);
+        }
+      }
+    };
+    
+    window.addEventListener('webrtc_ice_candidate_received', handleIceCandidate);
 
     return () => {
       window.removeEventListener('webrtc_offer_received', handleOffer);
+      window.removeEventListener('webrtc_ice_candidate_received', handleIceCandidate);
       cleanup();
     };
-  }, [roomId]);
+  }, [roomId, sendWebSocketMessage]);
 
   const initializeWebRTC = async () => {
     try {

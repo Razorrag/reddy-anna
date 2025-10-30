@@ -448,7 +448,7 @@ export class StreamStorage {
       activeMethod: data.active_method,
       streamStatus: data.stream_status,
       streamTitle: data.stream_title,
-      showStream: data.show_stream,
+      showStream: data.show_stream !== undefined ? data.show_stream : true, // Default to true if not set
       rtmpServerUrl: data.rtmp_server_url,
       rtmpStreamKey: data.rtmp_stream_key,
       rtmpPlayerUrl: data.rtmp_player_url,

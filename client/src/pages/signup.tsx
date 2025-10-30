@@ -91,13 +91,23 @@ export default function Signup() {
 
       // CRITICAL: Ensure token is stored (check multiple sources)
       const token = response.token || response.user?.token;
+      const refreshToken = response.refreshToken || response.user?.refreshToken;
+      
       if (!token) {
         console.error('❌ No token received from server');
         setApiError('Registration failed - no token received. Please try again.');
         setSuccess(false);
         return;
       }
+      
       localStorage.setItem('token', token);
+      
+      // Store refresh token if provided
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
+        console.log('✅ Refresh token stored successfully');
+      }
+      
       console.log('✅ Token stored successfully');
 
       // Redirect after 1 second to show success message

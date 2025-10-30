@@ -110,7 +110,7 @@ interface AuthContextType {
   state: AuthState;
   
   // Methods
-  login: (userData: User, token: string) => void;
+  login: (userData: User, token: string, refreshToken?: string) => void;
   logout: () => void;
   checkAuthStatus: () => void;
   clearError: () => void;
@@ -153,14 +153,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Login function
-  const login = (userData: User, token: string) => {
-    console.log('AuthContext.login() called with:', { userData, token });
+  const login = (userData: User, token: string, refreshToken?: string) => {
+    console.log('AuthContext.login() called with:', { userData, token, refreshToken });
     try {
-      console.log('Storing token in localStorage');
+      console.log('Storing tokens in localStorage');
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('token', token);
-      console.log('Token stored successfully');
+      
+      // Store refresh token if provided
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
+        console.log('Refresh token stored successfully');
+      }
+      
+      console.log('Tokens stored successfully');
       dispatch({ type: 'AUTH_SUCCESS', payload: { user: userData, token } });
     } catch (error) {
       console.error('Login error:', error);
@@ -172,6 +179,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = () => {
     // Remove all auth-related data from localStorage
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     localStorage.removeItem('isLoggedIn');
     
@@ -303,15 +311,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Only update if value actually changed and not from same source
       if (balance !== state.user?.balance && source !== 'auth') {
-        const updatedUser = {
-          ...state.user,
+        const updatedUser: User = {
+          ...state.user!,
           balance: typeof balance === 'string' ? parseFloat(balance) : Number(balance)
         };
         
         // Update localStorage
-        if (updatedUser.id) {
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-        }
+        localStorage.setItem('user', JSON.stringify(updatedUser));
         
         // Update state
         dispatch({
@@ -341,7 +347,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkAuthStatus,
     clearError,
     refreshUser,
-    updateBalance
+    updateBalance,
+    refreshAccessToken
   };
 
   return (

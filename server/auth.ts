@@ -26,7 +26,7 @@ export const validatePassword = async (password: string, hashedPassword: string)
 // Generate JWT access token with shorter expiration
 export const generateAccessToken = (userData: { id: string; phone?: string; username?: string; role: string }): string => {
   const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
-  const expiresIn = process.env.JWT_EXPIRES_IN || '1h'; // 1 hour default
+  const expiresIn = process.env.JWT_EXPIRES_IN || '2h'; // Increased from 1h
   
   return jwt.sign(
     {
@@ -37,7 +37,7 @@ export const generateAccessToken = (userData: { id: string; phone?: string; user
       type: 'access'
     },
     secret,
-    { expiresIn: expiresIn } as jwt.SignOptions
+    { expiresIn } as jwt.SignOptions
   );
 };
 
@@ -55,7 +55,7 @@ export const generateRefreshToken = (userData: { id: string; phone?: string; use
       type: 'refresh'
     },
     secret,
-    { expiresIn: expiresIn } as jwt.SignOptions
+    { expiresIn } as jwt.SignOptions
   );
   
   // In a real application, you'd store the refresh token in a database
@@ -485,14 +485,14 @@ export const changePassword = async (
   }
 };
 
-// 🛡️ REQUIRE AUTH MIDDLEWARE - JWT ONLY
-export const requireAuth = (req: any, res: any, next: any) => {
+// 🛡️ REQUIRE AUTH MIDDLEWARE - JWT ONLY (SUPPORTS ADMIN USERS)
+export const requireAuth = async (req: any, res: any, next: any) => {
   // Check for token in Authorization header
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.startsWith('Bearer ')
     ? authHeader.substring(7)
     : null;
-  
+
   // JWT token authentication (ONLY method)
   if (!token) {
     console.log('❌ Authentication required - no token provided');
@@ -502,10 +502,10 @@ export const requireAuth = (req: any, res: any, next: any) => {
       code: 'NO_TOKEN'
     });
   }
-  
+
   try {
     const decoded = verifyToken(token);
-    
+
     // Ensure this is an access token, not a refresh token
     if (decoded.type !== 'access') {
       console.error('❌ Invalid token type:', decoded.type);
@@ -515,14 +515,45 @@ export const requireAuth = (req: any, res: any, next: any) => {
         code: 'INVALID_TOKEN_TYPE'
       });
     }
-    
+
+    // Handle admin users - they don't exist in the users table
+    if (decoded.role === 'admin' || decoded.role === 'super_admin') {
+      // For admin users, create a user object without database validation
+      req.user = {
+        id: decoded.id,
+        phone: decoded.username, // Admin uses username as ID/phone
+        username: decoded.username,
+        role: decoded.role,
+        isAdmin: true, // Flag to indicate this is an admin user
+        balance: 0 // Admin users don't have game balance
+      };
+
+      console.log('✅ Admin authenticated via JWT token:', req.user.id, `(${req.user.role})`);
+      return next();
+    }
+
+    // For regular users, lookup in database (existing logic)
+    const user = await storage.getUser(decoded.id);
+    if (!user) {
+      console.log('❌ User not found in database:', decoded.id);
+      return res.status(401).json({
+        success: false,
+        error: 'User not found. Please login again.',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Populate request with user data
     req.user = {
-      id: decoded.id,
-      phone: decoded.phone,
-      username: decoded.username,
-      role: decoded.role
+      id: user.id,
+      phone: user.phone,
+      username: user.phone, // Regular users don't have username, use phone
+      role: user.role,
+      balance: parseFloat(user.balance),
+      profile: user // Include full user object if needed
     };
-    console.log('✅ Authenticated via JWT token:', req.user.id, `(${req.user.role})`);
+
+    console.log('✅ Player authenticated via JWT token:', req.user.id, `(${req.user.role})`);
     return next();
   } catch (error) {
     console.error('❌ Token validation error:', error);

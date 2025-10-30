@@ -6,7 +6,7 @@ import type { Card } from '@/types/game';
 
 const OpeningCardSelector: React.FC = () => {
   const { gameState, setSelectedOpeningCard, setPhase, setCurrentRound, setCountdown } = useGameState();
-  const { sendWebSocketMessage } = useWebSocket();
+  const { startGame } = useWebSocket();
   const { showNotification } = useNotification();
   
   const [selectedCard, setSelectedCard] = useState<Card | null>(gameState.selectedOpeningCard);
@@ -63,27 +63,32 @@ const OpeningCardSelector: React.FC = () => {
     showNotification(`Selected: ${card.display}`, 'info');
   };
 
-  const handleStartGame = () => {
+  const handleStartGame = async () => {
     if (!selectedCard) return;
-    
-    // Update local state
-    setPhase('betting');
-    setCurrentRound(1);
-    setCountdown(timerDuration);
-    
-    // Broadcast to all players
-    sendWebSocketMessage({
-      type: 'game_start',
-      data: {
-        gameId: gameState.gameId,
-        openingCard: selectedCard.display,
-        round: 1,
-        timer: timerDuration
-      }
-    });
-    
-    setShowConfirmModal(false);
-    showNotification(`🎲 Round 1 started! Opening card: ${selectedCard.display}`, 'success');
+
+    try {
+      // Update local state
+      setPhase('betting');
+      setCurrentRound(1);
+      setCountdown(timerDuration);
+      setSelectedOpeningCard(selectedCard!);
+
+      // Call WebSocket context method to start the game
+      await startGame();
+
+      // Close modal and show success
+      setShowConfirmModal(false);
+      showNotification(`🎲 Round 1 started! Opening card: ${selectedCard.display}`, 'success');
+    } catch (error) {
+      console.error('Failed to start game:', error);
+      showNotification('Failed to start game. Please try again.', 'error');
+
+      // Revert local state changes on error
+      setPhase('idle');
+      setCurrentRound(1);
+      setCountdown(0);
+      setSelectedOpeningCard(null);
+    }
   };
 
   return (

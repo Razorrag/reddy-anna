@@ -24,6 +24,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Redirect unauthenticated users
   React.useEffect(() => {
     if (requireAuth && !isPlayer && authState.authChecked) {
+      console.log('ProtectedRoute: Redirecting to login - authChecked:', authState.authChecked, 'isPlayer:', isPlayer);
       setLocation('/login');
     }
   }, [requireAuth, isPlayer, authState.authChecked, setLocation]);

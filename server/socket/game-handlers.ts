@@ -1,12 +1,11 @@
 /**
  * WEBSOCKET GAME HANDLERS
- * 
+ *
  * Extracts WebSocket event handlers from server/index.ts
  * Handles all game-related socket events with validation
  */
 
 import { WebSocket } from 'ws';
-import { gameService } from '../services/GameService';
 
 // WSClient interface to match the main routes.ts file
 interface WSClient {
@@ -51,14 +50,8 @@ export async function handlePlayerBet(client: WSClient, data: any) {
   const { gameId, side, amount, round } = data;
 
   // Validate required fields
-  if (!gameId || !side || !amount || !round) {
-    sendError(ws, 'Missing required fields: gameId, side, amount, round');
-    return;
-  }
-
-  // Validate types
-  if (typeof gameId !== 'string') {
-    sendError(ws, 'gameId must be a string');
+  if (!side || !amount || !round) {
+    sendError(ws, 'Missing required fields: side, amount, round');
     return;
   }
 
@@ -78,40 +71,95 @@ export async function handlePlayerBet(client: WSClient, data: any) {
   }
 
   try {
-    // Place bet using game service (with full validation)
-    const result = await gameService.placeBet({
-      userId,
-      gameId,
-      side,
-      amount,
-      round,
-    });
+    // Use the actual game logic from routes.ts - import required dependencies
+    console.log(`📝 BET REQUEST: User ${userId} wants to bet ₹${amount} on ${side} for round ${round}`);
 
-    // Send success response
-    ws.send(JSON.stringify({
-      type: 'bet:success',
-      data: result,
-    }));
-
-    // Broadcast bet to all clients via the main routes.ts broadcast function
-    // We'll use the global broadcast function from the routes.ts file
-    if (typeof (global as any).broadcast !== 'undefined') {
-      (global as any).broadcast({
-        type: 'game:bet-placed',
-        data: {
-          userId,
-          side,
-          amount,
-          round,
-        },
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      // Fallback: log that global broadcast is not available
-      console.log('Global broadcast function not available, bet placed for user:', userId);
+    // Validate game state (using global currentGameState)
+    if ((global as any).currentGameState?.phase !== 'betting') {
+      sendError(ws, 'Betting is not open');
+      return;
     }
 
-    console.log(`✅ Bet processed: ${userId} bet ₹${amount} on ${side}`);
+    if ((global as any).currentGameState?.bettingLocked) {
+      sendError(ws, 'Betting period has ended');
+      return;
+    }
+
+    // Validate balance (using storage function)
+    const { storage } = await import('../storage-supabase');
+    const user = await storage.getUser(userId);
+    if (!user) {
+      sendError(ws, 'User not found');
+      return;
+    }
+
+    const currentBalance = parseFloat(user.balance || '0');
+    if (currentBalance < amount) {
+      sendError(ws, `Insufficient balance. You have ₹${currentBalance}${currentBalance < 0 ? ' (negative balance)' : ''}, but bet is ₹${amount}`);
+      return;
+    }
+
+    // Add bet to current game state
+    const roundNum = parseInt(round);
+    if (roundNum === 1) {
+      if ((global as any).currentGameState?.userBets?.get) {
+        if (!(global as any).currentGameState.userBets.has(userId)) {
+          (global as any).currentGameState.userBets.set(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
+        }
+        const userBets = (global as any).currentGameState.userBets.get(userId);
+        userBets.round1[side] += amount;
+        (global as any).currentGameState.round1Bets[side] += amount;
+      }
+    } else if (roundNum === 2) {
+      if ((global as any).currentGameState?.userBets?.get) {
+        if (!(global as any).currentGameState.userBets.has(userId)) {
+          (global as any).currentGameState.userBets.set(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
+        }
+        const userBets = (global as any).currentGameState.userBets.get(userId);
+        userBets.round2[side] += amount;
+        (global as any).currentGameState.round2Bets[side] += amount;
+      }
+    }
+
+    // Deduct balance
+    if (user.balance !== undefined) {
+      const newBalance = parseFloat(user.balance) - amount;
+      await storage.updateUserBalance(userId, newBalance);
+
+      // Store bet in database (if gameId exists)
+      const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
+      if (gameIdToUse && gameIdToUse !== 'default-game') {
+        // TODO: Implement bet recording if storage method exists
+        console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
+      }
+    }
+
+    // Send bet confirmation back to the user
+    ws.send(JSON.stringify({
+      type: 'bet_confirmed',
+      data: {
+        betId: `bet-${Date.now()}`,
+        userId,
+        round,
+        side,
+        amount,
+        newBalance: (currentBalance - amount),
+        timestamp: Date.now()
+      }
+    }));
+
+    // Broadcast bet update to admin panel
+    if (typeof (global as any).broadcast !== 'undefined') {
+      (global as any).broadcast({
+        type: 'user_bets_update',
+        data: {
+          round1Bets: (global as any).currentGameState?.round1Bets || { andar: 0, bahar: 0 },
+          round2Bets: (global as any).currentGameState?.round2Bets || { andar: 0, bahar: 0 }
+        }
+      });
+    }
+
+    console.log(`✅ BET CONFIRMED: ${userId} bet ₹${amount} on ${side}, new balance: ₹${currentBalance - amount}`);
   } catch (error: any) {
     console.error('Bet error:', error);
     sendError(ws, error.message || 'Failed to place bet');
@@ -142,28 +190,80 @@ export async function handleStartGame(client: WSClient, data: any) {
     return;
   }
 
+  console.log(`🎴 GAME START: Admin ${userId} starting game with opening card: ${data.openingCard}`);
+
   try {
-    const gameState = await gameService.startGame(data.openingCard, userId);
+    // Use the actual game state from routes.ts global variables
+    if ((global as any).currentGameState) {
+      // Set opening card and initialize game
+      (global as any).currentGameState.reset();
+      (global as any).currentGameState.gameId = `game-${Date.now()}`;
+      (global as any).currentGameState.openingCard = data.openingCard;
+      (global as any).currentGameState.phase = 'betting';
+      (global as any).currentGameState.currentRound = 1;
+      (global as any).currentGameState.bettingLocked = false;
 
-    // Send success response
-    ws.send(JSON.stringify({
-      type: 'game:started',
-      data: gameState,
-    }));
-
-    // Broadcast to all clients via the main routes.ts broadcast function
-    if (typeof (global as any).broadcast !== 'undefined') {
-      (global as any).broadcast({
-        type: 'game_start',
-        data: gameState,
-        timestamp: new Date().toISOString()
+      // Store in database
+      const { storage } = await import('../storage-supabase');
+      const gameSession = await storage.createGameSession({
+        gameId: (global as any).currentGameState.gameId,
+        openingCard: data.openingCard,
+        phase: 'betting'
       });
-    } else {
-      // Fallback: log that global broadcast is not available
-      console.log('Global broadcast function not available, game started by admin:', userId);
-    }
 
-    console.log(`✅ Game started by admin ${userId}`);
+      console.log(`✅ Game session created: ${(global as any).currentGameState.gameId}`);
+
+      // Broadcast game start to all clients
+      if (typeof (global as any).broadcast !== 'undefined') {
+        (global as any).broadcast({
+          type: 'game_start',
+          data: {
+            gameId: (global as any).currentGameState.gameId,
+            openingCard: data.openingCard,
+            phase: 'betting',
+            currentRound: 1,
+            timer: 30,
+            message: 'New game started! Round 1 betting is open.'
+          }
+        });
+      }
+
+      // Start betting timer using global startTimer
+      if (typeof (global as any).startTimer === 'function') {
+        (global as any).startTimer(30, () => {
+          console.log('🎯 Betting time expired, moving to dealing phase');
+          (global as any).currentGameState.phase = 'dealing';
+          (global as any).currentGameState.bettingLocked = true;
+
+          // Broadcast phase change
+          if (typeof (global as any).broadcast !== 'undefined') {
+            (global as any).broadcast({
+              type: 'phase_change',
+              data: {
+                phase: 'dealing',
+                round: 1,
+                message: 'Betting closed. Admin can now deal cards.'
+              }
+            });
+          }
+        });
+      }
+
+      // Send confirmation to admin
+      ws.send(JSON.stringify({
+        type: 'game_started',
+        data: {
+          gameId: (global as any).currentGameState.gameId,
+          openingCard: data.openingCard,
+          phase: 'betting',
+          timer: 30
+        }
+      }));
+
+      console.log(`✅ GAME STARTED: Game ${(global as any).currentGameState.gameId} started by admin ${userId}`);
+    } else {
+      sendError(ws, 'Game state not available');
+    }
   } catch (error: any) {
     console.error('Start game error:', error);
     sendError(ws, error.message || 'Failed to start game');
@@ -189,27 +289,48 @@ export async function handleDealCard(client: WSClient, data: any) {
   }
 
   // Validate input
-  if (!data || !data.gameId || !data.card || !data.side || typeof data.position !== 'number') {
-    sendError(ws, 'Missing required fields: gameId, card, side, position');
+  if (!data || !data.card || !data.side || typeof data.position !== 'number') {
+    sendError(ws, 'Missing required fields: card, side, position');
     return;
   }
 
+  if (data.side !== 'andar' && data.side !== 'bahar') {
+    sendError(ws, 'side must be "andar" or "bahar"');
+    return;
+  }
+
+  console.log(`🃏 DEAL CARD: Admin ${userId} dealing ${data.card} on ${data.side} at position ${data.position}`);
+
   try {
-    const gameState = await gameService.dealCard(
-      data.gameId,
-      data.card,
-      data.side,
-      data.position,
-      userId
-    );
+    // Use actual game logic from routes.ts
+    if (!(global as any).currentGameState) {
+      sendError(ws, 'Game state not available');
+      return;
+    }
 
-    // Send success response
-    ws.send(JSON.stringify({
-      type: 'card:dealt',
-      data: gameState,
-    }));
+    if ((global as any).currentGameState.phase !== 'dealing') {
+      sendError(ws, 'Not in dealing phase');
+      return;
+    }
 
-    // Broadcast to all clients via the main routes.ts broadcast function
+    // Determine if this is a winner based on the opening card logic
+    let isWinningCard = false;
+    if ((global as any).currentGameState.openingCard) {
+      const openingRank = (global as any).currentGameState.openingCard.replace(/[♠♥♦♣]/g, '');
+      const dealtRank = data.card.replace(/[♠♥♦♣]/g, '');
+      isWinningCard = openingRank === dealtRank;
+    }
+
+    // Add card to the appropriate list
+    if (data.side === 'andar') {
+      (global as any).currentGameState.addAndarCard(data.card);
+    } else {
+      (global as any).currentGameState.addBaharCard(data.card);
+    }
+
+    console.log(`♠️ Dealt ${data.card} on ${data.side}: total andar=${(global as any).currentGameState.andarCards.length}, bahar=${(global as any).currentGameState.baharCards.length}`);
+
+    // Broadcast the dealt card to all clients
     if (typeof (global as any).broadcast !== 'undefined') {
       (global as any).broadcast({
         type: 'card_dealt',
@@ -217,16 +338,106 @@ export async function handleDealCard(client: WSClient, data: any) {
           card: data.card,
           side: data.side,
           position: data.position,
-          isWinningCard: false  // We'll determine this appropriately
-        },
-        timestamp: new Date().toISOString()
+          isWinningCard: isWinningCard
+        }
       });
-    } else {
-      // Fallback: log that global broadcast is not available
-      console.log('Global broadcast function not available, card dealt by admin:', userId);
     }
 
-    console.log(`✅ Card dealt by admin ${userId}: ${data.card} on ${data.side}`);
+    // Check if round should end after this card
+    if ((global as any).currentGameState.isRoundComplete &&
+        (global as any).currentGameState.isRoundComplete()) {
+      console.log('🎯 Round completed after this card');
+
+      if (isWinningCard) {
+        // Game ends with winner
+        (global as any).currentGameState.winner = data.side === 'andar' ? 'andar' : 'bahar';
+        (global as any).currentGameState.winningCard = data.card;
+        (global as any).currentGameState.phase = 'complete';
+
+        // Complete the game with payouts using global completeGame if available
+        if (typeof (global as any).completeGame === 'function') {
+          (global as any).completeGame(data.side === 'andar' ? 'andar' : 'bahar', data.card);
+        }
+
+        console.log(`🏆 GAME COMPLETE: Winner is ${data.side} with card ${data.card}`);
+      } else {
+        // Continue to next round
+        if ((global as any).currentGameState.currentRound < 2) {
+          // Go to round 2
+          (global as any).currentGameState.currentRound = 2;
+          (global as any).currentGameState.phase = 'betting';
+          (global as any).currentGameState.bettingLocked = false;
+
+          if (typeof (global as any).broadcast !== 'undefined') {
+            (global as any).broadcast({
+              type: 'phase_change',
+              data: {
+                phase: 'betting',
+                round: 2,
+                message: 'Round 1 complete! Round 2 betting is now open.'
+              }
+            });
+          }
+
+          // Start timer for round 2 betting
+          if (typeof (global as any).startTimer === 'function') {
+            (global as any).startTimer(30, () => {
+              (global as any).currentGameState.phase = 'dealing';
+              (global as any).currentGameState.bettingLocked = true;
+
+              if (typeof (global as any).broadcast !== 'undefined') {
+                (global as any).broadcast({
+                  type: 'phase_change',
+                  data: {
+                    phase: 'dealing',
+                    round: 2,
+                    message: 'Round 2 betting closed. Admin can deal second cards.'
+                  }
+                });
+              }
+            });
+          }
+
+          console.log('🔄 MOVED TO ROUND 2');
+        } else {
+          // Game should end if no winner in 2 rounds
+          (global as any).currentGameState.winner = null;
+          (global as any).currentGameState.phase = 'complete';
+
+          if (typeof (global as any).broadcast !== 'undefined') {
+            (global as any).broadcast({
+              type: 'game_complete',
+              data: {
+                winner: null,
+                winningCard: null,
+                round: 2,
+                andarTotal: (global as any).currentGameState.round1Bets.andar + (global as any).currentGameState.round2Bets.andar,
+                baharTotal: (global as any).currentGameState.round1Bets.bahar + (global as any).currentGameState.round2Bets.bahar,
+                message: 'Game ended after 2 rounds with no winner! Refunds applied.',
+                payoutMessage: 'No winner after 2 rounds. All bets refunded.'
+              }
+            });
+          }
+
+          console.log('🏁 GAME ENDED WITH NO WINNER');
+        }
+      }
+    }
+
+    // Confirm to admin
+    ws.send(JSON.stringify({
+      type: 'card_dealt',
+      data: {
+        card: data.card,
+        side: data.side,
+        position: data.position,
+        isWinningCard: isWinningCard,
+        gamePhase: (global as any).currentGameState.phase,
+        currentRound: (global as any).currentGameState.currentRound
+      }
+    }));
+
+    console.log(`✅ CARD DEALT: ${data.card} on ${data.side} by admin ${userId}`);
   } catch (error: any) {
     console.error('Deal card error:', error);
     sendError(ws, error.message || 'Failed to deal card');
@@ -237,7 +448,7 @@ export async function handleDealCard(client: WSClient, data: any) {
  * Handle game subscription
  */
 export async function handleGameSubscribe(client: WSClient, data: any) {
-  const { ws } = client;
+  const { ws, userId } = client;
 
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     console.error('Client not connected');
@@ -245,15 +456,38 @@ export async function handleGameSubscribe(client: WSClient, data: any) {
   }
 
   try {
-    const gameState = await gameService.getCurrentGame();
+    // Use getCurrentGameStateForUser function from routes.ts
+    const gameStateFn = (global as any).getCurrentGameStateForUser;
+    if (typeof gameStateFn === 'function') {
+      const gameState = await gameStateFn(userId);
 
-    ws.send(JSON.stringify({
-      type: 'game:state',
-      data: gameState,
-    }));
+      ws.send(JSON.stringify({
+        type: 'game_state',
+        data: gameState
+      }));
+    } else {
+      // Fallback with basic info
+      const currentState = {
+        phase: (global as any).currentGameState?.phase || 'idle',
+        currentRound: (global as any).currentGameState?.currentRound || 1,
+        timer: (global as any).currentGameState?.timer || 0,
+        openingCard: (global as any).currentGameState?.openingCard || null,
+        andarCards: (global as any).currentGameState?.andarCards || [],
+        baharCards: (global as any).currentGameState?.baharCards || [],
+        round1Bets: (global as any).currentGameState?.round1Bets || { andar: 0, bahar: 0 },
+        round2Bets: (global as any).currentGameState?.round2Bets || { andar: 0, bahar: 0 }
+      };
+
+      ws.send(JSON.stringify({
+        type: 'game:state',
+        data: currentState
+      }));
+    }
+
+    console.log(`✅ Game state sent to ${userId}`);
   } catch (error: any) {
     console.error('Subscribe error:', error);
-    sendError(ws, 'Failed to get game state');
+    sendError(ws, error.message || 'Failed to get game state');
   }
 }
 

@@ -74,14 +74,12 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '', isScreenSharing }
 
   return (
     <div className={`relative bg-black rounded-lg overflow-hidden ${className}`}>
-      {/* Live Video Stream */}
+      {/* Live Video Stream - Always show StreamPlayer for screen sharing */}
       <div className="relative aspect-video">
-        {isScreenSharing && (
-          <StreamPlayer
-            isLive={gameState.phase !== 'idle'}
-            className="w-full h-full"
-          />
-        )}
+        <StreamPlayer
+          isLive={gameState.phase !== 'idle'}
+          className="w-full h-full"
+        />
 
         {/* Game Status Overlay - Removed to keep video clean */}
 
