@@ -66,6 +66,7 @@ interface GameState {
   // Player's individual bets per round
   playerRound1Bets: RoundBets;
   playerRound2Bets: RoundBets;
+  isScreenSharingActive: boolean;
 }
 
 type GameStateAction =
@@ -89,6 +90,7 @@ type GameStateAction =
   | { type: 'SET_WINNING_CARD'; payload: Card }
   | { type: 'SET_USER_DATA'; payload: { userId: string; username: string; wallet: number } }
   | { type: 'UPDATE_PLAYER_ROUND_BETS'; payload: { round: GameRound; bets: RoundBets } }
+  | { type: 'SET_SCREEN_SHARING'; payload: boolean }
   | { type: 'CLEAR_CARDS' };
 
 const initialState: GameState = {
@@ -119,7 +121,8 @@ const initialState: GameState = {
   userRole: 'player',
   playerWallet: 0,
   playerRound1Bets: { andar: 0, bahar: 0 },
-  playerRound2Bets: { andar: 0, bahar: 0 }
+  playerRound2Bets: { andar: 0, bahar: 0 },
+  isScreenSharingActive: false
 };
 
 const gameReducer = (state: GameState, action: GameStateAction): GameState => {
@@ -209,6 +212,8 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         return { ...state, playerRound2Bets: action.payload.bets };
       }
       return state;
+    case 'SET_SCREEN_SHARING':
+      return { ...state, isScreenSharingActive: action.payload };
     case 'CLEAR_CARDS':
       return { 
         ...state, 
@@ -249,6 +254,7 @@ interface GameStateContextType {
   clearCards: () => void;
   placeBet: (side: BetSide, amount: number) => void;
   resetBettingData: () => void;
+  setScreenSharing: (isSharing: boolean) => void;
   phase: GamePhase;
 }
 
@@ -476,6 +482,10 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'CLEAR_CARDS' });
   };
 
+  const setScreenSharing = (isSharing: boolean) => {
+    dispatch({ type: 'SET_SCREEN_SHARING', payload: isSharing });
+  };
+
   const resetBettingData = () => {
     dispatch({ type: 'UPDATE_TOTAL_BETS', payload: { andar: 0, bahar: 0 } });
     dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round: 1, bets: { andar: 0, bahar: 0 } } });
@@ -548,6 +558,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     clearCards,
     placeBet,
     resetBettingData,
+    setScreenSharing,
     phase: gameState.phase,
   };
 

@@ -36,7 +36,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
   }
 
   // Validate role (only players can bet)
-  if (role === 'admin') {
+  if (role === 'admin' || role === 'super_admin') {
     sendError(ws, 'Admins cannot place bets');
     return;
   }
@@ -199,8 +199,7 @@ export async function handleStartGame(client: WSClient, data: any) {
     return;
   }
 
-  // Validate role (only admins can start games)
-  if (role !== 'admin') {
+  if (role !== 'admin' && role !== 'super_admin') {
     sendError(ws, 'Unauthorized: Only admins can start games');
     return;
   }
@@ -302,7 +301,7 @@ export async function handleDealCard(client: WSClient, data: any) {
   }
 
   // Validate role (only admins can deal cards)
-  if (role !== 'admin') {
+  if (role !== 'admin' && role !== 'super_admin') {
     sendError(ws, 'Unauthorized: Only admins can deal cards');
     return;
   }

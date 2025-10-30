@@ -351,6 +351,7 @@ const PlayerGame: React.FC = () => {
           onShowChipSelector={handleShowChipSelector}
           showChipSelector={showChipSelector}
           isPlacingBet={isPlacingBet}
+          isScreenSharing={gameState.isScreenSharingActive || false}
         />
       </div>
 

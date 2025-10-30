@@ -78,6 +78,7 @@ const VideoArea: React.FC<VideoAreaProps> = ({ className = '', isScreenSharing }
       <div className="relative aspect-video">
         <StreamPlayer
           isLive={gameState.phase !== 'idle'}
+          isScreenSharing={isScreenSharing} // <-- ADD THIS PROP
           className="w-full h-full"
         />
 

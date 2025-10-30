@@ -84,6 +84,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     clearCards,
     resetGame,
     updatePlayerWallet,
+    setScreenSharing,
   } = useGameState();
   const { showNotification } = useNotification();
   const { state: authState, logout, refreshAccessToken } = useAuth();
@@ -432,21 +433,32 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         break;
       }
 
-      case 'webrtc_offer': {
-        const event = new CustomEvent('webrtc_offer_received', { detail: data.data });
-        window.dispatchEvent(event);
+      case 'webrtc:signal':
+        if (data.data) {
+          switch (data.data.type) {
+            case 'stream-start':
+              // Set global state to TRUE
+              setScreenSharing(true);
+              break;
+            case 'stream-stop':
+              // Set global state to FALSE
+              setScreenSharing(false);
+              break;
+            case 'offer':
+              // Fire event for WebRTCPlayer to pick up
+              window.dispatchEvent(new CustomEvent('webrtc_offer_received', { detail: data.data }));
+              break;
+            case 'answer':
+              // Fire event for WebRTCPlayer to pick up
+              window.dispatchEvent(new CustomEvent('webrtc_answer_received', { detail: data.data }));
+              break;
+            case 'ice-candidate':
+              // Fire event for WebRTCPlayer to pick up
+              window.dispatchEvent(new CustomEvent('webrtc_ice_candidate_received', { detail: data.data }));
+              break;
+          }
+        }
         break;
-      }
-      case 'webrtc_answer': {
-        const event = new CustomEvent('webrtc_answer_received', { detail: data.data });
-        window.dispatchEvent(event);
-        break;
-      }
-      case 'webrtc_ice_candidate': {
-        const event = new CustomEvent('webrtc_ice_candidate_received', { detail: data.data });
-        window.dispatchEvent(event);
-        break;
-      }
       
       case 'notification': {
           const { message, type } = (data as NotificationMessage).data;
