@@ -703,16 +703,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Expose wss so other routers/services can push real-time notifications
   app.set('wss', wss);
 
-  // Initialize and mount Admin Requests API under /api/admin (only if DB configured)
+  // Initialize and mount Admin Requests API under /api/admin (only if DB configured and reachable)
   const pgConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
   if (pgConnectionString) {
     const pgPool = new Pool({
       connectionString: pgConnectionString,
       ssl: (process.env.PGSSL?.toLowerCase() === 'true') ? { rejectUnauthorized: false } : undefined,
     });
-    const adminRequestsApi = new AdminRequestsAPI(pgPool);
-    app.use('/api/admin', adminRequestsApi.getRouter());
-    console.log('🐾 Admin Requests API enabled');
+    try {
+      // Quick connectivity check to avoid enabling routes when DB is unreachable
+      await pgPool.query('SELECT 1');
+      const adminRequestsApi = new AdminRequestsAPI(pgPool);
+      app.use('/api/admin', adminRequestsApi.getRouter());
+      console.log('🐾 Admin Requests API enabled');
+    } catch (e) {
+      console.warn('🐾 Admin Requests API disabled: database unreachable. Set DATABASE_URL/POSTGRES_URL and ensure DB is running.');
+    }
   } else {
     console.warn('🐾 Admin Requests API disabled: DATABASE_URL/POSTGRES_URL not set');
   }

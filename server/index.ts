@@ -54,16 +54,17 @@ app.use(express.urlencoded({ extended: false }));
 
 // ✅ PRODUCTION-READY: Dynamic CORS configuration via environment variables
 const getAllowedOrigins = (): string[] => {
-  const envOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [];
+  const envOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) || [];
   const defaultOrigins = [
     'http://localhost:5173', // Vite dev server
     'http://localhost:3000',
     'http://localhost:5000'
   ];
-  
-  return process.env.NODE_ENV === 'production' 
-    ? envOrigins.length > 0 ? envOrigins : []
+  const combined = process.env.NODE_ENV === 'production'
+    ? (envOrigins.length > 0 ? envOrigins : [])
     : [...defaultOrigins, ...envOrigins];
+  // De-duplicate while preserving order
+  return Array.from(new Set(combined));
 };
 
 const allowedOrigins = getAllowedOrigins();
