@@ -157,6 +157,27 @@ export async function handlePlayerBet(client: WSClient, data: any) {
           round2Bets: (global as any).currentGameState?.round2Bets || { andar: 0, bahar: 0 }
         }
       });
+      // --- ADD THIS FIX ---
+      // Broadcast to Admin-specific listeners
+      (global as any).broadcast({
+        type: 'admin_bet_update',
+        data: {
+          userId,
+          side,
+          amount,
+          round,
+        },
+      });
+      
+      (global as any).broadcast({
+        type: 'analytics_update',
+        data: {
+          newBet: { userId, side, amount, round },
+          andarTotal: ((global as any).currentGameState?.round1Bets.andar || 0) + ((global as any).currentGameState?.round2Bets.andar || 0),
+          baharTotal: ((global as any).currentGameState?.round1Bets.bahar || 0) + ((global as any).currentGameState?.round2Bets.bahar || 0),
+        }
+      });
+      // --- END OF FIX ---
     }
 
     console.log(`✅ BET CONFIRMED: ${userId} bet ₹${amount} on ${side}, new balance: ₹${currentBalance - amount}`);
@@ -216,14 +237,12 @@ export async function handleStartGame(client: WSClient, data: any) {
       // Broadcast game start to all clients
       if (typeof (global as any).broadcast !== 'undefined') {
         (global as any).broadcast({
-          type: 'game_start',
+          type: 'opening_card_confirmed',
           data: {
-            gameId: (global as any).currentGameState.gameId,
             openingCard: data.openingCard,
             phase: 'betting',
-            currentRound: 1,
-            timer: 30,
-            message: 'New game started! Round 1 betting is open.'
+            round: 1,
+            timer: 30
           }
         });
       }

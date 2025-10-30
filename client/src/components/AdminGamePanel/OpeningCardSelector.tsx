@@ -6,7 +6,7 @@ import type { Card } from '@/types/game';
 
 const OpeningCardSelector: React.FC = () => {
   const { gameState, setSelectedOpeningCard, setPhase, setCurrentRound, setCountdown } = useGameState();
-  const { startGame } = useWebSocket();
+  const { sendWebSocketMessage } = useWebSocket();
   const { showNotification } = useNotification();
   
   const [selectedCard, setSelectedCard] = useState<Card | null>(gameState.selectedOpeningCard);
@@ -66,29 +66,19 @@ const OpeningCardSelector: React.FC = () => {
   const handleStartGame = async () => {
     if (!selectedCard) return;
 
-    try {
-      // Update local state
-      setPhase('betting');
-      setCurrentRound(1);
-      setCountdown(timerDuration);
-      setSelectedOpeningCard(selectedCard!);
-
-      // Call WebSocket context method to start the game
-      await startGame();
-
-      // Close modal and show success
-      setShowConfirmModal(false);
-      showNotification(`🎲 Round 1 started! Opening card: ${selectedCard.display}`, 'success');
-    } catch (error) {
-      console.error('Failed to start game:', error);
-      showNotification('Failed to start game. Please try again.', 'error');
-
-      // Revert local state changes on error
-      setPhase('idle');
-      setCurrentRound(1);
-      setCountdown(0);
-      setSelectedOpeningCard(null);
-    }
+    // Broadcast to all players
+    sendWebSocketMessage({
+      type: 'admin:start-game', // <--- THIS IS THE FIX
+      data: {
+        // The server's handler expects the openingCard object, not just the display string.
+        // Let's also send the gameId, just in case, though the handler doesn't strictly use it.
+        openingCard: selectedCard, 
+        timer: timerDuration,
+        gameId: gameState.gameId,
+        // The server handler doesn't use 'round', it's handled by the service.
+        // It also doesn't use openingCard.display, it expects the card object.
+      }
+    });
   };
 
   return (
