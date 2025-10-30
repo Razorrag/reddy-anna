@@ -8,18 +8,7 @@
 import { storage } from '../storage-supabase';
 import { stateManager } from '../state-manager';
 
-export interface GameState {
-  gameId: string;
-  phase: 'idle' | 'betting' | 'dealing' | 'complete';
-  openingCard?: string;
-  andarCards: string[];
-  baharCards: string[];
-  currentRound: number;
-  countdown: number;
-  totalAndarBets: number;
-  totalBaharBets: number;
-  winner?: 'andar' | 'bahar';
-}
+import type { GameState } from '../state-manager';
 
 export interface BetData {
   userId: string;
@@ -51,14 +40,12 @@ export class GameService {
     // Create game in database
     const gameId = `game-${Date.now()}`;
     const game = await storage.createGameSession({
-      game_id: gameId,
-      opening_card: openingCard,
+      gameId: gameId,
+      openingCard: openingCard,
       phase: 'betting',
       status: 'active',
-      current_round: 1,
-      current_timer: 30,
-      andar_cards: [],
-      bahar_cards: [],
+      // round is derived in storage; not part of InsertGameSession type
+      currentTimer: 30,
     });
 
     // Initialize game state
@@ -72,6 +59,8 @@ export class GameService {
       countdown: 30,
       totalAndarBets: 0,
       totalBaharBets: 0,
+      activeBets: {},
+      connectedPlayers: new Set<string>(),
     };
 
     await stateManager.setGameState(gameId, gameState);
@@ -146,11 +135,11 @@ export class GameService {
 
     // 8. Record bet in database
     const bet = await storage.createBet({
-      user_id: userId,
-      game_id: gameId,
+      userId: userId,
+      gameId: gameId,
       round,
       side,
-      amount: amount.toString(),
+      amount: amount,
       status: 'pending',
     });
 
@@ -220,11 +209,11 @@ export class GameService {
 
     // Record in database
     await storage.createDealtCard({
-      game_id: gameId,
+      gameId: gameId,
       card,
       side,
       position,
-      is_winning_card: false,
+      isWinningCard: false,
     });
 
     // Check for winner
@@ -252,25 +241,19 @@ export class GameService {
         // Calculate payout (2x for simplicity, adjust based on your rules)
         const payout = bet.amount * 2;
 
-        // Update user balance
-        const user = await storage.getUser(bet.userId);
-        if (user) {
-          const newBalance = parseFloat(user.balance) + payout;
-          await storage.updateUser(bet.userId, { balance: newBalance.toFixed(2) });
+        // Update user balance atomically to avoid race conditions
+        await storage.updateUserBalance(bet.userId, payout);
 
-          // Update bet status
-          await storage.updateBet(gameId, bet.userId, {
-            status: 'completed',
-            actual_payout: payout.toString(),
-          });
+        // Update bet status
+        await storage.updateBet(gameId, bet.userId, {
+          status: 'completed',
+        });
 
-          console.log(`💰 Payout: ${bet.userId} won ₹${payout}`);
-        }
+        console.log(`💰 Payout: ${bet.userId} won ₹${payout}`);
       } else {
         // Losing bet
         await storage.updateBet(gameId, bet.userId, {
           status: 'completed',
-          actual_payout: '0',
         });
       }
     }

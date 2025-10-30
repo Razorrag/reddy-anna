@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function AdminLogin() {
+  const [, setLocation] = useLocation();
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -53,7 +55,7 @@ export default function AdminLogin() {
       
       // Make API call to admin login endpoint
       // IMPORTANT: skipAuth: true to prevent sending Authorization header
-      const response = await apiClient.post<any>('/auth/admin-login', {
+      const response = await apiClient.post<any>('/api/auth/admin-login', {
         username: formData.username,
         password: formData.password
       }, { skipAuth: true });
@@ -73,7 +75,7 @@ export default function AdminLogin() {
         username: response.admin?.username || formData.username,
         phone: response.admin?.username || formData.username, // Admin "phone" is their username
         balance: 0, // Admins don't have game balance
-        role: response.admin?.role || 'admin'
+        role: (response.admin?.role || 'admin').toLowerCase() as 'admin' | 'super_admin'
       };
 
       // CRITICAL: Ensure token is stored (check multiple sources)
@@ -81,16 +83,28 @@ export default function AdminLogin() {
       if (!token) {
         console.error('❌ No token received from server');
         setError('Authentication failed - no token received. Please try again.');
+        setIsLoading(false);
         return;
       }
 
+      console.log('✅ Admin token received:', { 
+        hasToken: !!token, 
+        role: adminData.role,
+        id: adminData.id 
+      });
+
       // Use auth context to handle login
       const refreshToken = response.refreshToken || response.admin?.refreshToken;
+      console.log('🔐 Calling login with admin data and tokens');
       login(adminData, token, refreshToken);
-      console.log('✅ Admin login successful');
+      
+      // Wait a bit for localStorage to settle before redirecting
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      console.log('✅ Admin login successful, redirecting to /admin');
 
       // Redirect to admin panel after successful login
-      window.location.href = '/admin';
+      setLocation('/admin');
     } catch (err: any) {
       console.error('Admin login error:', err);
       setError(err.message || 'Invalid admin credentials. Please try again.');

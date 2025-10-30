@@ -19,19 +19,7 @@ import {
   AuthErrorMessage,
   StreamStatusMessage,
   NotificationMessage,
-  TokenRefreshMessage,
-  TokenRefreshedMessage,
-  TokenRefreshErrorMessage,
-  ActivityPingMessage,
-  ActivityPongMessage,
-  TokenExpiryWarningMessage,
-  TokenExpiredMessage,
-  InactivityWarningMessage,
-  BetErrorMessage,
-  BetConfirmedMessage,
-  StartGameMessage,
-  DealCardMessage,
-  PlaceBetMessage,
+  WebRTCSignalMessage,
 } from '../../../shared/src/types/webSocket';
 import WebSocketManager, { ConnectionStatus } from '../lib/WebSocketManager';
 
@@ -40,6 +28,32 @@ import { handleComponentError } from '../lib/utils';
 // Validate WebSocket message structure
 const isValidWebSocketMessage = (data: any): data is WebSocketMessage => {
   return data && typeof data === 'object' && 'type' in data;
+};
+
+// Helper: parse a display string like "A♠" or "10♥" into a Card object
+const parseDisplayCard = (display: string): Card => {
+  const suitSymbol = display.slice(-1);
+  const rankPart = display.slice(0, display.length - 1);
+  const suitMap: Record<string, { name: Card['suit']; color: 'red' | 'black' }> = {
+    '♠': { name: 'spades', color: 'black' },
+    '♥': { name: 'hearts', color: 'red' },
+    '♦': { name: 'diamonds', color: 'red' },
+    '♣': { name: 'clubs', color: 'black' },
+  };
+  const valueMap: Record<string, number> = {
+    A: 1, J: 11, Q: 12, K: 13,
+    '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10,
+  };
+  const suitInfo = suitMap[suitSymbol] || { name: 'spades', color: 'black' };
+  const value = (valueMap[rankPart] ?? parseInt(rankPart, 10)) || 0;
+  return {
+    id: `${rankPart}-${suitInfo.name}`,
+    suit: suitInfo.name,
+    rank: rankPart as any,
+    value,
+    color: suitInfo.color,
+    display,
+  } as Card;
 };
 
 declare global {
@@ -142,10 +156,16 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     switch (data.type) {
-      case 'authenticated':
-        console.log('WebSocket authenticated:', data.data);
-        // Handle game state synchronization for new connections
-        if (data.data.gameState) {
+      case 'authenticated': {
+        console.log('✅ WebSocket authenticated successfully:', data.data);
+        const gameState = data.data.gameState;
+        if (gameState) {
+          console.log('📊 Received game state sync:', {
+            phase: gameState.phase,
+            round: gameState.currentRound,
+            hasOpeningCard: !!gameState.openingCard
+          });
+          
           const {
             phase,
             countdownTimer,
@@ -160,21 +180,17 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             userBets,
             playerRound1Bets,
             playerRound2Bets,
-            userBalance,
-            canBet,
-            isGameActive,
-            bettingLocked,
-            status
-          } = data.data.gameState;
+            userBalance
+          } = gameState;
           
           setPhase(phase as any);
           setCountdown(countdownTimer || timer || 0);
           setWinner(winner);
           setCurrentRound(currentRound as any);
-          if (openingCard) setSelectedOpeningCard(openingCard);
+          if (openingCard && typeof openingCard === 'string') setSelectedOpeningCard(parseDisplayCard(openingCard));
           clearCards();
-          andarCards?.forEach(addAndarCard);
-          baharCards?.forEach(addBaharCard);
+          andarCards?.forEach((c: any) => addAndarCard(typeof c === 'string' ? parseDisplayCard(c) : c));
+          baharCards?.forEach((c: any) => addBaharCard(typeof c === 'string' ? parseDisplayCard(c) : c));
           if (round1Bets) updateTotalBets(round1Bets);
           if (round2Bets) updateTotalBets(round2Bets);
           if (userBets) {
@@ -186,6 +202,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           if (userBalance !== undefined) updatePlayerWallet(userBalance);
         }
         break;
+      }
         
       case 'token_refreshed':
         console.log('WebSocket token refreshed:', data.data);
@@ -304,10 +321,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         setCountdown(countdown);
         setWinner(winner);
         setCurrentRound(currentRound);
-        if(openingCard) setSelectedOpeningCard(openingCard);
+        if (openingCard) setSelectedOpeningCard(typeof openingCard === 'string' ? parseDisplayCard(openingCard) : openingCard);
         clearCards();
-        andarCards.forEach(addAndarCard);
-        baharCards.forEach(addBaharCard);
+        andarCards.forEach((c: any) => addAndarCard(typeof c === 'string' ? parseDisplayCard(c) : c));
+        baharCards.forEach((c: any) => addBaharCard(typeof c === 'string' ? parseDisplayCard(c) : c));
         if(totalBets) updateTotalBets(totalBets);
         if(userBets) {
           updatePlayerRoundBets(1, userBets.round1);
@@ -318,23 +335,36 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         
       case 'opening_card_confirmed': {
         const { openingCard, phase, round, timer } = (data as OpeningCardConfirmedMessage).data;
-        setSelectedOpeningCard(openingCard);
+        const parsed = typeof openingCard === 'string' ? parseDisplayCard(openingCard) : openingCard;
+        setSelectedOpeningCard(parsed);
         setPhase(phase);
         setCurrentRound(round);
         setCountdown(timer);
-        showNotification(`Opening card: ${openingCard.display} - Round ${round} betting started!`, 'success');
+        showNotification(`Opening card: ${parsed.display} - Round ${round} betting started!`, 'success');
+        break;
+      }
+
+      // Server confirmation just for admin; state is driven by opening_card_confirmed
+      case 'game_started': {
+        // No-op to avoid console warnings
         break;
       }
         
       case 'card_dealt': {
         const { side, card, isWinningCard } = (data as CardDealtMessage).data;
+        const parsedCard = typeof card === 'string' ? parseDisplayCard(card) : card;
         if (side === 'andar') {
-          addAndarCard(card);
+          addAndarCard(parsedCard);
         } else {
-          addBaharCard(card);
+          addBaharCard(parsedCard);
         }
         if (isWinningCard) {
-          showNotification(`${side.toUpperCase()} wins with ${card.display}!`, 'success');
+          showNotification(`${side.toUpperCase()} wins with ${parsedCard.display}!`, 'success');
+          // Trigger celebration event
+          const celebrationEvent = new CustomEvent('game-complete-celebration', {
+            detail: { winner: side, winningCard: parsedCard, round: gameState.currentRound }
+          });
+          window.dispatchEvent(celebrationEvent);
         }
         break;
       }
@@ -357,8 +387,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         setPhase('complete');
         setWinner(winner);
         showNotification(message, 'success');
+        // Compute local user's potential win for dynamic celebration
+        const r1 = gameState.playerRound1Bets?.[winner as 'andar' | 'bahar'] || 0;
+        const r2 = gameState.playerRound2Bets?.[winner as 'andar' | 'bahar'] || 0;
+        const localWinAmount = (r1 || 0) + (r2 || 0);
         const celebrationEvent = new CustomEvent('game-complete-celebration', {
-          detail: data.data
+          detail: { ...data.data, localWinAmount }
         });
         window.dispatchEvent(celebrationEvent);
         break;
@@ -391,6 +425,47 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         break;
       }
       
+      // Admin dashboards: real-time bet updates
+      case 'admin_bet_update': {
+        const event = new CustomEvent('admin_bet_update', {
+          detail: (data as any).data
+        });
+        window.dispatchEvent(event);
+        break;
+      }
+
+      // Analytics dashboard: real-time aggregate updates
+      case 'analytics_update': {
+        const analyticsEvent = new CustomEvent('realtime-analytics-update', {
+          detail: (data as any).data
+        });
+        window.dispatchEvent(analyticsEvent);
+        // Also emit a generic analytics-update in case specific handlers exist
+        const genericEvent = new CustomEvent('analytics-update', {
+          detail: { type: 'realtime', data: (data as any).data }
+        });
+        window.dispatchEvent(genericEvent);
+        break;
+      }
+
+      // Admin notifications (requests, status changes)
+      case 'admin_notification': {
+        const adminEvent = new CustomEvent('admin_notification', {
+          detail: (data as any)
+        });
+        window.dispatchEvent(adminEvent);
+        break;
+      }
+
+      // Bonus updates (e.g., claim, grant)
+      case 'bonus_update': {
+        const bonusEvent = new CustomEvent('bonus_update', {
+          detail: (data as any).data
+        });
+        window.dispatchEvent(bonusEvent);
+        break;
+      }
+      
       case 'user_bets_update': {
         const { round1Bets, round2Bets } = (data as UserBetsUpdateMessage).data;
         updatePlayerRoundBets(1, round1Bets);
@@ -413,8 +488,18 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       case 'auth_error': {
         const { message, redirectTo } = (data as AuthErrorMessage).data;
-        console.error('WebSocket authentication error:', message);
-        showNotification(message, 'error');
+        console.error('❌ WebSocket authentication error:', message);
+        console.error('Auth state at error time:', {
+          isAuthenticated: authState.isAuthenticated,
+          hasToken: !!authState.token,
+          hasUser: !!authState.user,
+          userRole: authState.user?.role
+        });
+        showNotification(`Authentication failed: ${message}`, 'error');
+        
+        // Disconnect WebSocket before logout
+        webSocketManagerRef.current?.disconnect();
+        
         logout();
         if (redirectTo) {
           setTimeout(() => {
@@ -433,32 +518,50 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         break;
       }
 
-      case 'webrtc:signal':
-        if (data.data) {
-          switch (data.data.type) {
+      case 'webrtc:signal': {
+        const signalData = data as WebRTCSignalMessage;
+        if (signalData.data) {
+          console.log('📡 WebRTC signal received:', signalData.data.type);
+          switch (signalData.data.type) {
             case 'stream-start':
               // Set global state to TRUE
               setScreenSharing(true);
+              console.log('✅ Screen sharing started - UI updated');
               break;
             case 'stream-stop':
               // Set global state to FALSE
               setScreenSharing(false);
+              console.log('⏹️ Screen sharing stopped - UI updated');
+              break;
+            case 'stream-pause':
+              // Fire event for WebRTCPlayer to show paused overlay
+              console.log('⏸️ Stream paused - dispatching to WebRTCPlayer');
+              window.dispatchEvent(new CustomEvent('webrtc_stream_pause', { detail: signalData.data }));
+              break;
+            case 'stream-resume':
+              // Fire event for WebRTCPlayer to hide paused overlay
+              console.log('▶️ Stream resumed - dispatching to WebRTCPlayer');
+              window.dispatchEvent(new CustomEvent('webrtc_stream_resume', { detail: signalData.data }));
               break;
             case 'offer':
               // Fire event for WebRTCPlayer to pick up
-              window.dispatchEvent(new CustomEvent('webrtc_offer_received', { detail: data.data }));
+              console.log('📡 WebRTC offer received - dispatching to WebRTCPlayer');
+              window.dispatchEvent(new CustomEvent('webrtc_offer_received', { detail: signalData.data }));
               break;
             case 'answer':
               // Fire event for WebRTCPlayer to pick up
-              window.dispatchEvent(new CustomEvent('webrtc_answer_received', { detail: data.data }));
+              console.log('📡 WebRTC answer received - dispatching to WebRTCPlayer');
+              window.dispatchEvent(new CustomEvent('webrtc_answer_received', { detail: signalData.data }));
               break;
             case 'ice-candidate':
               // Fire event for WebRTCPlayer to pick up
-              window.dispatchEvent(new CustomEvent('webrtc_ice_candidate_received', { detail: data.data }));
+              console.log('🧊 WebRTC ICE candidate received - dispatching to WebRTCPlayer');
+              window.dispatchEvent(new CustomEvent('webrtc_ice_candidate_received', { detail: signalData.data }));
               break;
           }
         }
         break;
+      }
       
       case 'notification': {
           const { message, type } = (data as NotificationMessage).data;
@@ -472,9 +575,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [addAndarCard, addBaharCard, clearCards, gameState.playerRound1Bets, gameState.playerRound2Bets, logout, resetGame, setCurrentRound, setCountdown, setPhase, setSelectedOpeningCard, setWinner, showNotification, updatePlayerRoundBets, updateTotalBets, updatePlayerWallet]);
 
   const initWebSocketManager = useCallback(() => {
-    if (webSocketManagerRef.current) return;
+    if (webSocketManagerRef.current) {
+      console.log('WebSocketManager already initialized');
+      return;
+    }
 
     const wsUrl = getWebSocketUrl();
+    console.log('🔧 Initializing WebSocketManager with URL:', wsUrl);
+    
     webSocketManagerRef.current = WebSocketManager.getInstance({
       url: wsUrl,
       tokenProvider: getAuthToken,
@@ -482,32 +590,47 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         try {
           const data = JSON.parse(event.data);
           if (!isValidWebSocketMessage(data)) {
-            console.warn('Received invalid WebSocket message:', data);
+            console.warn('⚠️ Received invalid WebSocket message:', data);
             return;
           }
           handleWebSocketMessage(data);
         } catch (parseError) {
-          console.error('WebSocket message parsing error:', parseError);
+          console.error('❌ WebSocket message parsing error:', parseError);
           handleComponentError(parseError, 'WebSocket message parsing');
         }
       },
       onOpen: () => {
+        console.log('✅ WebSocket opened - showing notification');
         showNotification('Connected to game server', 'success');
       },
       onClose: (event) => {
-        console.log('WebSocket closed:', event.code, event.reason);
-        if (event.code === 1008) {
-          console.log('WebSocket auth failed - attempting reconnect');
-          // Add reconnect logic here instead of logout
+        console.log('🔌 WebSocket closed:', event.code, event.reason);
+        
+        // Handle different close codes
+        if (event.code === 1008 || event.code === 4008) {
+          console.log('⚠️ WebSocket auth failed (code ' + event.code + ')');
+          showNotification('Authentication failed. Reconnecting...', 'warning');
+          // WebSocketManager will handle reconnection automatically
+        } else if (event.code === 1000) {
+          console.log('✅ WebSocket closed normally');
+        } else {
+          console.log('⚠️ WebSocket closed with code:', event.code);
+          showNotification('Connection lost. Reconnecting...', 'warning');
         }
       },
       onError: (error) => {
-        console.error('WebSocket connection error:', error);
-        // Don't logout on connection errors - just attempt reconnect
+        console.error('❌ WebSocket connection error:', error);
+        showNotification('Connection error. Please check your network.', 'error');
+        // Don't logout on connection errors - WebSocketManager handles reconnection
       },
     });
 
-    webSocketManagerRef.current.on('statusChange', setConnectionStatus);
+    webSocketManagerRef.current.on('statusChange', (status) => {
+      console.log('📡 WebSocket status changed to:', status);
+      setConnectionStatus(status);
+    });
+    
+    console.log('✅ WebSocketManager initialized successfully');
   }, [getAuthToken, handleWebSocketMessage, showNotification]);
 
   const connectWebSocket = useCallback(() => {
@@ -556,7 +679,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     // Check if we have a proper role before sending admin commands
-    if (!authState.user?.role || authState.user?.role !== 'admin') {
+    if (!authState.user?.role || (authState.user.role !== 'admin' && authState.user.role !== 'super_admin')) {
       showNotification(`Only admins can start games. Current role: ${authState.user?.role || 'unknown'}. Please login as admin.`, 'error');
       return;
     }
@@ -572,7 +695,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       sendWebSocketMessage({
         type: 'start_game',
         data: {
-          openingCard: gameState.selectedOpeningCard,
+          openingCard: gameState.selectedOpeningCard.display,
         }
       });
 
@@ -586,7 +709,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const dealCard = async (card: Card, side: BetSide, position: number) => {
     // Check if we have admin role before sending admin commands
-    if (authState.user?.role !== 'admin') {
+    if (authState.user?.role !== 'admin' && authState.user?.role !== 'super_admin') {
       showNotification('Only admins can deal cards.', 'error');
       return;
     }
@@ -603,7 +726,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         type: 'deal_card',
         data: {
           gameId: gameState.gameId || 'default-game',
-          card: card.rank + card.suit,
+          card: card.display,
           side: side,
           position: position
         }
@@ -626,7 +749,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           gameId: gameState.gameId || 'default-game',
           side,
           amount,
-          round: gameState.currentRound,
+          round: String(gameState.currentRound),
         }
       });
     } catch (error) {
@@ -640,10 +763,22 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   useEffect(() => {
     const initializeWebSocket = async () => {
+      // Wait for auth to be checked before initializing WebSocket
+      if (!authState.authChecked) {
+        console.log('🔄 Waiting for auth check to complete before WebSocket init...');
+        return;
+      }
+
+      // Only connect if user is authenticated
+      if (!authState.isAuthenticated || !authState.token) {
+        console.log('⏸️ Skipping WebSocket connection - user not authenticated');
+        return;
+      }
+
+      console.log('🚀 Initializing WebSocket with authenticated user:', authState.user?.role);
       initWebSocketManager();
       
-      // Always attempt to connect - WebSocketManager will handle authentication
-      // This ensures connection is established even if token is initially loading
+      // Connect and authenticate immediately with available token
       webSocketManagerRef.current?.connect();
     };
     
@@ -652,7 +787,19 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     return () => {
       webSocketManagerRef.current?.disconnect();
     };
-  }, []); // Remove initWebSocketManager from dependencies to prevent reconnection loops
+  }, [authState.authChecked, authState.isAuthenticated, authState.token]); // Depend on auth state
+
+  // Note: Authentication is now handled by WebSocketManager automatically after connection
+  // This effect is kept for monitoring purposes only
+  useEffect(() => {
+    if (connectionStatus === ConnectionStatus.CONNECTED) {
+      console.log('✅ WebSocket connected - authentication should be automatic via WebSocketManager');
+    } else if (connectionStatus === ConnectionStatus.DISCONNECTED) {
+      console.log('⏸️ WebSocket disconnected');
+    } else if (connectionStatus === ConnectionStatus.ERROR) {
+      console.error('❌ WebSocket connection error');
+    }
+  }, [connectionStatus]);
 
   const value: WebSocketContextType = {
       sendWebSocketMessage,

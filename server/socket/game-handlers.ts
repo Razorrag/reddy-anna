@@ -36,7 +36,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
   }
 
   // Validate role (only players can bet)
-  if (role === 'admin' || role === 'super_admin') {
+  if (role === 'admin') {
     sendError(ws, 'Admins cannot place bets');
     return;
   }
@@ -85,21 +85,18 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       return;
     }
 
-    // Validate balance (using storage function)
+    // Atomically deduct balance - prevents race conditions
     const { storage } = await import('../storage-supabase');
-    const user = await storage.getUser(userId);
-    if (!user) {
-      sendError(ws, 'User not found');
+    
+    let newBalance: number;
+    try {
+      newBalance = await storage.deductBalanceAtomic(userId, amount);
+    } catch (error: any) {
+      sendError(ws, error.message || 'Failed to place bet');
       return;
     }
 
-    const currentBalance = parseFloat(user.balance || '0');
-    if (currentBalance < amount) {
-      sendError(ws, `Insufficient balance. You have ₹${currentBalance}${currentBalance < 0 ? ' (negative balance)' : ''}, but bet is ₹${amount}`);
-      return;
-    }
-
-    // Add bet to current game state
+    // Add bet to current game state (only after successful balance deduction)
     const roundNum = parseInt(round);
     if (roundNum === 1) {
       if ((global as any).currentGameState?.userBets?.get) {
@@ -121,16 +118,21 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       }
     }
 
-    // Deduct balance
-    if (user.balance !== undefined) {
-      const newBalance = parseFloat(user.balance) - amount;
-      await storage.updateUserBalance(userId, newBalance);
-
-      // Store bet in database (if gameId exists)
-      const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
-      if (gameIdToUse && gameIdToUse !== 'default-game') {
-        // TODO: Implement bet recording if storage method exists
+    // Store bet in database
+    const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
+    if (gameIdToUse && gameIdToUse !== 'default-game') {
+      try {
+        await storage.createBet({
+          userId: userId,
+          gameId: gameIdToUse,
+          side,
+          amount: amount,
+          round: round.toString(),
+          status: 'pending'
+        });
         console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
+      } catch (error) {
+        console.error('Error storing bet:', error);
       }
     }
 
@@ -143,7 +145,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         round,
         side,
         amount,
-        newBalance: (currentBalance - amount),
+        newBalance,
         timestamp: Date.now()
       }
     }));
@@ -180,7 +182,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       // --- END OF FIX ---
     }
 
-    console.log(`✅ BET CONFIRMED: ${userId} bet ₹${amount} on ${side}, new balance: ₹${currentBalance - amount}`);
+    console.log(`✅ BET CONFIRMED: ${userId} bet ₹${amount} on ${side}, new balance: ₹${newBalance}`);
   } catch (error: any) {
     console.error('Bet error:', error);
     sendError(ws, error.message || 'Failed to place bet');
@@ -199,7 +201,7 @@ export async function handleStartGame(client: WSClient, data: any) {
     return;
   }
 
-  if (role !== 'admin' && role !== 'super_admin') {
+  if (role !== 'admin') {
     sendError(ws, 'Unauthorized: Only admins can start games');
     return;
   }
@@ -301,7 +303,7 @@ export async function handleDealCard(client: WSClient, data: any) {
   }
 
   // Validate role (only admins can deal cards)
-  if (role !== 'admin' && role !== 'super_admin') {
+  if (role !== 'admin') {
     sendError(ws, 'Unauthorized: Only admins can deal cards');
     return;
   }
@@ -362,89 +364,92 @@ export async function handleDealCard(client: WSClient, data: any) {
     }
 
     // Check if round should end after this card
-    if ((global as any).currentGameState.isRoundComplete &&
-        (global as any).currentGameState.isRoundComplete()) {
-      console.log('🎯 Round completed after this card');
+    const currentRound = (global as any).currentGameState.currentRound;
+    const isRoundComplete = (global as any).currentGameState.isRoundComplete();
+    
+    console.log(`🎯 Card dealt - Round: ${currentRound}, Complete: ${isRoundComplete}, Winner: ${isWinningCard}`);
+    
+    if (isWinningCard) {
+      // Game ends with winner regardless of round
+      (global as any).currentGameState.winner = data.side === 'andar' ? 'andar' : 'bahar';
+      (global as any).currentGameState.winningCard = data.card;
+      (global as any).currentGameState.phase = 'complete';
 
-      if (isWinningCard) {
-        // Game ends with winner
-        (global as any).currentGameState.winner = data.side === 'andar' ? 'andar' : 'bahar';
-        (global as any).currentGameState.winningCard = data.card;
-        (global as any).currentGameState.phase = 'complete';
-
-        // Complete the game with payouts using global completeGame if available
-        if (typeof (global as any).completeGame === 'function') {
-          (global as any).completeGame(data.side === 'andar' ? 'andar' : 'bahar', data.card);
-        }
-
-        console.log(`🏆 GAME COMPLETE: Winner is ${data.side} with card ${data.card}`);
-      } else {
-        // Continue to next round
-        if ((global as any).currentGameState.currentRound < 2) {
-          // Go to round 2
-          (global as any).currentGameState.currentRound = 2;
-          (global as any).currentGameState.phase = 'betting';
-          (global as any).currentGameState.bettingLocked = false;
-
-          if (typeof (global as any).broadcast !== 'undefined') {
-            (global as any).broadcast({
-              type: 'phase_change',
-              data: {
-                phase: 'betting',
-                round: 2,
-                message: 'Round 1 complete! Round 2 betting is now open.'
-              }
-            });
-          }
-
-          // Start timer for round 2 betting
-          if (typeof (global as any).startTimer === 'function') {
-            (global as any).startTimer(30, () => {
-              (global as any).currentGameState.phase = 'dealing';
-              (global as any).currentGameState.bettingLocked = true;
-
-              if (typeof (global as any).broadcast !== 'undefined') {
-                (global as any).broadcast({
-                  type: 'phase_change',
-                  data: {
-                    phase: 'dealing',
-                    round: 2,
-                    message: 'Round 2 betting closed. Admin can deal second cards.'
-                  }
-                });
-              }
-            });
-          }
-
-          console.log('🔄 MOVED TO ROUND 2');
-        } else {
-          // Game should end if no winner in 2 rounds
-          (global as any).currentGameState.winner = null;
-          (global as any).currentGameState.phase = 'complete';
-
-          if (typeof (global as any).broadcast !== 'undefined') {
-            (global as any).broadcast({
-              type: 'game_complete',
-              data: {
-                winner: null,
-                winningCard: null,
-                round: 2,
-                andarTotal: (global as any).currentGameState.round1Bets.andar + (global as any).currentGameState.round2Bets.andar,
-                baharTotal: (global as any).currentGameState.round1Bets.bahar + (global as any).currentGameState.round2Bets.bahar,
-                message: 'Game ended after 2 rounds with no winner! Refunds applied.',
-                payoutMessage: 'No winner after 2 rounds. All bets refunded.'
-              }
-            });
-          }
-
-          console.log('🏁 GAME ENDED WITH NO WINNER');
-        }
+      // Complete the game with payouts using global completeGame if available
+      if (typeof (global as any).completeGame === 'function') {
+        (global as any).completeGame(data.side === 'andar' ? 'andar' : 'bahar', data.card);
       }
+
+      console.log(`🏆 GAME COMPLETE: Winner is ${data.side} with card ${data.card}`);
+    } else if (isRoundComplete && currentRound < 3) {
+      // Round 1 or 2 complete without winner - move to next round
+      if (currentRound === 1) {
+        // Go to round 2
+        (global as any).currentGameState.currentRound = 2;
+        (global as any).currentGameState.phase = 'betting';
+        (global as any).currentGameState.bettingLocked = false;
+
+        if (typeof (global as any).broadcast !== 'undefined') {
+          (global as any).broadcast({
+            type: 'phase_change',
+            data: {
+              phase: 'betting',
+              round: 2,
+              message: 'Round 1 complete! Round 2 betting is now open.'
+            }
+          });
+        }
+
+        // Start timer for round 2 betting
+        if (typeof (global as any).startTimer === 'function') {
+          (global as any).startTimer(30, () => {
+            (global as any).currentGameState.phase = 'dealing';
+            (global as any).currentGameState.bettingLocked = true;
+
+            if (typeof (global as any).broadcast !== 'undefined') {
+              (global as any).broadcast({
+                type: 'phase_change',
+                data: {
+                  phase: 'dealing',
+                  round: 2,
+                  message: 'Round 2 betting closed. Admin can deal second cards.'
+                }
+              });
+            }
+          });
+        }
+
+        console.log('🔄 MOVED TO ROUND 2');
+      } else if (currentRound === 2) {
+        // Move to Round 3 (Continuous Draw) if no winner in 2 rounds
+        (global as any).currentGameState.currentRound = 3;
+        (global as any).currentGameState.phase = 'dealing';
+        (global as any).currentGameState.bettingLocked = true;
+
+        if (typeof (global as any).broadcast !== 'undefined') {
+          (global as any).broadcast({
+            type: 'start_final_draw',
+            data: {
+              gameId: (global as any).currentGameState.gameId,
+              round: 3,
+              round1Bets: (global as any).currentGameState.round1Bets,
+              round2Bets: (global as any).currentGameState.round2Bets,
+              message: 'Round 3: Continuous draw started!'
+            }
+          });
+        }
+
+        console.log('🔄 MOVED TO ROUND 3 (CONTINUOUS DRAW)');
+      }
+    } else if (currentRound === 3) {
+      // Round 3 (Continuous Draw) - continue dealing until winner found
+      console.log('⚡ Round 3: Continuing continuous draw...');
+      // No action needed - just continue dealing in Round 3
     }
 
-    // Confirm to admin
+    // Confirm to admin without duplicating broadcast event type
     ws.send(JSON.stringify({
-      type: 'card_dealt',
+      type: 'card_dealt_ack',
       data: {
         card: data.card,
         side: data.side,

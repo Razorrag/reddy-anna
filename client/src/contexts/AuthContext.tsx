@@ -138,13 +138,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (userStr && isLoggedIn && token) {
       try {
-        const user: User = JSON.parse(userStr);
+        const parsed = JSON.parse(userStr) as User;
+        const normalizedRole = (parsed.role || 'player').toLowerCase() as User['role'];
+        const user: User = { ...parsed, role: normalizedRole };
+        // Keep a separate role key for other contexts needing quick access
+        localStorage.setItem('userRole', normalizedRole);
         dispatch({ type: 'AUTH_SUCCESS', payload: { user, token } });
       } catch (error) {
         console.error('Failed to parse user data:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('userRole');
         dispatch({ type: 'AUTH_CHECKED' });
       }
     } else {
@@ -157,9 +162,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log('AuthContext.login() called with:', { userData, token, refreshToken });
     try {
       console.log('Storing tokens in localStorage');
-      localStorage.setItem('user', JSON.stringify(userData));
+      const normalizedRole = (userData.role || 'player').toLowerCase() as User['role'];
+      const normalizedUser: User = { ...userData, role: normalizedRole };
+      localStorage.setItem('user', JSON.stringify(normalizedUser));
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('token', token);
+      localStorage.setItem('userRole', normalizedRole);
       
       // Store refresh token if provided
       if (refreshToken) {
@@ -168,7 +176,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       
       console.log('Tokens stored successfully');
-      dispatch({ type: 'AUTH_SUCCESS', payload: { user: userData, token } });
+      dispatch({ type: 'AUTH_SUCCESS', payload: { user: normalizedUser, token } });
     } catch (error) {
       console.error('Login error:', error);
       dispatch({ type: 'AUTH_FAILURE', payload: 'Failed to store user data' });
@@ -182,6 +190,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('userRole');
     
     dispatch({ type: 'LOGOUT' });
   };

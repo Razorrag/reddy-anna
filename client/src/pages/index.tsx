@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Trophy, Zap } from "lucide-react";
 
@@ -13,6 +15,8 @@ import WhatsAppFloatButton from "@/components/WhatsAppFloatButton/WhatsAppFloatB
 
 export default function Index() {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [, setLocation] = useLocation();
+  const { state } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -22,6 +26,19 @@ export default function Index() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Auth-aware landing: redirect authenticated users to their home
+  useEffect(() => {
+    if (!state.authChecked) return;
+    if (state.isAuthenticated && state.user) {
+      const role = state.user.role;
+      if (role === 'admin' || role === 'super_admin') {
+        setLocation('/admin');
+      } else {
+        setLocation('/game');
+      }
+    }
+  }, [state.authChecked, state.isAuthenticated, state.user, setLocation]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900">

@@ -22,7 +22,7 @@ import ProtectedRoute from "@/components/ProtectedRoute.tsx";
 import ProtectedAdminRoute from "@/components/ProtectedAdminRoute.tsx";
 import ErrorBoundary from "@/components/ErrorBoundary.tsx";
 import AppProviders from "@/providers/AppProviders.tsx";
-import { UserProfileProvider } from "@/contexts/UserProfileContext";
+import Navbar from "@/components/Navbar.tsx";
 
 function Router() {
   return (
@@ -36,21 +36,15 @@ function Router() {
       <Route path="/admin-login" component={AdminLogin} />
       
       {/* Player Game Routes - Require authentication */}
-      <Route path="/play">
-        <ProtectedRoute>
-          <PlayerGame />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/player-game">
-        <ProtectedRoute>
-          <PlayerGame />
-        </ProtectedRoute>
-      </Route>
+      {/* Canonical game route */}
       <Route path="/game">
         <ProtectedRoute>
           <PlayerGame />
         </ProtectedRoute>
       </Route>
+      {/* Legacy aliases redirect to /game */}
+      <Route path="/play">{() => { window.history.replaceState(null, '', '/game'); return null; }}</Route>
+      <Route path="/player-game">{() => { window.history.replaceState(null, '', '/game'); return null; }}</Route>
       
       {/* Profile Routes - Protected */}
       <Route path="/profile">
@@ -59,64 +53,53 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
-      {/* Admin Routes - Protected and hidden from public routing */}
-      {/* These routes will be accessed directly via URL only by admins who know the exact paths */}
+      {/* Admin Routes - Protected */}
       <Route path="/admin">
         <ProtectedAdminRoute>
           <Admin />
         </ProtectedAdminRoute>
       </Route>
-      <Route path="/admin-game">
+      <Route path="/admin/game">
         <ProtectedAdminRoute>
           <AdminGame />
         </ProtectedAdminRoute>
       </Route>
-      <Route path="/game-admin">
-        <ProtectedAdminRoute>
-          <AdminGame />
-        </ProtectedAdminRoute>
-      </Route>
-      <Route path="/admin-control">
-        <ProtectedAdminRoute>
-          <AdminGame />
-        </ProtectedAdminRoute>
-      </Route>
-      <Route path="/user-admin">
+      <Route path="/admin/users">
         <ProtectedAdminRoute>
           <UserAdmin />
         </ProtectedAdminRoute>
       </Route>
-      <Route path="/admin-analytics">
+      <Route path="/admin/analytics">
         <ProtectedAdminRoute>
           <AdminAnalytics />
         </ProtectedAdminRoute>
       </Route>
-      <Route path="/admin-payments">
+      <Route path="/admin/payments">
         <ProtectedAdminRoute>
           <AdminPayments />
         </ProtectedAdminRoute>
       </Route>
-      <Route path="/admin-bonus">
+      <Route path="/admin/bonus">
         <ProtectedAdminRoute>
           <AdminBonus />
         </ProtectedAdminRoute>
       </Route>
-      <Route path="/backend-settings">
+      <Route path="/admin/backend-settings">
         <ProtectedAdminRoute>
           <BackendSettings />
         </ProtectedAdminRoute>
       </Route>
-      <Route path="/admin-whatsapp-settings">
+      <Route path="/admin/whatsapp-settings">
         <ProtectedAdminRoute>
           <AdminWhatsAppSettings />
         </ProtectedAdminRoute>
       </Route>
-      <Route path="/admin-stream-settings">
+      <Route path="/admin/stream-settings">
         <ProtectedAdminRoute>
           <AdminStreamSettings />
         </ProtectedAdminRoute>
       </Route>
-      <Route path="/game-history">
+      <Route path="/admin/game-history">
         <ProtectedAdminRoute>
           <GameHistoryPage />
         </ProtectedAdminRoute>
@@ -132,6 +115,7 @@ function App() {
   return (
     <ErrorBoundary>
       <AppProviders>
+        <Navbar />
         <Router />
       </AppProviders>
     </ErrorBoundary>

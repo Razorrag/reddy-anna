@@ -205,17 +205,22 @@ class WebRTCSignalingServer {
     }
 
     if (!message.to) {
-      console.error(`[WebRTC] Answer must specify recipient`);
-      return;
+      // Send to all admins if no specific recipient
+      this.sendToAdmins({
+        type: 'answer',
+        from: client.userId,
+        sdp: message.sdp
+      });
+    } else {
+      // Send to specific admin
+      this.sendToClient(message.to, {
+        type: 'answer',
+        from: client.userId,
+        sdp: message.sdp
+      });
     }
 
-    this.sendToClient(message.to, {
-      type: 'answer',
-      from: client.userId,
-      sdp: message.sdp
-    });
-
-    console.log(`[WebRTC] Answer sent from ${client.userId} to ${message.to}`);
+    console.log(`[WebRTC] Answer sent from ${client.userId} to ${message.to || 'all admins'}`);
   }
 
   /**
@@ -223,17 +228,30 @@ class WebRTCSignalingServer {
    */
   private handleIceCandidate(client: WebRTCClient, message: SignalingMessage): void {
     if (!message.to) {
-      console.error(`[WebRTC] ICE candidate must specify recipient`);
-      return;
+      // If no specific recipient, send to opposite role
+      if (client.role === 'admin') {
+        this.sendToPlayers({
+          type: 'ice-candidate',
+          from: client.userId,
+          candidate: message.candidate
+        });
+      } else {
+        this.sendToAdmins({
+          type: 'ice-candidate',
+          from: client.userId,
+          candidate: message.candidate
+        });
+      }
+    } else {
+      // Send to specific recipient
+      this.sendToClient(message.to, {
+        type: 'ice-candidate',
+        from: client.userId,
+        candidate: message.candidate
+      });
     }
 
-    this.sendToClient(message.to, {
-      type: 'ice-candidate',
-      from: client.userId,
-      candidate: message.candidate
-    });
-
-    console.log(`[WebRTC] ICE candidate sent from ${client.userId} to ${message.to}`);
+    console.log(`[WebRTC] ICE candidate sent from ${client.userId} to ${message.to || (client.role === 'admin' ? 'all players' : 'all admins')}`);
   }
 
   /**
@@ -260,6 +278,7 @@ class WebRTCSignalingServer {
     }
 
     try {
+      // Send message in the format expected by the frontend
       client.ws.send(JSON.stringify({
         type: 'webrtc:signal',
         data: message
@@ -270,17 +289,52 @@ class WebRTCSignalingServer {
   }
 
   /**
-   * Broadcast message to all players
+   * Send message to all admin clients
    */
-  private broadcastToPlayers(message: any): void {
+  private sendToAdmins(message: any): void {
+    let sentCount = 0;
+    this.clients.forEach((client, userId) => {
+      if (client.role === 'admin' && client.ws.readyState === WebSocket.OPEN) {
+        try {
+          client.ws.send(JSON.stringify({
+            type: 'webrtc:signal',
+            data: message
+          }));
+          sentCount++;
+        } catch (error) {
+          console.error(`[WebRTC] Error sending to admin ${userId}:`, error);
+        }
+      }
+    });
+    console.log(`[WebRTC] Sent to ${sentCount} admins`);
+  }
+
+  /**
+   * Send message to all player clients
+   */
+  private sendToPlayers(message: any): void {
     let sentCount = 0;
     this.clients.forEach((client, userId) => {
       if (client.role === 'player' && client.ws.readyState === WebSocket.OPEN) {
-        this.sendToClient(userId, message);
-        sentCount++;
+        try {
+          client.ws.send(JSON.stringify({
+            type: 'webrtc:signal',
+            data: message
+          }));
+          sentCount++;
+        } catch (error) {
+          console.error(`[WebRTC] Error sending to player ${userId}:`, error);
+        }
       }
     });
-    console.log(`[WebRTC] Broadcast to ${sentCount} players`);
+    console.log(`[WebRTC] Sent to ${sentCount} players`);
+  }
+
+  /**
+   * Broadcast message to all players
+   */
+  private broadcastToPlayers(message: any): void {
+    this.sendToPlayers(message);
   }
 
   /**

@@ -38,8 +38,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   };
 
   const openWalletModal = (mode: 'deposit' | 'withdraw') => {
-    setWalletMode(mode);
-    setShowWalletModal(true);
+    // Redirect to admin WhatsApp with a prefilled message instead of internal modal
+    const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '';
+    const base = 'https://wa.me/';
+    const number = adminWhatsApp.replace(/\D/g, '');
+    const text = `Request: ${mode.toUpperCase()}\nPlease assist.`;
+    const url = number ? `${base}${number}?text=${encodeURIComponent(text)}` : `${base}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
   };
 
   if (!isOpen) return null;

@@ -11,12 +11,14 @@ services:
         value: production
       - key: PORT
         sync: false  # Render will provide this automatically
-      - key: SESSION_SECRET
-        generateValue: true  # Auto-generate secure session secret
+      - key: JWT_SECRET
+        generateValue: true  # Auto-generate secure JWT secret
+      - key: SUPABASE_SERVICE_KEY
+        sync: false  # Add your Supabase service key in Render dashboard
       - key: SUPABASE_URL
         sync: false  # Add your Supabase URL in Render dashboard
       - key: SUPABASE_ANON_KEY
-        sync: false  # Add your Supabase anon key in Render dashboard
+        sync: false  # Client-side only: provided to frontend via Vite env
       - key: CORS_ORIGIN
         sync: false  # Set to your deployed URL
     healthCheckPath: /

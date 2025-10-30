@@ -85,6 +85,7 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
         <div className="text-xs text-gray-400 mt-2">Round {gameState.currentRound}</div>
       </div>
 
+
       {/* Opening Card - ALWAYS VISIBLE */}
       <div className="bg-gradient-to-br from-gold/20 to-yellow-600/20 rounded-lg p-5 border-2 border-gold/50 text-center">
         <div className="text-sm text-gray-400 mb-2">Opening Card</div>
@@ -107,11 +108,9 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
           <div className="text-xs text-gray-500 mt-1">
             Round {gameState.currentRound}: {currentAndarPercentage.toFixed(1)}%
           </div>
-          {gameState.currentRound >= 2 && (
-            <div className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700">
-              Total: ₹{totalCumulativeAndar.toLocaleString('en-IN')}
-            </div>
-          )}
+          <div className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700">
+            Cumulative: ₹{totalCumulativeAndar.toLocaleString('en-IN')}
+          </div>
         </div>
         
         {/* BAHAR BETS */}
@@ -123,11 +122,9 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
           <div className="text-xs text-gray-500 mt-1">
             Round {gameState.currentRound}: {currentBaharPercentage.toFixed(1)}%
           </div>
-          {gameState.currentRound >= 2 && (
-            <div className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700">
-              Total: ₹{totalCumulativeBahar.toLocaleString('en-IN')}
-            </div>
-          )}
+          <div className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700">
+            Cumulative: ₹{totalCumulativeBahar.toLocaleString('en-IN')}
+          </div>
         </div>
         
         {/* Round 1 Stats (show when in Round 2+) */}

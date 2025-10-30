@@ -18,28 +18,34 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'failed'>('connecting');
+  const [isPaused, setIsPaused] = useState(false);
+  const isMountedRef = useRef(true);
   const { sendWebSocketMessage } = useWebSocket();
 
   useEffect(() => {
-    console.log('🌐 WebRTC Player initializing for room:', roomId);
+    console.log('🌐 WebRTC Player: Mounting and initializing for room:', roomId);
+    isMountedRef.current = true;
     initializeWebRTC();
 
     // FIXED: Handle WebRTC offers directly from WebSocket messages
     // The WebSocketContext already dispatches 'webrtc_offer_received' events
     const handleOffer = async (event: any) => {
-      const { offer } = event.detail;
-      console.log('📡 Received WebRTC offer:', offer);
+      const { sdp } = event.detail; // expect SDP under `sdp`
+      console.log('📡 Received WebRTC offer:', sdp);
       
-      if (peerConnectionRef.current && offer) {
+      if (peerConnectionRef.current && sdp) {
         try {
-          await peerConnectionRef.current.setRemoteDescription(offer);
+          await peerConnectionRef.current.setRemoteDescription(sdp);
           const answer = await peerConnectionRef.current.createAnswer();
           await peerConnectionRef.current.setLocalDescription(answer);
           
           console.log('📤 Sending WebRTC answer');
           sendWebSocketMessage({
-            type: 'webrtc_answer',
-            data: { answer },
+            type: 'webrtc:signal',
+            data: {
+              type: 'answer',
+              sdp: answer
+            },
           });
         } catch (error) {
           console.error('❌ Error handling WebRTC offer:', error);
@@ -66,9 +72,27 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
     
     window.addEventListener('webrtc_ice_candidate_received', handleIceCandidate);
 
+    // Handle stream pause/resume
+    const handleStreamPause = () => {
+      console.log('⏸️ Stream paused by admin');
+      setIsPaused(true);
+    };
+
+    const handleStreamResume = () => {
+      console.log('▶️ Stream resumed by admin');
+      setIsPaused(false);
+    };
+
+    window.addEventListener('webrtc_stream_pause', handleStreamPause);
+    window.addEventListener('webrtc_stream_resume', handleStreamResume);
+
     return () => {
+      console.log('🌐 WebRTC Player: Unmounting and cleaning up');
+      isMountedRef.current = false;
       window.removeEventListener('webrtc_offer_received', handleOffer);
       window.removeEventListener('webrtc_ice_candidate_received', handleIceCandidate);
+      window.removeEventListener('webrtc_stream_pause', handleStreamPause);
+      window.removeEventListener('webrtc_stream_resume', handleStreamResume);
       cleanup();
     };
   }, [roomId, sendWebSocketMessage]);
@@ -88,7 +112,8 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
       // Handle incoming tracks (video/audio from admin)
       peerConnection.ontrack = (event) => {
         console.log('📺 Received remote track:', event.track.kind);
-        if (videoRef.current && event.streams[0]) {
+        if (isMountedRef.current && videoRef.current && event.streams[0]) {
+          console.log('📺 Setting video stream to video element');
           videoRef.current.srcObject = event.streams[0];
           setConnectionState('connected');
         }
@@ -100,8 +125,9 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
           console.log('🧊 Sending ICE candidate');
           // Send via WebSocket (type will be handled by backend)
           sendWebSocketMessage({
-            type: 'webrtc_ice_candidate' as any,
+            type: 'webrtc:signal',
             data: {
+              type: 'ice-candidate',
               candidate: event.candidate
             }
           });
@@ -167,11 +193,24 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
 
   // Show connection status overlay
   const renderStatusOverlay = () => {
-    if (connectionState === 'connected') return null;
+    if (connectionState === 'connected' && !isPaused) return null;
 
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-10">
         <div className="text-center p-6">
+          {isPaused && connectionState === 'connected' && (
+            <>
+              <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-4 mx-auto">
+                <div className="flex gap-1">
+                  <div className="w-2 h-8 bg-yellow-400 rounded"></div>
+                  <div className="w-2 h-8 bg-yellow-400 rounded"></div>
+                </div>
+              </div>
+              <p className="text-white text-lg mb-2">Stream Paused</p>
+              <p className="text-gray-400 text-sm">Admin has paused the stream</p>
+            </>
+          )}
+          
           {connectionState === 'connecting' && (
             <>
               <Wifi className="w-16 h-16 text-gold mb-4 mx-auto animate-pulse" />

@@ -11,9 +11,8 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+import { apiClient } from '../lib/api-client';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ============================================
 // QUERY KEYS (centralized for cache management)
@@ -29,27 +28,6 @@ export const queryKeys = {
 };
 
 // ============================================
-// API CLIENT (centralized axios instance)
-// ============================================
-
-const apiClient = axios.create({
-  baseURL: API_BASE,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add auth token to requests
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// ============================================
 // GAME QUERIES
 // ============================================
 
@@ -61,7 +39,7 @@ export function useCurrentGame() {
   return useQuery({
     queryKey: queryKeys.currentGame,
     queryFn: async () => {
-      const { data } = await apiClient.get('/api/game/current');
+      const data = await apiClient.get<any>('/api/game/current');
       return data;
     },
     refetchInterval: 1000, // Poll every second for real-time updates
@@ -76,7 +54,7 @@ export function useGameHistory(userId: string) {
   return useQuery({
     queryKey: queryKeys.gameHistory(userId),
     queryFn: async () => {
-      const { data } = await apiClient.get(`/api/game/history/${userId}`);
+      const data = await apiClient.get<any>(`/api/game/history/${userId}`);
       return data;
     },
     enabled: !!userId, // Only fetch if userId exists
@@ -95,7 +73,7 @@ export function useUserProfile() {
   return useQuery({
     queryKey: queryKeys.userProfile,
     queryFn: async () => {
-      const { data } = await apiClient.get('/api/user/profile');
+      const data = await apiClient.get<any>('/api/user/profile');
       return data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -107,13 +85,17 @@ export function useUserProfile() {
  * Replaces: Frequent balance checks in components
  */
 export function useUserBalance() {
+  const { state: authState } = useAuth();
+  const isPlayer = authState.isAuthenticated && (authState.user?.role === 'player');
+
   return useQuery({
     queryKey: queryKeys.userBalance,
     queryFn: async () => {
-      const { data } = await apiClient.get('/api/user/balance');
-      return data.balance;
+      const data = await apiClient.get<any>('/api/user/balance');
+      return (data as any).balance;
     },
     refetchInterval: 5000, // Update every 5 seconds
+    enabled: !!isPlayer, // Only fetch for players
   });
 }
 
@@ -130,8 +112,7 @@ export function usePlaceBet() {
 
   return useMutation({
     mutationFn: async (bet: { side: 'andar' | 'bahar'; amount: number; round: string }) => {
-      const { data } = await apiClient.post('/api/game/bet', bet);
-      return data;
+      return apiClient.post<any>('/api/game/bet', bet);
     },
     onSuccess: () => {
       // Invalidate and refetch relevant queries
@@ -139,7 +120,7 @@ export function usePlaceBet() {
       queryClient.invalidateQueries({ queryKey: queryKeys.currentGame });
     },
     onError: (error: any) => {
-      console.error('Bet failed:', error.response?.data?.message || error.message);
+      console.error('Bet failed:', error.message);
     },
   });
 }
@@ -152,8 +133,7 @@ export function useStartGame() {
 
   return useMutation({
     mutationFn: async (openingCard: string) => {
-      const { data } = await apiClient.post('/api/game/start', { openingCard });
-      return data;
+      return apiClient.post<any>('/api/game/start', { openingCard });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.currentGame });
@@ -169,8 +149,7 @@ export function useDealCard() {
 
   return useMutation({
     mutationFn: async (cardData: { card: string; side: 'andar' | 'bahar'; position: number }) => {
-      const { data } = await apiClient.post('/api/game/deal-card', cardData);
-      return data;
+      return apiClient.post<any>('/api/game/deal-card', cardData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.currentGame });
@@ -189,8 +168,7 @@ export function useAdminRequests() {
   return useQuery({
     queryKey: queryKeys.adminRequests,
     queryFn: async () => {
-      const { data } = await apiClient.get('/api/admin/requests');
-      return data;
+      return apiClient.get<any>('/api/admin/requests');
     },
     refetchInterval: 10000, // Poll every 10 seconds
   });
@@ -204,8 +182,7 @@ export function useProcessRequest() {
 
   return useMutation({
     mutationFn: async ({ requestId, action }: { requestId: string; action: 'approve' | 'reject' }) => {
-      const { data } = await apiClient.post(`/api/admin/requests/${requestId}/${action}`);
-      return data;
+      return apiClient.post<any>(`/api/admin/requests/${requestId}/${action}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.adminRequests });
@@ -224,8 +201,7 @@ export function useStreamSettings() {
   return useQuery({
     queryKey: queryKeys.streamSettings,
     queryFn: async () => {
-      const { data } = await apiClient.get('/api/stream/settings');
-      return data;
+      return apiClient.get<any>('/api/stream/settings');
     },
   });
 }
@@ -238,8 +214,7 @@ export function useUpdateStreamSettings() {
 
   return useMutation({
     mutationFn: async (settings: any) => {
-      const { data } = await apiClient.post('/api/stream/settings', settings);
-      return data;
+      return apiClient.post<any>('/api/stream/settings', settings);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.streamSettings });
@@ -261,8 +236,7 @@ export function usePrefetchGame() {
     queryClient.prefetchQuery({
       queryKey: queryKeys.currentGame,
       queryFn: async () => {
-        const { data } = await apiClient.get('/api/game/current');
-        return data;
+        return apiClient.get<any>('/api/game/current');
       },
     });
   };

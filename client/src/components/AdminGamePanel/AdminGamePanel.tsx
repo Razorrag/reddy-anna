@@ -101,7 +101,7 @@ const AdminGamePanel: React.FC = () => {
             </button>
           </div>
           
-          {/* Tab Navigation - Only Game Control and Stream */}
+          {/* Tab Navigation - Game Control and Stream */}
           <div className="flex gap-3 border-t border-gold/20 pt-4 overflow-x-auto">
             <button
               onClick={() => setActiveTab('game')}

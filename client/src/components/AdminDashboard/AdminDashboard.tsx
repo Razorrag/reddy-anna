@@ -2,7 +2,7 @@
 // Comprehensive admin dashboard for managing requests, users, and platform operations
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { RefreshCw, Plus } from 'lucide-react';
 
 import { AdminRequestsTable } from './AdminRequestsTable';
@@ -12,7 +12,8 @@ import { ManualRequestModal } from './ManualRequestModal';
 import { ExportButton } from './ExportButton';
 import { WebSocketStatus } from '../WebSocketStatus';
 import { useToast } from '../../hooks/use-toast';
-import { useAuth } from '../../contexts/AuthContext';
+// import { useAuth } from '../../contexts/AuthContext';
+import { useUserProfile } from '../../contexts/UserProfileContext';
 
 interface AdminDashboardProps {
   className?: string;
@@ -43,9 +44,53 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
   const [showManualRequestModal, setShowManualRequestModal] = useState(false);
   const [websocketConnected, setWebsocketConnected] = useState(false);
   
-  const queryClient = useQueryClient();
+  // const queryClient = useQueryClient();
+  const { state: profileState, fetchBonusInfo } = useUserProfile();
+  const [bonusAmount, setBonusAmount] = useState<number>(0);
+  const [settings, setSettings] = useState<any | null>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   // Fetch request statistics
+  // Load admin dashboard settings (includes bonus config)
+  const loadSettings = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/settings');
+      if (res.ok) {
+        const body = await res.json();
+        setSettings(body.data || {});
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  const saveSettings = useCallback(async () => {
+    if (!settings) return;
+    setSavingSettings(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bonus_percentage: Number(settings.bonus_percentage || 0),
+          bonus_win_threshold: Number(settings.bonus_win_threshold || 0),
+          bonus_loss_threshold: Number(settings.bonus_loss_threshold || 0)
+        })
+      });
+      if (res.ok) {
+        showToast({ title: 'Saved', description: 'Settings updated successfully' });
+        await loadSettings();
+      } else {
+        showToast({ title: 'Error', description: 'Failed to update settings', variant: 'destructive' });
+      }
+    } catch (e: any) {
+      showToast({ title: 'Error', description: e?.message || 'Failed to update settings', variant: 'destructive' });
+    } finally {
+      setSavingSettings(false);
+    }
+  }, [settings, loadSettings, showToast]);
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<RequestStats>({
     queryKey: ['admin-requests-stats'],
     queryFn: async () => {
@@ -170,7 +215,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
         throw new Error('Failed to create manual request');
       }
 
-      const result = await response.json();
+      await response.json();
       showToast({
         title: "Success",
         description: "Manual request created successfully",
@@ -193,80 +238,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
     setPage(1); // Reset to first page when filters change
   }, []);
 
-  // WebSocket connection setup
-  const { token } = useAuth();
+  // Subscribe to centralized admin notifications from WebSocketContext
   const { toast: showToast } = useToast();
-  
   useEffect(() => {
-    const setupWebSocket = () => {
-      const ws = new WebSocket(`ws://${window.location.host}/ws`);
-      
-      ws.onopen = () => {
-        console.log('WebSocket connected for admin dashboard');
-        setWebsocketConnected(true);
-        
-        // Send authentication
-        if (token) {
-          ws.send(JSON.stringify({
-            type: 'authenticate',
-            data: {
-              token: token
-            }
-          }));
-        }
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          
-          if (message.type === 'admin_notification') {
-            // Handle real-time notifications
-            if (message.event === 'new_request') {
-              showToast({
-                title: "New Request",
-                description: `New ${message.data.request.request_type} request received`,
-              });
-              refetchRequests();
-              refetchStats();
-            } else if (message.event === 'request_status_update') {
-              showToast({
-                title: "Status Updated",
-                description: `Request ${message.data.request.id} status updated`,
-              });
-              refetchRequests();
-            } else if (message.event === 'request_processed') {
-              showToast({
-                title: "Request Processed",
-                description: `Request ${message.data.request.id} processed`,
-              });
-              refetchRequests();
-              refetchStats();
-            }
-          }
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        setWebsocketConnected(false);
-        // Retry connection after 5 seconds
-        setTimeout(setupWebSocket, 5000);
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setWebsocketConnected(false);
-      };
-
-      return ws;
+    // Initial bonus fetch
+    const init = async () => {
+      try {
+        await fetchBonusInfo();
+        const bi = (profileState as any)?.bonusInfo;
+        const amount = (bi?.depositBonus || 0) + (bi?.referralBonus || 0);
+        setBonusAmount(amount);
+      } catch {}
     };
+    init();
 
-    const ws = setupWebSocket();
-    return () => ws.close();
-  }, [refetchRequests, refetchStats]);
+    const handleAdminNotification = (evt: Event) => {
+      const message: any = (evt as CustomEvent).detail;
+      if (!message || message.type !== 'admin_notification') return;
+      setWebsocketConnected(true);
+      if (message.event === 'new_request') {
+        showToast({ title: 'New Request', description: `New ${message.data.request.request_type} request received` });
+        refetchRequests();
+        refetchStats();
+      } else if (message.event === 'request_status_update') {
+        showToast({ title: 'Status Updated', description: `Request ${message.data.request.id} status updated` });
+        refetchRequests();
+      } else if (message.event === 'request_processed') {
+        showToast({ title: 'Request Processed', description: `Request ${message.data.request.id} processed` });
+        refetchRequests();
+        refetchStats();
+      }
+    };
+    window.addEventListener('admin_notification', handleAdminNotification as EventListener);
+    const handleBonusUpdate = async () => {
+      await fetchBonusInfo();
+      const bi = (profileState as any)?.bonusInfo;
+      const amount = (bi?.depositBonus || 0) + (bi?.referralBonus || 0);
+      setBonusAmount(amount);
+    };
+    window.addEventListener('bonus_update', handleBonusUpdate as EventListener);
+    return () => window.removeEventListener('admin_notification', handleAdminNotification as EventListener);
+  }, [refetchRequests, refetchStats, fetchBonusInfo, profileState]);
 
   return (
     <div className={`admin-dashboard ${className || ''}`}>
@@ -304,6 +316,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
         loading={statsLoading}
         onRefresh={refetchStats}
       />
+
+      {/* Bonus Summary (real-time) */}
+      <div className="mt-4">
+        <div className="bg-white rounded-lg border p-4 flex items-center justify-between">
+          <div className="text-gray-600 text-sm">Total Bonus Pool</div>
+          <div className="text-xl font-bold text-gray-900">₹{bonusAmount.toLocaleString('en-IN')}</div>
+        </div>
+      </div>
+
+      {/* Bonus Configuration */}
+      <div className="mt-4 bg-white rounded-lg border p-4">
+        <div className="text-lg font-semibold mb-3">Bonus Configuration</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-sm text-gray-600">Bonus Percentage (%)</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={settings?.bonus_percentage ?? ''}
+              onChange={(e) => setSettings((s: any) => ({ ...s, bonus_percentage: e.target.value }))}
+              className="border rounded px-3 py-2"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm text-gray-600">Win Threshold (%)</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={settings?.bonus_win_threshold ?? ''}
+              onChange={(e) => setSettings((s: any) => ({ ...s, bonus_win_threshold: e.target.value }))}
+              className="border rounded px-3 py-2"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm text-gray-600">Loss Threshold (%)</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={settings?.bonus_loss_threshold ?? ''}
+              onChange={(e) => setSettings((s: any) => ({ ...s, bonus_loss_threshold: e.target.value }))}
+              className="border rounded px-3 py-2"
+            />
+          </label>
+        </div>
+        <div className="mt-3">
+          <button onClick={saveSettings} disabled={savingSettings} className="btn btn-primary">
+            {savingSettings ? 'Saving…' : 'Save Settings'}
+          </button>
+        </div>
+      </div>
 
       {/* Filters and Actions */}
       <div className="dashboard-filters-actions">

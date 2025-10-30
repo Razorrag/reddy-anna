@@ -35,6 +35,16 @@ const Profile: React.FC = () => {
     claimBonus
   } = useUserProfile();
   const { balance, refreshBalance } = useBalance();
+  // WhatsApp deeplink helper
+  const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '';
+  const openWhatsAppRequest = (requestType: 'deposit' | 'withdraw') => {
+    const phone = (user && (user.phone || user.id)) || '';
+    const base = 'https://wa.me/';
+    const number = adminWhatsApp.replace(/\D/g, '');
+    const text = `Request: ${requestType.toUpperCase()}\nUser: ${phone}\nPlease assist.`;
+    const url = number ? `${base}${number}?text=${encodeURIComponent(text)}` : `${base}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -67,6 +77,24 @@ const Profile: React.FC = () => {
       fetchReferralData();
     }
   }, [activeTab, user, fetchReferralData]);
+
+  // Fetch transactions when transactions tab is active
+  useEffect(() => {
+    if (activeTab === 'transactions' && user) {
+      if (profileState.transactions.length === 0) {
+        fetchTransactions(false);
+      }
+    }
+  }, [activeTab, user, fetchTransactions, profileState.transactions.length]);
+
+  // Fetch game history when game-history tab is active
+  useEffect(() => {
+    if (activeTab === 'game-history' && user) {
+      if (profileState.gameHistory.length === 0) {
+        fetchGameHistory(false);
+      }
+    }
+  }, [activeTab, user, fetchGameHistory, profileState.gameHistory.length]);
 
   // Initialize profile form when user data is available
   useEffect(() => {
@@ -224,6 +252,11 @@ const Profile: React.FC = () => {
                     <div className="text-4xl font-bold text-gold">
                       {formatCurrency(balance)}
                     </div>
+                    {profileState.bonusInfo && (
+                      <div className="mt-1 text-sm text-yellow-200/90">
+                        Bonus: {formatCurrency((profileState.bonusInfo.depositBonus || 0) + (profileState.bonusInfo.referralBonus || 0))}
+                      </div>
+                    )}
                     <div className="mt-2">
                       <Button
                         onClick={refreshBalance}
@@ -260,14 +293,14 @@ const Profile: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <Button
-                      onClick={openWalletModal}
+                      onClick={() => openWhatsAppRequest('deposit')}
                       className="bg-green-600 hover:bg-green-700 text-white"
                     >
                       <TrendingUp className="w-4 h-4 mr-2" />
                       Add Funds
                     </Button>
                     <Button
-                      onClick={openWalletModal}
+                      onClick={() => openWhatsAppRequest('withdraw')}
                       className="bg-red-600 hover:bg-red-700 text-white"
                     >
                       <TrendingDown className="w-4 h-4 mr-2" />

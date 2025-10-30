@@ -300,6 +300,15 @@ export type WebRTCIceCandidateMessage = WebSocketMessageBase<'webrtc_ice_candida
   fromAdmin?: boolean;
 }>;
 
+export type WebRTCSignalMessage = WebSocketMessageBase<'webrtc:signal', {
+  type: 'stream-start' | 'stream-stop' | 'stream-pause' | 'stream-resume' | 'offer' | 'answer' | 'ice-candidate';
+  from?: string;
+  to?: string;
+  streamId?: string;
+  sdp?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+}>;
+
 // ---------------------------------------------------------------------------------
 // General and Error Messages
 // ---------------------------------------------------------------------------------
@@ -362,6 +371,7 @@ export type WebSocketMessage =
   | WebRTCOfferMessage
   | WebRTCAnswerMessage
   | WebRTCIceCandidateMessage
+  | WebRTCSignalMessage
   // General
   | ErrorMessage
   | NotificationMessage;

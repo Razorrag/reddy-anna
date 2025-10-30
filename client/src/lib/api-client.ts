@@ -2,19 +2,39 @@
  * API Client with Automatic Token Management
  * 
  * This utility automatically adds authentication tokens to all API requests
- * No manual token handling needed in components
+ * and handles token refresh on 401 errors with a single retry.
  */
 
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean; // Skip authentication for public endpoints
+  _retried?: boolean; // Internal flag to prevent infinite retry loops
 }
 
 class APIClient {
   private baseURL: string;
+  private isRefreshing: boolean = false;
+  private refreshPromise: Promise<string | null> | null = null;
 
   constructor() {
-    // Use empty baseURL since /api is already in environment variable
     this.baseURL = import.meta.env.VITE_API_BASE_URL || '';
+  }
+
+  /**
+   * Normalize and join baseURL with endpoint, avoiding double /api or slashes
+   */
+  private buildUrl(endpoint: string): string {
+    const base = (this.baseURL || '').replace(/\/+$/g, ''); // trim trailing slashes
+    let path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+
+    // If base ends with /api and endpoint starts with /api, drop one
+    if (base.endsWith('/api') && path.startsWith('/api/')) {
+      path = path.substring(4); // remove leading /api
+    }
+
+    // If base is empty, return path as-is
+    if (!base) return path;
+
+    return `${base}${path}`;
   }
 
   /**
@@ -22,6 +42,13 @@ class APIClient {
    */
   private getToken(): string | null {
     return localStorage.getItem('token');
+  }
+
+  /**
+   * Get refresh token from localStorage
+   */
+  private getRefreshToken(): string | null {
+    return localStorage.getItem('refreshToken');
   }
 
   /**
@@ -43,63 +70,120 @@ class APIClient {
   }
 
   /**
-   * Handle API response
+   * Refresh the access token using refresh token
    */
-  private async handleResponse<T>(response: Response): Promise<T> {
+  private async refreshAccessToken(): Promise<string | null> {
+    if (this.isRefreshing && this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.isRefreshing = true;
+
+    this.refreshPromise = (async () => {
+      const refreshToken = this.getRefreshToken();
+      if (!refreshToken) {
+        console.log('No refresh token available, clearing auth');
+        this.clearAuth();
+        return null;
+      }
+
+      try {
+        const response = await fetch(this.buildUrl('/auth/refresh'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const newAccessToken = data.token || data.accessToken;
+          const newRefreshToken = data.refreshToken;
+
+          if (newAccessToken && newRefreshToken) {
+            localStorage.setItem('token', newAccessToken);
+            localStorage.setItem('refreshToken', newRefreshToken);
+            console.log('✅ Access token refreshed successfully');
+            return newAccessToken;
+          } else {
+            console.error('Refresh response missing tokens');
+            this.clearAuth();
+            return null;
+          }
+        } else {
+          console.error('Token refresh failed with status:', response.status);
+          this.clearAuth();
+          return null;
+        }
+      } catch (error) {
+        console.error('Error during token refresh:', error);
+        this.clearAuth();
+        return null;
+      } finally {
+        this.isRefreshing = false;
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
+  }
+
+  /**
+   * Clear authentication data
+   */
+  private clearAuth(): void {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('admin');
+    localStorage.removeItem('isAdminLoggedIn');
+    localStorage.removeItem('adminRole');
+  }
+
+  /**
+   * Handle API response and token refresh on 401
+   */
+  private async handleResponse<T>(response: Response, retryFn?: () => Promise<T>): Promise<T> {
     if (!response.ok) {
-      // Handle authentication errors
+      if (response.status === 401 && retryFn) {
+        console.log('Received 401, attempting token refresh and retry');
+        const newToken = await this.refreshAccessToken();
+        if (newToken && retryFn) {
+          console.log('Token refreshed, retrying request');
+          return retryFn();
+        } else {
+          console.log('Token refresh failed or no retry function provided');
+          this.clearAuth();
+          const currentPath = window.location.pathname;
+          const redirectPath = currentPath.includes('/admin') ? '/admin-login' : '/login';
+          if (currentPath !== redirectPath && currentPath !== '/login' && currentPath !== '/signup') {
+            window.location.href = redirectPath;
+          }
+          throw new Error('Authentication required. Please login again.');
+        }
+      }
+
       if (response.status === 401) {
-        // Try to get error response first to see if this is a login failure vs auth token issue
         let errorData;
         try {
           errorData = await response.json();
         } catch {
           errorData = { error: 'Authentication failed' };
         }
-        
-        // For login endpoints, don't clear existing tokens - just throw the error
         const url = response.url;
         const isLoginEndpoint = url.includes('/auth/login') || url.includes('/auth/admin-login');
-        
-        if (isLoginEndpoint) {
-          // For admin login, check if there's a specific error message
-          if (url.includes('/auth/admin-login')) {
-            const adminError = errorData.error || errorData.message || 'Invalid admin credentials';
-            console.error('Admin login failed:', adminError);
-            throw new Error(adminError);
+        if (!isLoginEndpoint) {
+          this.clearAuth();
+          const currentPath = window.location.pathname;
+          const redirectPath = currentPath.includes('/admin') ? '/admin-login' : '/login';
+          if (currentPath !== redirectPath && currentPath !== '/login' && currentPath !== '/signup') {
+            window.location.href = redirectPath;
           }
-          throw new Error(errorData.error || errorData.message || 'Invalid credentials');
         }
-        
-        // For other endpoints, clear tokens and redirect
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('isLoggedIn');
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('admin');
-        localStorage.removeItem('isAdminLoggedIn');
-        localStorage.removeItem('adminRole');
-        
-        // Determine where to redirect based on current context
-        const currentPath = window.location.pathname;
-        let redirectPath = '/login'; // Default to user login
-        
-        // If trying to access admin routes or already on admin-related paths, redirect to admin login
-        if (currentPath.includes('/admin') || currentPath === '/admin-login') {
-          redirectPath = '/admin-login';
-        }
-        // If already on login pages, don't redirect
-        else if (currentPath === '/login' || currentPath === '/signup') {
-          // Stay on current page, just clear the tokens
-          return {} as any; // Return empty for login pages
-        }
-        
-        // Only redirect if not already on login page
-        // Use exact match instead of includes to avoid issues with /admin-login containing /login
-        if (currentPath !== '/login' && currentPath !== '/admin-login' && currentPath !== '/signup') {
-          window.location.href = redirectPath;
-        }
-        
         throw new Error(errorData.error || errorData.message || 'Authentication required. Please login again.');
       }
 
@@ -107,11 +191,13 @@ class APIClient {
         throw new Error('Access denied. Insufficient permissions.');
       }
 
-      // Try to get error message from response
       try {
         const errorData = await response.json();
         throw new Error(errorData.error || errorData.message || 'Request failed');
-      } catch {
+      } catch (e) {
+        if (e instanceof Error && e.message !== 'Request failed') {
+          throw e;
+        }
         throw new Error(`Request failed with status ${response.status}`);
       }
     }
@@ -123,9 +209,9 @@ class APIClient {
     endpoint: string,
     options: RequestOptions = {}
   ): Promise<T> {
-    const { skipAuth, ...fetchOptions } = options;
-    
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
+    const { skipAuth, _retried, ...fetchOptions } = options;
+
+    const response = await fetch(this.buildUrl(endpoint), {
       ...fetchOptions,
       credentials: 'include',
       headers: {
@@ -134,7 +220,14 @@ class APIClient {
       },
     });
 
-    return this.handleResponse<T>(response);
+    const retryFn = !_retried ? () => {
+      return this.request<T>(endpoint, {
+        ...options,
+        _retried: true,
+      });
+    } : undefined;
+
+    return this.handleResponse<T>(response, retryFn);
   }
 
   async get<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -170,7 +263,7 @@ class APIClient {
   }
 
   /**
-   * Notify balance update via WebSocket
+   * Notify balance update via API
    */
   async notifyBalanceUpdate(userId: string, balance: number, transactionType?: string, amount?: number): Promise<ApiResponse> {
     return this.post<ApiResponse>('/user/balance-notify', {
@@ -182,7 +275,6 @@ class APIClient {
   }
 }
 
-// Export singleton instance
 export const apiClient = new APIClient();
 
 export interface ApiResponse<T = any> {

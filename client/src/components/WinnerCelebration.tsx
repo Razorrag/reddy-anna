@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface WinnerCelebrationProps {
   winner: 'andar' | 'bahar' | null;
-  winningCard: string;
+  winningCard: any;
   payoutMessage: string;
   round: number;
   onComplete: () => void;
@@ -18,6 +18,7 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
 }) => {
   const [countdown, setCountdown] = useState(5);
   const [showConfetti, setShowConfetti] = useState(true);
+  const [localWinAmount, setLocalWinAmount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!winner) return;
@@ -44,6 +45,17 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
       clearTimeout(confettiTimer);
     };
   }, [winner, onComplete]);
+
+  // Listen for celebration event to capture per-user win amount
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e?.detail?.localWinAmount != null) {
+        setLocalWinAmount(Number(e.detail.localWinAmount) || 0);
+      }
+    };
+    window.addEventListener('game-complete-celebration', handler as EventListener);
+    return () => window.removeEventListener('game-complete-celebration', handler as EventListener);
+  }, []);
 
   if (!winner) return null;
 
@@ -135,7 +147,7 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
                   : 'BAHAR WON!'}
               </h1>
               <div className="text-4xl font-bold text-white mb-2">
-                {winningCard}
+                {typeof winningCard === 'string' ? winningCard : winningCard?.display}
               </div>
               <div className="text-xl text-gray-400">
                 Round {round}
@@ -149,9 +161,22 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
               transition={{ delay: 0.7 }}
               className="bg-black/40 rounded-xl p-6 mb-6 border border-gray-700"
             >
+            {localWinAmount != null ? (
+              <div className="text-center">
+                {localWinAmount > 0 ? (
+                  <div>
+                    <div className="text-3xl font-extrabold text-gold mb-1">You won</div>
+                    <div className="text-5xl font-black text-white">₹{localWinAmount.toLocaleString('en-IN')}</div>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-semibold text-gray-300">No winnings this round</div>
+                )}
+              </div>
+            ) : (
               <div className="text-center text-2xl font-semibold text-yellow-400">
                 {payoutMessage}
               </div>
+            )}
             </motion.div>
 
             {/* Countdown */}

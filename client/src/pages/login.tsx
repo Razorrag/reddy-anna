@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function Login() {
+  const [, setLocation] = useLocation();
   const [formData, setFormData] = useState({
     phone: '',
     password: ''
@@ -20,6 +22,10 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isLoading) {
+      return; // Prevent duplicate submissions
+    }
 
     // --- ADD THIS BLOCK ---
     // Force disconnect any existing WebSocket connection to prevent auth conflicts
@@ -39,7 +45,7 @@ export default function Login() {
       
       // User login only
       // IMPORTANT: skipAuth: true to prevent sending Authorization header
-      const response = await apiClient.post<any>('/auth/login', {
+      const response = await apiClient.post<any>('/api/auth/login', {
         phone: formData.phone,
         password: formData.password
       }, { skipAuth: true });
@@ -67,10 +73,8 @@ export default function Login() {
       login(userData, token, refreshToken);
       console.log('✅ Login successful - token stored');
 
-      // Redirect to game after a short delay to allow token processing
-      setTimeout(() => {
-        window.location.href = '/player-game';
-      }, 2000);
+      // Redirect to game immediately after successful login
+      setLocation('/game');
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Invalid phone number or password');

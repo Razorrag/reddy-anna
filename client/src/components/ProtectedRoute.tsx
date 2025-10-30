@@ -14,17 +14,28 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAuth = true
 }) => {
   const [, setLocation] = useLocation();
-  const { state: authState, refreshUser } = useAuth();
+  const { state: authState } = useAuth();
   
   // Check if user has player role (allow both players and admins)
   const isPlayer = authState.isAuthenticated && 
     authState.user && 
     (authState.user.role === 'player' || authState.user.role === 'admin' || authState.user.role === 'super_admin');
 
-  // Redirect unauthenticated users
+  // Redirect unauthenticated users only after auth check is complete
   React.useEffect(() => {
-    if (requireAuth && !isPlayer && authState.authChecked) {
-      console.log('ProtectedRoute: Redirecting to login - authChecked:', authState.authChecked, 'isPlayer:', isPlayer);
+    // Wait until auth check is complete before making redirect decision
+    if (!authState.authChecked) {
+      return; // Still loading, don't redirect yet
+    }
+
+    // If protection is not required, don't redirect
+    if (!requireAuth) {
+      return;
+    }
+
+    // If user is not authenticated and auth check is done, redirect to login
+    if (!isPlayer) {
+      console.log('ProtectedRoute: User not authenticated, redirecting to login');
       setLocation('/login');
     }
   }, [requireAuth, isPlayer, authState.authChecked, setLocation]);
@@ -38,7 +49,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // If authentication is required but user is not authenticated, redirect happens via useEffect
+  // If authentication is required but user is not authenticated, block rendering
   if (requireAuth && !isPlayer) {
     return null;
   }

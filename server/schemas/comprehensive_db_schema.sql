@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS users (
   full_name TEXT,
   role user_role DEFAULT 'player',
   status user_status DEFAULT 'active',
-  balance DECIMAL(15, 2) NOT NULL DEFAULT '100000.00', -- ₹100,000 default
+  balance DECIMAL(15, 2) NOT NULL DEFAULT '0.00',
   total_winnings DECIMAL(15, 2) DEFAULT '0.00',
   total_losses DECIMAL(15, 2) DEFAULT '0.00',
   games_played INTEGER DEFAULT 0,
@@ -66,6 +66,10 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Performance indexes for frequent queries
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_balance ON users(balance);
 
 -- Admin credentials table
 CREATE TABLE IF NOT EXISTS admin_credentials (
@@ -537,18 +541,8 @@ CREATE INDEX IF NOT EXISTS idx_stream_sessions_start ON stream_sessions(start_ti
 -- DEFAULT DATA - ADMIN ACCOUNT
 -- ============================================
 
--- Insert default admin user
--- Username: admin
--- Password: Admin@123
-INSERT INTO admin_credentials (id, username, password_hash, role, created_at, updated_at) 
-VALUES (
-  gen_random_uuid()::text,
-  'admin',
-  '$2b$12$7mPOKPBE8jwbvQmqxyjpYeB8cE8enDiB2qKpiJq4HQ.accgeRoaVK', -- Hash for 'Admin@123'
-  'admin',
-  NOW(),
-  NOW()
-) ON CONFLICT (username) DO NOTHING;
+-- IMPORTANT: Removed insecure default admin seeding. Create admins via a secure script
+-- or migration that runs only in development. See `scripts/setup-admin.ts`.
 
 -- ============================================
 -- DEFAULT DATA - GAME SETTINGS

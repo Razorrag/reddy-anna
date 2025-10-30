@@ -13,8 +13,8 @@ export function PlayingCard({ card, size = "md", isWinning, className }: Playing
   const rank = typeof card === 'string' ? card.slice(0, -1) : card.value;
   const suit = typeof card === 'string' ? card.slice(-1) : card.suit;
 
-  // Determine suit color
-  const suitColor = (suit === '♥' || suit === '♦') ? 'text-red-600' : 'text-gray-900';
+  // Use gold color for both rank and suit for better visibility on stream
+  const suitColor = 'text-gold';
   
   // Size variants - Matches Legacy Sizing
   const sizeClasses = {
@@ -44,7 +44,7 @@ export function PlayingCard({ card, size = "md", isWinning, className }: Playing
         "relative rounded-lg bg-white border-2 flex flex-col items-center justify-center shadow-lg transition-all duration-300",
         "border-gray-300", // Default border
         sizeClasses[size],
-        isWinning && "ring-4 ring-gold animate-pulse shadow-2xl shadow-gold/50", // Legacy winning effect
+        isWinning && "ring-4 ring-gold shadow-2xl shadow-gold/50", // Subtle winning effect without blink
         className
       )}
       data-testid={`card-${card}`}

@@ -12,8 +12,9 @@ import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useBalance } from '../contexts/BalanceContext';
-import { apiClient } from '../lib/apiClient';
+import { apiClient } from '@/lib/api-client';
 import MobileGameLayout from '../components/MobileGameLayout/MobileGameLayout';
+import { ConnectionStatus } from '../lib/WebSocketManager';
 
 import { GameHistoryModal } from '../components/GameHistoryModal';
 import { WalletModal } from '../components/WalletModal';
@@ -30,24 +31,18 @@ interface WhatsAppResponse {
 const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
   const { gameState, updatePlayerWallet } = useGameState();
-  const { placeBet: placeBetWebSocket } = useWebSocket();
+  const { placeBet: placeBetWebSocket, connectionStatus } = useWebSocket();
   const { balance, updateBalance } = useBalance();
 
   // Get user data from AuthContext
   const { user, isAuthenticated } = useAuth();
   
-  // Redirect if no user (shouldn't happen due to ProtectedRoute)
-  if (!user || !isAuthenticated) {
-    window.location.href = '/login';
-    return null;
-  }
-  
-  // Ensure user has required properties
+  // Ensure user has required properties (guard against undefined user during initial render)
   const userData = {
-    id: user.id || user.phone,
-    username: user.full_name || user.username || 'Player',
-    phone: user.phone,
-    balance: user.balance || 0
+    id: user?.id || user?.phone || '',
+    username: user?.full_name || user?.username || 'Player',
+    phone: user?.phone || '',
+    balance: user?.balance || 0
   };
   
   // Local state
@@ -264,9 +259,14 @@ const PlayerGame: React.FC = () => {
     const handleGameComplete = (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log('Game complete celebration received:', customEvent.detail);
-      // Show celebration for wins
+      const winAmt = Number(customEvent.detail?.localWinAmount || 0);
       if (customEvent.detail.winner) {
-        setShowWinnerCelebration(true);
+        if (winAmt > 0) {
+          setShowWinnerCelebration(true);
+        } else {
+          // No bet placed: show non-blocking info toast only
+          showNotification(`${String(customEvent.detail.winner).toUpperCase()} won`, 'info');
+        }
       }
     };
 
@@ -330,8 +330,30 @@ const PlayerGame: React.FC = () => {
 
 
 
+  // Conditional screens rendered inside a single render pass to preserve hook order
+  const shouldShowAuthLoading = !user || !isAuthenticated;
+  const shouldShowWsLoading = connectionStatus === ConnectionStatus.CONNECTING || connectionStatus === ConnectionStatus.DISCONNECTED;
+
   return (
     <div className="relative">
+      {shouldShowAuthLoading && (
+        <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+          <div className="text-white text-xl">Loading...</div>
+        </div>
+      )}
+      {(!shouldShowAuthLoading && shouldShowWsLoading) && (
+        <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-white text-xl mb-4">Connecting to game...</div>
+            <div className="inline-flex flex-col items-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold"></div>
+              <div className="text-gray-300 text-sm mt-4">Status: {connectionStatus}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(!shouldShowAuthLoading && !shouldShowWsLoading) && (
       <div className="relative top-0">
         <MobileGameLayout
 
@@ -354,6 +376,7 @@ const PlayerGame: React.FC = () => {
           isScreenSharing={gameState.isScreenSharingActive || false}
         />
       </div>
+      )}
 
       {/* Game History Modal */}
       <GameHistoryModal
@@ -390,6 +413,7 @@ const PlayerGame: React.FC = () => {
       )}
 
       {/* Round Notification - Non-blocking toast for round changes */}
+      {!shouldShowAuthLoading && !shouldShowWsLoading && (
       <RoundNotification
         show={showRoundNotification}
         round={gameState.currentRound}
@@ -399,7 +423,7 @@ const PlayerGame: React.FC = () => {
             : ''
         }
         onComplete={() => setShowRoundNotification(false)}
-      />
+      />)}
     </div>
   );
 };

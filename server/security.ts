@@ -112,12 +112,7 @@ export const corsOptions = {
     // Allow requests with no origin (like mobile apps, curl, or same-origin)
     if (!origin) return callback(null, true);
     
-    // In production, allow all Render.com and onrender.com subdomains
-    if (process.env.NODE_ENV === 'production') {
-      if (origin.includes('render.com') || origin.includes('onrender.com')) {
-        return callback(null, true);
-      }
-    }
+    // In production, do NOT allow unspecified origins
     
     // Check against allowed origins list
     if (allowedOrigins.indexOf(origin) !== -1) {
@@ -125,13 +120,7 @@ export const corsOptions = {
     } else {
       console.log('[CORS] Blocked origin:', origin);
       console.log('[CORS] Allowed origins:', allowedOrigins);
-      // In production, be more permissive - allow it anyway
-      if (process.env.NODE_ENV === 'production') {
-        console.log('[CORS] Production mode: Allowing origin anyway');
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'), false);
-      }
+      callback(new Error('Not allowed by CORS'), false);
     }
   },
   credentials: true,
@@ -252,7 +241,7 @@ export const suspiciousActivityDetector = (req: Request, res: Response, next: Ne
 
 // JWT token security configuration
 export const jwtOptions = {
-  secret: process.env.JWT_SECRET || 'default_secret_change_in_production',
+  secret: process.env.JWT_SECRET as string,
   options: {
     expiresIn: process.env.JWT_EXPIRES_IN || '24h',
     issuer: process.env.JWT_ISSUER || 'AndarBaharApp',
@@ -481,9 +470,7 @@ export const validateSecurityConfig = () => {
     return false;
   }
   
-  if (process.env.JWT_SECRET === 'default_secret_change_in_production') {
-    console.warn('[SECURITY] Using default JWT secret. Please change in production!');
-  }
+  // No default secrets allowed
   
   return true;
 };

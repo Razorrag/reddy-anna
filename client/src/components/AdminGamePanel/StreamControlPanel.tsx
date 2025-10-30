@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Monitor, Video, StopCircle, Settings, ExternalLink, Radio, Eye, EyeOff } from 'lucide-react';
+import { Monitor, Video, StopCircle, Settings, ExternalLink, Radio, Eye, EyeOff, Play, Pause } from 'lucide-react';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useNotification } from '../../contexts/NotificationContext';
-import { apiClient } from '../../lib/apiClient'; // Import apiClient
+import { apiClient } from '../../lib/api-client'; // Import apiClient
 
 interface StreamControlPanelProps {
   className?: string;
@@ -18,6 +18,7 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
   
   const [streamMethod, setStreamMethod] = useState<StreamMethod>('none');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [rtmpUrl, setRtmpUrl] = useState('');
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [showStream, setShowStream] = useState(false);
@@ -40,8 +41,8 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
 
   useEffect(() => {
     const handleWebRTCAnswer = (event: any) => {
-      const { answer, playerId } = event.detail;
-      handleAnswerReceived(answer, playerId);
+      const { sdp, playerId } = event.detail; // expect SDP under `sdp`
+      handleAnswerReceived(sdp, playerId);
     };
 
     const handleWebRTCIceCandidate = (event: any) => {
@@ -138,6 +139,17 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
         videoRef.current.srcObject = stream;
       }
 
+      // Send stream-start signal to notify players
+      const streamId = `stream-${Date.now()}`;
+      sendWebSocketMessage({
+        type: 'webrtc:signal',
+        data: {
+          type: 'stream-start',
+          streamId: streamId
+        }
+      });
+
+      // Also send stream status for UI updates
       sendWebSocketMessage({
         type: 'stream_status',
         data: {
@@ -157,9 +169,9 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
         peerConnectionsRef.current.set('primary', pc);
       }
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Screen share failed:', error);
-      showNotification(`❌ Screen share failed: ${error.message}`, 'error');
+      showNotification(`❌ Screen share failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
   };
 
@@ -179,8 +191,9 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           sendWebSocketMessage({
-            type: 'webrtc_ice_candidate',
+            type: 'webrtc:signal',
             data: {
+              type: 'ice-candidate',
               candidate: event.candidate,
               fromAdmin: true
             }
@@ -194,16 +207,17 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
         })
         .then(() => {
           sendWebSocketMessage({
-            type: 'webrtc_offer',
+            type: 'webrtc:signal',
             data: {
-              offer: pc.localDescription!,
+              type: 'offer',
+              sdp: pc.localDescription!,
               adminId: '' // adminId is set on the server
             }
           });
         })
         .catch(error => {
           console.error('Error creating WebRTC offer:', error);
-          showNotification(`WebRTC setup failed: ${error.message}`, 'error');
+          showNotification(`WebRTC setup failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         });
 
       if (videoRef.current) {
@@ -214,9 +228,69 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
       return pc;
     } catch (error) {
       console.error('Error setting up WebRTC connection:', error);
-      showNotification(`WebRTC connection setup failed: ${error.message}`, 'error');
+      showNotification(`WebRTC connection setup failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
       return null;
     }
+  };
+
+  const pauseWebRTCScreenShare = () => {
+    if (!screenStream) return;
+
+    // Disable video and audio tracks
+    screenStream.getTracks().forEach(track => {
+      track.enabled = false;
+    });
+
+    setIsPaused(true);
+
+    // Send pause signal to players
+    sendWebSocketMessage({
+      type: 'webrtc:signal',
+      data: {
+        type: 'stream-pause'
+      }
+    });
+
+    // Also send stream status for UI updates
+    sendWebSocketMessage({
+      type: 'stream_status',
+      data: {
+        status: 'paused',
+        method: 'webrtc'
+      }
+    });
+
+    showNotification('⏸️ Screen sharing paused', 'info');
+  };
+
+  const resumeWebRTCScreenShare = () => {
+    if (!screenStream) return;
+
+    // Re-enable video and audio tracks
+    screenStream.getTracks().forEach(track => {
+      track.enabled = true;
+    });
+
+    setIsPaused(false);
+
+    // Send resume signal to players
+    sendWebSocketMessage({
+      type: 'webrtc:signal',
+      data: {
+        type: 'stream-resume'
+      }
+    });
+
+    // Also send stream status for UI updates
+    sendWebSocketMessage({
+      type: 'stream_status',
+      data: {
+        status: 'live',
+        method: 'webrtc'
+      }
+    });
+
+    showNotification('▶️ Screen sharing resumed', 'success');
   };
 
   const stopWebRTCScreenShare = () => {
@@ -231,8 +305,18 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
     peerConnectionsRef.current.clear();
 
     setIsStreaming(false);
+    setIsPaused(false);
     setStreamMethod('none');
 
+    // Send stream-stop signal to notify players
+    sendWebSocketMessage({
+      type: 'webrtc:signal',
+      data: {
+        type: 'stream-stop'
+      }
+    });
+
+    // Also send stream status for UI updates
     sendWebSocketMessage({
       type: 'stream_status',
       data: {
@@ -330,13 +414,43 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
               Start Screen Share
             </button>
           ) : (
-            <button
-              onClick={stopWebRTCScreenShare}
-              className="w-full px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-semibold transition-all duration-200 hover:scale-105"
-            >
-              <StopCircle className="w-4 h-4 inline mr-2" />
-              Stop Sharing
-            </button>
+            <div className="space-y-2">
+              {/* Pause/Resume and Stop buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                {!isPaused ? (
+                  <button
+                    onClick={pauseWebRTCScreenShare}
+                    className="px-4 py-2 bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 text-white rounded-lg font-semibold transition-all duration-200 hover:scale-105 flex items-center justify-center gap-2"
+                  >
+                    <Pause className="w-4 h-4" />
+                    Pause
+                  </button>
+                ) : (
+                  <button
+                    onClick={resumeWebRTCScreenShare}
+                    className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all duration-200 hover:scale-105 flex items-center justify-center gap-2"
+                  >
+                    <Play className="w-4 h-4" />
+                    Resume
+                  </button>
+                )}
+                <button
+                  onClick={stopWebRTCScreenShare}
+                  className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-semibold transition-all duration-200 hover:scale-105 flex items-center justify-center gap-2"
+                >
+                  <StopCircle className="w-4 h-4" />
+                  Stop
+                </button>
+              </div>
+              
+              {/* Status indicator */}
+              {isPaused && (
+                <div className="flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600/20 border border-yellow-400/50 text-yellow-200 rounded-lg text-sm font-semibold">
+                  <Pause className="w-4 h-4" />
+                  Stream Paused
+                </div>
+              )}
+            </div>
           )}
 
           {/* Preview */}

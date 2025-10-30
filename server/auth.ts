@@ -25,7 +25,7 @@ export const validatePassword = async (password: string, hashedPassword: string)
 
 // Generate JWT access token with shorter expiration
 export const generateAccessToken = (userData: { id: string; phone?: string; username?: string; role: string }): string => {
-  const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+  const secret = process.env.JWT_SECRET as string;
   const expiresIn = process.env.JWT_EXPIRES_IN || '2h'; // Increased from 1h
   
   return jwt.sign(
@@ -43,7 +43,7 @@ export const generateAccessToken = (userData: { id: string; phone?: string; user
 
 // Generate JWT refresh token with longer expiration
 export const generateRefreshToken = (userData: { id: string; phone?: string; username?: string; role: string }): string => {
-  const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+  const secret = process.env.JWT_SECRET as string;
   const expiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d'; // 7 days default
   
   const refreshToken = jwt.sign(
@@ -65,7 +65,7 @@ export const generateRefreshToken = (userData: { id: string; phone?: string; use
 
 // Verify JWT token
 export const verifyToken = (token: string): any => {
-  const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+  const secret = process.env.JWT_SECRET as string;
   try {
     return jwt.verify(token, secret) as any;
   } catch (error: any) {
@@ -93,7 +93,7 @@ export const verifyToken = (token: string): any => {
 
 // Verify refresh token specifically
 export const verifyRefreshToken = (token: string): any => {
-  const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+  const secret = process.env.JWT_SECRET as string;
   try {
     const decoded = jwt.verify(token, secret) as any;
     

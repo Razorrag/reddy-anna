@@ -3,46 +3,49 @@ import { useLocation } from 'wouter';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedAdminRouteProps {
-  children: React.ReactNode;
+  component?: React.ComponentType<any>;
+  children?: React.ReactNode;
+  requireAuth?: boolean;
 }
 
-/**
- * ProtectedAdminRoute - Ensures only authenticated admins can access admin pages
- * 
- * This component checks if the user is authenticated as an admin before rendering
- * the protected content.
- * 
- * Behavior:
- * - If admin is logged in → Allow access
- * - If player is logged in → Redirect to /unauthorized
- * - If no one is logged in → Redirect to /admin-login
- */
-export const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({ children }) => {
+const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({ 
+  component: Component, 
+  children,
+  requireAuth = true
+}) => {
   const [, setLocation] = useLocation();
   const { state: authState } = useAuth();
   
-  // Check if user has admin role
+  // Check if user has admin role (allow only admins and super_admins)
   const isAdmin = authState.isAuthenticated && 
     authState.user && 
     (authState.user.role === 'admin' || authState.user.role === 'super_admin');
-    
-  // Check if user is logged in but not an admin
-  const isPlayer = authState.isAuthenticated && 
-    authState.user && 
-    authState.user.role === 'player';
 
-  // Redirect based on user role
+  // Redirect to admin login if not authenticated, or to unauthorized if not admin role
   React.useEffect(() => {
-    if (authState.authChecked) {
-      if (!authState.isAuthenticated) {
-        // User not logged in at all
-        setLocation('/admin-login');
-      } else if (isPlayer) {
-        // Player logged in, redirect to unauthorized
-        setLocation('/unauthorized');
-      }
+    // Wait until auth check is complete before making redirect decision
+    if (!authState.authChecked) {
+      return; // Still loading, don't redirect yet
     }
-  }, [authState.authChecked, authState.isAuthenticated, isPlayer, setLocation]);
+
+    // If protection is not required, don't redirect
+    if (!requireAuth) {
+      return;
+    }
+
+    // If user is not authenticated, redirect to admin login
+    if (!authState.isAuthenticated) {
+      console.log('ProtectedAdminRoute: User not authenticated, redirecting to admin login');
+      setLocation('/admin-login');
+      return;
+    }
+
+    // If user is authenticated but not admin, redirect to unauthorized
+    if (!isAdmin) {
+      console.log('ProtectedAdminRoute: User not admin, redirecting to unauthorized');
+      setLocation('/unauthorized');
+    }
+  }, [requireAuth, isAdmin, authState.authChecked, authState.isAuthenticated, setLocation]);
 
   // Show loading while checking authentication status
   if (!authState.authChecked) {
@@ -53,8 +56,13 @@ export const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({ childr
     );
   }
 
-  // Only render children if user is authenticated as admin
-  return isAdmin ? <>{children}</> : null;
+  // If authentication is required but user is not authenticated or not admin, block rendering
+  if (requireAuth && (!authState.isAuthenticated || !isAdmin)) {
+    return null;
+  }
+  
+  // Return the children/component
+  return children ? <>{children}</> : Component ? <Component /> : null;
 };
 
 export default ProtectedAdminRoute;

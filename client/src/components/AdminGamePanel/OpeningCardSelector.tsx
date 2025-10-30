@@ -6,12 +6,13 @@ import type { Card } from '@/types/game';
 
 const OpeningCardSelector: React.FC = () => {
   const { gameState, setSelectedOpeningCard, setPhase, setCurrentRound, setCountdown } = useGameState();
-  const { sendWebSocketMessage } = useWebSocket();
+  const { startGame } = useWebSocket();
   const { showNotification } = useNotification();
   
   const [selectedCard, setSelectedCard] = useState<Card | null>(gameState.selectedOpeningCard);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [timerDuration, setTimerDuration] = useState(30);
+  const [isStarting, setIsStarting] = useState(false);
 
   // Sync local state with game state (important for reset functionality)
   useEffect(() => {
@@ -58,27 +59,21 @@ const OpeningCardSelector: React.FC = () => {
   );
 
   const handleCardSelect = (card: Card) => {
+    if (selectedCard) return; // Prevent selecting again once chosen
     setSelectedCard(card);
     setSelectedOpeningCard(card);
     showNotification(`Selected: ${card.display}`, 'info');
   };
 
   const handleStartGame = async () => {
-    if (!selectedCard) return;
-
-    // Broadcast to all players
-    sendWebSocketMessage({
-      type: 'admin:start-game', // <--- THIS IS THE FIX
-      data: {
-        // The server's handler expects the openingCard object, not just the display string.
-        // Let's also send the gameId, just in case, though the handler doesn't strictly use it.
-        openingCard: selectedCard, 
-        timer: timerDuration,
-        gameId: gameState.gameId,
-        // The server handler doesn't use 'round', it's handled by the service.
-        // It also doesn't use openingCard.display, it expects the card object.
-      }
-    });
+    if (!selectedCard || isStarting) return;
+    setIsStarting(true);
+    try {
+      await startGame();
+      setShowConfirmModal(false);
+    } finally {
+      setTimeout(() => setIsStarting(false), 1500);
+    }
   };
 
   return (
@@ -115,12 +110,12 @@ const OpeningCardSelector: React.FC = () => {
                 .map(card => {
                   const isCurrentlySelected = selectedCard?.id === card.id;
                   const isUsed = gameState.usedCards.some(usedCard => usedCard.id === card.id);
-                  const isDisabled = isUsed;
+                  const isDisabled = isUsed || (!!selectedCard && !isCurrentlySelected);
                   
                   return (
                     <button
                       key={card.id}
-                      onClick={() => !isUsed && handleCardSelect(card)}
+                      onClick={() => !isDisabled && handleCardSelect(card)}
                       disabled={isDisabled}
                       className={`
                         w-[calc(100%/13-0.25rem)] min-w-[45px] h-[55px] rounded text-sm font-bold transition-all duration-300
@@ -128,11 +123,15 @@ const OpeningCardSelector: React.FC = () => {
                           ? 'bg-gradient-to-br from-gold to-yellow-500 text-black border-2 border-white scale-105 relative z-10 shadow-lg shadow-gold/50 animate-pulse-subtle'
                           : isUsed
                           ? 'bg-gray-800/50 border-2 border-gray-600 opacity-40 cursor-not-allowed line-through'
+                          : (!!selectedCard && !isCurrentlySelected)
+                          ? 'bg-gray-800/50 border-2 border-gray-600 opacity-40 cursor-not-allowed'
                           : 'bg-black hover:bg-gray-900 border-2 border-gold/50 hover:border-gold hover:scale-105'
                         }
                         ${isCurrentlySelected 
                           ? '' 
                           : isUsed
+                          ? 'text-gray-600'
+                          : (!!selectedCard && !isCurrentlySelected)
                           ? 'text-gray-600'
                           : (card.color === 'red' ? 'text-red-400' : 'text-yellow-400')
                         }
@@ -212,9 +211,10 @@ const OpeningCardSelector: React.FC = () => {
               </button>
               <button
                 onClick={handleStartGame}
+                disabled={isStarting}
                 className="flex-[2] px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-bold transition-all shadow-xl"
               >
-                🚀 Start Game!
+                {isStarting ? 'Starting…' : '🚀 Start Game!'}
               </button>
             </div>
           </div>

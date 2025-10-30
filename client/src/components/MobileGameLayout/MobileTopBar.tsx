@@ -126,16 +126,23 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
             {/* Wallet Chip - Always Visible Balance */}
             <button
               onClick={onWalletClick}
-              className="flex items-center space-x-2 bg-gradient-to-r from-yellow-500/30 to-yellow-600/30 border-2 border-yellow-400 rounded-full px-4 py-2 hover:from-yellow-500/40 hover:to-yellow-600/40 hover:border-yellow-300 transition-all active:scale-95 shadow-lg shadow-yellow-500/20"
+              className="flex items-center space-x-2 bg-gradient-to-r from-yellow-500/30 to-yellow-600/30 border-2 border-yellow-400 rounded-xl px-4 py-2 hover:from-yellow-500/40 hover:to-yellow-600/40 hover:border-yellow-300 transition-all active:scale-95 shadow-lg shadow-yellow-500/20"
             >
               {/* Wallet Icon */}
               <svg className="w-5 h-5 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"/>
                 <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd"/>
               </svg>
-              <span className="text-yellow-300 font-bold text-base tracking-wide">
-                ₹{displayBalance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </span>
+              <div className="flex flex-col leading-tight -space-y-0.5">
+                <span className="text-yellow-300 font-bold text-base tracking-wide">
+                  ₹{displayBalance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </span>
+                {hasBonus && (
+                  <span className="text-[11px] text-yellow-200/90">
+                    Bonus: ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </span>
+                )}
+              </div>
             </button>
           </div>
         </div>

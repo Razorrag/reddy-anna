@@ -125,27 +125,14 @@ class WebSocketManager extends BrowserEventEmitter {
 
     const connectAttempt = async () => {
       try {
-        let url = this.options.url;
+        const url = this.options.url;
         
-        // Get token before connecting
-        let token: string | null = null;
-        if (this.options.tokenProvider) {
-          token = await this.options.tokenProvider();
-          if (!token) {
-            console.warn('WebSocketManager: No token available for connection, will authenticate after connection.');
-          }
-        }
-
+        console.log('🔌 WebSocketManager: Connecting to', url);
         this.ws = new WebSocket(url);
         
         // Set up handlers
         this.ws.onopen = (event: Event) => {
           this.handleOpen(event);
-          
-          // If we have a token, authenticate immediately after connection
-          if (token) {
-            this.send({ type: 'authenticate', data: { token } });
-          }
         };
         
         this.ws.onmessage = this.handleMessage;
@@ -173,7 +160,7 @@ class WebSocketManager extends BrowserEventEmitter {
   }
 
   public send(message: object): void {
-    if (this.ws && this.status === ConnectionStatus.CONNECTED) {
+    if (this.ws && this.status === ConnectionStatus.CONNECTED && this.ws.readyState === WebSocket.OPEN) {
       try {
         this.ws.send(JSON.stringify(message));
         this.updateLastActivity(); // Update activity on message send
@@ -261,7 +248,7 @@ class WebSocketManager extends BrowserEventEmitter {
   }
 
   private handleOpen = (event: Event) => {
-    console.log('WebSocketManager: Connection opened.');
+    console.log('✅ WebSocketManager: Connection opened successfully.');
     this.setStatus(ConnectionStatus.CONNECTED);
     this.reconnectAttempts = 0; // Reset attempts on successful connection
     this.options.onOpen?.(event);
@@ -272,16 +259,26 @@ class WebSocketManager extends BrowserEventEmitter {
     this.scheduleTokenRefresh();
     this.updateLastActivity();
  
-    // If tokenProvider is used and token was not sent in URL, send authenticate message
-    // This logic might need to be more sophisticated depending on server expectations
+    // Authenticate immediately after connection opens
     if (this.options.tokenProvider) {
+      console.log('🔐 WebSocketManager: Requesting token for authentication...');
       this.options.tokenProvider().then(token => {
         if (token) {
-          this.send({ type: 'authenticate', data: { token } });
+          // Ensure socket is still open before attempting to send auth
+          if (this.ws && this.ws.readyState === WebSocket.OPEN && this.status === ConnectionStatus.CONNECTED) {
+            console.log('🔑 WebSocketManager: Token received, sending authentication...');
+            this.send({ type: 'authenticate', data: { token } });
+          } else {
+            console.warn('⚠️ WebSocketManager: Skipping auth send; socket not open anymore');
+          }
+        } else {
+          console.warn('⚠️ WebSocketManager: No token available for authentication');
         }
       }).catch(error => {
-        console.error('WebSocketManager: Error getting token for authentication:', error);
+        console.error('❌ WebSocketManager: Error getting token for authentication:', error);
       });
+    } else {
+      console.warn('⚠️ WebSocketManager: No token provider configured');
     }
   };
 

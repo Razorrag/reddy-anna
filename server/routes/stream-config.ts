@@ -10,7 +10,7 @@ const optionalAuth = (req: any, res: any, next: any) => {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     try {
       const token = authHeader.substring(7);
-      const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+      const secret = process.env.JWT_SECRET as string;
       const decoded = jwt.verify(token, secret) as any;
       
       // Ensure this is an access token, not a refresh token

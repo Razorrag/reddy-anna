@@ -1,7 +1,8 @@
 // Enhanced WhatsApp Service with Retry Logic and Reliability Improvements
 // Comprehensive service for handling WhatsApp messages and admin requests with improved reliability
 
-import { Pool } from 'pg';
+import pg from 'pg';
+const { Pool } = pg;
 import { v4 as uuidv4 } from 'uuid';
 import { storage } from './storage-supabase';
 import { WebSocketServer } from 'ws';
@@ -65,6 +66,10 @@ interface DashboardSettings {
     whatsapp_retry_attempts: number;
     whatsapp_retry_delay: number; // in seconds
     whatsapp_max_retry_delay: number; // in seconds
+    // Game/Finance configurable percentages
+    bonus_percentage?: number; // e.g. 5 for 5%
+    bonus_win_threshold?: number; // percent threshold to release on win
+    bonus_loss_threshold?: number; // percent threshold to release on loss
 }
 
 interface RetryConfig {
@@ -87,7 +92,10 @@ class EnhancedWhatsAppService {
         whatsapp_retry_enabled: true,
         whatsapp_retry_attempts: 3,
         whatsapp_retry_delay: 30,
-        whatsapp_max_retry_delay: 300
+        whatsapp_max_retry_delay: 300,
+        bonus_percentage: 5,
+        bonus_win_threshold: 20,
+        bonus_loss_threshold: 20
     };
 
     private retryConfig: RetryConfig = {
@@ -105,6 +113,11 @@ class EnhancedWhatsAppService {
 
     // Initialize dashboard settings
     private async initializeSettings() {
+        // Skip DB access entirely if no DB configured
+        if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
+            this.settings.whatsapp_retry_enabled = false;
+            return;
+        }
         try {
             const result = await this.pool.query(`
                 SELECT setting_key, setting_value FROM admin_dashboard_settings
@@ -142,6 +155,15 @@ class EnhancedWhatsAppService {
                     case 'whatsapp_max_retry_delay':
                         this.settings.whatsapp_max_retry_delay = parseInt(row.setting_value);
                         break;
+                    case 'bonus_percentage':
+                        this.settings.bonus_percentage = parseFloat(row.setting_value);
+                        break;
+                    case 'bonus_win_threshold':
+                        this.settings.bonus_win_threshold = parseFloat(row.setting_value);
+                        break;
+                    case 'bonus_loss_threshold':
+                        this.settings.bonus_loss_threshold = parseFloat(row.setting_value);
+                        break;
                 }
             });
 
@@ -153,7 +175,9 @@ class EnhancedWhatsAppService {
                 backoffMultiplier: 2
             };
         } catch (error) {
-            console.error('Failed to load dashboard settings:', error);
+            console.warn('Failed to load dashboard settings (DB unreachable). Admin requests will be disabled until DB is available.');
+            // Disable retry worker if DB is unavailable to avoid repeated connection errors
+            this.settings.whatsapp_retry_enabled = false;
         }
     }
 
@@ -330,6 +354,10 @@ class EnhancedWhatsAppService {
     // Start retry worker
     private startRetryWorker(): void {
         if (!this.settings.whatsapp_retry_enabled) {
+            return;
+        }
+        // If no database URL is configured, do not start the worker
+        if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
             return;
         }
 
@@ -795,6 +823,15 @@ class EnhancedWhatsAppService {
                 case 'whatsapp_max_retry_delay':
                     description = 'Maximum delay between retry attempts in seconds';
                     break;
+                case 'bonus_percentage':
+                    description = 'Deposit bonus percentage awarded on admin fund add';
+                    break;
+                case 'bonus_win_threshold':
+                    description = 'Winning performance threshold (%) to release bonus';
+                    break;
+                case 'bonus_loss_threshold':
+                    description = 'Losing performance threshold (%) to release bonus';
+                    break;
             }
             
             await this.pool.query(query, [key, value.toString(), description]);
@@ -822,6 +859,9 @@ class EnhancedWhatsAppService {
                 this.settings.whatsapp_max_retry_delay = value as number;
                 this.retryConfig.maxDelay = value as number;
             }
+            if (key === 'bonus_percentage') this.settings.bonus_percentage = Number(value);
+            if (key === 'bonus_win_threshold') this.settings.bonus_win_threshold = Number(value);
+            if (key === 'bonus_loss_threshold') this.settings.bonus_loss_threshold = Number(value);
         });
         
         await Promise.all(updatePromises);
