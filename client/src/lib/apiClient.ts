@@ -13,8 +13,8 @@ class APIClient {
   private baseURL: string;
 
   constructor() {
-    // Use relative URLs - Vite proxy handles routing in development
-    this.baseURL = '/api';
+    // Use empty baseURL since /api is already in environment variable
+    this.baseURL = import.meta.env.VITE_API_BASE_URL || '';
   }
 
   /**
