@@ -14,13 +14,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { useBalance } from '../contexts/BalanceContext';
 import { apiClient } from '../lib/apiClient';
 import MobileGameLayout from '../components/MobileGameLayout/MobileGameLayout';
-import PlayerStreamView from '../components/PlayerStreamView';
+
 import { GameHistoryModal } from '../components/GameHistoryModal';
 import { WalletModal } from '../components/WalletModal';
 import RoundNotification from '../components/RoundNotification';
 import NoWinnerTransition from '../components/NoWinnerTransition';
 import WinnerCelebration from '../components/WinnerCelebration';
 import type { BetSide } from '../types/game';
+
+interface WhatsAppResponse {
+  success: boolean;
+  whatsappUrl?: string;
+}
 
 const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
@@ -76,7 +81,7 @@ const PlayerGame: React.FC = () => {
   // Listen for balance updates
   useEffect(() => {
     const handleBalanceUpdate = (event: CustomEvent) => {
-      const { balance: newBalance, source } = event.detail;
+      const { balance: newBalance } = event.detail;
       
       // Convert to number if it's a string
       const balanceAsNumber = typeof newBalance === 'string' 
@@ -203,81 +208,9 @@ const PlayerGame: React.FC = () => {
     setShowWalletModal(true);
   }, []);
 
-  const redirectToWhatsApp = async (requestType: string, amount: number) => {
-    // Use a fallback WhatsApp number if settings API is not available
-    const fallbackNumber = "919999999999"; // Replace with actual admin number
-    
-    // Try to get admin number from settings
-    try {
-      const response = await apiClient.get('/game-settings') as any;
-      if (response.success && response.data?.admin_whatsapp_number) {
-        const adminPhoneNumber = response.data.admin_whatsapp_number;
-        const message = `User ${userData.phone} wants to ${requestType} ₹${amount}`;
-        const whatsappUrl = `https://wa.me/${adminPhoneNumber}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
-      } else {
-        // Fallback to default number
-        const message = `User ${userData.phone} wants to ${requestType} ₹${amount}`;
-        const whatsappUrl = `https://wa.me/${fallbackNumber}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
-      }
-    } catch (error) {
-      console.error('Failed to fetch game settings, using fallback:', error);
-      // Use fallback number if API fails
-      const message = `User ${userData.phone} wants to ${requestType} ₹${amount}`;
-      const whatsappUrl = `https://wa.me/${fallbackNumber}?text=${encodeURIComponent(message)}`;
-      window.open(whatsappUrl, '_blank');
-    }
-  };
 
-  // Handle deposit
-  const handleDeposit = useCallback(async (amount: number) => {
-    try {
-      // Use the apiClient which handles authentication automatically
-      const data = await apiClient.post<any>('/payment-requests', {
-        amount: amount,
-        paymentMethod: 'UPI',
-        requestType: 'deposit'
-      });
 
-      if (data.success) {
-        showNotification(`Successfully submitted deposit request for ₹${amount.toLocaleString('en-IN')}. Awaiting admin approval.`, 'success');
-        redirectToWhatsApp('deposit', amount);
-      } else {
-        showNotification(data.error || 'Deposit request failed', 'error');
-      }
-    } catch (error: any) {
-      showNotification(error.message || 'Deposit request failed', 'error');
-      console.error('Deposit error:', error);
-    }
-  }, [updatePlayerWallet, showNotification]);
 
-  // Handle withdraw
-  const handleWithdraw = useCallback(async (amount: number) => {
-    if (amount > userBalance || !user) {
-      showNotification('Insufficient balance', 'error');
-      return;
-    }
-
-    try {
-      // Use the apiClient which handles authentication automatically
-      const data = await apiClient.post<any>('/payment-requests', {
-        amount: amount,
-        paymentMethod: 'Bank Transfer',
-        requestType: 'withdrawal'
-      });
-
-      if (data.success) {
-        showNotification(`Successfully submitted withdrawal request for ₹${amount.toLocaleString('en-IN')}. Awaiting admin approval.`, 'success');
-        redirectToWhatsApp('withdrawal', amount);
-      } else {
-        showNotification(data.error || 'Withdrawal request failed', 'error');
-      }
-    } catch (error: any) {
-      showNotification(error.message || 'Withdrawal request failed', 'error');
-      console.error('Withdrawal error:', error);
-    }
-  }, [userBalance, updatePlayerWallet, showNotification]);
 
   // Handle history click
   const handleHistoryClick = useCallback(() => {
@@ -395,27 +328,13 @@ const PlayerGame: React.FC = () => {
     },
   ];
 
-  // State to track if screen sharing is active
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
 
-  // Listen for stream status updates to show/hide screen share
-  useEffect(() => {
-    const handleStreamStatus = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const status = customEvent.detail?.status;
-      console.log('Stream status received in player-game:', status);
-      setIsScreenSharing(status === 'online' || status === 'connecting');
-    };
-
-    window.addEventListener('stream_status_update', handleStreamStatus as EventListener);
-    return () => window.removeEventListener('stream_status_update', handleStreamStatus as EventListener);
-  }, []);
 
   return (
     <div className="relative">
       <div className="relative top-0">
         <MobileGameLayout
-          isScreenSharing={true}
+
           gameState={gameState}
           user={userData}
           userBalance={userBalance || 0}

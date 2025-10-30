@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { apiClient } from '@/lib/api-client';
 
+interface WhatsAppResponse {
+  success: boolean;
+  whatsappUrl?: string;
+}
+
 // Types for user profile data
 export interface UserAnalytics {
   currentBalance: number;
@@ -379,6 +384,26 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         // Refresh analytics
         await fetchAnalytics();
         
+        // Auto-open WhatsApp
+        if (state.user) {
+            try {
+              const whatsappResponse = await apiClient.post<WhatsAppResponse>('/whatsapp/send-request', {
+                userId: state.user.id,
+                userPhone: state.user.mobile || state.user.username,
+                requestType: 'DEPOSIT',
+                message: `Request for ₹${amount}. Request ID: ${response.data.requestId}`,
+                amount: amount,
+                isUrgent: false
+              });
+
+              if (whatsappResponse.success && whatsappResponse.whatsappUrl) {
+                window.open(whatsappResponse.whatsappUrl, '_blank');
+              }
+            } catch (error) {
+              console.error('WhatsApp failed (non-critical):', error);
+            }
+        }
+        
         return response;
       }
       throw new Error(response.error || 'Failed to submit deposit request');
@@ -416,6 +441,26 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         
         // Refresh analytics
         await fetchAnalytics();
+        
+        // Auto-open WhatsApp
+        if (state.user) {
+            try {
+              const whatsappResponse = await apiClient.post<WhatsAppResponse>('/whatsapp/send-request', {
+                userId: state.user.id,
+                userPhone: state.user.mobile || state.user.username,
+                requestType: 'WITHDRAWAL',
+                message: `Request for ₹${amount}. Request ID: ${response.data.requestId}`,
+                amount: amount,
+                isUrgent: false
+              });
+
+              if (whatsappResponse.success && whatsappResponse.whatsappUrl) {
+                window.open(whatsappResponse.whatsappUrl, '_blank');
+              }
+            } catch (error) {
+              console.error('WhatsApp failed (non-critical):', error);
+            }
+        }
         
         return response;
       }
