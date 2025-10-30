@@ -16,14 +16,16 @@ class APIClient {
   private refreshPromise: Promise<string | null> | null = null;
 
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_BASE_URL || '';
+    // Default to '/api' so relative endpoints (e.g., '/user/balance') proxy to the backend in dev
+    // If VITE_API_BASE_URL is set, it will override this (supports absolute URLs or other bases)
+    this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
   }
 
   /**
    * Normalize and join baseURL with endpoint, avoiding double /api or slashes
    */
   private buildUrl(endpoint: string): string {
-    const base = (this.baseURL || '').replace(/\/+$/g, ''); // trim trailing slashes
+    const base = (this.baseURL || '/api').replace(/\/+$/g, ''); // trim trailing slashes, default to /api
     let path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 
     // If base ends with /api and endpoint starts with /api, drop one

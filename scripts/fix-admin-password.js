@@ -50,8 +50,8 @@ async function fixAdminPassword() {
   try {
     console.log('🔧 Fixing admin password...');
     
-    // The correct hash from database-setup.sql
-    const correctHash = '$2b$12$Vc738883Bz.Rn6y4N5pP.eNl93jBQ.aJ5sXK3v3jVcQFpNQ7vZ5XW';
+    // The new hash generated for 'admin123' password
+    const correctHash = '$2b$12$qt.5sEC6PmayqztgC.7CW.peylp24dN2FzCUHDdWQVketU/wvRmJq';
     
     // First, let's check if admin exists
     const { data: admin, error: fetchError } = await supabase

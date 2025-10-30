@@ -703,24 +703,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Expose wss so other routers/services can push real-time notifications
   app.set('wss', wss);
 
-  // Initialize and mount Admin Requests API under /api/admin (only if DB configured and reachable)
-  const pgConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
-  if (pgConnectionString) {
-    const pgPool = new Pool({
-      connectionString: pgConnectionString,
-      ssl: (process.env.PGSSL?.toLowerCase() === 'true') ? { rejectUnauthorized: false } : undefined,
-    });
+  // Initialize and mount Admin Requests API under /api/admin
+  // Prefer Supabase if configured; otherwise fall back to Postgres
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+
+  if (supabaseUrl && supabaseServiceKey) {
     try {
-      // Quick connectivity check to avoid enabling routes when DB is unreachable
-      await pgPool.query('SELECT 1');
-      const adminRequestsApi = new AdminRequestsAPI(pgPool);
-      app.use('/api/admin', adminRequestsApi.getRouter());
-      console.log('🐾 Admin Requests API enabled');
+      const adminRequestsSupabaseApi = new AdminRequestsSupabaseAPI();
+      app.use('/api/admin', adminRequestsSupabaseApi.getRouter());
+      console.log('🐾 Admin Requests API enabled (Supabase)');
     } catch (e) {
-      console.warn('🐾 Admin Requests API disabled: database unreachable. Set DATABASE_URL/POSTGRES_URL and ensure DB is running.');
+      console.warn('🐾 Failed to initialize Supabase Admin Requests API, falling back to Postgres if available.', e);
+      const pgConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
+      if (pgConnectionString) {
+        const pgPool = new Pool({
+          connectionString: pgConnectionString,
+          ssl: (process.env.PGSSL?.toLowerCase() === 'true') ? { rejectUnauthorized: false } : undefined,
+        });
+        try {
+          await pgPool.query('SELECT 1');
+          const adminRequestsApi = new AdminRequestsAPI(pgPool);
+          app.use('/api/admin', adminRequestsApi.getRouter());
+          console.log('🐾 Admin Requests API enabled (Postgres fallback)');
+        } catch (err) {
+          console.warn('🐾 Admin Requests API disabled: Postgres database unreachable. Set DATABASE_URL/POSTGRES_URL and ensure DB is running.');
+        }
+      } else {
+        console.warn('🐾 Admin Requests API disabled: No Supabase or Postgres configuration found');
+      }
     }
   } else {
-    console.warn('🐾 Admin Requests API disabled: DATABASE_URL/POSTGRES_URL not set');
+    // No Supabase credentials; try Postgres
+    const pgConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
+    if (pgConnectionString) {
+      const pgPool = new Pool({
+        connectionString: pgConnectionString,
+        ssl: (process.env.PGSSL?.toLowerCase() === 'true') ? { rejectUnauthorized: false } : undefined,
+      });
+      try {
+        await pgPool.query('SELECT 1');
+        const adminRequestsApi = new AdminRequestsAPI(pgPool);
+        app.use('/api/admin', adminRequestsApi.getRouter());
+        console.log('🐾 Admin Requests API enabled (Postgres)');
+      } catch (e) {
+        console.warn('🐾 Admin Requests API disabled: database unreachable. Set DATABASE_URL/POSTGRES_URL and ensure DB is running.');
+      }
+    } else {
+      console.warn('🐾 Admin Requests API disabled: Neither Supabase nor Postgres env vars are set');
+    }
   }
   
   wss.on('connection', (ws: WebSocket) => {
