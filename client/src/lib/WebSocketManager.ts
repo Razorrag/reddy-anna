@@ -219,22 +219,44 @@ class WebSocketManager extends BrowserEventEmitter {
   }
 
   public send(message: object): void {
-    if (this.ws && this.status === ConnectionStatus.CONNECTED && this.ws.readyState === WebSocket.OPEN) {
-      try {
-        this.ws.send(JSON.stringify(message));
-        this.updateLastActivity(); // Update activity on message send
-        console.log('WebSocketManager: Message sent successfully:', (message as any).type || 'unknown');
-      } catch (error) {
-        console.error('WebSocketManager: Error sending message:', error);
-        this.emit('error', error);
-      }
-    } else {
-      console.warn('WebSocketManager: Cannot send message, WebSocket not connected.', {
-        message,
-        status: this.status,
-        wsState: this.ws?.readyState
+    // Enhanced validation with better logging
+    if (!this.ws) {
+      console.error('WebSocketManager: Cannot send message - WebSocket instance is null', {
+        message: (message as any).type || 'unknown',
+        status: this.status
       });
-      this.emit('warning', 'WebSocket not connected, message not sent.');
+      this.emit('warning', 'WebSocket instance is null, message not sent.');
+      return;
+    }
+
+    if (this.ws.readyState !== WebSocket.OPEN) {
+      console.error('WebSocketManager: Cannot send message - WebSocket not in OPEN state', {
+        message: (message as any).type || 'unknown',
+        readyState: this.ws.readyState,
+        status: this.status,
+        readyStateText: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][this.ws.readyState]
+      });
+      this.emit('warning', 'WebSocket not in OPEN state, message not sent.');
+      return;
+    }
+
+    if (this.status !== ConnectionStatus.CONNECTED) {
+      console.warn('WebSocketManager: Status mismatch - socket is OPEN but status is not CONNECTED', {
+        message: (message as any).type || 'unknown',
+        status: this.status,
+        readyState: this.ws.readyState
+      });
+      // Try to fix status mismatch
+      this.setStatus(ConnectionStatus.CONNECTED);
+    }
+
+    try {
+      this.ws.send(JSON.stringify(message));
+      this.updateLastActivity(); // Update activity on message send
+      console.log('WebSocketManager: Message sent successfully:', (message as any).type || 'unknown');
+    } catch (error) {
+      console.error('WebSocketManager: Error sending message:', error);
+      this.emit('error', error);
     }
   }
   
@@ -348,7 +370,11 @@ class WebSocketManager extends BrowserEventEmitter {
 
   private handleClose = (event: CloseEvent) => {
     console.log('WebSocketManager: Connection closed.', event.code, event.reason);
+    
+    // Store reference before nulling
+    const wasOpen = this.ws !== null;
     this.ws = null;
+    
     this.options.onClose?.(event);
     this.emit('close', event);
     
@@ -357,9 +383,13 @@ class WebSocketManager extends BrowserEventEmitter {
     this.stopTokenRefresh();
 
     if (!this.isExplicitlyClosed) {
+      if (wasOpen) {
+        console.log('WebSocketManager: Unexpected close - will attempt to reconnect');
+      }
       this.setStatus(ConnectionStatus.RECONNECTING);
       this.scheduleReconnect();
     } else {
+      console.log('WebSocketManager: Explicitly closed - not reconnecting');
       this.setStatus(ConnectionStatus.DISCONNECTED);
     }
   };

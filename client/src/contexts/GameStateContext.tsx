@@ -326,8 +326,14 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [auth.user?.balance, auth.isAuthenticated]); // Only update when balance changes
 
-  // Add balance refresh function
+  // Add balance refresh function - only for non-admin users
   const refreshBalanceFromAPI = useCallback(async () => {
+    // Skip balance fetch for admin users
+    if (gameState.userRole === 'admin') {
+      console.log('ℹ️ Skipping balance refresh for admin user');
+      return gameState.playerWallet;
+    }
+
     try {
       const response = await apiClient.get<{success: boolean, balance: number, error?: string}>('/user/balance');
       if (response.success && response.balance !== gameState.playerWallet) {
@@ -342,7 +348,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.error('Failed to refresh balance:', error);
     }
     return gameState.playerWallet;
-  }, [gameState.playerWallet, updateBalance]);
+  }, [gameState.playerWallet, gameState.userRole, updateBalance]);
 
   // Listen for balance updates from BalanceContext
   useEffect(() => {
@@ -387,8 +393,14 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
   }, [gameState.playerWallet]);
 
-  // Add periodic balance refresh
+  // Add periodic balance refresh - only for player users, not admins
   useEffect(() => {
+    // Skip periodic balance refresh for admin users
+    if (gameState.userRole === 'admin') {
+      console.log('ℹ️ Skipping periodic balance refresh for admin user');
+      return;
+    }
+
     const interval = setInterval(async () => {
       if (auth.isAuthenticated && !gameState.isGameActive) {
         await refreshBalanceFromAPI();
@@ -396,7 +408,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [auth.isAuthenticated, gameState.isGameActive, refreshBalanceFromAPI]);
+  }, [auth.isAuthenticated, gameState.isGameActive, gameState.userRole, refreshBalanceFromAPI]);
 
   // Dispatchers for all actions
   const setGameId = (id: string) => {

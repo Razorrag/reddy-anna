@@ -893,9 +893,22 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       // Only connect if user is authenticated
-      if (!authState.isAuthenticated || !authState.token) {
-        console.log('⏸️ Skipping WebSocket connection - user not authenticated');
-        setIsWebSocketAuthenticated(false); // Reset auth state
+      if (!authState.isAuthenticated) {
+        console.log('⏸️ User not authenticated - disconnecting WebSocket');
+        setIsWebSocketAuthenticated(false);
+        webSocketManagerRef.current?.disconnect();
+        return;
+      }
+
+      // If no token yet, wait for it
+      if (!authState.token) {
+        console.log('⏸️ No token available yet - waiting...');
+        return;
+      }
+
+      // If WebSocket is already connected, don't reconnect (WebSocketManager handles token updates automatically)
+      if (webSocketManagerRef.current && webSocketManagerRef.current.getStatus() !== ConnectionStatus.DISCONNECTED) {
+        console.log('✅ WebSocket already connected - token updates handled automatically');
         return;
       }
 
@@ -909,11 +922,15 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     
     initializeWebSocket();
     
+    // Only disconnect on unmount or when authentication is lost
     return () => {
-      setIsWebSocketAuthenticated(false); // Reset auth state on cleanup
-      webSocketManagerRef.current?.disconnect();
+      if (!authState.isAuthenticated) {
+        console.log('🔌 Auth lost - disconnecting WebSocket on cleanup');
+        setIsWebSocketAuthenticated(false);
+        webSocketManagerRef.current?.disconnect();
+      }
     };
-  }, [authState.authChecked, authState.isAuthenticated, authState.token]); // Depend on auth state
+  }, [authState.authChecked, authState.isAuthenticated, authState.token, initWebSocketManager]); // Depend on auth state
 
   // Subscribe to game state only after WebSocket is authenticated
   useEffect(() => {
