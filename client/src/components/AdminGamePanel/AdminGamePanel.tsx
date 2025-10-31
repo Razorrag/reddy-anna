@@ -128,10 +128,12 @@ const AdminGamePanel: React.FC = () => {
 
         {/* Management Dashboard Removed - Access from main admin dashboard */}
 
-        {/* Tab Content */}
-        {activeTab === 'stream' ? (
+        {/* Tab Content - Keep StreamControlPanel mounted but hidden to prevent stream from stopping */}
+        <div style={{ display: activeTab === 'stream' ? 'block' : 'none' }}>
           <StreamControlPanel />
-        ) : (
+        </div>
+        
+        {activeTab === 'game' && (
           <div className="space-y-4">
             {/* STEP 1: Opening Card Selection (Only at start) */}
             {(gameState.phase === 'idle' || gameState.phase === 'opening') && (

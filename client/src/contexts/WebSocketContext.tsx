@@ -689,6 +689,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           break;
       }
 
+      case 'card_dealt_ack': {
+        // Server acknowledgment for card dealt - no action needed on client
+        console.log('✅ Card dealt acknowledged by server');
+        break;
+      }
+
       default:
         console.log('Unknown message type:', data.type);
     }

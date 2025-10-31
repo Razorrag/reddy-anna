@@ -68,11 +68,26 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
     }
   };
 
+  // Track initial timer value to calculate progress correctly
+  const [initialTimer, setInitialTimer] = useState(30);
+
+  // Update initial timer when betting phase starts or resets
+  useEffect(() => {
+    if (gameState.phase === 'betting') {
+      // When betting phase starts, capture the initial timer value
+      if (localTimer > initialTimer || localTimer === initialTimer) {
+        setInitialTimer(localTimer);
+      }
+    } else {
+      // Reset for next betting phase
+      setInitialTimer(30);
+    }
+  }, [gameState.phase, localTimer, initialTimer]);
+
   // Calculate timer progress for circular display
   const getTimerProgress = () => {
-    if (gameState.phase !== 'betting') return 0;
-    const maxTime = 30; // 30 seconds for betting
-    return Math.max(0, (maxTime - localTimer) / maxTime);
+    if (gameState.phase !== 'betting' || initialTimer === 0) return 0;
+    return Math.max(0, Math.min(1, (initialTimer - localTimer) / initialTimer));
   };
 
   return (
@@ -100,8 +115,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
             gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
           }`}>
             {/* Large Circular Timer */}
-            <div className="relative w-32 h-32 md:w-36 md:h-36">
-              <svg className="transform -rotate-90" viewBox="0 0 128 128" width="128" height="128">
+            <div className="relative w-32 h-32 md:w-40 md:h-40">
+              <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 128 128">
                 {/* Background circle */}
                 <circle
                   cx="64"
@@ -125,12 +140,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
                   strokeLinecap="round"
                 />
               </svg>
-              {/* Timer text */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-white font-bold text-4xl md:text-5xl drop-shadow-2xl">
+              {/* Timer text - Perfectly centered */}
+              <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center">
+                <div className="text-white font-bold text-5xl md:text-6xl drop-shadow-2xl leading-none">
                   {localTimer > 0 ? localTimer : '--'}
                 </div>
-                <div className="text-gold text-sm md:text-base font-medium mt-1">
+                <div className="text-gold text-xs md:text-sm font-semibold mt-1 tracking-wide uppercase">
                   {getPhaseText()}
                 </div>
               </div>

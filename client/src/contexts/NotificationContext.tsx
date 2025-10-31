@@ -19,9 +19,12 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const notificationCounter = React.useRef(0);
 
   const showNotification = useCallback((message: string, type: NotificationType) => {
-    const id = Date.now().toString();
+    // Use combination of timestamp and counter to ensure unique IDs
+    notificationCounter.current += 1;
+    const id = `${Date.now()}-${notificationCounter.current}`;
     setNotifications(prev => [...prev, { id, type, message }]);
   }, []);
 
