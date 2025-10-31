@@ -1034,25 +1034,27 @@ ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value;
 -- CREATE ADMIN ACCOUNTS
 -- ============================================
 -- Password: admin123
--- Hash: $2b$12$Vc738883Bz.Rn6y4N5pP.eNl93jBQ.aJ5sXK3v3jVcQFpNQ7vZ5XW
+-- Hash: $2b$12$YRanbM3QQ//LTd35cuHUlerlHCZN5Xd1/HY80Zqmof6HIRgzRue6m
+-- Generated with bcrypt (salt rounds: 12)
 
 INSERT INTO admin_credentials (username, password_hash, role) VALUES
-('admin', '$2b$12$Vc738883Bz.Rn6y4N5pP.eNl93jBQ.aJ5sXK3v3jVcQFpNQ7vZ5XW', 'admin'),
-('rajugarikossu', '$2b$12$Vc738883Bz.Rn6y4N5pP.eNl93jBQ.aJ5sXK3v3jVcQFpNQ7vZ5XW', 'admin')
+('admin', '$2b$12$YRanbM3QQ//LTd35cuHUlerlHCZN5Xd1/HY80Zqmof6HIRgzRue6m', 'admin'),
+('rajugarikossu', '$2b$12$YRanbM3QQ//LTd35cuHUlerlHCZN5Xd1/HY80Zqmof6HIRgzRue6m', 'admin')
 ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- ============================================
 -- CREATE TEST USER ACCOUNTS
 -- ============================================
 -- Password for all test users: Test@123
--- Hash: $2b$12$ivq6eChnB.SBEjfpxQSG0./mLY05R.IQnt.q0mobK9ZX6pXpu9pV.
+-- Hash: $2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm
+-- Generated with bcrypt (salt rounds: 12)
 
 INSERT INTO users (id, phone, password_hash, full_name, role, status, balance, referral_code_generated) VALUES
-('9876543210', '9876543210', '$2b$12$ivq6eChnB.SBEjfpxQSG0./mLY05R.IQnt.q0mobK9ZX6pXpu9pV.', 'Test Player 1', 'player', 'active', 100000.00, 'RAJUGARIKOSSU0001'),
-('9876543211', '9876543211', '$2b$12$ivq6eChnB.SBEjfpxQSG0./mLY05R.IQnt.q0mobK9ZX6pXpu9pV.', 'Test Player 2', 'player', 'active', 50000.00, 'RAJUGARIKOSSU0002'),
-('9876543212', '9876543212', '$2b$12$ivq6eChnB.SBEjfpxQSG0./mLY05R.IQnt.q0mobK9ZX6pXpu9pV.', 'Test Player 3', 'player', 'active', 75000.00, 'RAJUGARIKOSSU0003'),
-('9876543213', '9876543213', '$2b$12$ivq6eChnB.SBEjfpxQSG0./mLY05R.IQnt.q0mobK9ZX6pXpu9pV.', 'Test Player 4', 'player', 'active', 25000.00, 'RAJUGARIKOSSU0004'),
-('9876543214', '9876543214', '$2b$12$ivq6eChnB.SBEjfpxQSG0./mLY05R.IQnt.q0mobK9ZX6pXpu9pV.', 'Test Player 5', 'player', 'active', 10000.00, 'RAJUGARIKOSSU0005')
+('9876543210', '9876543210', '$2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm', 'Test Player 1', 'player', 'active', 100000.00, 'RAJUGARIKOSSU0001'),
+('9876543211', '9876543211', '$2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm', 'Test Player 2', 'player', 'active', 50000.00, 'RAJUGARIKOSSU0002'),
+('9876543212', '9876543212', '$2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm', 'Test Player 3', 'player', 'active', 75000.00, 'RAJUGARIKOSSU0003'),
+('9876543213', '9876543213', '$2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm', 'Test Player 4', 'player', 'active', 25000.00, 'RAJUGARIKOSSU0004'),
+('9876543214', '9876543214', '$2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm', 'Test Player 5', 'player', 'active', 10000.00, 'RAJUGARIKOSSU0005')
 ON CONFLICT (id) DO UPDATE SET 
   password_hash = EXCLUDED.password_hash,
   balance = EXCLUDED.balance,
