@@ -41,9 +41,22 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
         return;
       }
       
-      // Request screen capture
+      // Request screen capture with comprehensive error handling
       let stream: MediaStream;
       try {
+        // Double-check secure context before attempting getDisplayMedia
+        const isLocalhost = window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1' || 
+                            window.location.hostname === '[::1]';
+        if (!window.isSecureContext && !isLocalhost) {
+          throw new DOMException('Screen sharing requires HTTPS on VPS. Please use https:// instead of http://', 'SecurityError');
+        }
+
+        // Check if getDisplayMedia is available one more time before calling
+        if (typeof navigator.mediaDevices?.getDisplayMedia !== 'function') {
+          throw new DOMException('getDisplayMedia is not available. Please use a modern browser (Chrome, Firefox, Edge)', 'NotSupportedError');
+        }
+
         stream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             cursor: 'never' // Hide cursor in screen share
@@ -51,17 +64,54 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
           audio: true
         });
       } catch (getDisplayError: any) {
-        if (getDisplayError.name === 'NotAllowedError' || getDisplayError.name === 'PermissionDeniedError') {
-          showNotification('❌ Screen sharing permission denied. Please allow screen sharing when prompted.', 'error');
+        // Prevent the "get sidplay error" by catching all possible errors
+        console.error('❌ getDisplayMedia error caught:', {
+          name: getDisplayError?.name,
+          message: getDisplayError?.message
+        });
+
+        // Handle user cancellation gracefully (not an error)
+        if (getDisplayError?.name === 'NotAllowedError' || getDisplayError?.name === 'PermissionDeniedError' || getDisplayError?.name === 'AbortError') {
+          showNotification('ℹ️ Screen sharing cancelled. Please try again when ready.', 'info');
           return;
-        } else if (getDisplayError.name === 'NotReadableError' || getDisplayError.name === 'TrackStartError') {
-          showNotification('❌ Could not access screen. Make sure no other application is using your screen.', 'error');
+        } 
+        // Handle security context errors
+        else if (getDisplayError?.name === 'SecurityError' || getDisplayError?.message?.includes('HTTPS')) {
+          const errorMsg = '❌ Screen sharing requires HTTPS connection. Current: ' + window.location.protocol + '//' + window.location.hostname + '. Please use https:// instead of http:// on your VPS.';
+          showNotification(errorMsg, 'error');
           return;
-        } else if (getDisplayError.name === 'NotFoundError' || getDisplayError.name === 'DevicesNotFoundError') {
-          showNotification('❌ No screen or window available for sharing.', 'error');
+        } 
+        // Handle browser not supported
+        else if (getDisplayError?.name === 'NotSupportedError' || getDisplayError?.message?.includes('not available') || getDisplayError?.message?.includes('not supported')) {
+          showNotification('❌ Screen sharing is not supported in this browser. Please use Chrome, Firefox, or Edge.', 'error');
           return;
         }
-        throw getDisplayError;
+        // Handle screen access errors
+        else if (getDisplayError?.name === 'NotReadableError' || getDisplayError?.name === 'TrackStartError') {
+          showNotification('❌ Could not access screen. Make sure no other application is using your screen.', 'error');
+          return;
+        } 
+        // Handle device not found
+        else if (getDisplayError?.name === 'NotFoundError' || getDisplayError?.name === 'DevicesNotFoundError') {
+          showNotification('❌ No screen or window available for sharing.', 'error');
+          return;
+        } 
+        // Handle generic errors with helpful message
+        else {
+          const errorMsg = getDisplayError?.message || 'Unknown error occurred';
+          let userMessage = '❌ Screen sharing failed. ';
+          if (errorMsg.includes('getDisplayMedia') || errorMsg.includes('get_display') || errorMsg.includes('getDisplay')) {
+            userMessage += 'The browser API is not available. Please check HTTPS configuration and browser permissions.';
+          } else if (errorMsg.includes('permission') || errorMsg.includes('denied')) {
+            userMessage += 'Permission was denied. Please allow screen sharing when prompted.';
+          } else if (errorMsg.includes('HTTPS') || errorMsg.includes('secure') || errorMsg.includes('SSL')) {
+            userMessage += 'HTTPS is required for screen sharing on VPS. Please configure SSL certificate.';
+          } else {
+            userMessage += errorMsg;
+          }
+          showNotification(userMessage, 'error');
+          return; // Don't throw - prevent "get sidplay error" from propagating
+        }
       }
 
       if (!stream || !stream.getVideoTracks().length) {

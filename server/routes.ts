@@ -3647,7 +3647,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { limit = 50 } = req.query;
       const limitNum = parseInt(limit as string) || 50;
       const history = await storage.getGameHistory(limitNum);
-      res.json(history);
+      // Ensure we always return an array, even if empty
+      const formattedHistory = (history || []).map(game => ({
+        ...game,
+        // Ensure all required fields have defaults
+        totalBets: game.totalBets || 0,
+        andarTotalBet: game.andarTotalBet || 0,
+        baharTotalBet: game.baharTotalBet || 0,
+        totalWinnings: game.totalWinnings || 0,
+        andarBetsCount: game.andarBetsCount || 0,
+        baharBetsCount: game.baharBetsCount || 0,
+        totalPlayers: game.totalPlayers || 0,
+        round: game.round || 1
+      }));
+      res.json(formattedHistory);
     } catch (error) {
       console.error("Get game history error:", error);
       res.status(500).json({ error: "Failed to get game history" });
@@ -3799,15 +3812,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const stats = await storage.getDailyStats(today);
-        res.json({ success: true, data: stats });
+        // Provide default values if no stats exist
+        const defaultStats = {
+          totalGames: 0,
+          totalBets: 0,
+          totalPayouts: 0,
+          totalRevenue: 0,
+          profitLoss: 0,
+          profitLossPercentage: 0,
+          uniquePlayers: 0,
+          peakBetsHour: 0
+        };
+        res.json({ success: true, data: stats || defaultStats });
       } else if (period === 'monthly') {
         const monthYear = month ? month as string : new Date().toISOString().slice(0, 7); // YYYY-MM
         const stats = await storage.getMonthlyStats(monthYear);
-        res.json({ success: true, data: stats });
+        res.json({ success: true, data: stats || { totalGames: 0, totalBets: 0, totalPayouts: 0, profitLoss: 0 } });
       } else if (period === 'yearly') {
         const yearNum = year ? parseInt(year as string) : new Date().getFullYear();
         const stats = await storage.getYearlyStats(yearNum);
-        res.json({ success: true, data: stats });
+        res.json({ success: true, data: stats || { totalGames: 0, totalBets: 0, totalPayouts: 0, profitLoss: 0 } });
       } else {
         res.status(400).json({ success: false, error: 'Invalid period' });
       }
@@ -3820,8 +3844,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Real-time admin stats endpoint
   app.get("/api/admin/realtime-stats", generalLimiter, async (req, res) => {
     try {
+      const todayGameCount = await storage.getTodayGameCount() || 0;
+      const todayBetTotal = await storage.getTodayBetsTotal() || 0;
+      const todayPlayers = await storage.getTodayUniquePlayers() || 0;
+      
       const realtimeStats = {
-        currentGame: {
+        currentGame: currentGameState.phase !== 'idle' ? {
           id: currentGameState.gameId,
           phase: currentGameState.phase,
           currentRound: currentGameState.currentRound,
@@ -3830,11 +3858,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
           bettingLocked: currentGameState.bettingLocked,
           totalPlayers: currentGameState.userBets.size
-        },
+        } : null,
         todayStats: await storage.getTodayStats(),
-        todayGameCount: await storage.getTodayGameCount(),
-        todayBetTotal: await storage.getTodayBetsTotal(),
-        todayPlayers: await storage.getTodayUniquePlayers()
+        todayGameCount: todayGameCount,
+        todayBetTotal: todayBetTotal,
+        todayPlayers: todayPlayers
       };
       res.json({ success: true, data: realtimeStats });
     } catch (error) {
@@ -3861,7 +3889,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const endDate = dateTo ? new Date(dateTo as string) : new Date();
       
       // Get game statistics with filters
-      let gameStats = await storage.getGameStatisticsByDateRange(startDate, endDate);
+      let gameStats = await storage.getGameStatisticsByDateRange(startDate, endDate) || [];
       
       // Apply profit filters if specified
       if (minProfit !== undefined) {
@@ -3899,7 +3927,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             page: pageNum,
             limit: limitNum,
             total: gameStats.length,
-            pages: Math.ceil(gameStats.length / limitNum)
+            pages: Math.ceil(gameStats.length / limitNum) || 1
           }
         }
       });

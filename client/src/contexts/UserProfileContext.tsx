@@ -240,7 +240,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
       
-      const response = await apiClient.get('/user/profile') as any;
+      const response = await apiClient.get('/api/user/profile') as any;
       if (response.success && response.user) {
         dispatch({ type: 'SET_USER', payload: response.user });
       }
@@ -255,7 +255,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.get('/user/analytics') as any;
+      const response = await apiClient.get('/api/user/analytics') as any;
       if (response.success && response.data) {
         dispatch({ type: 'SET_ANALYTICS', payload: response.data });
       }
@@ -281,7 +281,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
     
     try {
-      const response = await apiClient.get('/user/bonus-info') as any;
+      const response = await apiClient.get('/api/user/bonus-info') as any;
       if (response.success && response.data) {
         dispatch({ type: 'SET_BONUS_INFO', payload: response.data });
       }
@@ -293,7 +293,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const fetchReferralData = async () => {
     try {
-      const response = await apiClient.get('/user/referral-data') as any;
+      const response = await apiClient.get('/api/user/referral-data') as any;
       if (response.success && response.data) {
         dispatch({ type: 'SET_REFERRAL_DATA', payload: response.data });
       }
@@ -332,7 +332,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (!append) dispatch({ type: 'SET_LOADING', payload: true });
       
       const { offset, limit } = state.pagination.gameHistory;
-      const response = await apiClient.get(`/user/game-history?limit=${limit}&offset=${append ? offset : 0}&result=all`) as any;
+      const response = await apiClient.get(`/api/user/game-history?limit=${limit}&offset=${append ? offset : 0}&result=all`) as any;
       
       if (response.success && response.data) {
         dispatch({
@@ -343,9 +343,29 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
             append
           }
         });
+      } else {
+        // Handle case where no data exists or response structure is different
+        dispatch({
+          type: 'SET_GAME_HISTORY',
+          payload: {
+            games: [],
+            hasMore: false,
+            append
+          }
+        });
       }
     } catch (error: any) {
+      console.error('Failed to fetch game history:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to fetch game history' });
+      // Set empty array on error
+      dispatch({
+        type: 'SET_GAME_HISTORY',
+        payload: {
+          games: [],
+          hasMore: false,
+          append: false
+        }
+      });
     } finally {
       if (!append) dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -355,7 +375,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.put('/user/profile', updates) as any;
+      const response = await apiClient.put('/api/user/profile', updates) as any;
       if (response.success) {
         dispatch({ type: 'UPDATE_USER_PROFILE', payload: updates });
         return response;
@@ -374,7 +394,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       dispatch({ type: 'SET_LOADING', payload: true });
       
       // Create payment request instead of direct balance processing
-      const response = await apiClient.post('/payment-requests', {
+      const response = await apiClient.post('/api/payment-requests', {
         amount,
         paymentMethod: { type: method },
         requestType: 'deposit'
@@ -400,7 +420,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         // Auto-open WhatsApp
         if (state.user) {
             try {
-              const whatsappResponse = await apiClient.post<WhatsAppResponse>('/whatsapp/send-request', {
+              const whatsappResponse = await apiClient.post<WhatsAppResponse>('/api/whatsapp/send-request', {
                 userId: state.user.id,
                 userPhone: state.user.mobile || state.user.username,
                 requestType: 'DEPOSIT',
@@ -432,7 +452,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post('/payment-requests', {
+      const response = await apiClient.post('/api/payment-requests', {
         amount,
         paymentMethod: { type: method },
         requestType: 'withdrawal'
@@ -458,7 +478,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         // Auto-open WhatsApp
         if (state.user) {
             try {
-              const whatsappResponse = await apiClient.post<WhatsAppResponse>('/whatsapp/send-request', {
+              const whatsappResponse = await apiClient.post<WhatsAppResponse>('/api/whatsapp/send-request', {
                 userId: state.user.id,
                 userPhone: state.user.mobile || state.user.username,
                 requestType: 'WITHDRAWAL',
@@ -490,7 +510,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post('/user/claim-bonus') as any;
+      const response = await apiClient.post('/api/user/claim-bonus') as any;
       
       if (response.success) {
         // Refresh analytics and bonus info after claiming

@@ -25,23 +25,11 @@ const CardHistory: React.FC<CardHistoryProps> = ({
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const response = await apiClient.get<{
-          success: boolean;
-          data?: { games?: any[] };
-          games?: any[]; // Fallback format
-        }>('/api/user/game-history?limit=10');
+        // Use the public game history endpoint that doesn't require authentication
+        const response = await apiClient.get<any[]>('/api/game/history?limit=10');
         
-        // Handle different response formats
-        let games: any[] = [];
-        if (response.success) {
-          if (response.data?.games) {
-            games = response.data.games;
-          } else if (Array.isArray(response.data)) {
-            games = response.data;
-          } else if (Array.isArray((response as any).games)) {
-            games = (response as any).games;
-          }
-        }
+        // Handle response - should be an array directly
+        const games = Array.isArray(response) ? response : [];
         
         if (games.length > 0) {
           // Transform API data to match component format
@@ -49,8 +37,8 @@ const CardHistory: React.FC<CardHistoryProps> = ({
             .filter(game => game.winner) // Only show games with winners
             .map(game => ({
               winner: (game.winner || '').toLowerCase(),
-              round: game.round || game.current_round || 1,
-              gameId: game.gameId || game.game_id || `game-${Date.now()}-${Math.random()}`
+              round: game.round || 1,
+              gameId: game.gameId || game.id || `game-${Date.now()}-${Math.random()}`
             }))
             .slice(0, 10); // Limit to 10 most recent
           
@@ -69,7 +57,7 @@ const CardHistory: React.FC<CardHistoryProps> = ({
 
     fetchHistory();
     
-    // Refresh every 30 seconds
+    // Refresh every 30 seconds to show new games
     const interval = setInterval(fetchHistory, 30000);
     return () => clearInterval(interval);
   }, []);
