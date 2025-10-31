@@ -221,6 +221,7 @@ app.use((req, res, next) => {
   const httpsEnabled = process.env.HTTPS_ENABLED === 'true';
   const sslKeyPath = process.env.SSL_KEY_PATH || './server.key';
   const sslCertPath = process.env.SSL_CERT_PATH || './server.crt';
+  const sslCaPath = process.env.SSL_CA_PATH || process.env.SSL_CERT_PATH?.replace('fullchain.pem', 'chain.pem'); // Let's Encrypt chain
   
   if (httpsEnabled) {
     try {
@@ -246,12 +247,70 @@ app.use((req, res, next) => {
         }
       }
       
-      const httpsOptions = {
-        key: fs.readFileSync(sslKeyPath),
-        cert: fs.readFileSync(sslCertPath)
+      // Read certificate files with error handling
+      let key: Buffer;
+      let cert: Buffer | string;
+      let ca: Buffer | string | undefined;
+      
+      try {
+        key = fs.readFileSync(sslKeyPath);
+        log(`✅ SSL key loaded from: ${sslKeyPath}`);
+      } catch (error) {
+        log(`❌ Failed to read SSL key from: ${sslKeyPath}`);
+        log(`   Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`SSL key file not readable: ${sslKeyPath}`);
+      }
+      
+      try {
+        cert = fs.readFileSync(sslCertPath);
+        log(`✅ SSL certificate loaded from: ${sslCertPath}`);
+      } catch (error) {
+        log(`❌ Failed to read SSL certificate from: ${sslCertPath}`);
+        log(`   Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`SSL certificate file not readable: ${sslCertPath}`);
+      }
+      
+      // For Let's Encrypt, try to load chain certificate if available
+      // Let's Encrypt fullchain.pem already includes the chain, but we check for chain.pem anyway
+      if (sslCaPath && fs.existsSync(sslCaPath)) {
+        try {
+          ca = fs.readFileSync(sslCaPath);
+          log(`✅ SSL CA chain loaded from: ${sslCaPath}`);
+        } catch (error) {
+          log(`⚠️  Failed to read SSL CA chain from: ${sslCaPath} (continuing without chain)`);
+        }
+      }
+      
+      // Build HTTPS options with proper certificate chain support
+      const httpsOptions: any = {
+        key: key,
+        cert: cert
       };
       
-      const httpsServer = createHttpsServer(httpsOptions, app);
+      // Add CA chain if available (for Let's Encrypt compatibility)
+      if (ca) {
+        httpsOptions.ca = ca;
+      }
+      
+      // Additional SSL options for better compatibility
+      httpsOptions.secureProtocol = 'TLSv1_2_method'; // Use TLS 1.2+
+      
+      // For Let's Encrypt fullchain.pem, the cert already includes the chain
+      // But we can still set it explicitly if needed
+      if (sslCertPath.includes('fullchain.pem')) {
+        log('✅ Using Let\'s Encrypt fullchain certificate (includes chain)');
+      }
+      
+      // Create HTTPS server with proper error handling
+      let httpsServer;
+      try {
+        httpsServer = createHttpsServer(httpsOptions, app);
+        log('✅ HTTPS server created successfully');
+      } catch (error) {
+        log('❌ Failed to create HTTPS server');
+        log(`   Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw error;
+      }
       
       // Get WebSocket server from routes (already created in registerRoutes)
       const wssFromRoutes = app.get('wss');
@@ -270,11 +329,24 @@ app.use((req, res, next) => {
       
       const httpsPort = parseInt(process.env.HTTPS_PORT || '443', 10);
       
+      // Listen with error handling
+      httpsServer.on('error', (error: Error) => {
+        log('❌ HTTPS server error:', error.message);
+        if (error.message.includes('EADDRINUSE')) {
+          log(`   Port ${httpsPort} is already in use. Change HTTPS_PORT in .env or stop the other service.`);
+        } else if (error.message.includes('EACCES')) {
+          log(`   Permission denied on port ${httpsPort}. Run with sudo or use a port >= 1024.`);
+        } else if (error.message.includes('certificate')) {
+          log(`   Certificate error. Check certificate files and permissions.`);
+        }
+      });
+      
       httpsServer.listen(httpsPort, host, () => {
         log(`✅ HTTPS server serving on https://${host}:${httpsPort}`);
         log(`✅ WebSocket server running on wss://${host}:${httpsPort}/ws`);
         log(`🔧 Admin panel: Game Control available`);
         log(`⚠️  Screen sharing REQUIRES HTTPS - use https://your-vps-ip:${httpsPort}`);
+        log(`💡 For Let's Encrypt, use fullchain.pem as SSL_CERT_PATH`);
       });
       
       // Optional: Redirect HTTP to HTTPS

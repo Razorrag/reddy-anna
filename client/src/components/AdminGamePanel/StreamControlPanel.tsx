@@ -516,30 +516,59 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
 
     try {
       // Enhanced diagnostics for VPS issues
-      console.log('🖥️ Screen Share Diagnostics:', {
+      const diagnostics = {
         hostname: window.location.hostname,
         protocol: window.location.protocol,
         origin: window.location.origin,
         hasMediaDevices: !!navigator.mediaDevices,
-        hasGetDisplayMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia),
+        hasGetDisplayMedia: !!(navigator.mediaDevices?.getDisplayMedia),
+        getDisplayMediaType: typeof navigator.mediaDevices?.getDisplayMedia,
         userAgent: navigator.userAgent,
-        isSecureContext: window.isSecureContext
-      });
+        isSecureContext: window.isSecureContext,
+        isLocalhost: window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1' || 
+                    window.location.hostname === '[::1]'
+      };
+      
+      console.log('🖥️ Screen Share Diagnostics:', diagnostics);
 
-      // Check if getDisplayMedia is supported
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        const errorMsg = 'Screen sharing is not supported in this browser. Please use a modern browser like Chrome, Firefox, or Edge.';
-        console.error('❌ getDisplayMedia not supported:', errorMsg);
+      // More accurate browser support check
+      // getDisplayMedia requires secure context (HTTPS) to work on non-localhost
+      const isLocalhost = window.location.hostname === 'localhost' || 
+                          window.location.hostname === '127.0.0.1' || 
+                          window.location.hostname === '[::1]';
+      const isSecure = window.location.protocol === 'https:' || window.isSecureContext;
+      
+      // Check 1: Basic browser API availability
+      if (!navigator.mediaDevices) {
+        const errorMsg = 'Screen sharing is not supported in this browser. navigator.mediaDevices is not available. Please use a modern browser like Chrome, Firefox, or Edge.';
+        console.error('❌ navigator.mediaDevices not available');
         showNotification(`❌ ${errorMsg}`, 'error');
+        return;
+      }
+      
+      // Check 2: getDisplayMedia method exists
+      if (typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+        // This could mean: browser doesn't support it OR not in secure context
+        if (!isSecure && !isLocalhost) {
+          const errorMsg = 'Screen sharing requires HTTPS connection. Current: ' + window.location.protocol + '//' + window.location.hostname + '. Please use https:// instead of http:// on your VPS.';
+          console.error('❌ getDisplayMedia not available (likely due to non-secure context):', {
+            protocol: window.location.protocol,
+            isSecureContext: window.isSecureContext,
+            isLocalhost
+          });
+          showNotification(`❌ ${errorMsg}`, 'error');
+        } else {
+          const errorMsg = 'Screen sharing is not supported in this browser. getDisplayMedia API is not available. Please use Chrome 72+, Firefox 66+, or Edge 79+.';
+          console.error('❌ getDisplayMedia not available (browser does not support)');
+          showNotification(`❌ ${errorMsg}`, 'error');
+        }
         return;
       }
 
       // Check if we're in a secure context (HTTPS or localhost)
       // CRITICAL FOR VPS: Screen sharing REQUIRES HTTPS (except localhost)
-      const isLocalhost = window.location.hostname === 'localhost' || 
-                          window.location.hostname === '127.0.0.1' || 
-                          window.location.hostname === '[::1]';
-      const isSecure = window.location.protocol === 'https:' || window.isSecureContext;
+      // Note: isLocalhost and isSecure already defined above
       
       if (!isSecure && !isLocalhost) {
         const errorMsg = `Screen sharing requires HTTPS connection. Current: ${window.location.protocol}//${window.location.hostname}. Please configure SSL/HTTPS on your VPS.`;

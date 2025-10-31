@@ -29,15 +29,43 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
     try {
       console.log('Starting screen sharing...');
       
-      // Check if getDisplayMedia is supported
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        showNotification('❌ Screen sharing is not supported in this browser. Please use Chrome, Firefox, or Edge.', 'error');
+      // Enhanced diagnostics
+      const isLocalhost = window.location.hostname === 'localhost' || 
+                          window.location.hostname === '127.0.0.1' || 
+                          window.location.hostname === '[::1]';
+      const isSecure = window.location.protocol === 'https:' || window.isSecureContext;
+      
+      const diagnostics = {
+        hostname: window.location.hostname,
+        protocol: window.location.protocol,
+        hasMediaDevices: !!navigator.mediaDevices,
+        hasGetDisplayMedia: typeof navigator.mediaDevices?.getDisplayMedia,
+        isSecureContext: window.isSecureContext,
+        isLocalhost,
+        isSecure
+      };
+      console.log('🖥️ Screen Share Diagnostics:', diagnostics);
+      
+      // Check 1: Basic browser API availability
+      if (!navigator.mediaDevices) {
+        showNotification('❌ Screen sharing is not supported in this browser. navigator.mediaDevices is not available. Please use a modern browser like Chrome, Firefox, or Edge.', 'error');
+        return;
+      }
+      
+      // Check 2: getDisplayMedia method exists
+      if (typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+        // This could mean: browser doesn't support it OR not in secure context
+        if (!isSecure && !isLocalhost) {
+          showNotification('❌ Screen sharing requires HTTPS connection. Current: ' + window.location.protocol + '//' + window.location.hostname + '. Please use https:// instead of http:// on your VPS.', 'error');
+        } else {
+          showNotification('❌ Screen sharing is not supported in this browser. getDisplayMedia API is not available. Please use Chrome 72+, Firefox 66+, or Edge 79+.', 'error');
+        }
         return;
       }
 
-      // Check secure context
-      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        showNotification('❌ Screen sharing requires HTTPS connection. Please use HTTPS or localhost.', 'error');
+      // Check 3: Secure context for VPS
+      if (!isSecure && !isLocalhost) {
+        showNotification('❌ Screen sharing requires HTTPS connection. Please use https:// instead of http:// on your VPS.', 'error');
         return;
       }
       
