@@ -93,41 +93,44 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
       </div>
 
-      {/* Circular Timer Overlay - TOP CENTER - ONLY VISIBLE DURING BETTING */}
+      {/* Circular Timer Overlay - CENTERED - ONLY VISIBLE DURING BETTING */}
       {gameState.phase === 'betting' && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
           <div className={`relative transition-all duration-300 ${
             gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
           }`}>
             {/* Large Circular Timer */}
-            <div className="relative w-28 h-28">
-              <svg className="transform -rotate-90 w-28 h-28">
+            <div className="relative w-32 h-32 md:w-36 md:h-36">
+              <svg className="transform -rotate-90 w-32 h-32 md:w-36 md:h-36">
                 {/* Background circle */}
                 <circle
-                  cx="56"
-                  cy="56"
-                  r="50"
-                  stroke="rgba(0, 0, 0, 0.5)"
-                  strokeWidth="6"
-                  fill="rgba(0, 0, 0, 0.3)"
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="rgba(0, 0, 0, 0.6)"
+                  strokeWidth="8"
+                  fill="rgba(0, 0, 0, 0.4)"
                 />
                 {/* Progress circle - only show during betting */}
                 <circle
-                  cx="56"
-                  cy="56"
-                  r="50"
+                  cx="64"
+                  cy="64"
+                  r="56"
                   stroke={getTimerColor()}
-                  strokeWidth="6"
+                  strokeWidth="8"
                   fill="none"
-                  strokeDasharray={`${2 * Math.PI * 50}`}
-                  strokeDashoffset={`${2 * Math.PI * 50 * (1 - getTimerProgress())}`}
+                  strokeDasharray={`${2 * Math.PI * 56}`}
+                  strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}
                   className="transition-all duration-1000 ease-linear"
                 />
               </svg>
               {/* Timer text */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-white font-bold text-3xl drop-shadow-lg">
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div className="text-white font-bold text-4xl md:text-5xl drop-shadow-2xl">
                   {localTimer > 0 ? localTimer : '--'}
+                </div>
+                <div className="text-gold text-sm md:text-base font-medium mt-1">
+                  {getPhaseText()}
                 </div>
               </div>
             </div>

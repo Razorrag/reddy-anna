@@ -132,8 +132,15 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
             }
           }, 3000);
         } else if (state === 'disconnected') {
-          console.warn('⚠️ WebRTC connection disconnected. Waiting for reconnect...');
-          // Don't auto-reconnect on disconnected - wait for renegotiation
+          console.warn('⚠️ WebRTC connection disconnected. Attempting to reconnect...');
+          // Auto-reconnect after a short delay
+          setTimeout(() => {
+            if (isMountedRef.current && peerConnectionRef.current?.connectionState === 'disconnected') {
+              console.log('🔄 Attempting to reconnect WebRTC...');
+              cleanup();
+              initializeWebRTC();
+            }
+          }, 2000);
         } else if (state === 'connected') {
           console.log('✅ WebRTC connection established!');
         }
@@ -245,9 +252,11 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
     }
   };
 
-  // Show connection status overlay
+  // Show connection status overlay (only for paused or failed states)
   const renderStatusOverlay = () => {
+    // Don't show overlay during normal connecting - stream broadcasts automatically
     if (connectionState === 'connected' && !isPaused) return null;
+    if (connectionState === 'connecting') return null;
 
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-10">
@@ -265,26 +274,11 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
             </>
           )}
           
-          {connectionState === 'connecting' && (
-            <>
-              <Wifi className="w-16 h-16 text-gold mb-4 mx-auto animate-pulse" />
-              <p className="text-white text-lg mb-2">Stream Available</p>
-              <p className="text-gray-400 text-sm mb-4">Admin is sharing their screen</p>
-              <button
-                onClick={initializeWebRTC}
-                className="px-6 py-3 bg-gradient-to-r from-gold to-yellow-500 hover:from-yellow-500 hover:to-gold text-gray-900 rounded-lg font-bold text-lg transition-all transform hover:scale-105 shadow-lg"
-              >
-                ✅ Accept & Watch Stream
-              </button>
-              <p className="text-gray-500 text-xs mt-3">Click to connect to the live stream</p>
-            </>
-          )}
-          
           {connectionState === 'disconnected' && (
             <>
-              <WifiOff className="w-16 h-16 text-yellow-400 mb-4 mx-auto" />
-              <p className="text-white text-lg mb-2">Connection Lost</p>
-              <p className="text-gray-400 text-sm">Attempting to reconnect...</p>
+              <WifiOff className="w-16 h-16 text-yellow-400 mb-4 mx-auto animate-pulse" />
+              <p className="text-white text-lg mb-2">Reconnecting...</p>
+              <p className="text-gray-400 text-sm">Attempting to reconnect to stream...</p>
             </>
           )}
           
@@ -314,6 +308,17 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
         autoPlay
         playsInline
         muted={false}
+        style={{
+          imageRendering: 'auto',
+          willChange: 'auto'
+        }}
+        onLoadedMetadata={() => {
+          if (videoRef.current) {
+            videoRef.current.play().catch(err => {
+              console.warn('Video autoplay prevented:', err);
+            });
+          }
+        }}
       />
       
       {renderStatusOverlay()}

@@ -406,16 +406,50 @@ export const getUserStatistics = async (userId?: string): Promise<UserManagement
 
       return { success: true, user: statistics };
     } else {
-      // For now, return basic platform stats
+      // Fetch real platform stats from Supabase
+      const allUsers = await storage.getAllUsers();
+      
+      // Calculate statistics from actual user data
+      const totalUsers = allUsers.length;
+      const activeUsers = allUsers.filter((u: any) => u.status === 'active').length;
+      const suspendedUsers = allUsers.filter((u: any) => u.status === 'suspended').length;
+      const bannedUsers = allUsers.filter((u: any) => u.status === 'banned').length;
+      
+      // Calculate total balance
+      const totalBalance = allUsers.reduce((sum: number, u: any) => {
+        const balance = typeof u.balance === 'string' ? parseFloat(u.balance) : (u.balance || 0);
+        return sum + balance;
+      }, 0);
+      
+      // Calculate new users today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const newUsersToday = allUsers.filter((u: any) => {
+        if (!u.created_at) return false;
+        const createdAt = new Date(u.created_at);
+        return createdAt >= today;
+      }).length;
+      
+      // Calculate new users this month
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      const newUsersThisMonth = allUsers.filter((u: any) => {
+        if (!u.created_at) return false;
+        const createdAt = new Date(u.created_at);
+        return createdAt >= monthStart;
+      }).length;
+      
+      // Calculate average balance
+      const averageBalance = totalUsers > 0 ? totalBalance / totalUsers : 0;
+      
       const statistics = {
-        totalUsers: 0,      // Placeholder
-        activeUsers: 0,     // Placeholder
-        suspendedUsers: 0,  // Placeholder
-        bannedUsers: 0,     // Placeholder
-        totalBalance: 0,    // Placeholder
-        newUsersToday: 0,   // Placeholder
-        newUsersThisMonth: 0, // Placeholder
-        averageBalance: 0   // Placeholder
+        totalUsers,
+        activeUsers,
+        suspendedUsers,
+        bannedUsers,
+        totalBalance,
+        newUsersToday,
+        newUsersThisMonth,
+        averageBalance
       };
 
       return { success: true, user: statistics };

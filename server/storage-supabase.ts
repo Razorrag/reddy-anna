@@ -1438,19 +1438,66 @@ export class SupabaseStorage implements IStorage {
     return data;
   }
 
-  async getGameHistory(limit: number = 50): Promise<GameHistoryEntry[]> {
-    const { data, error } = await supabaseServer
+  async getGameHistory(limit: number = 50): Promise<any[]> {
+    // Join game_history with game_statistics to get complete data
+    const { data: historyData, error: historyError } = await supabaseServer
       .from('game_history')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(limit);
 
-    if (error) {
-      console.error('Error getting game history:', error);
+    if (historyError) {
+      console.error('Error getting game history:', historyError);
       return [];
     }
 
-    return data || [];
+    if (!historyData || historyData.length === 0) {
+      return [];
+    }
+
+    // Get game statistics for each game
+    const gameIds = historyData.map((h: any) => h.game_id);
+    const { data: statsData, error: statsError } = await supabaseServer
+      .from('game_statistics')
+      .select('*')
+      .in('game_id', gameIds);
+
+    if (statsError) {
+      console.error('Error getting game statistics:', statsError);
+    }
+
+    // Create a map of game_id to statistics
+    const statsMap = new Map();
+    if (statsData) {
+      statsData.forEach((stat: any) => {
+        statsMap.set(stat.game_id, stat);
+      });
+    }
+
+    // Combine history with statistics
+    const enhancedHistory = historyData.map((history: any) => {
+      const stats = statsMap.get(history.game_id);
+      return {
+        id: history.id,
+        gameId: history.game_id,
+        openingCard: history.opening_card,
+        winner: history.winner,
+        winningCard: history.winning_card,
+        totalCards: history.total_cards,
+        round: history.round || 1, // Default to 1 if not present
+        createdAt: history.created_at,
+        // Statistics data (with defaults if not available)
+        totalBets: stats ? parseFloat(stats.total_bets || '0') : 0,
+        andarTotalBet: stats ? parseFloat(stats.andar_total_bet || '0') : 0,
+        baharTotalBet: stats ? parseFloat(stats.bahar_total_bet || '0') : 0,
+        totalWinnings: stats ? parseFloat(stats.total_winnings || '0') : 0,
+        andarBetsCount: stats ? (stats.andar_bets_count || 0) : 0,
+        baharBetsCount: stats ? (stats.bahar_bets_count || 0) : 0,
+        totalPlayers: stats ? (stats.total_players || 0) : 0,
+      };
+    });
+
+    return enhancedHistory;
   }
 
   async getUserBets(userId: string, limit: number = 50, offset: number = 0): Promise<PlayerBet[]> {

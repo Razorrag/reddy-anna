@@ -3226,6 +3226,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all active/recent bets endpoint (for bet monitoring)
+  app.get("/api/admin/bets/all", generalLimiter, async (req, res) => {
+    try {
+      const { limit = 100, status, gameId } = req.query;
+      
+      // If gameId is provided, get bets for that game
+      if (gameId) {
+        const bets = await storage.getBetsForGame(gameId as string);
+        
+        // Join with user details
+        const betsWithUserDetails = await Promise.all(bets.map(async (bet) => {
+          const user = await storage.getUser(bet.userId);
+          return {
+            id: bet.id,
+            userId: bet.userId,
+            userPhone: user?.phone,
+            userName: user?.full_name,
+            gameId: bet.gameId,
+            round: bet.round,
+            side: bet.side,
+            amount: parseFloat(bet.amount),
+            status: bet.status,
+            createdAt: bet.createdAt
+          };
+        }));
+        
+        // Filter by status if provided
+        const filteredBets = status 
+          ? betsWithUserDetails.filter(b => b.status === status)
+          : betsWithUserDetails;
+        
+        // Limit results
+        const limitedBets = filteredBets.slice(0, parseInt(limit as string));
+        
+        return res.json({ success: true, data: limitedBets });
+      }
+      
+      // Get all active/recent bets from current game if available
+      if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+        const bets = await storage.getBetsForGame(currentGameState.gameId);
+        
+        // Join with user details
+        const betsWithUserDetails = await Promise.all(bets.map(async (bet) => {
+          const user = await storage.getUser(bet.userId);
+          return {
+            id: bet.id,
+            userId: bet.userId,
+            userPhone: user?.phone,
+            userName: user?.full_name,
+            gameId: bet.gameId,
+            round: bet.round,
+            side: bet.side,
+            amount: parseFloat(bet.amount),
+            status: bet.status,
+            createdAt: bet.createdAt
+          };
+        }));
+        
+        // Filter by status if provided
+        const filteredBets = status 
+          ? betsWithUserDetails.filter(b => b.status === status)
+          : betsWithUserDetails;
+        
+        // Sort by created_at descending (most recent first)
+        filteredBets.sort((a, b) => {
+          const aTime = new Date(a.createdAt).getTime();
+          const bTime = new Date(b.createdAt).getTime();
+          return bTime - aTime;
+        });
+        
+        // Limit results
+        const limitedBets = filteredBets.slice(0, parseInt(limit as string));
+        
+        return res.json({ success: true, data: limitedBets });
+      }
+      
+      // If no current game, get recent bets from Supabase directly
+      const { supabaseServer } = await import('./lib/supabaseServer');
+      let query = supabaseServer
+        .from('player_bets')
+        .select(`
+          *,
+          user:users(phone, full_name)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(parseInt(limit as string));
+      
+      if (status) {
+        query = query.eq('status', status);
+      }
+      
+      const { data: bets, error } = await query;
+      
+      if (error) {
+        throw error;
+      }
+      
+      const betsWithUserDetails = (bets || []).map((bet: any) => ({
+        id: bet.id,
+        userId: bet.user_id,
+        userPhone: bet.user?.phone,
+        userName: bet.user?.full_name,
+        gameId: bet.game_id,
+        round: bet.round,
+        side: bet.side,
+        amount: parseFloat(bet.amount),
+        status: bet.status,
+        createdAt: bet.created_at
+      }));
+      
+      res.json({ success: true, data: betsWithUserDetails });
+    } catch (error) {
+      console.error('Get all bets error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get all bets'
+      });
+    }
+  });
+
   app.patch("/api/admin/bets/:betId", generalLimiter, async (req, res) => {
     try {
       const { betId } = req.params;
@@ -3524,7 +3644,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/game/history", async (req, res) => {
     try {
-      const history = await storage.getGameHistory(50);
+      const { limit = 50 } = req.query;
+      const limitNum = parseInt(limit as string) || 50;
+      const history = await storage.getGameHistory(limitNum);
       res.json(history);
     } catch (error) {
       console.error("Get game history error:", error);

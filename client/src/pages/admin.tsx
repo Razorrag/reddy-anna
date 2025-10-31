@@ -67,7 +67,7 @@ export default function Admin() {
             </div>
           )}
           
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-gold">Total Users</CardTitle>
@@ -75,7 +75,7 @@ export default function Admin() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-white">
-                  {loading ? '...' : stats?.totalUsers.toLocaleString('en-IN')}
+                  {loading ? '...' : (stats?.totalUsers || 0).toLocaleString('en-IN')}
                 </div>
                 <p className="text-xs text-gray-400 mt-1">
                   {loading ? 'Loading...' : `${stats?.activeUsers || 0} active`}
@@ -130,6 +130,48 @@ export default function Admin() {
               </CardContent>
             </Card>
           </div>
+          
+          {/* User Status Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            <Card className="bg-black/40 border-green-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-green-400">Active Users</CardTitle>
+                <Users className="h-4 w-4 text-green-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-400">
+                  {loading ? '...' : stats?.activeUsers || 0}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Currently active</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-black/40 border-yellow-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-yellow-400">Suspended</CardTitle>
+                <Activity className="h-4 w-4 text-yellow-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-yellow-400">
+                  {loading ? '...' : stats?.suspendedUsers || 0}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Temporarily suspended</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-black/40 border-red-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-red-400">Banned</CardTitle>
+                <Users className="h-4 w-4 text-red-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-red-400">
+                  {loading ? '...' : stats?.bannedUsers || 0}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Permanently banned</p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Bet Monitoring (moved from Game Control) */}
@@ -137,6 +179,53 @@ export default function Admin() {
           <h2 className="text-2xl font-bold text-gold mb-4">🧭 Bet Monitor</h2>
           <div className="bg-black/40 border-gold/30 backdrop-blur-sm rounded-lg p-4">
             <BetMonitoringDashboard />
+          </div>
+        </div>
+
+        {/* Financial Overview */}
+        <div className="max-w-7xl mx-auto mb-8">
+          <h2 className="text-2xl font-bold text-gold mb-4">💰 Financial Overview</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="bg-black/40 border-green-500/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-green-400">Total Winnings</CardTitle>
+                <Gift className="h-4 w-4 text-green-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-400">
+                  {loading ? '...' : formatCurrency(stats?.totalWinnings || 0)}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">All users combined</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-black/40 border-red-500/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-red-400">Total Losses</CardTitle>
+                <TrendingDown className="h-4 w-4 text-red-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-red-400">
+                  {loading ? '...' : formatCurrency(stats?.totalLosses || 0)}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">All users combined</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gold">Net House Profit</CardTitle>
+                <CreditCard className="h-4 w-4 text-gold" />
+              </CardHeader>
+              <CardContent>
+                <div className={`text-3xl font-bold ${
+                  (stats?.netHouseProfit || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                }`}>
+                  {loading ? '...' : formatCurrency(stats?.netHouseProfit || 0)}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">House earnings (losses - winnings)</p>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
@@ -190,7 +279,7 @@ export default function Admin() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-purple-400">
-                  {loading ? '...' : stats?.activeUsers || 0}
+                  {loading ? '...' : stats?.activePlayers || 0}
                 </div>
                 <p className="text-xs text-gray-400 mt-1">Online now</p>
               </CardContent>

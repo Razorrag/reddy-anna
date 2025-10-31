@@ -45,7 +45,9 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
+          video: {
+            cursor: 'never' // Hide cursor in screen share
+          },
           audio: true
         });
       } catch (getDisplayError: any) {

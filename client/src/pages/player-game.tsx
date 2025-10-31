@@ -302,59 +302,6 @@ const PlayerGame: React.FC = () => {
     };
   }, [showNotification, updateBalance]);
 
-  // Mock history data
-  const mockHistory = [
-    { 
-      id: '1', 
-      gameId: 'game-1', 
-      openingCard: '6♣', 
-      winner: 'andar', 
-      winningCard: '6♣', 
-      totalCards: 3, 
-      round: 1, 
-      createdAt: new Date() 
-    },
-    { 
-      id: '2', 
-      gameId: 'game-1', 
-      openingCard: 'Q♥', 
-      winner: 'bahar', 
-      winningCard: 'Q♥', 
-      totalCards: 5, 
-      round: 2, 
-      createdAt: new Date() 
-    },
-    { 
-      id: '3', 
-      gameId: 'game-1', 
-      openingCard: 'K♠', 
-      winner: 'andar', 
-      winningCard: 'K♠', 
-      totalCards: 2, 
-      round: 3, 
-      createdAt: new Date() 
-    },
-    { 
-      id: '4', 
-      gameId: 'game-1', 
-      openingCard: 'A♦', 
-      winner: 'andar', 
-      winningCard: 'A♦', 
-      totalCards: 4, 
-      round: 4, 
-      createdAt: new Date() 
-    },
-    { 
-      id: '5', 
-      gameId: 'game-1', 
-      openingCard: '7♣', 
-      winner: 'bahar', 
-      winningCard: '7♣', 
-      totalCards: 6, 
-      round: 5, 
-      createdAt: new Date() 
-    },
-  ];
 
 
 
@@ -410,7 +357,6 @@ const PlayerGame: React.FC = () => {
       <GameHistoryModal
         isOpen={showHistoryModal}
         onClose={() => setShowHistoryModal(false)}
-        history={mockHistory}
       />
 
       {/* Wallet Modal */}

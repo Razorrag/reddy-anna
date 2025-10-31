@@ -56,15 +56,24 @@ const BetMonitoringDashboard: React.FC = () => {
   const { sendWebSocketMessage } = useWebSocket();
 
   const fetchBets = useCallback(async () => {
-    if (!gameId) return;
-    
     try {
       setLoading(true);
-      const result = await apiClient.get(`/admin/games/${gameId}/bets`) as any;
-      if (result.success && result.data) {
-        setBets(result.data || []);
+      // If gameId is provided, fetch bets for that specific game
+      if (gameId) {
+        const result = await apiClient.get(`/admin/games/${gameId}/bets`) as any;
+        if (result.success && result.data) {
+          setBets(result.data || []);
+        } else {
+          console.error('Failed to fetch bets');
+        }
       } else {
-        console.error('Failed to fetch bets');
+        // Otherwise, fetch all active/recent bets
+        const result = await apiClient.get(`/admin/bets/all?limit=200`) as any;
+        if (result.success && result.data) {
+          setBets(result.data || []);
+        } else {
+          console.error('Failed to fetch bets');
+        }
       }
     } catch (error) {
       console.error('Error fetching bets:', error);
@@ -136,9 +145,13 @@ const BetMonitoringDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (gameId) {
-      fetchBets();
-    }
+    // Fetch bets on mount and when gameId changes
+    fetchBets();
+    
+    // Set up auto-refresh every 5 seconds
+    const interval = setInterval(fetchBets, 5000);
+    
+    return () => clearInterval(interval);
   }, [gameId, fetchBets]);
 
   // Listen for WebSocket updates
@@ -174,7 +187,7 @@ const BetMonitoringDashboard: React.FC = () => {
             Live Bet Monitoring
           </CardTitle>
           <CardDescription className="text-purple-200">
-            Monitor and manage live bets in real-time
+            Monitor and manage live bets in real-time. Showing all bets {gameId ? `for game ${gameId}` : 'from current game and recent bets'}.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -220,7 +233,7 @@ const BetMonitoringDashboard: React.FC = () => {
               {filteredBets.length === 0 ? (
                 <div className="text-center py-8 text-purple-200">
                   <Users className="h-12 w-12 mx-auto text-purple-400 mb-2" />
-                  <p>No bets found. Enter a game ID to monitor live bets.</p>
+                  <p>No bets found.{gameId ? ' Try checking another game ID or leave blank to see all recent bets.' : ' All recent bets from the current game are displayed here.'}</p>
                 </div>
               ) : (
                 filteredBets.map(bet => (

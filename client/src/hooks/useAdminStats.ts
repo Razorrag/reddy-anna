@@ -19,6 +19,10 @@ interface AdminStats {
   todayProfitLoss: number;
   pendingDeposits: number;
   pendingWithdrawals: number;
+  activePlayers: number; // Players currently playing in the game
+  totalWinnings: number; // Total winnings across all users
+  totalLosses: number; // Total losses across all users
+  netHouseProfit: number; // Net house profit (losses - winnings)
 }
 
 export function useAdminStats() {
@@ -37,7 +41,8 @@ export function useAdminStats() {
         usersResponse,
         analyticsResponse,
         realtimeResponse,
-        paymentsResponse
+        paymentsResponse,
+        allUsersResponse
       ] = await Promise.all([
         apiClient.get('/admin/statistics', {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -53,13 +58,20 @@ export function useAdminStats() {
         
         apiClient.get('/admin/payment-requests/pending', {
           headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(() => ({ success: false, data: [] }))
+        }).catch(() => ({ success: false, data: [] })),
+        
+        apiClient.get('/admin/users?limit=1000', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => ({ success: false, data: { users: [] } }))
       ]);
 
       const userStats = (usersResponse as any).success ? (usersResponse as any).data : null;
       const dailyAnalytics = (analyticsResponse as any).success ? (analyticsResponse as any).data : null;
       const realtimeStats = (realtimeResponse as any).success ? (realtimeResponse as any).data : null;
       const paymentRequests = (paymentsResponse as any).success ? (paymentsResponse as any).data : [];
+      const allUsers = (allUsersResponse as any).success && (allUsersResponse as any).data?.users 
+        ? (allUsersResponse as any).data.users 
+        : [];
 
       const pendingDeposits = Array.isArray(paymentRequests) 
         ? paymentRequests.filter((r: any) => r.request_type === 'deposit' && r.status === 'pending').length
@@ -67,6 +79,11 @@ export function useAdminStats() {
       const pendingWithdrawals = Array.isArray(paymentRequests)
         ? paymentRequests.filter((r: any) => r.request_type === 'withdrawal' && r.status === 'pending').length
         : 0;
+
+      // Calculate financial statistics from all users
+      const totalWinnings = allUsers.reduce((sum: number, u: any) => sum + (parseFloat(u.totalWinnings) || 0), 0);
+      const totalLosses = allUsers.reduce((sum: number, u: any) => sum + (parseFloat(u.totalLosses) || 0), 0);
+      const netHouseProfit = totalLosses - totalWinnings;
 
       const combinedStats: AdminStats = {
         totalUsers: userStats?.totalUsers || 0,
@@ -84,7 +101,11 @@ export function useAdminStats() {
         profitLoss: dailyAnalytics?.profitLoss || 0,
         todayProfitLoss: dailyAnalytics?.profitLoss || 0,
         pendingDeposits,
-        pendingWithdrawals
+        pendingWithdrawals,
+        activePlayers: realtimeStats?.currentGame?.totalPlayers || realtimeStats?.todayPlayers || 0,
+        totalWinnings,
+        totalLosses,
+        netHouseProfit
       };
 
       setStats(combinedStats);
