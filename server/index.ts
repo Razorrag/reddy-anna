@@ -3,9 +3,11 @@ import 'dotenv/config';
 
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
+import { createServer as createHttpsServer } from "https";
 import { WebSocketServer } from "ws";
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -214,9 +216,110 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || '5000', 10);
   const host = '0.0.0.0'; // Listen on all interfaces, not just 127.0.0.1
   
-  server.listen(port, host, () => {
-    log(`serving on http://${host}:${port}`); // This should show 0.0.0.0:5000
-    log(`WebSocket server running on the same port as HTTP server`);
-    log(`🔧 Admin panel: Game Control available`);
-  });
+  // HTTPS Support for Screen Sharing (REQUIRED on VPS)
+  // Screen sharing requires HTTPS - browser blocks HTTP on non-localhost
+  const httpsEnabled = process.env.HTTPS_ENABLED === 'true';
+  const sslKeyPath = process.env.SSL_KEY_PATH || './server.key';
+  const sslCertPath = process.env.SSL_CERT_PATH || './server.crt';
+  
+  if (httpsEnabled) {
+    try {
+      // Check if SSL certificates exist
+      if (!fs.existsSync(sslKeyPath) || !fs.existsSync(sslCertPath)) {
+        log('⚠️  HTTPS enabled but certificates not found!');
+        log(`   Key path: ${sslKeyPath}`);
+        log(`   Cert path: ${sslCertPath}`);
+        log('   Generating self-signed certificate for testing...');
+        log('   For production, use Let\'s Encrypt or proper SSL certificate.');
+        
+        // Generate self-signed certificate if missing
+        const { execSync } = await import('child_process');
+        try {
+          execSync(`openssl req -x509 -newkey rsa:2048 -nodes -keyout ${sslKeyPath} -out ${sslCertPath} -days 365 -subj "/CN=${process.env.DOMAIN || host}"`, {
+            stdio: 'inherit'
+          });
+          log('✅ Self-signed certificate generated!');
+        } catch (error) {
+          log('❌ Failed to generate certificate. Please generate manually or disable HTTPS.');
+          log('   To disable HTTPS, remove HTTPS_ENABLED=true from .env');
+          throw error;
+        }
+      }
+      
+      const httpsOptions = {
+        key: fs.readFileSync(sslKeyPath),
+        cert: fs.readFileSync(sslCertPath)
+      };
+      
+      const httpsServer = createHttpsServer(httpsOptions, app);
+      
+      // Get WebSocket server from routes (already created in registerRoutes)
+      const wssFromRoutes = app.get('wss');
+      
+      // Setup WebSocket server on HTTPS (share same instance or create new)
+      const wssHttps = new WebSocketServer({ server: httpsServer, path: '/ws' });
+      
+      // Update app to use HTTPS WebSocket server as primary
+      app.set('wss', wssHttps);
+      app.set('wssHttps', wssHttps);
+      
+      // Keep HTTP WebSocket server reference if needed
+      if (wssFromRoutes) {
+        app.set('wssHttp', wssFromRoutes);
+      }
+      
+      const httpsPort = parseInt(process.env.HTTPS_PORT || '443', 10);
+      
+      httpsServer.listen(httpsPort, host, () => {
+        log(`✅ HTTPS server serving on https://${host}:${httpsPort}`);
+        log(`✅ WebSocket server running on wss://${host}:${httpsPort}/ws`);
+        log(`🔧 Admin panel: Game Control available`);
+        log(`⚠️  Screen sharing REQUIRES HTTPS - use https://your-vps-ip:${httpsPort}`);
+      });
+      
+      // Optional: Redirect HTTP to HTTPS
+      if (process.env.HTTP_TO_HTTPS_REDIRECT === 'true') {
+        server.listen(port, host, () => {
+          log(`✅ HTTP server serving on http://${host}:${port} (redirects to HTTPS)`);
+          
+          // Redirect all HTTP requests to HTTPS
+          app.use((req, res, next) => {
+            if (req.protocol === 'http' && req.get('host') !== 'localhost' && !req.get('host')?.includes('127.0.0.1')) {
+              const httpsUrl = `https://${req.get('host')?.replace(/:\d+$/, '')}:${httpsPort}${req.url}`;
+              return res.redirect(301, httpsUrl);
+            }
+            next();
+          });
+        });
+      } else {
+        // Keep HTTP server for non-localhost access without redirect
+        server.listen(port, host, () => {
+          log(`⚠️  HTTP server serving on http://${host}:${port}`);
+          log(`⚠️  WARNING: Screen sharing will NOT work on HTTP! Use HTTPS: https://your-vps-ip:${httpsPort}`);
+        });
+      }
+    } catch (error) {
+      log('❌ HTTPS setup failed:', error);
+      log('   Falling back to HTTP only - screen sharing will NOT work on VPS!');
+      log('   Screen sharing requires HTTPS on non-localhost addresses.');
+      
+      server.listen(port, host, () => {
+        log(`serving on http://${host}:${port}`);
+        log(`WebSocket server running on the same port as HTTP server`);
+        log(`🔧 Admin panel: Game Control available`);
+      });
+    }
+  } else {
+    // HTTP only mode (works on localhost, won't work for screen sharing on VPS)
+    server.listen(port, host, () => {
+      log(`serving on http://${host}:${port}`);
+      log(`WebSocket server running on the same port as HTTP server`);
+      log(`🔧 Admin panel: Game Control available`);
+      
+      if (process.env.NODE_ENV === 'production' && host !== 'localhost' && host !== '127.0.0.1') {
+        log(`⚠️  WARNING: Screen sharing requires HTTPS on VPS!`);
+        log(`   Set HTTPS_ENABLED=true in .env to enable HTTPS`);
+      }
+    });
+  }
 })();

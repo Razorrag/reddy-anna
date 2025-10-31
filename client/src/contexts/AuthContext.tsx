@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback } from 'react';
+import { tokenManager } from '@/lib/TokenManager';
 
 // Define user interface
 export interface User {
@@ -130,11 +131,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkAuthStatus();
   }, []);
 
-  // Check if user is authenticated using localStorage
+  // Check if user is authenticated using TokenManager for consistency
   const checkAuthStatus = () => {
     const userStr = localStorage.getItem('user');
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    const token = localStorage.getItem('token');
+    const token = tokenManager.getToken(); // Use TokenManager instead of direct localStorage access
 
     if (userStr && isLoggedIn && token) {
       try {
@@ -146,7 +147,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         dispatch({ type: 'AUTH_SUCCESS', payload: { user, token } });
       } catch (error) {
         console.error('Failed to parse user data:', error);
-        localStorage.removeItem('token');
+        tokenManager.clearTokens(); // Use TokenManager to clear tokens
         localStorage.removeItem('user');
         localStorage.removeItem('isLoggedIn');
         localStorage.removeItem('userRole');
@@ -161,21 +162,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = (userData: User, token: string, refreshToken?: string) => {
     console.log('AuthContext.login() called with:', { userData, token, refreshToken });
     try {
-      console.log('Storing tokens in localStorage');
+      console.log('Storing tokens via TokenManager');
       const normalizedRole = (userData.role || 'player').toLowerCase() as User['role'];
       const normalizedUser: User = { ...userData, role: normalizedRole };
       localStorage.setItem('user', JSON.stringify(normalizedUser));
       localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('token', token);
       localStorage.setItem('userRole', normalizedRole);
       
-      // Store refresh token if provided
+      // Use TokenManager to store tokens (will notify listeners)
       if (refreshToken) {
-        localStorage.setItem('refreshToken', refreshToken);
-        console.log('Refresh token stored successfully');
+        tokenManager.setTokens(token, refreshToken);
+      } else {
+        tokenManager.setToken(token);
       }
       
-      console.log('Tokens stored successfully');
+      console.log('Tokens stored successfully via TokenManager');
       dispatch({ type: 'AUTH_SUCCESS', payload: { user: normalizedUser, token } });
     } catch (error) {
       console.error('Login error:', error);
@@ -185,9 +186,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Logout function
   const logout = () => {
-    // Remove all auth-related data from localStorage
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
+    // Use TokenManager to clear tokens (will notify listeners)
+    tokenManager.clearTokens();
+    
+    // Remove other auth-related data from localStorage
     localStorage.removeItem('user');
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('userRole');
@@ -266,7 +268,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Function to refresh access token using refresh token
   const refreshAccessToken = useCallback(async (): Promise<string | null> => {
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = tokenManager.getRefreshToken();
     if (!refreshToken) {
       console.log('No refresh token found, cannot refresh access token.');
       logout();
@@ -288,8 +290,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const newRefreshToken = data.refreshToken;
 
         if (newAccessToken && newRefreshToken) {
-          localStorage.setItem('token', newAccessToken);
-          localStorage.setItem('refreshToken', newRefreshToken);
+          // Use TokenManager to update tokens (will notify listeners including WebSocket)
+          tokenManager.setTokens(newAccessToken, newRefreshToken);
           // Update auth state with new token
           dispatch({
             type: 'AUTH_SUCCESS',

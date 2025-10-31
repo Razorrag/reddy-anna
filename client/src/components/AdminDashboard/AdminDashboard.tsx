@@ -45,8 +45,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
   const [websocketConnected, setWebsocketConnected] = useState(false);
   
   // const queryClient = useQueryClient();
-  const { state: profileState, fetchBonusInfo } = useUserProfile();
-  const [bonusAmount, setBonusAmount] = useState<number>(0);
+  // Removed user profile hooks - admins don't have bonuses/balances
+  const bonusAmount = 0; // Admins don't have bonuses
   const [settings, setSettings] = useState<any | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -241,16 +241,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
   // Subscribe to centralized admin notifications from WebSocketContext
   const { toast: showToast } = useToast();
   useEffect(() => {
-    // Initial bonus fetch
-    const init = async () => {
-      try {
-        await fetchBonusInfo();
-        const bi = (profileState as any)?.bonusInfo;
-        const amount = (bi?.depositBonus || 0) + (bi?.referralBonus || 0);
-        setBonusAmount(amount);
-      } catch {}
-    };
-    init();
+    // Skip bonus fetch for admin dashboard (admins don't have bonuses)
+    // Initial bonus fetch removed - admins don't need this
 
     const handleAdminNotification = (evt: Event) => {
       const message: any = (evt as CustomEvent).detail;
@@ -270,15 +262,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
       }
     };
     window.addEventListener('admin_notification', handleAdminNotification as EventListener);
-    const handleBonusUpdate = async () => {
-      await fetchBonusInfo();
-      const bi = (profileState as any)?.bonusInfo;
-      const amount = (bi?.depositBonus || 0) + (bi?.referralBonus || 0);
-      setBonusAmount(amount);
-    };
-    window.addEventListener('bonus_update', handleBonusUpdate as EventListener);
+    // Removed bonus_update handler - admins don't have bonuses
     return () => window.removeEventListener('admin_notification', handleAdminNotification as EventListener);
-  }, [refetchRequests, refetchStats, fetchBonusInfo, profileState]);
+  }, [refetchRequests, refetchStats]);
 
   return (
     <div className={`admin-dashboard ${className || ''}`}>

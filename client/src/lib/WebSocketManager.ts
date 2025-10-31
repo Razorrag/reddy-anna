@@ -1,3 +1,4 @@
+import { tokenManager } from './TokenManager';
 
 // Browser-compatible event system (replaces Node.js EventEmitter)
 class BrowserEventEmitter {
@@ -82,6 +83,8 @@ class WebSocketManager extends BrowserEventEmitter {
   private lastActivityTime: number = 0;
   private options: WebSocketManagerOptions;
   private isExplicitlyClosed: boolean = false;
+  private tokenUnsubscribe: (() => void) | null = null;
+  private isReAuthenticating: boolean = false;
 
   private constructor(options: WebSocketManagerOptions) {
     super();
@@ -90,6 +93,11 @@ class WebSocketManager extends BrowserEventEmitter {
       maxReconnectAttempts: 10, // Default max attempts
       ...options,
     };
+    
+    // Subscribe to token changes for automatic re-authentication
+    this.tokenUnsubscribe = tokenManager.subscribeAccessToken((token) => {
+      this.handleTokenChange(token);
+    });
   }
 
   public static getInstance(options?: WebSocketManagerOptions): WebSocketManager {
@@ -148,9 +156,60 @@ class WebSocketManager extends BrowserEventEmitter {
     connectAttempt();
   }
 
+  /**
+   * Handle token change - re-authenticate if WebSocket is connected
+   */
+  private handleTokenChange(newToken: string | null): void {
+    // Only re-authenticate if WebSocket is connected and we're not already re-authenticating
+    if (
+      this.ws &&
+      this.ws.readyState === WebSocket.OPEN &&
+      this.status === ConnectionStatus.CONNECTED &&
+      newToken &&
+      !this.isReAuthenticating
+    ) {
+      console.log('🔄 WebSocketManager: Token updated, re-authenticating WebSocket...');
+      this.reAuthenticate(newToken);
+    }
+  }
+
+  /**
+   * Re-authenticate WebSocket with new token
+   */
+  private reAuthenticate(token: string): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocketManager: Cannot re-authenticate - WebSocket not open');
+      return;
+    }
+
+    this.isReAuthenticating = true;
+    try {
+      console.log('🔑 WebSocketManager: Re-authenticating with fresh token...');
+      this.send({ type: 'authenticate', data: { token } });
+      
+      // Reset re-authenticating flag after short delay
+      setTimeout(() => {
+        this.isReAuthenticating = false;
+      }, 1000);
+    } catch (error) {
+      console.error('❌ WebSocketManager: Error re-authenticating:', error);
+      this.isReAuthenticating = false;
+    }
+  }
+
   public disconnect(): void {
+    console.log('WebSocketManager: Disconnecting...');
     this.isExplicitlyClosed = true;
     this.clearReconnectTimeout();
+    this.stopActivityMonitoring();
+    this.stopTokenRefresh();
+    
+    // Unsubscribe from token changes
+    if (this.tokenUnsubscribe) {
+      this.tokenUnsubscribe();
+      this.tokenUnsubscribe = null;
+    }
+    
     if (this.ws) {
       console.log('WebSocketManager: Explicitly closing WebSocket.');
       this.ws.close(1000, 'Explicitly closed by client');

@@ -42,10 +42,36 @@ export default function AdminPayments() {
   const fetchPaymentRequests = async () => {
     try {
       setLoadingRequests(true);
-      const response = await apiClient.get('/admin/payment-requests/pending') as { data: PaymentRequest[] };
-      setPaymentRequests(response.data || []);
-    } catch (error) {
+      const response = await apiClient.get('/admin/payment-requests/pending') as { success?: boolean; data?: PaymentRequest[] };
+      
+      // Handle both response formats
+      if (response.success !== false) {
+        const requests = response.data || [];
+        // Ensure each request has required fields
+        const formattedRequests = requests.map((req: any) => ({
+          id: req.id,
+          user_id: req.user_id,
+          phone: req.phone || req.user_id || 'N/A',
+          full_name: req.full_name || req.phone || 'Unknown User',
+          request_type: req.request_type || req.type || 'deposit',
+          amount: parseFloat(req.amount) || 0,
+          payment_method: req.payment_method || 'N/A',
+          status: req.status || 'pending',
+          created_at: req.created_at || new Date().toISOString(),
+          updated_at: req.updated_at
+        }));
+        setPaymentRequests(formattedRequests);
+      } else {
+        console.error('API returned error:', response);
+        setPaymentRequests([]);
+      }
+    } catch (error: any) {
       console.error('Failed to fetch payment requests:', error);
+      // Show user-friendly error message
+      if (error.message?.includes('table') || error.message?.includes('does not exist')) {
+        console.warn('⚠️ payment_requests table may not exist. Please run the database migration.');
+      }
+      setPaymentRequests([]);
     } finally {
       setLoadingRequests(false);
       setIsLoaded(true);

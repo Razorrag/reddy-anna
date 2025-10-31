@@ -63,7 +63,7 @@ export default function Login() {
       console.log('Token received from server:', token);
       if (!token) {
         console.error('❌ No token received from server');
-        setError('Authentication failed - no token received. Please try again.');
+        setError('⚠️ Authentication Error: Server did not provide authentication token. Please check your connection and try again. If the problem persists, contact support.');
         return;
       }
 
@@ -77,7 +77,28 @@ export default function Login() {
       setLocation('/game');
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Invalid phone number or password');
+      
+      // Enhanced error messages
+      let errorMessage = 'Unable to log in. Please try again.';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('network') || message.includes('fetch')) {
+          errorMessage = '🌐 Network Error: Unable to connect to server. Please check your internet connection and try again.';
+        } else if (message.includes('timeout')) {
+          errorMessage = '⏱️ Connection Timeout: The server took too long to respond. Please try again.';
+        } else if (message.includes('401') || message.includes('unauthorized') || message.includes('invalid')) {
+          errorMessage = '❌ Invalid Credentials: Phone number or password is incorrect. Please check and try again.';
+        } else if (message.includes('404') || message.includes('not found')) {
+          errorMessage = '⚠️ Service Unavailable: Authentication service not found. Please try again later.';
+        } else if (message.includes('500') || message.includes('server error')) {
+          errorMessage = '🔴 Server Error: Our servers are experiencing issues. Please try again in a few moments.';
+        } else {
+          errorMessage = `⚠️ Error: ${err.message}`;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

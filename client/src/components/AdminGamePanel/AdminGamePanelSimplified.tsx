@@ -157,20 +157,65 @@ const AdminGamePanelSimplified: React.FC = () => {
               </div>
             </div>
 
-            {/* Total Bets Summary */}
+            {/* Total Bets Summary - Show Round 1 and Round 2 separately */}
             <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-gold/30 p-4">
               <div className="text-sm text-gray-300 mb-3 text-center font-semibold">Total Bets</div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-red-900/30 rounded-lg p-3 border border-red-500/30">
-                  <div className="text-xs text-red-300 mb-1">Andar</div>
-                  <div className="text-xl font-bold text-red-400">
-                    ₹{(gameState.round1Bets.andar + gameState.round2Bets.andar).toLocaleString()}
+              
+              {/* Round 1 Totals */}
+              <div className="mb-4">
+                <div className="text-xs text-gray-400 mb-2 text-center">Round 1</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-red-900/30 rounded-lg p-2 border border-red-500/30">
+                    <div className="text-[10px] text-red-300 mb-0.5">Andar R1</div>
+                    <div className="text-lg font-bold text-red-400">
+                      ₹{gameState.round1Bets.andar.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="bg-blue-900/30 rounded-lg p-2 border border-blue-500/30">
+                    <div className="text-[10px] text-blue-300 mb-0.5">Bahar R1</div>
+                    <div className="text-lg font-bold text-blue-400">
+                      ₹{gameState.round1Bets.bahar.toLocaleString()}
+                    </div>
                   </div>
                 </div>
-                <div className="bg-blue-900/30 rounded-lg p-3 border border-blue-500/30">
-                  <div className="text-xs text-blue-300 mb-1">Bahar</div>
-                  <div className="text-xl font-bold text-blue-400">
-                    ₹{(gameState.round1Bets.bahar + gameState.round2Bets.bahar).toLocaleString()}
+              </div>
+
+              {/* Round 2 Totals */}
+              {gameState.currentRound >= 2 && (
+                <div className="mb-4">
+                  <div className="text-xs text-gray-400 mb-2 text-center">Round 2</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-red-900/30 rounded-lg p-2 border border-red-500/30">
+                      <div className="text-[10px] text-red-300 mb-0.5">Andar R2</div>
+                      <div className="text-lg font-bold text-red-400">
+                        ₹{gameState.round2Bets.andar.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="bg-blue-900/30 rounded-lg p-2 border border-blue-500/30">
+                      <div className="text-[10px] text-blue-300 mb-0.5">Bahar R2</div>
+                      <div className="text-lg font-bold text-blue-400">
+                        ₹{gameState.round2Bets.bahar.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Grand Total */}
+              <div className="pt-3 border-t border-gray-600">
+                <div className="text-xs text-gray-400 mb-2 text-center">Grand Total</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-red-900/50 rounded-lg p-2 border border-red-500/50">
+                    <div className="text-[10px] text-red-300 mb-0.5">Andar Total</div>
+                    <div className="text-xl font-bold text-red-400">
+                      ₹{(gameState.round1Bets.andar + gameState.round2Bets.andar).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="bg-blue-900/50 rounded-lg p-2 border border-blue-500/50">
+                    <div className="text-[10px] text-blue-300 mb-0.5">Bahar Total</div>
+                    <div className="text-xl font-bold text-blue-400">
+                      ₹{(gameState.round1Bets.bahar + gameState.round2Bets.bahar).toLocaleString()}
+                    </div>
                   </div>
                 </div>
               </div>

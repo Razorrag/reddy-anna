@@ -1,6 +1,6 @@
 import { X, Wallet, ArrowDownToLine, ArrowUpFromLine, Gift, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { apiClient } from "@/lib/api-client";
 
@@ -20,7 +20,26 @@ export function WalletModal({
   const [amount, setAmount] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
   const [isLoading, setIsLoading] = useState(false);
-  const { state: userProfileState, claimBonus } = useUserProfile();
+  const { state: userProfileState, claimBonus, fetchBonusInfo } = useUserProfile();
+
+  // Fetch bonus info when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchBonusInfo();
+    }
+  }, [isOpen, fetchBonusInfo]);
+
+  // Listen for bonus updates
+  useEffect(() => {
+    const handleBonusUpdate = () => {
+      fetchBonusInfo();
+    };
+
+    window.addEventListener('bonus_update', handleBonusUpdate);
+    return () => {
+      window.removeEventListener('bonus_update', handleBonusUpdate);
+    };
+  }, [fetchBonusInfo]);
 
   if (!isOpen) return null;
 
@@ -46,6 +65,14 @@ export function WalletModal({
       });
 
       if (response.success) {
+        // Refresh bonus info after deposit request (will be applied when admin approves)
+        if (activeTab === 'deposit') {
+          // Fetch bonus info after a short delay to allow backend processing
+          setTimeout(() => {
+            fetchBonusInfo();
+          }, 2000);
+        }
+        
         // Show success message
         alert(`${activeTab === 'deposit' ? 'Deposit' : 'Withdrawal'} request submitted successfully! Opening WhatsApp to contact admin...`);
         

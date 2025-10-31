@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Trophy, Zap } from "lucide-react";
 
 // Import new components
-import Navigation from "@/components/Navigation/Navigation";
 import LanguageSelector from "@/components/LanguageSelector/LanguageSelector";
 import About from "@/components/About/About";
 import GameRules from "@/components/GameRules/GameRules";
@@ -14,18 +13,8 @@ import Footer from "@/components/Footer/Footer";
 import WhatsAppFloatButton from "@/components/WhatsAppFloatButton/WhatsAppFloatButton";
 
 export default function Index() {
-  const [isScrolled, setIsScrolled] = useState(false);
   const [, setLocation] = useLocation();
   const { state } = useAuth();
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // Auth-aware landing: redirect authenticated users to their home
   useEffect(() => {
@@ -42,9 +31,6 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900">
-      {/* Navigation Header */}
-      <Navigation isScrolled={isScrolled} />
-      
       {/* Language Selector - Fixed Top Right */}
       <div className="fixed top-4 right-4 z-40">
         <LanguageSelector />
@@ -64,7 +50,7 @@ export default function Index() {
         {/* Hero Content */}
         <div className="relative z-10 text-center max-w-5xl mx-auto px-4 py-20">
           <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-gold mb-6 drop-shadow-2xl animate-fade-in">
-            REDDY ANNA
+            RAJU GARI KOSSU
           </h1>
           <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-white/90 mb-4 font-light">
             India's Premier Andar Bahar Platform
@@ -112,7 +98,7 @@ export default function Index() {
       {/* Features Section */}
       <section className="py-16 sm:py-20 lg:py-24 bg-gradient-to-br from-purple-950 via-indigo-950 to-violet-950">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-gold mb-8 sm:mb-12">Why Choose Reddy Anna?</h2>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-gold mb-8 sm:mb-12">Why Choose RAJU GARI KOSSU?</h2>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:border-gold/50 hover:shadow-lg hover:shadow-gold/10 transition-all duration-300">

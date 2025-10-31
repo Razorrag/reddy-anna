@@ -5,6 +5,8 @@
  * and handles token refresh on 401 errors with a single retry.
  */
 
+import { tokenManager } from './TokenManager';
+
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean; // Skip authentication for public endpoints
   _retried?: boolean; // Internal flag to prevent infinite retry loops
@@ -40,17 +42,17 @@ class APIClient {
   }
 
   /**
-   * Get authentication token from localStorage
+   * Get authentication token from TokenManager
    */
   private getToken(): string | null {
-    return localStorage.getItem('token');
+    return tokenManager.getToken();
   }
 
   /**
-   * Get refresh token from localStorage
+   * Get refresh token from TokenManager
    */
   private getRefreshToken(): string | null {
-    return localStorage.getItem('refreshToken');
+    return tokenManager.getRefreshToken();
   }
 
   /**
@@ -105,8 +107,8 @@ class APIClient {
           const newRefreshToken = data.refreshToken;
 
           if (newAccessToken && newRefreshToken) {
-            localStorage.setItem('token', newAccessToken);
-            localStorage.setItem('refreshToken', newRefreshToken);
+            // Use TokenManager to update tokens (will notify listeners including WebSocket)
+            tokenManager.setTokens(newAccessToken, newRefreshToken);
             console.log('✅ Access token refreshed successfully');
             return newAccessToken;
           } else {
@@ -136,8 +138,10 @@ class APIClient {
    * Clear authentication data
    */
   private clearAuth(): void {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
+    // Use TokenManager to clear tokens (will notify listeners)
+    tokenManager.clearTokens();
+    
+    // Clear other auth-related data
     localStorage.removeItem('user');
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('userRole');

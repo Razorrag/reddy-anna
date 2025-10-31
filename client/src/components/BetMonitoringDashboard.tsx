@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Edit3, Users, Clock, TrendingUp, TrendingDown } from "lucide-react";
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiClient } from '@/lib/api-client';
 
 interface Bet {
   id: string;
@@ -53,21 +54,14 @@ const BetMonitoringDashboard: React.FC = () => {
   const [gameId, setGameId] = useState<string>('');
   
   const { sendWebSocketMessage } = useWebSocket();
-  const { token } = useAuth();
 
   const fetchBets = useCallback(async () => {
     if (!gameId) return;
     
     try {
       setLoading(true);
-      const response = await fetch(`/api/admin/games/${gameId}/bets`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
+      const result = await apiClient.get(`/admin/games/${gameId}/bets`) as any;
+      if (result.success && result.data) {
         setBets(result.data || []);
       } else {
         console.error('Failed to fetch bets');
@@ -84,14 +78,11 @@ const BetMonitoringDashboard: React.FC = () => {
     
     try {
       setLoading(true);
-      const response = await fetch(`/api/admin/search-bets?phone=${encodeURIComponent(searchTerm)}${gameId ? `&gameId=${gameId}` : ''}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const params = new URLSearchParams({ phone: searchTerm });
+      if (gameId) params.append('gameId', gameId);
       
-      if (response.ok) {
-        const result = await response.json();
+      const result = await apiClient.get(`/admin/search-bets?${params}`) as any;
+      if (result.success && result.data) {
         setBets(result.data || []);
       } else {
         console.error('Failed to search bets');
@@ -110,22 +101,14 @@ const BetMonitoringDashboard: React.FC = () => {
     }
     
     try {
-      const response = await fetch(`/api/admin/bets/${updateForm.betId}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          side: updateForm.newSide,
-          amount: updateForm.newAmount,
-          round: updateForm.currentRound,
-          reason: updateForm.reason
-        })
-      });
+      const result = await apiClient.patch(`/admin/bets/${updateForm.betId}`, {
+        side: updateForm.newSide,
+        amount: updateForm.newAmount,
+        round: updateForm.currentRound,
+        reason: updateForm.reason
+      }) as any;
       
-      if (response.ok) {
-        const result = await response.json();
+      if (result.success) {
         console.log('Bet updated successfully:', result);
         setShowUpdateDialog(false);
         fetchBets(); // Refresh the bets list

@@ -100,6 +100,7 @@ export interface IStorage {
   updateUserBalance(userId: string, amountChange: number): Promise<void>;
   updateUser(userId: string, updates: any): Promise<User>;
   deductBalanceAtomic(userId: string, amount: number): Promise<number>; // Atomic balance deduction
+  addBalanceAtomic(userId: string, amount: number): Promise<number>; // Atomic balance addition
   updateUserGameStats(userId: string, won: boolean, betAmount: number, payoutAmount: number): Promise<void>;
   
   // Game session operations
@@ -160,6 +161,7 @@ export interface IStorage {
     default_deposit_bonus_percent: number;
     referral_bonus_percent: number;
     conditional_bonus_threshold: number;
+    bonus_claim_threshold: number;
     admin_whatsapp_number: string;
   }>;
   updateGameSettings(settings: { minBet?: number; maxBet?: number; timerDuration?: number }): Promise<void>;
@@ -239,6 +241,8 @@ export interface IStorage {
   // Analytics methods
   getBonusAnalytics(period: string): Promise<any>;
   getReferralAnalytics(period: string): Promise<any>;
+  getAllBonusTransactions(filters?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<any[]>;
+  getAllReferralData(filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
 }
 
 export class SupabaseStorage implements IStorage {
@@ -776,6 +780,48 @@ export class SupabaseStorage implements IStorage {
       return newBalance;
     } catch (error: any) {
       console.error('Atomic balance deduction failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Atomically add balance - prevents race conditions
+   * Returns new balance if successful
+   */
+  async addBalanceAtomic(userId: string, amount: number): Promise<number> {
+    try {
+      // Get current balance with row lock
+      const { data: user, error: selectError } = await supabaseServer
+        .from('users')
+        .select('balance')
+        .eq('id', userId)
+        .single();
+
+      if (selectError || !user) {
+        throw new Error('User not found');
+      }
+
+      const currentBalance = parseFloat(user.balance || '0');
+      const newBalance = currentBalance + amount;
+
+      // Update balance atomically
+      const { error: updateError } = await supabaseServer
+        .from('users')
+        .update({ 
+          balance: newBalance.toString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId)
+        // Double-check balance hasn't changed (optimistic locking)
+        .eq('balance', currentBalance.toString());
+
+      if (updateError) {
+        throw new Error('Failed to update balance - please try again');
+      }
+
+      return newBalance;
+    } catch (error: any) {
+      console.error('Atomic balance addition failed:', error);
       throw error;
     }
   }
@@ -1472,12 +1518,14 @@ export class SupabaseStorage implements IStorage {
       default_deposit_bonus_percent: number;
       referral_bonus_percent: number;
       conditional_bonus_threshold: number;
+      bonus_claim_threshold: number;
       admin_whatsapp_number: string;
     }> {
       // Get bonus settings from game_settings table
       const defaultDepositBonusPercent = await this.getGameSetting('default_deposit_bonus_percent');
       const referralBonusPercent = await this.getGameSetting('referral_bonus_percent');
       const conditionalBonusThreshold = await this.getGameSetting('conditional_bonus_threshold');
+      const bonusClaimThreshold = await this.getGameSetting('bonus_claim_threshold');
       const adminWhatsappNumber = await this.getGameSetting('admin_whatsapp_number');
       
       return {
@@ -1487,6 +1535,7 @@ export class SupabaseStorage implements IStorage {
         default_deposit_bonus_percent: parseFloat(defaultDepositBonusPercent || '5'),
         referral_bonus_percent: parseFloat(referralBonusPercent || '1'),
         conditional_bonus_threshold: parseFloat(conditionalBonusThreshold || '30'),
+        bonus_claim_threshold: parseFloat(bonusClaimThreshold || '500'),
         admin_whatsapp_number: adminWhatsappNumber || ''
       };
     }
@@ -2488,6 +2537,117 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
+  async getAllBonusTransactions(filters: { status?: string; type?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
+    try {
+      const { status, type, limit = 100, offset = 0 } = filters;
+      
+      let query = supabaseServer
+        .from('user_transactions')
+        .select(`
+          *,
+          user:users!user_transactions_user_id_fkey(id, phone, full_name, username)
+        `)
+        .in('transaction_type', ['bonus', 'bonus_applied'])
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (type) {
+        if (type === 'deposit_bonus') {
+          query = query.like('description', '%Deposit bonus%');
+        } else if (type === 'referral_bonus') {
+          query = query.like('description', '%Referral bonus%');
+        } else if (type === 'bonus_applied') {
+          query = query.eq('transaction_type', 'bonus_applied');
+        }
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error getting all bonus transactions:', error);
+        return [];
+      }
+
+      const transactions = (data || []).map((txn: any) => {
+        let bonusType: 'deposit_bonus' | 'referral_bonus' | 'bonus_applied' = 'bonus_applied';
+        if (txn.description?.includes('Deposit bonus')) {
+          bonusType = 'deposit_bonus';
+        } else if (txn.description?.includes('Referral bonus')) {
+          bonusType = 'referral_bonus';
+        }
+
+        const relatedAmountMatch = txn.description?.match(/₹(\d+(?:\.\d+)?)/);
+        const relatedAmount = relatedAmountMatch ? parseFloat(relatedAmountMatch[1]) : undefined;
+
+        return {
+          id: txn.id,
+          userId: txn.user_id,
+          username: txn.user?.username || txn.user?.full_name || txn.user?.phone || 'Unknown',
+          type: bonusType,
+          amount: parseFloat(txn.amount),
+          status: txn.transaction_type === 'bonus_applied' || txn.description?.includes('applied') ? 'applied' : 'pending',
+          timestamp: txn.created_at,
+          description: txn.description || '',
+          relatedAmount
+        };
+      });
+
+      if (status && status !== 'all') {
+        return transactions.filter((t: any) => t.status === status);
+      }
+
+      return transactions;
+    } catch (error) {
+      console.error('Error in getAllBonusTransactions:', error);
+      return [];
+    }
+  }
+
+  async getAllReferralData(filters: { status?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
+    try {
+      const { status, limit = 100, offset = 0 } = filters;
+      
+      let query = supabaseServer
+        .from('user_referrals')
+        .select(`
+          *,
+          referrer:users!user_referrals_referrer_user_id_fkey(id, phone, full_name, username),
+          referred:users!user_referrals_referred_user_id_fkey(id, phone, full_name, username)
+        `)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error getting all referral data:', error);
+        return [];
+      }
+
+      const referralData = (data || []).map((ref: any) => ({
+        id: ref.id,
+        referrerId: ref.referrer_user_id,
+        referrerUsername: ref.referrer?.username || ref.referrer?.full_name || ref.referrer?.phone || 'Unknown',
+        referredId: ref.referred_user_id,
+        referredUsername: ref.referred?.username || ref.referred?.full_name || ref.referred?.phone || 'Unknown',
+        depositAmount: parseFloat(ref.deposit_amount || '0'),
+        bonusAmount: parseFloat(ref.bonus_amount || '0'),
+        status: ref.bonus_applied ? 'completed' : 'pending',
+        createdAt: ref.created_at,
+        bonusAppliedAt: ref.bonus_applied_at
+      }));
+
+      if (status && status !== 'all') {
+        return referralData.filter((r: any) => r.status === status);
+      }
+
+      return referralData;
+    } catch (error) {
+      console.error('Error in getAllReferralData:', error);
+      return [];
+    }
+  }
+
   // Payment request methods implementation
   async createPaymentRequest(request: {
     userId: string;
@@ -2504,7 +2664,7 @@ export class SupabaseStorage implements IStorage {
     const paymentRequest = {
       id,
       user_id: request.userId,
-      type: request.type,
+      request_type: request.type,
       amount: request.amount,
       payment_method: request.paymentMethod,
       status: request.status,
@@ -2522,16 +2682,20 @@ export class SupabaseStorage implements IStorage {
 
       if (error) {
         console.error('Error creating payment request:', error);
-        // Fallback for local/dev when table is missing or DB unavailable
-        // Return an in-memory result so the UI can proceed
-        return paymentRequest;
+        // Throw error so API can properly report failure to user
+        throw new Error(`Failed to create payment request: ${error.message || 'Database error'}`);
+      }
+
+      if (!data) {
+        console.error('No data returned from payment request insert');
+        throw new Error('Failed to create payment request: No data returned');
       }
 
       return data;
-    } catch (err) {
+    } catch (err: any) {
       console.error('DB exception creating payment request:', err);
-      // Fallback result
-      return paymentRequest;
+      // Re-throw so the API route can handle it
+      throw err instanceof Error ? err : new Error(`Failed to create payment request: ${err?.message || 'Unknown error'}`);
     }
   }
 
@@ -2568,22 +2732,95 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getPendingPaymentRequests(): Promise<any[]> {
-    const { data, error } = await supabaseServer
-      .from('payment_requests')
-      .select(`
-        *,
-        user:users!payment_requests_user_id_fkey(phone, full_name),
-        admin:users!payment_requests_admin_id_fkey(phone, full_name)
-      `)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
+    try {
+      // First try with join
+      const { data, error } = await supabaseServer
+        .from('payment_requests')
+        .select(`
+          *,
+          user:users(phone, full_name)
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error getting pending payment requests:', error);
+      if (error) {
+        console.error('Error getting pending payment requests (with join):', error);
+        // Try simpler query without joins if the foreign key join fails
+        const { data: simpleData, error: simpleError } = await supabaseServer
+          .from('payment_requests')
+          .select('*')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false });
+        
+        if (simpleError) {
+          console.error('Error getting pending payment requests (simple query):', simpleError);
+          // If table doesn't exist, return empty array
+          if (simpleError.code === '42P01' || simpleError.message?.includes('does not exist')) {
+            console.warn('⚠️ payment_requests table does not exist. Please create it first.');
+            return [];
+          }
+          return [];
+        }
+        
+        // Manually fetch user data for each request
+        const requestsWithUsers = await Promise.all(
+          (simpleData || []).map(async (request: any) => {
+            try {
+              const { data: userData } = await supabaseServer
+                .from('users')
+                .select('phone, full_name')
+                .eq('id', request.user_id)
+                .single();
+              
+              return {
+                ...request,
+                user: userData || null,
+                phone: userData?.phone || request.user_id || null,
+                full_name: userData?.full_name || null,
+                user_id: request.user_id
+              };
+            } catch (userError) {
+              console.error(`Error fetching user for request ${request.id}:`, userError);
+              return {
+                ...request,
+                user: null,
+                phone: request.user_id || null,
+                full_name: null,
+                user_id: request.user_id
+              };
+            }
+          })
+        );
+        
+        return requestsWithUsers;
+      }
+
+      // Flatten the user data for easier access and ensure correct format
+      const flattenedData = (data || []).map((request: any) => {
+        const userPhone = request.user?.phone || request.user_id || null;
+        const userFullName = request.user?.full_name || null;
+        
+        return {
+          id: request.id,
+          user_id: request.user_id,
+          request_type: request.request_type || request.type,
+          amount: parseFloat(request.amount) || 0,
+          payment_method: request.payment_method || 'N/A',
+          status: request.status || 'pending',
+          admin_notes: request.admin_notes || null,
+          created_at: request.created_at,
+          updated_at: request.updated_at,
+          phone: userPhone,
+          full_name: userFullName,
+          user: request.user || null
+        };
+      });
+
+      return flattenedData;
+    } catch (err: any) {
+      console.error('Exception in getPendingPaymentRequests:', err);
       return [];
     }
-
-    return data || [];
   }
 
   async updatePaymentRequest(requestId: string, status: string, adminId?: string): Promise<void> {
@@ -2608,15 +2845,22 @@ export class SupabaseStorage implements IStorage {
   }
 
   async approvePaymentRequest(requestId: string, userId: string, amount: number, adminId: string): Promise<void> {
+    // Get the payment request to determine type
+    const paymentRequest = await this.getPaymentRequest(requestId);
+    if (!paymentRequest) {
+      throw new Error('Payment request not found');
+    }
+
+    const requestType = paymentRequest.request_type || paymentRequest.type;
+    
     // Use database transaction to ensure atomic operation
-    // Note: We'll assume the database has a stored procedure for atomic approval
-    // In a real implementation, this would require a more complex atomic operation
     try {
       // Update the payment request status
       await this.updatePaymentRequest(requestId, 'approved', adminId);
 
-      // For deposits: add to user balance
-      if (amount > 0) {
+      // Handle deposits and withdrawals differently
+      if (requestType === 'deposit') {
+        // For deposits: add to user balance
         await this.updateUserBalance(userId, amount);
         
         // CRITICAL FIX: Apply deposit bonus when admin approves deposit
@@ -2628,10 +2872,10 @@ export class SupabaseStorage implements IStorage {
           console.error('⚠️ Failed to apply deposit bonus on approval:', bonusError);
           // Don't fail the approval if bonus fails
         }
-      } 
-      // For withdrawals: subtract from user balance (though this would be unusual for approval)
-      else if (amount < 0) {
-        await this.updateUserBalance(userId, amount);
+      } else if (requestType === 'withdrawal') {
+        // For withdrawals: subtract from user balance (amount is positive)
+        await this.updateUserBalance(userId, -amount);
+        console.log(`✅ Withdrawal processed: deducted ₹${amount} from user ${userId}`);
       }
     } catch (error) {
       console.error('Error approving payment request:', error);

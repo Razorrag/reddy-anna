@@ -103,9 +103,9 @@ export const corsOptions = {
       'http://localhost:5173',
       'http://localhost:3000',
       'http://localhost:3001',
-      'https://reddyanna.com',
-      'https://reddy-anna-7n83.onrender.com',
-      'https://reddy-anna.onrender.com',
+      'https://raju-gari-kossu.com',
+      'https://raju-gari-kossu-7n83.onrender.com',
+      'https://raju-gari-kossu.onrender.com',
       'http://91.108.110.72:5000'
     ];
     

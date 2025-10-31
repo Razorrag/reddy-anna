@@ -22,7 +22,6 @@ import ProtectedRoute from "@/components/ProtectedRoute.tsx";
 import ProtectedAdminRoute from "@/components/ProtectedAdminRoute.tsx";
 import ErrorBoundary from "@/components/ErrorBoundary.tsx";
 import AppProviders from "@/providers/AppProviders.tsx";
-import Navbar from "@/components/Navbar.tsx";
 
 function Router() {
   return (
@@ -115,7 +114,6 @@ function App() {
   return (
     <ErrorBoundary>
       <AppProviders>
-        <Navbar />
         <Router />
       </AppProviders>
     </ErrorBoundary>

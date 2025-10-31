@@ -3,7 +3,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage-supabase";
-import { registerUser, loginUser, loginAdmin } from './auth';
+import { registerUser, loginUser, loginAdmin, requireAuth } from './auth';
 import { processPayment, getTransactionHistory, applyDepositBonus, applyReferralBonus, checkConditionalBonus, applyAvailableBonus } from './payment';
 import {
   updateSiteContent,
@@ -131,12 +131,13 @@ import {
   exportUserData,
   createUserManually
 } from './user-management';
-import {
-  sendWhatsAppRequest,
-  getUserRequestHistory,
-  getPendingAdminRequests,
-  updateRequestStatus
-} from './whatsapp-service';
+// WhatsApp service removed - functionality handled by admin-requests-supabase.ts
+// import {
+//   sendWhatsAppRequest,
+//   getUserRequestHistory,
+//   getPendingAdminRequests,
+//   updateRequestStatus
+// } from './whatsapp-service';
 import { 
   authLimiter, 
   generalLimiter, 
@@ -182,11 +183,6 @@ declare global {
 
 // Initialize clients Set before using it
 const clients = new Set<WSClient>();
-
-// Initialize global variables
-global.broadcast = broadcast;
-global.broadcastToRole = broadcastToRole;
-global.clients = clients;
 
 // Async error handler wrapper
 function asyncHandler(fn: Function) {
@@ -398,15 +394,6 @@ class GameState {
 
 const currentGameState = new GameState();
 
-// Make game state and functions globally available
-(global as any).currentGameState = currentGameState;
-(global as any).broadcast = broadcast;
-(global as any).broadcastToRole = broadcastToRole;
-(global as any).startTimer = startTimer;
-(global as any).completeGame = completeGame;
-(global as any).transitionToRound2 = transitionToRound2;
-(global as any).transitionToRound3 = transitionToRound3;
-
 // Helper function to get current game state for new connections
 const getCurrentGameStateForUser = async (userId: string) => {
   try {
@@ -504,6 +491,9 @@ const getCurrentGameStateForUser = async (userId: string) => {
     return null;
   }
 };
+
+// Make getCurrentGameStateForUser globally available for WebSocket handlers
+(global as any).getCurrentGameStateForUser = getCurrentGameStateForUser;
 
 // Helper function to get appropriate join message
 const getJoinMessage = (phase: string, currentRound: number): string => {
@@ -688,9 +678,6 @@ function calculatePayout(
     return totalBet * 2; // 1:1 payout on total investment
   }
 }
-
-// Import unified authentication middleware from auth.ts
-import { requireAuth } from './auth';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -1860,22 +1847,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'pending'
       });
       
-      // Send WhatsApp notification to admin
-      try {
-        const { sendWhatsAppRequest } = await import('./whatsapp-service');
-        await sendWhatsAppRequest({
-          userId: req.user!.id,
-          userPhone: req.user!.phone || req.user!.username || 'unknown',
-          requestType: requestType.toUpperCase(),
-          message: `🚨 NEW ${requestType.toUpperCase()} REQUEST: ₹${numAmount.toLocaleString('en-IN')} from ${req.user!.phone || req.user!.username || 'unknown'}`,
-          amount: numAmount,
-          isUrgent: true, // Mark as urgent for immediate admin attention
-          metadata: { requestId: result.id }
-        });
-      } catch (whatsappError) {
-        console.error('Failed to send WhatsApp notification:', whatsappError);
-        // Don't fail the request if WhatsApp notification fails
-      }
+      // WhatsApp notification handled by admin-requests-supabase API
+      // Request is created via AdminRequestsSupabaseAPI which handles notifications
       
       // Audit log
       auditLogger('payment_request_created', req.user.id, {
@@ -1972,9 +1945,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       await storage.approvePaymentRequest(id, request.user_id, request.amount, req.user.id);
       
-      // FIXED: Remove balance updates from WebSocket entirely
-      // All balance updates should now come from REST API polling
-      console.log(`💰 Payment request approved via REST API: ${request.user_id} -> ${request.amount} (${request.request_type})`);
+      // If deposit approved, check if bonus threshold reached for auto-credit
+      if (request.request_type === 'deposit') {
+        try {
+          const { checkAndAutoCreditBonus } = await import('./payment');
+          const autoCredited = await checkAndAutoCreditBonus(request.user_id);
+          if (autoCredited) {
+            console.log(`✅ Bonus auto-credited for user ${request.user_id} after deposit approval (threshold reached)`);
+            // Notify user about auto-credit
+            clients.forEach(c => {
+              if (c.userId === request.user_id && c.ws.readyState === WebSocket.OPEN) {
+                c.ws.send(JSON.stringify({
+                  type: 'bonus_update',
+                  data: {
+                    message: 'Bonus automatically credited to your balance!',
+                    timestamp: Date.now()
+                  }
+                }));
+              }
+            });
+          }
+        } catch (bonusError) {
+          console.error(`⚠️ Error checking bonus threshold after deposit:`, bonusError);
+          // Don't fail approval if bonus check fails
+        }
+      }
+      
+      // Get updated user balance
+      const updatedUser = await storage.getUser(request.user_id);
+      const newBalance = updatedUser ? parseFloat(updatedUser.balance) : 0;
+      
+      // Send WebSocket notification to user about payment approval
+      try {
+        clients.forEach(client => {
+          if (client.userId === request.user_id && client.ws.readyState === WebSocket.OPEN) {
+            client.ws.send(JSON.stringify({
+              type: 'admin_payment_notification',
+              data: {
+                message: `Your ${request.request_type} request of ₹${request.amount.toLocaleString('en-IN')} has been approved. New balance: ₹${newBalance.toLocaleString('en-IN')}`,
+                reason: `Admin approved ${request.request_type}`,
+                timestamp: Date.now(),
+                requestType: request.request_type,
+                amount: request.amount,
+                newBalance: newBalance
+              }
+            }));
+            
+            // Also send balance update
+            client.ws.send(JSON.stringify({
+              type: 'balance_update',
+              data: {
+                balance: newBalance,
+                amount: request.request_type === 'deposit' ? request.amount : -request.amount,
+                type: request.request_type,
+                timestamp: Date.now()
+              }
+            }));
+          }
+        });
+        console.log(`💰 Payment request approved and notification sent: ${request.user_id} -> ₹${request.amount} (${request.request_type})`);
+      } catch (notificationError) {
+        console.error('Failed to send payment notification:', notificationError);
+        // Don't fail the request if notification fails
+      }
       
       // Audit log
       if (req.user) {
@@ -2920,108 +2953,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // WhatsApp Integration Endpoints
-  app.post("/api/whatsapp/send-request", generalLimiter, async (req, res) => {
-    try {
-      const { userId, userPhone, requestType, message, amount, isUrgent, metadata } = req.body;
-      
-      if (!userId || !userPhone || !requestType || !message) {
-        return res.status(400).json({
-          success: false,
-          error: 'Missing required fields'
-        });
-      }
-      
-      const result = await sendWhatsAppRequest({
-        userId,
-        userPhone,
-        requestType,
-        message,
-        amount,
-        isUrgent,
-        metadata
-      });
-      
-      res.json(result);
-    } catch (error) {
-      console.error('Send WhatsApp request error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to send WhatsApp request'
-      });
-    }
-  });
-
-  app.get("/api/whatsapp/request-history", generalLimiter, async (req, res) => {
-    try {
-      const { userId, limit } = req.query;
-      
-      if (!userId) {
-        return res.status(400).json({
-          success: false,
-          error: 'User ID is required'
-        });
-      }
-      
-      const result = await getUserRequestHistory(
-        userId as string,
-        limit ? parseInt(limit as string) : 20
-      );
-      
-      res.json(result);
-    } catch (error) {
-      console.error('Get request history error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get request history'
-      });
-    }
-  });
-
-  app.get("/api/admin/whatsapp/pending-requests", generalLimiter, async (req, res) => {
-    try {
-      const result = await getPendingAdminRequests();
-      res.json(result);
-    } catch (error) {
-      console.error('Get pending requests error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get pending requests'
-      });
-    }
-  });
-
-  app.patch("/api/admin/whatsapp/requests/:id", generalLimiter, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { status, responseMessage } = req.body;
-      
-      if (!status) {
-        return res.status(400).json({
-          success: false,
-          error: 'Status is required'
-        });
-      }
-      
-      const result = await updateRequestStatus(
-        id,
-        status,
-        responseMessage,
-        req.user!.id
-      );
-      
-      if (result.success) {
-        auditLogger('whatsapp_request_updated', req.user!.id, { requestId: id, status });
-      }
-      
-      res.json(result);
-    } catch (error) {
-      console.error('Update request status error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to update request status'
-      });
-    }
-  });
+  // WhatsApp Integration Endpoints - Moved to admin-requests-supabase.ts
+  // These endpoints are now handled by AdminRequestsSupabaseAPI mounted at /api/admin
+  // See admin-requests-supabase.ts for the new implementation
 
   // Admin Bonus Management Endpoints
   app.get("/api/admin/bonus-analytics", generalLimiter, async (req, res) => {
@@ -3124,7 +3058,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bonusSettings = {
         depositBonusPercent: settings.default_deposit_bonus_percent || '5',
         referralBonusPercent: settings.referral_bonus_percent || '1',
-        conditionalBonusThreshold: settings.conditional_bonus_threshold || '30'
+        conditionalBonusThreshold: settings.conditional_bonus_threshold || '30',
+        bonusClaimThreshold: (settings as any).bonus_claim_threshold || '500'
       };
       
       res.json({
@@ -3142,7 +3077,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/admin/bonus-settings", generalLimiter, async (req, res) => {
     try {
-      const { depositBonusPercent, referralBonusPercent, conditionalBonusThreshold } = req.body;
+      const { depositBonusPercent, referralBonusPercent, conditionalBonusThreshold, bonusClaimThreshold } = req.body;
       
       // Update game settings
       const updates: any = {};
@@ -3154,6 +3089,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (conditionalBonusThreshold !== undefined) {
         updates.conditional_bonus_threshold = conditionalBonusThreshold.toString();
+      }
+      if (bonusClaimThreshold !== undefined) {
+        updates.bonus_claim_threshold = bonusClaimThreshold.toString();
       }
       
       const result = await updateGameSettings(updates, req.user!.id);
@@ -3168,6 +3106,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         success: false,
         error: 'Failed to update bonus settings'
+      });
+    }
+  });
+
+  // Get All Bonus Transactions Endpoint
+  app.get("/api/admin/bonus-transactions", generalLimiter, async (req, res) => {
+    try {
+      const { status, type, limit = 100, offset = 0 } = req.query;
+      
+      // Get all bonus transactions using storage method
+      const transactions = await storage.getAllBonusTransactions({
+        status: status as string,
+        type: type as string,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      });
+
+      res.json({
+        success: true,
+        data: transactions,
+        total: transactions.length
+      });
+    } catch (error) {
+      console.error('Get bonus transactions error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve bonus transactions'
+      });
+    }
+  });
+
+  // Get All Referral Data Endpoint
+  app.get("/api/admin/referral-data", generalLimiter, async (req, res) => {
+    try {
+      const { status, limit = 100, offset = 0 } = req.query;
+      
+      // Get all referral data using storage method
+      const referralData = await storage.getAllReferralData({
+        status: status as string,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      });
+
+      res.json({
+        success: true,
+        data: referralData,
+        total: referralData.length
+      });
+    } catch (error) {
+      console.error('Get referral data error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve referral data'
       });
     }
   });
@@ -3359,6 +3350,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         success: false,
         error: 'Failed to update bet'
+      });
+    }
+  });
+
+  // Delete/Cancel bet endpoint
+  app.delete("/api/admin/bets/:betId", generalLimiter, async (req, res) => {
+    try {
+      const { betId } = req.params;
+      
+      // Get current bet to find user info
+      const currentBet = await storage.getBetById(betId);
+      if (!currentBet) {
+        return res.status(404).json({
+          success: false,
+          error: 'Bet not found'
+        });
+      }
+      
+      // 🔒 SECURITY: Only allow bet cancellation during betting phase
+      const game = await storage.getGameSession(currentBet.gameId);
+      if (!game) {
+        return res.status(404).json({
+          success: false,
+          error: 'Game session not found'
+        });
+      }
+      
+      if (game.phase !== 'betting') {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot cancel bets after betting phase. Current phase: ${game.phase}`
+        });
+      }
+      
+      const userId = currentBet.userId;
+      const betAmount = parseFloat(currentBet.amount);
+      
+      // Refund the bet amount to user's balance
+      await storage.addBalanceAtomic(userId, betAmount);
+      
+      // Update bet status to cancelled in database
+      await storage.updateBetDetails(betId, {
+        status: 'cancelled'
+      });
+      
+      // Update the current game state in memory
+      if (currentGameState.userBets.has(userId)) {
+        const userBets = currentGameState.userBets.get(userId)!;
+        const side = currentBet.side as 'andar' | 'bahar';
+        const round = parseInt(currentBet.round);
+        
+        if (round === 1) {
+          userBets.round1[side] -= betAmount;
+          currentGameState.round1Bets[side] -= betAmount;
+        } else {
+          userBets.round2[side] -= betAmount;
+          currentGameState.round2Bets[side] -= betAmount;
+        }
+      }
+      
+      // Broadcast cancellation to all clients
+      broadcast({
+        type: 'bet_cancelled',
+        data: {
+          betId,
+          userId,
+          side: currentBet.side,
+          amount: betAmount,
+          round: currentBet.round,
+          cancelledBy: req.user!.id
+        }
+      });
+      
+      // Get updated user balance for response
+      const user = await storage.getUser(userId);
+      const newBalance = parseFloat(user?.balance as string) || 0;
+      
+      res.json({
+        success: true,
+        message: 'Bet cancelled successfully. Amount refunded to user.',
+        data: {
+          betId,
+          userId,
+          refundedAmount: betAmount,
+          newBalance
+        }
+      });
+    } catch (error) {
+      console.error('Cancel bet error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to cancel bet'
       });
     }
   });
@@ -3588,7 +3671,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analytics API Endpoints
   app.get("/api/admin/analytics", generalLimiter, async (req, res) => {
     try {
-      const { period = 'daily' } = req.query;
+      const { period = 'daily', month, year } = req.query;
       
       if (period === 'daily') {
         const today = new Date();
@@ -3596,12 +3679,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const stats = await storage.getDailyStats(today);
         res.json({ success: true, data: stats });
       } else if (period === 'monthly') {
-        const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-        const stats = await storage.getMonthlyStats(currentMonth);
+        const monthYear = month ? month as string : new Date().toISOString().slice(0, 7); // YYYY-MM
+        const stats = await storage.getMonthlyStats(monthYear);
         res.json({ success: true, data: stats });
       } else if (period === 'yearly') {
-        const currentYear = new Date().getFullYear();
-        const stats = await storage.getYearlyStats(currentYear);
+        const yearNum = year ? parseInt(year as string) : new Date().getFullYear();
+        const stats = await storage.getYearlyStats(yearNum);
         res.json({ success: true, data: stats });
       } else {
         res.status(400).json({ success: false, error: 'Invalid period' });
@@ -3878,6 +3961,25 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
               }
             });
           }
+          
+          // Also check bonus claim threshold (auto-credit when bonus amount reaches threshold)
+          const { checkAndAutoCreditBonus } = await import('./payment');
+          const autoCredited = await checkAndAutoCreditBonus(userId);
+          if (autoCredited) {
+            console.log(`✅ Bonus auto-credited for user ${userId} after game completion (threshold reached)`);
+            // Notify user about auto-credit
+            clients.forEach(c => {
+              if (c.userId === userId && c.ws.readyState === WebSocket.OPEN) {
+                c.ws.send(JSON.stringify({
+                  type: 'bonus_update',
+                  data: {
+                    message: 'Bonus automatically credited to your balance!',
+                    timestamp: Date.now()
+                  }
+                }));
+              }
+            });
+          }
         } catch (bonusError) {
           console.error(`⚠️ Error checking conditional bonus for user ${userId}:`, bonusError);
           // Don't fail payout if bonus check fails
@@ -3887,12 +3989,15 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       }
     }
     
-    // FIXED: Simplify WebSocket notifications - only send game result notifications
-    // Balance updates should come from REST API polling
+    // Send WebSocket notifications for payout and balance update
     try {
+      // Get updated user balance after payout
+      const updatedUser = await storage.getUser(userId);
+      const newBalance = updatedUser ? parseFloat(updatedUser.balance) : 0;
+      
       clients.forEach(client => {
         if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
-          // Only send payout notification, not balance update
+          // Send payout notification
           client.ws.send(JSON.stringify({
             type: 'payout_received',
             data: {
@@ -3902,6 +4007,19 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
               yourBets: bets
             }
           }));
+          
+          // Send balance update notification
+          if (payout > 0) {
+            client.ws.send(JSON.stringify({
+              type: 'balance_update',
+              data: {
+                balance: newBalance,
+                amount: payout,
+                type: 'win',
+                timestamp: Date.now()
+              }
+            }));
+          }
         }
       });
     } catch (error) {
@@ -4073,3 +4191,14 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     console.log('✅ Game auto-restarted successfully');
   }, 5000);
 }
+
+// Make game state and functions globally available
+// NOTE: These assignments must happen AFTER all function definitions
+(global as any).currentGameState = currentGameState;
+(global as any).broadcast = broadcast;
+(global as any).broadcastToRole = broadcastToRole;
+(global as any).startTimer = startTimer;
+(global as any).completeGame = completeGame;
+(global as any).transitionToRound2 = transitionToRound2;
+(global as any).transitionToRound3 = transitionToRound3;
+(global as any).getCurrentGameStateForUser = getCurrentGameStateForUser;

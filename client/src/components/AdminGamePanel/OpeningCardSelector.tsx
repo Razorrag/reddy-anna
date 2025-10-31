@@ -69,7 +69,7 @@ const OpeningCardSelector: React.FC = () => {
     if (!selectedCard || isStarting) return;
     setIsStarting(true);
     try {
-      await startGame();
+      await startGame(timerDuration);
       setShowConfirmModal(false);
     } finally {
       setTimeout(() => setIsStarting(false), 1500);

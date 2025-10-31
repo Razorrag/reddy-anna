@@ -74,17 +74,17 @@ export const getSiteContent = async (): Promise<ContentResponse> => {
   try {
     // For our simplified Supabase schema, get settings from game_settings table
     const whatsappNumber = await storage.getGameSetting('whatsapp_number') || '+91 8686886632';
-    const siteTitle = await storage.getGameSetting('site_title') || 'Reddy Anna - Andar Bahar Game';
+    const siteTitle = await storage.getGameSetting('site_title') || 'RAJU GARI KOSSU - Andar Bahar Game';
     const siteSubtitle = await storage.getGameSetting('site_subtitle') || 'Play and Win Real Money';
-    const contactEmail = await storage.getGameSetting('contact_email') || 'support@reddyanna.com';
+    const contactEmail = await storage.getGameSetting('contact_email') || 'support@raju-gari-kossu.com';
     
     const content = {
       whatsappNumber,
       siteTitle,
       siteSubtitle,
-      heroTitle: 'Welcome to Reddy Anna',
+      heroTitle: 'Welcome to RAJU GARI KOSSU',
       heroDescription: 'Experience the thrill of Andar Bahar with real money games',
-      aboutContent: 'Reddy Anna is a premier online gaming platform offering exciting Andar Bahar games with real money rewards.',
+      aboutContent: 'RAJU GARI KOSSU is a premier online gaming platform offering exciting Andar Bahar games with real money rewards.',
       contactInfo: {
         phone: whatsappNumber,
         email: contactEmail,
@@ -183,7 +183,7 @@ export const getSystemSettings = async (): Promise<ContentResponse> => {
       maxWithdrawAmount: parseInt(maxWithdrawAmount || '50000', 10),
       autoWithdrawal: false,
       kycRequired: true,
-      customerSupportEmail: customerSupportEmail || 'support@reddyanna.com',
+      customerSupportEmail: customerSupportEmail || 'support@raju-gari-kossu.com',
       customerSupportPhone: customerSupportPhone || '+91 8686886632'
     } };
   } catch (error) {

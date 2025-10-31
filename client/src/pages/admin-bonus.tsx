@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AdminLayout from "@/components/AdminLayout";
+import { apiClient } from "@/lib/api-client";
+import { useNotification } from "@/contexts/NotificationContext";
 
 interface BonusTransaction {
   id: string;
@@ -54,103 +56,112 @@ interface BonusSettings {
   depositBonusPercent: number;
   referralBonusPercent: number;
   conditionalBonusThreshold: number;
+  bonusClaimThreshold: number;
   adminWhatsappNumber: string;
 }
 
 export default function AdminBonus() {
+  const { showNotification } = useNotification();
   const [bonusTransactions, setBonusTransactions] = useState<BonusTransaction[]>([]);
   const [referralData, setReferralData] = useState<ReferralData[]>([]);
   const [bonusSettings, setBonusSettings] = useState<BonusSettings>({
     depositBonusPercent: 5,
     referralBonusPercent: 1,
     conditionalBonusThreshold: 30,
+    bonusClaimThreshold: 500,
     adminWhatsappNumber: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 
+  // Fetch bonus transactions
+  const fetchBonusTransactions = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.get<{ success: boolean; data: BonusTransaction[] }>(
+        `/admin/bonus-transactions?status=${statusFilter}&type=${typeFilter}`
+      );
+      if (response.success && response.data) {
+        setBonusTransactions(response.data);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch bonus transactions:', error);
+      showNotification(error.message || 'Failed to fetch bonus transactions', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch referral data
+  const fetchReferralData = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.get<{ success: boolean; data: ReferralData[] }>(
+        `/admin/referral-data?status=${statusFilter === 'all' ? '' : statusFilter}`
+      );
+      if (response.success && response.data) {
+        setReferralData(response.data);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch referral data:', error);
+      showNotification(error.message || 'Failed to fetch referral data', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch bonus settings
+  const fetchBonusSettings = async () => {
+    try {
+      const response = await apiClient.get<{ success: boolean; data: BonusSettings }>('/admin/bonus-settings');
+      if (response.success && response.data) {
+        setBonusSettings({
+          depositBonusPercent: parseFloat(response.data.depositBonusPercent?.toString() || '5'),
+          referralBonusPercent: parseFloat(response.data.referralBonusPercent?.toString() || '1'),
+          conditionalBonusThreshold: parseInt(response.data.conditionalBonusThreshold?.toString() || '30'),
+          bonusClaimThreshold: parseFloat(response.data.bonusClaimThreshold?.toString() || '500'),
+          adminWhatsappNumber: response.data.adminWhatsappNumber || ''
+        });
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch bonus settings:', error);
+      showNotification(error.message || 'Failed to fetch bonus settings', 'error');
+    }
+  };
+
+  // Load all data on mount
   useEffect(() => {
-    // Simulate loading data
-    setTimeout(() => {
-      setBonusTransactions([
-        {
-          id: '1',
-          userId: 'user1',
-          username: 'player123',
-          type: 'deposit_bonus',
-          amount: 250,
-          status: 'applied',
-          timestamp: '2024-01-20 14:30:00',
-          description: 'Deposit bonus (5% of ₹5000)',
-          relatedAmount: 5000
-        },
-        {
-          id: '2',
-          userId: 'user2',
-          username: 'referrer789',
-          type: 'referral_bonus',
-          amount: 100,
-          status: 'applied',
-          timestamp: '2024-01-20 13:45:00',
-          description: 'Referral bonus for new user deposit',
-          relatedAmount: 10000
-        },
-        {
-          id: '3',
-          userId: 'user3',
-          username: 'luckyone',
-          type: 'bonus_applied',
-          amount: 350,
-          status: 'applied',
-          timestamp: '2024-01-20 12:15:00',
-          description: 'Bonus applied to main balance',
-          relatedAmount: undefined
-        },
-        {
-          id: '4',
-          userId: 'user4',
-          username: 'gamer456',
-          type: 'deposit_bonus',
-          amount: 500,
-          status: 'pending',
-          timestamp: '2024-01-20 11:30:00',
-          description: 'Deposit bonus (5% of ₹10000)',
-          relatedAmount: 10000
-        }
+    const loadData = async () => {
+      setIsLoaded(false);
+      await Promise.all([
+        fetchBonusTransactions(),
+        fetchReferralData(),
+        fetchBonusSettings()
       ]);
-
-      setReferralData([
-        {
-          id: '1',
-          referrerId: 'user1',
-          referrerUsername: 'player123',
-          referredId: 'user2',
-          referredUsername: 'newplayer456',
-          depositAmount: 10000,
-          bonusAmount: 100,
-          status: 'completed',
-          createdAt: '2024-01-20 10:00:00',
-          bonusAppliedAt: '2024-01-20 13:45:00'
-        },
-        {
-          id: '2',
-          referrerId: 'user3',
-          referrerUsername: 'luckyone',
-          referredId: 'user4',
-          referredUsername: 'gamer789',
-          depositAmount: 5000,
-          bonusAmount: 50,
-          status: 'pending',
-          createdAt: '2024-01-20 09:30:00'
-        }
-      ]);
-
       setIsLoaded(true);
-    }, 1000);
+    };
+    loadData();
   }, []);
+
+  // Refresh data when filters change
+  useEffect(() => {
+    if (isLoaded) {
+      fetchBonusTransactions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, typeFilter]);
+
+  // Refresh referral data when filter changes
+  useEffect(() => {
+    if (isLoaded && activeTab === 'referrals') {
+      fetchReferralData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, activeTab]);
 
   const formatCurrency = (amount: number) => {
     return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -205,23 +216,36 @@ export default function AdminBonus() {
 
   const handleSaveSettings = async () => {
     try {
-      const response = await fetch('/api/game-settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(bonusSettings),
-      });
-      const data = await response.json();
-      if (data.success) {
+      const response = await apiClient.put<{ success: boolean; message?: string; error?: string }>(
+        '/admin/bonus-settings',
+        {
+          depositBonusPercent: bonusSettings.depositBonusPercent,
+          referralBonusPercent: bonusSettings.referralBonusPercent,
+          conditionalBonusThreshold: bonusSettings.conditionalBonusThreshold,
+          bonusClaimThreshold: bonusSettings.bonusClaimThreshold,
+          adminWhatsappNumber: bonusSettings.adminWhatsappNumber
+        }
+      );
+      if (response.success) {
         showNotification('Settings saved successfully', 'success');
       } else {
-        showNotification('Failed to save settings', 'error');
+        showNotification(response.error || 'Failed to save settings', 'error');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save settings:', error);
-      showNotification('Failed to save settings', 'error');
+      showNotification(error.message || 'Failed to save settings', 'error');
     }
+  };
+
+  const handleRefresh = async () => {
+    setIsLoaded(false);
+    await Promise.all([
+      fetchBonusTransactions(),
+      fetchReferralData(),
+      fetchBonusSettings()
+    ]);
+    setIsLoaded(true);
+    showNotification('Data refreshed successfully', 'success');
   };
 
   return (
@@ -239,8 +263,13 @@ export default function AdminBonus() {
                 <Download className="w-4 h-4 mr-2" />
                 Export Data
               </Button>
-              <Button variant="outline" className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10">
-                <RefreshCw className="w-4 h-4 mr-2" />
+              <Button 
+                variant="outline" 
+                className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10"
+                onClick={handleRefresh}
+                disabled={isLoading}
+              >
+                <RefreshCw className={cn("w-4 h-4 mr-2", isLoading && "animate-spin")} />
                 Refresh
               </Button>
             </div>
@@ -366,6 +395,20 @@ export default function AdminBonus() {
                   </div>
 
                   <div className="space-y-2">
+                    <Label htmlFor="bonusClaimThreshold" className="text-purple-200">Bonus Auto-Credit Threshold (₹)</Label>
+                    <Input
+                      id="bonusClaimThreshold"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={bonusSettings.bonusClaimThreshold}
+                      onChange={(e) => setBonusSettings(prev => ({ ...prev, bonusClaimThreshold: parseFloat(e.target.value) || 0 }))}
+                      className="bg-purple-950/30 border-purple-400/30 text-white"
+                    />
+                    <p className="text-xs text-purple-300">Auto-credit bonus when total reaches this amount (0 to disable)</p>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="adminWhatsappNumber" className="text-purple-200">Admin WhatsApp Number</Label>
                     <Input
                       id="adminWhatsappNumber"
@@ -460,7 +503,16 @@ export default function AdminBonus() {
                               {getStatusBadge(transaction.status)}
                             </div>
                             <p className="text-purple-300 text-sm">{transaction.description}</p>
-                            <p className="text-purple-400 text-xs">{transaction.timestamp}</p>
+                            <p className="text-purple-400 text-xs">
+                              {transaction.timestamp ? new Date(transaction.timestamp).toLocaleString('en-IN', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                              }) : 'N/A'}
+                            </p>
                           </div>
                         </div>
 
@@ -543,9 +595,27 @@ export default function AdminBonus() {
                               <h3 className="text-lg font-semibold text-white">{referral.referredUsername}</h3>
                               {getStatusBadge(referral.status)}
                             </div>
-                            <p className="text-purple-300 text-sm">Referral created on {referral.createdAt}</p>
+                            <p className="text-purple-300 text-sm">
+                              Referral created on {referral.createdAt ? new Date(referral.createdAt).toLocaleString('en-IN', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                              }) : 'N/A'}
+                            </p>
                             {referral.bonusAppliedAt && (
-                              <p className="text-green-400 text-sm">Bonus applied on {referral.bonusAppliedAt}</p>
+                              <p className="text-green-400 text-sm">
+                                Bonus applied on {new Date(referral.bonusAppliedAt).toLocaleString('en-IN', {
+                                  year: 'numeric',
+                                  month: '2-digit',
+                                  day: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  second: '2-digit'
+                                })}
+                              </p>
                             )}
                           </div>
                         </div>

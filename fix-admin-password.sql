@@ -1,1 +1,0 @@
-UPDATE admin_credentials SET password_hash = '$2b$12$qt.5sEC6PmayqztgC.7CW.peylp24dN2FzCUHDdWQVketU/wvRmJq' WHERE username = 'admin';

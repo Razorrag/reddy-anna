@@ -17,13 +17,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { useGameState } from '../../contexts/GameStateContext';
-import { useWebSocket } from '../../contexts/WebSocketContext';
-import { useNotification } from '../../contexts/NotificationContext';
+import { useGameState } from '@/contexts/GameStateContext';
+import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useNotification } from '@/contexts/NotificationContext';
 import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
-import PersistentSidePanel from '../PersistentSidePanel';
-import WinnerCelebration from '../WinnerCelebration';
+import PersistentSidePanel from '@/components/PersistentSidePanel';
+import WinnerCelebration from '@/components/WinnerCelebration';
 import StreamControlPanel from './StreamControlPanel';
 import { Home } from 'lucide-react';
 

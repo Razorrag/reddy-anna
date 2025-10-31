@@ -10,7 +10,7 @@ const Footer: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
           {/* Company Info */}
           <div className="col-span-1 sm:col-span-2">
-            <h3 className="text-xl sm:text-2xl font-bold text-gold mb-3 sm:mb-4">REDDY ANNA</h3>
+            <h3 className="text-xl sm:text-2xl font-bold text-gold mb-3 sm:mb-4">RAJU GARI KOSSU</h3>
             <p className="text-gray-300 mb-4 sm:mb-6 leading-relaxed text-sm sm:text-base">
               India's most trusted Andar Bahar gaming platform. Experience the thrill of live gaming 
               with secure transactions, fair play, and 24/7 customer support.
@@ -130,7 +130,7 @@ const Footer: React.FC = () => {
         <div className="border-t border-gold/20 mt-6 sm:mt-8 pt-6 sm:pt-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-gray-400 text-xs sm:text-sm">
-              © {currentYear} Reddy Anna. All rights reserved.
+              © {currentYear} RAJU GARI KOSSU. All rights reserved.
             </p>
             <div className="flex space-x-6 text-sm">
               <a href="#" className="text-gray-400 hover:text-gold transition-colors duration-200">

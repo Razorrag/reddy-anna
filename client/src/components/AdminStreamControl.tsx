@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useWebSocket } from '../contexts/WebSocketContext';
-import { useNotification } from '../contexts/NotificationContext';
+import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useNotification } from '@/contexts/NotificationContext';
 
 interface AdminStreamControlProps {
   className?: string;
@@ -29,11 +29,43 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
     try {
       console.log('Starting screen sharing...');
       
+      // Check if getDisplayMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        showNotification('❌ Screen sharing is not supported in this browser. Please use Chrome, Firefox, or Edge.', 'error');
+        return;
+      }
+
+      // Check secure context
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        showNotification('❌ Screen sharing requires HTTPS connection. Please use HTTPS or localhost.', 'error');
+        return;
+      }
+      
       // Request screen capture
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true
+        });
+      } catch (getDisplayError: any) {
+        if (getDisplayError.name === 'NotAllowedError' || getDisplayError.name === 'PermissionDeniedError') {
+          showNotification('❌ Screen sharing permission denied. Please allow screen sharing when prompted.', 'error');
+          return;
+        } else if (getDisplayError.name === 'NotReadableError' || getDisplayError.name === 'TrackStartError') {
+          showNotification('❌ Could not access screen. Make sure no other application is using your screen.', 'error');
+          return;
+        } else if (getDisplayError.name === 'NotFoundError' || getDisplayError.name === 'DevicesNotFoundError') {
+          showNotification('❌ No screen or window available for sharing.', 'error');
+          return;
+        }
+        throw getDisplayError;
+      }
+
+      if (!stream || !stream.getVideoTracks().length) {
+        showNotification('❌ Failed to capture screen. No video track available.', 'error');
+        return;
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -59,11 +91,16 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
           }
         });
 
-        showNotification('Screen sharing started successfully!', 'success');
+        showNotification('✅ Screen sharing started successfully!', 'success');
       }
     } catch (error) {
       console.error('Failed to start screen sharing:', error);
-      showNotification('Failed to start screen sharing', 'error');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      let userMessage = `❌ Failed to start screen sharing: ${errorMessage}`;
+      if (errorMessage.includes('getDisplayMedia') || errorMessage.includes('get_display')) {
+        userMessage = '❌ Screen sharing is not available. Please check your browser permissions and try again.';
+      }
+      showNotification(userMessage, 'error');
     }
   };
 

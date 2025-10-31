@@ -326,6 +326,10 @@ export const applyDepositBonus = async (userId: string, depositAmount: number): 
     }
     
     console.log(`Deposit bonus of ₹${bonusAmount} added for user ${userId}`);
+    
+    // Check if bonus threshold reached and auto-credit if needed
+    await checkAndAutoCreditBonus(userId);
+    
     return true;
   } catch (error) {
     console.error('Error applying deposit bonus:', error);
@@ -364,6 +368,10 @@ export const applyReferralBonus = async (referrerId: string, depositAmount: numb
     }
     
     console.log(`Referral bonus of ₹${bonusAmount} added for referrer ${referrerId}`);
+    
+    // Check if bonus threshold reached and auto-credit if needed
+    await checkAndAutoCreditBonus(referrerId);
+    
     return true;
   } catch (error) {
     console.error('Error applying referral bonus:', error);
@@ -380,10 +388,90 @@ export const checkConditionalBonus = async (userId: string): Promise<boolean> =>
   }
 };
 
+// Check if bonus has reached threshold and auto-credit it
+export const checkAndAutoCreditBonus = async (userId: string): Promise<boolean> => {
+  try {
+    // Get bonus claim threshold setting (default 500)
+    const claimThresholdSetting = await storage.getGameSetting('bonus_claim_threshold');
+    const claimThreshold = parseFloat(claimThresholdSetting || '500');
+    
+    if (claimThreshold <= 0) {
+      // If threshold is 0 or not set, don't auto-credit
+      return false;
+    }
+    
+    // Get current bonus info
+    const bonusInfo = await storage.getUserBonusInfo(userId);
+    
+    // Check if total bonus has reached or exceeded the threshold
+    if (bonusInfo.totalBonus >= claimThreshold) {
+      console.log(`✅ Bonus threshold reached! Total bonus: ₹${bonusInfo.totalBonus}, Threshold: ₹${claimThreshold}`);
+      return await autoCreditBonus(userId, bonusInfo);
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking bonus threshold:', error);
+    return false;
+  }
+};
+
+// Auto-credit bonus to main balance
+const autoCreditBonus = async (userId: string, bonusInfo: { depositBonus: number; referralBonus: number; totalBonus: number }): Promise<boolean> => {
+  try {
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return false;
+    }
+    
+    const balanceBefore = parseFloat(user.balance);
+    const newBalance = balanceBefore + bonusInfo.totalBonus;
+    
+    // Add to main balance
+    await storage.updateUserBalance(userId, bonusInfo.totalBonus);
+    
+    // Reset bonus amounts
+    await storage.resetUserBonus(userId);
+    
+    // Log the auto-credit
+    await storage.addTransaction({
+      userId,
+      transactionType: 'bonus_applied',
+      amount: bonusInfo.totalBonus,
+      balanceBefore,
+      balanceAfter: newBalance,
+      referenceId: `bonus_auto_credited_${Date.now()}`,
+      description: `Bonus auto-credited (threshold reached): ₹${bonusInfo.depositBonus} deposit + ₹${bonusInfo.referralBonus} referral`
+    });
+    
+    console.log(`✅ Bonus of ₹${bonusInfo.totalBonus} auto-credited to main balance for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Error auto-crediting bonus:', error);
+    return false;
+  }
+};
+
 export const applyAvailableBonus = async (userId: string): Promise<boolean> => {
   try {
-    // This function will move available bonus to main balance
+    // Get bonus claim threshold setting
+    const claimThresholdSetting = await storage.getGameSetting('bonus_claim_threshold');
+    const claimThreshold = parseFloat(claimThresholdSetting || '500');
+    
+    // Get current bonus info
     const bonusInfo = await storage.getUserBonusInfo(userId);
+    
+    // If bonus has reached threshold, it should have been auto-credited already
+    // Only allow manual claim if bonus is below threshold
+    if (claimThreshold > 0 && bonusInfo.totalBonus >= claimThreshold) {
+      console.log(`⚠️ Bonus (₹${bonusInfo.totalBonus}) has reached threshold (₹${claimThreshold}). It should be auto-credited. Checking...`);
+      // Try to auto-credit it now if it wasn't already
+      const autoCredited = await checkAndAutoCreditBonus(userId);
+      if (autoCredited) {
+        return true;
+      }
+      // If auto-credit failed but threshold is reached, still allow manual claim
+    }
     
     if (bonusInfo.totalBonus > 0) {
       const user = await storage.getUser(userId);
@@ -408,7 +496,7 @@ export const applyAvailableBonus = async (userId: string): Promise<boolean> => {
         balanceBefore,
         balanceAfter: newBalance,
         referenceId: `bonus_applied_${Date.now()}`,
-        description: `Bonus applied to main balance (₹${bonusInfo.depositBonus} deposit + ₹${bonusInfo.referralBonus} referral)`
+        description: `Bonus manually claimed: ₹${bonusInfo.depositBonus} deposit + ₹${bonusInfo.referralBonus} referral`
       });
       
       console.log(`Bonus of ₹${bonusInfo.totalBonus} applied to main balance for user ${userId}`);

@@ -1,6 +1,7 @@
 // Manual Request Modal Component
 // Modal for creating manual admin requests
 
+import { tokenManager } from '@/lib/TokenManager';
 import React, { useState } from 'react';
 
 interface ManualRequestModalProps {
@@ -44,7 +45,7 @@ export const ManualRequestModal: React.FC<ManualRequestModalProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}` // Include admin token
+          'Authorization': `Bearer ${tokenManager.getToken()}` // Include admin token (via TokenManager)
         },
         body: JSON.stringify({
           ...formData,

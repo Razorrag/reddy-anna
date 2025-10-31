@@ -49,7 +49,7 @@ const PlayerGame: React.FC = () => {
   const [selectedBetAmount, setSelectedBetAmount] = useState(2500);
   const [selectedPosition, setSelectedPosition] = useState<BetSide | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
-  const [userBalance, setUserBalance] = useState(user.balance || 0); // Use user's balance from AuthContext
+  const [userBalance, setUserBalance] = useState(user?.balance || 0); // Use user's balance from AuthContext
   const [showChipSelector, setShowChipSelector] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -268,11 +268,39 @@ const PlayerGame: React.FC = () => {
           showNotification(`${String(customEvent.detail.winner).toUpperCase()} won`, 'info');
         }
       }
+      
+      // Refresh balance after game completion to get updated payout
+      setTimeout(() => {
+        updateBalance(undefined as any, 'api');
+      }, 1000);
     };
 
     window.addEventListener('game-complete-celebration', handleGameComplete);
     return () => window.removeEventListener('game-complete-celebration', handleGameComplete);
-  }, []);
+  }, [showNotification, updateBalance]);
+
+  // Listen for payment notifications and balance refresh requests
+  useEffect(() => {
+    const handlePaymentUpdate = (event: CustomEvent) => {
+      const { message } = event.detail;
+      showNotification(message || 'Payment request updated', 'success');
+      
+      // Refresh balance
+      updateBalance(undefined as any, 'api');
+    };
+    
+    const handleRefreshBalance = () => {
+      updateBalance(undefined as any, 'api');
+    };
+    
+    window.addEventListener('payment-request-updated', handlePaymentUpdate as EventListener);
+    window.addEventListener('refresh-balance', handleRefreshBalance as EventListener);
+    
+    return () => {
+      window.removeEventListener('payment-request-updated', handlePaymentUpdate as EventListener);
+      window.removeEventListener('refresh-balance', handleRefreshBalance as EventListener);
+    };
+  }, [showNotification, updateBalance]);
 
   // Mock history data
   const mockHistory = [

@@ -5,18 +5,18 @@ const About: React.FC = () => {
   return (
     <section id="about" className={getSectionClass()}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-gold mb-8 sm:mb-12">About Reddy Anna</h2>
+        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-gold mb-8 sm:mb-12">About RAJU GARI KOSSU</h2>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center mb-12 lg:mb-16">
           <div>
             <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4 sm:mb-6">India's Premier Andar Bahar Platform</h3>
             <p className="text-gray-300 mb-4 sm:mb-6 leading-relaxed text-sm sm:text-base">
-              Welcome to Reddy Anna, the most trusted and exciting Andar Bahar gaming platform in India. 
+              Welcome to RAJU GARI KOSSU, the most trusted and exciting Andar Bahar gaming platform in India. 
               We bring you the authentic casino experience with cutting-edge technology, ensuring fair play, 
               security, and endless entertainment.
             </p>
             <p className="text-gray-300 mb-4 sm:mb-6 leading-relaxed text-sm sm:text-base">
-              Founded with a vision to revolutionize online gaming in India, Reddy Anna combines traditional 
+              Founded with a vision to revolutionize online gaming in India, RAJU GARI KOSSU combines traditional 
               Andar Bahar gameplay with modern digital innovation. Our platform is designed for both beginners 
               and experienced players, offering a seamless and immersive gaming experience.
             </p>
@@ -33,7 +33,7 @@ const About: React.FC = () => {
           </div>
           
           <div className={getCardClass()}>
-            <h4 className="text-xl sm:text-2xl font-bold text-gold mb-4 sm:mb-6">Why Choose Reddy Anna?</h4>
+            <h4 className="text-xl sm:text-2xl font-bold text-gold mb-4 sm:mb-6">Why Choose RAJU GARI KOSSU?</h4>
             <div className="space-y-4">
               <div className="flex items-start">
                 <div className="w-8 h-8 bg-gold rounded-full flex items-center justify-center mr-4 flex-shrink-0">

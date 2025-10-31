@@ -24,7 +24,7 @@ async function createTestData() {
     // This would require a separate storage method for admin credentials
     console.log('📝 Admin accounts to be created manually:');
     console.log('   - Username: admin, Password: admin123');
-    console.log('   - Username: reddyanna, Password: admin123');
+    console.log('   - Username: rajugarikossu, Password: admin123');
 
     // Create test player users with ₹100,000 balance
     console.log('\n🎮 Creating test player accounts...');
@@ -69,7 +69,7 @@ async function createTestData() {
     console.log('\n📋 Test Accounts Summary:');
     console.log('\n👑 Admin Accounts:');
     console.log('   - Username: admin, Password: admin123');
-    console.log('   - Username: reddyanna, Password: admin123');
+    console.log('   - Username: rajugarikossu, Password: admin123');
     
     console.log('\n🎮 Player Accounts:');
     testPlayers.forEach(player => {
@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS admin_credentials (
 -- Insert admin accounts (password: admin123)
 INSERT INTO admin_credentials (username, password_hash, role) VALUES
 ('admin', '$2b$12$2wLKU1mQY7z5FZ.zj7uN5uF8B5K8d4N3R9V7m6J2L1K0P9W5U3Z1A', 'admin'),
-('reddyanna', '$2b$12$2wLKU1mQY7z5FZ.zj7uN5uF8B5K8d4N3R9V7m6J2L1K0P9W5U3Z1A', 'admin')
+('rajugarikossu', '$2b$12$2wLKU1mQY7z5FZ.zj7uN5uF8B5K8d4N3R9V7m6J2L1K0P9W5U3Z1A', 'admin')
 ON CONFLICT (username) DO NOTHING;
 
 -- Create indexes for admin credentials

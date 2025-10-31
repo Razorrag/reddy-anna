@@ -152,14 +152,20 @@ export async function handlePlayerBet(client: WSClient, data: any) {
 
     // Broadcast bet update to admin panel
     if (typeof (global as any).broadcast !== 'undefined') {
+      const round1Bets = (global as any).currentGameState?.round1Bets || { andar: 0, bahar: 0 };
+      const round2Bets = (global as any).currentGameState?.round2Bets || { andar: 0, bahar: 0 };
+      const totalAndar = round1Bets.andar + round2Bets.andar;
+      const totalBahar = round1Bets.bahar + round2Bets.bahar;
+
+      // Broadcast user bets update
       (global as any).broadcast({
         type: 'user_bets_update',
         data: {
-          round1Bets: (global as any).currentGameState?.round1Bets || { andar: 0, bahar: 0 },
-          round2Bets: (global as any).currentGameState?.round2Bets || { andar: 0, bahar: 0 }
+          round1Bets: round1Bets,
+          round2Bets: round2Bets
         }
       });
-      // --- ADD THIS FIX ---
+      
       // Broadcast to Admin-specific listeners
       (global as any).broadcast({
         type: 'admin_bet_update',
@@ -171,15 +177,25 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         },
       });
       
+      // Broadcast complete betting stats with round-specific totals
+      (global as any).broadcast({
+        type: 'betting_stats',
+        data: {
+          andarTotal: totalAndar,
+          baharTotal: totalBahar,
+          round1Bets: round1Bets,
+          round2Bets: round2Bets
+        }
+      });
+      
       (global as any).broadcast({
         type: 'analytics_update',
         data: {
           newBet: { userId, side, amount, round },
-          andarTotal: ((global as any).currentGameState?.round1Bets.andar || 0) + ((global as any).currentGameState?.round2Bets.andar || 0),
-          baharTotal: ((global as any).currentGameState?.round1Bets.bahar || 0) + ((global as any).currentGameState?.round2Bets.bahar || 0),
+          andarTotal: totalAndar,
+          baharTotal: totalBahar,
         }
       });
-      // --- END OF FIX ---
     }
 
     console.log(`✅ BET CONFIRMED: ${userId} bet ₹${amount} on ${side}, new balance: ₹${newBalance}`);
@@ -235,6 +251,21 @@ export async function handleStartGame(client: WSClient, data: any) {
 
       console.log(`✅ Game session created: ${(global as any).currentGameState.gameId}`);
 
+      // Get timer duration from data - check both timer and timerDuration fields
+      // Also check game settings if not provided
+      let timerDuration = data.timer || data.timerDuration || 30;
+      
+      // If still default, try to get from game settings
+      if (timerDuration === 30) {
+        try {
+          const { storage } = await import('../storage-supabase');
+          const timerSetting = await storage.getGameSetting('betting_timer_duration') || '30';
+          timerDuration = parseInt(timerSetting) || 30;
+        } catch (error) {
+          console.warn('Could not fetch timer setting, using default:', error);
+        }
+      }
+
       // Broadcast game start to all clients
       if (typeof (global as any).broadcast !== 'undefined') {
         (global as any).broadcast({
@@ -243,14 +274,14 @@ export async function handleStartGame(client: WSClient, data: any) {
             openingCard: data.openingCard,
             phase: 'betting',
             round: 1,
-            timer: 30
+            timer: timerDuration
           }
         });
       }
 
       // Start betting timer using global startTimer
       if (typeof (global as any).startTimer === 'function') {
-        (global as any).startTimer(30, () => {
+        (global as any).startTimer(timerDuration, () => {
           console.log('🎯 Betting time expired, moving to dealing phase');
           (global as any).currentGameState.phase = 'dealing';
           (global as any).currentGameState.bettingLocked = true;
@@ -276,7 +307,7 @@ export async function handleStartGame(client: WSClient, data: any) {
           gameId: (global as any).currentGameState.gameId,
           openingCard: data.openingCard,
           phase: 'betting',
-          timer: 30
+          timer: timerDuration
         }
       }));
 
@@ -333,6 +364,19 @@ export async function handleDealCard(client: WSClient, data: any) {
       return;
     }
 
+    // CRITICAL: Validate dealing sequence BEFORE adding card
+    const expectedSide = (global as any).currentGameState.getNextExpectedSide();
+    
+    if (expectedSide === null) {
+      sendError(ws, 'Current round is complete. Please progress to next round.');
+      return;
+    }
+
+    if (data.side !== expectedSide) {
+      sendError(ws, `Invalid dealing sequence. Expected ${expectedSide.toUpperCase()} card next. Attempted: ${data.side.toUpperCase()}`);
+      return;
+    }
+
     // Determine if this is a winner based on the opening card logic
     let isWinningCard = false;
     if ((global as any).currentGameState.openingCard) {
@@ -341,7 +385,7 @@ export async function handleDealCard(client: WSClient, data: any) {
       isWinningCard = openingRank === dealtRank;
     }
 
-    // Add card to the appropriate list
+    // Add card to the appropriate list (only after validation passes)
     if (data.side === 'andar') {
       (global as any).currentGameState.addAndarCard(data.card);
     } else {
@@ -400,9 +444,14 @@ export async function handleDealCard(client: WSClient, data: any) {
           });
         }
 
-        // Start timer for round 2 betting
+        // Start timer for round 2 betting - use same timer duration as round 1
+        // Try to get timer duration from settings or default to 30
+        const { storage } = await import('../storage-supabase');
+        const timerSetting = await storage.getGameSetting('betting_timer_duration') || '30';
+        const timerDuration = parseInt(timerSetting) || 30;
+        
         if (typeof (global as any).startTimer === 'function') {
-          (global as any).startTimer(30, () => {
+          (global as any).startTimer(timerDuration, () => {
             (global as any).currentGameState.phase = 'dealing';
             (global as any).currentGameState.bettingLocked = true;
 

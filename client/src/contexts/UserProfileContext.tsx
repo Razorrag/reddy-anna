@@ -267,6 +267,19 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const fetchBonusInfo = async () => {
+    // Skip bonus info fetch for admin users (admins don't have bonuses)
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.role === 'admin' || user.role === 'super_admin') {
+          return; // Admins don't have bonuses
+        }
+      } catch (e) {
+        // Continue if parsing fails
+      }
+    }
+    
     try {
       const response = await apiClient.get('/user/bonus-info') as any;
       if (response.success && response.data) {
@@ -594,8 +607,25 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     }));
   };
 
-  // Auto-refresh bonus info every 30 seconds
+  // Auto-refresh bonus info every 30 seconds (skip for admin users)
   useEffect(() => {
+    // Check if user is admin
+    const userStr = localStorage.getItem('user');
+    let isAdmin = false;
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        isAdmin = user.role === 'admin' || user.role === 'super_admin';
+      } catch (e) {
+        // Continue if parsing fails
+      }
+    }
+    
+    // Don't set up interval for admins
+    if (isAdmin) {
+      return;
+    }
+    
     const interval = setInterval(() => {
       const isLoggedIn = localStorage.getItem('isLoggedIn');
       if (isLoggedIn === 'true') {

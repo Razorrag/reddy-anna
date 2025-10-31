@@ -176,6 +176,9 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         playerWallet: state.playerWallet,
         userRole: state.userRole,
         usedCards: [], // Clear used cards on game reset
+        andarCards: [], // Clear cards from previous game
+        baharCards: [], // Clear cards from previous game
+        selectedOpeningCard: null, // Clear opening card
       };
     case 'SET_GAME_ACTIVE':
       return { ...state, isGameActive: action.payload };

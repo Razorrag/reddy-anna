@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { useAuth } from './AuthContext';
 
 interface BalanceState {
   currentBalance: number;
@@ -57,6 +58,10 @@ const BalanceContext = createContext<BalanceContextType | undefined>(undefined);
 
 export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(balanceReducer, initialState);
+  const { state: authState } = useAuth();
+
+  // Check if user is admin
+  const isAdmin = authState.user?.role === 'admin' || authState.user?.role === 'super_admin';
 
   const updateBalance = useCallback(async (newBalance: number, source: string = 'api', transactionType?: string, amount?: number) => {
     dispatch({
@@ -92,6 +97,11 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, []);
 
   const refreshBalance = useCallback(async () => {
+    // Skip balance refresh for admin users
+    if (isAdmin) {
+      return;
+    }
+    
     dispatch({ type: 'REFRESH_BALANCE' });
     
     try {
@@ -106,9 +116,14 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [updateBalance]);
+  }, [updateBalance, isAdmin]);
 
   const validateBalance = useCallback(async (): Promise<boolean> => {
+    // Skip balance validation for admin users
+    if (isAdmin) {
+      return true;
+    }
+    
     try {
       const response = await apiClient.get<{success: boolean, balance: number}>('/user/balance');
       if (response.success) {
@@ -123,7 +138,7 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       console.error('Balance validation failed:', error);
       return false;
     }
-  }, [state.currentBalance, updateBalance]);
+  }, [state.currentBalance, updateBalance, isAdmin]);
 
   // Initialize balance from localStorage
   useEffect(() => {
@@ -147,12 +162,28 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       updateBalance(newBalance, 'websocket');
     };
 
-    window.addEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
-    return () => window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
-  }, [updateBalance]);
+    const handleRefreshBalance = () => {
+      // Refresh balance from API when requested (skip for admin users)
+      if (!isAdmin) {
+        refreshBalance();
+      }
+    };
 
-  // Periodic balance refresh
+    window.addEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+    window.addEventListener('refresh-balance', handleRefreshBalance as EventListener);
+    
+    return () => {
+      window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+      window.removeEventListener('refresh-balance', handleRefreshBalance as EventListener);
+    };
+  }, [updateBalance, refreshBalance, isAdmin]);
+
+  // Periodic balance refresh (skip for admin users)
   useEffect(() => {
+    if (isAdmin) {
+      return; // Don't set up interval for admins
+    }
+    
     const interval = setInterval(() => {
       const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
       if (isLoggedIn && !state.isLoading) {
@@ -161,7 +192,7 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [refreshBalance, state.isLoading]);
+  }, [refreshBalance, state.isLoading, isAdmin]);
 
   const value: BalanceContextType = {
     balance: state.currentBalance,

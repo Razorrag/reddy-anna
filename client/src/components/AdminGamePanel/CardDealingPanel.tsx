@@ -180,6 +180,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
                   // Rounds 1 & 2: Highlight selected card
                   const isSelected = round < 3 && selectedCard?.id === card.id;
                   const isUsed = gameState.usedCards.some(usedCard => usedCard.id === card.id);
+                  // Cards should be visible but disabled during betting phase
                   const isDisabled = dealingInProgress || isUsed || phase === 'betting';
                   
                   return (

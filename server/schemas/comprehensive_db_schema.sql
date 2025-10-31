@@ -1,5 +1,5 @@
 -- ============================================
--- REDDY ANNA ANDAR BAHAR GAME - COMPREHENSIVE SUPABASE SCHEMA
+-- RAJU GARI KOSSU ANDAR BAHAR GAME - COMPREHENSIVE SUPABASE SCHEMA
 -- Complete Database with Admin Requests & WhatsApp Integration
 -- ============================================
 -- Run this script in your Supabase SQL Editor
@@ -308,6 +308,24 @@ CREATE TABLE IF NOT EXISTS admin_requests (
     CONSTRAINT fk_admin_requests_whatsapp FOREIGN KEY (whatsapp_message_id) REFERENCES whatsapp_messages(id) ON DELETE SET NULL
 );
 
+-- Payment Requests Table - User deposit/withdrawal requests awaiting admin approval
+CREATE TABLE IF NOT EXISTS payment_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id VARCHAR(20) NOT NULL,
+    request_type transaction_type NOT NULL, -- deposit, withdrawal
+    amount DECIMAL(15, 2) NOT NULL CHECK (amount > 0),
+    payment_method VARCHAR(50),
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'completed', 'processing')),
+    admin_id VARCHAR(36),
+    admin_notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Foreign key constraints
+    CONSTRAINT fk_payment_requests_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_payment_requests_admin FOREIGN KEY (admin_id) REFERENCES admin_credentials(id) ON DELETE SET NULL
+);
+
 -- Request Audit Trail Table - Complete audit log for all admin actions on requests
 CREATE TABLE IF NOT EXISTS request_audit (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -512,6 +530,13 @@ CREATE INDEX IF NOT EXISTS idx_admin_requests_priority ON admin_requests(priorit
 CREATE INDEX IF NOT EXISTS idx_admin_requests_whatsapp_id ON admin_requests(whatsapp_message_id);
 CREATE INDEX IF NOT EXISTS idx_admin_requests_user_game_status ON admin_requests(user_id, request_type, status);
 
+-- Payment requests indexes
+CREATE INDEX IF NOT EXISTS idx_payment_requests_status ON payment_requests(status);
+CREATE INDEX IF NOT EXISTS idx_payment_requests_user_id ON payment_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_payment_requests_created_at ON payment_requests(created_at);
+CREATE INDEX IF NOT EXISTS idx_payment_requests_type ON payment_requests(request_type);
+CREATE INDEX IF NOT EXISTS idx_payment_requests_user_status ON payment_requests(user_id, status);
+
 -- Request audit indexes
 CREATE INDEX IF NOT EXISTS idx_request_audit_request_id ON request_audit(request_id);
 CREATE INDEX IF NOT EXISTS idx_request_audit_admin_id ON request_audit(admin_id);
@@ -601,7 +626,7 @@ SELECT 'youtube_video_id', 'z7fyLrTL8ng', 'YouTube Live video ID'
 WHERE NOT EXISTS (SELECT 1 FROM stream_settings WHERE setting_key = 'youtube_video_id');
 
 INSERT INTO stream_settings (setting_key, setting_value, description)
-SELECT 'stream_title', 'Reddy Anna Andar Bahar Live', 'Title for the stream'
+SELECT 'stream_title', 'RAJU GARI KOSSU Andar Bahar Live', 'Title for the stream'
 WHERE NOT EXISTS (SELECT 1 FROM stream_settings WHERE setting_key = 'stream_title');
 
 INSERT INTO stream_settings (setting_key, setting_value, description)

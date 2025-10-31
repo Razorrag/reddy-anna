@@ -82,7 +82,7 @@ export default function AdminLogin() {
       const token = response.token || response.admin?.token;
       if (!token) {
         console.error('❌ No token received from server');
-        setError('Authentication failed - no token received. Please try again.');
+        setError('⚠️ Authentication Error: Server did not provide authentication token. Please check your connection and try again. If the problem persists, contact support.');
         setIsLoading(false);
         return;
       }
@@ -107,7 +107,30 @@ export default function AdminLogin() {
       setLocation('/admin');
     } catch (err: any) {
       console.error('Admin login error:', err);
-      setError(err.message || 'Invalid admin credentials. Please try again.');
+      
+      // Enhanced error messages
+      let errorMessage = 'Unable to log in. Please try again.';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('network') || message.includes('fetch')) {
+          errorMessage = '🌐 Network Error: Unable to connect to server. Please check your internet connection and try again.';
+        } else if (message.includes('timeout')) {
+          errorMessage = '⏱️ Connection Timeout: The server took too long to respond. Please try again.';
+        } else if (message.includes('401') || message.includes('unauthorized') || message.includes('invalid')) {
+          errorMessage = '❌ Invalid Credentials: Username or password is incorrect. Please check and try again.';
+        } else if (message.includes('403') || message.includes('forbidden')) {
+          errorMessage = '🚫 Access Denied: Your account does not have admin privileges.';
+        } else if (message.includes('404') || message.includes('not found')) {
+          errorMessage = '⚠️ Service Unavailable: Authentication service not found. Please try again later.';
+        } else if (message.includes('500') || message.includes('server error')) {
+          errorMessage = '🔴 Server Error: Our servers are experiencing issues. Please try again in a few moments.';
+        } else {
+          errorMessage = `⚠️ Error: ${err.message}`;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -22,6 +23,7 @@ export default function Signup() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState('');
   const [success, setSuccess] = useState(false);
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +80,7 @@ export default function Signup() {
       setSuccess(true);
       setApiError('');
 
-      // Store user data and redirect to player game
+      // Prepare user data for auth context
       const userData = {
         id: response.user?.id || response.id, // Phone number as ID
         phone: response.user?.phone || formData.phone, // Store phone separately
@@ -86,29 +88,21 @@ export default function Signup() {
         role: response.user?.role || 'player'
       };
 
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('isLoggedIn', 'true');
-
       // CRITICAL: Ensure token is stored (check multiple sources)
       const token = response.token || response.user?.token;
       const refreshToken = response.refreshToken || response.user?.refreshToken;
       
       if (!token) {
         console.error('❌ No token received from server');
-        setApiError('Registration failed - no token received. Please try again.');
+        setApiError('⚠️ Registration Error: Server did not provide authentication token. Your account may have been created, but you may need to log in manually.');
         setSuccess(false);
         return;
       }
-      
-      localStorage.setItem('token', token);
-      
-      // Store refresh token if provided
-      if (refreshToken) {
-        localStorage.setItem('refreshToken', refreshToken);
-        console.log('✅ Refresh token stored successfully');
-      }
-      
-      console.log('✅ Token stored successfully');
+
+      // Use auth context to handle login (consistent with login page)
+      console.log('Storing token via AuthContext');
+      login(userData, token, refreshToken);
+      console.log('✅ Registration successful - token stored via AuthContext');
 
       // Redirect after 1 second to show success message
       setTimeout(() => {
@@ -116,7 +110,30 @@ export default function Signup() {
       }, 1000);
     } catch (err: any) {
       console.error('Signup error:', err);
-      setApiError(err.message || 'Failed to create account. Please try again.');
+      
+      // Enhanced error messages
+      let errorMessage = 'Failed to create account. Please try again.';
+      
+      if (err.message) {
+        const message = err.message.toLowerCase();
+        if (message.includes('network') || message.includes('fetch')) {
+          errorMessage = '🌐 Network Error: Unable to connect to server. Please check your internet connection and try again.';
+        } else if (message.includes('timeout')) {
+          errorMessage = '⏱️ Connection Timeout: The server took too long to respond. Please try again.';
+        } else if (message.includes('phone') && message.includes('exists') || message.includes('already')) {
+          errorMessage = '📱 Phone Number Already Registered: This phone number is already registered. Please log in or use a different phone number.';
+        } else if (message.includes('validation') || message.includes('invalid')) {
+          errorMessage = '⚠️ Invalid Information: Please check your details and ensure all fields are filled correctly.';
+        } else if (message.includes('password') && (message.includes('weak') || message.includes('requirement'))) {
+          errorMessage = '🔒 Password Requirements: Password must be at least 8 characters with uppercase, lowercase, and a number.';
+        } else if (message.includes('500') || message.includes('server error')) {
+          errorMessage = '🔴 Server Error: Our servers are experiencing issues. Please try again in a few moments.';
+        } else {
+          errorMessage = `⚠️ Error: ${err.message}`;
+        }
+      }
+      
+      setApiError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -153,7 +170,7 @@ export default function Signup() {
             <UserPlus className="w-10 h-10 text-black" />
           </div>
           <CardTitle className="text-3xl font-bold text-gold mb-2">
-            Join Reddy Anna
+            Join RAJU GARI KOSSU
           </CardTitle>
           <CardDescription className="text-gray-400 text-lg">
             Create your account to start playing

@@ -14,7 +14,7 @@ const ImageSlider: React.FC = () => {
   const slides: Slide[] = [
     {
       id: 1,
-      title: "REDDY ANNA",
+      title: "RAJU GARI KOSSU",
       subtitle: "Ultimate Andar Bahar Experience",
       image: "/hero-images/slide1.jpg"
     },

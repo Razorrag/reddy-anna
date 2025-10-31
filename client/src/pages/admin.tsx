@@ -142,7 +142,8 @@ export default function Admin() {
 
         {/* Additional Stats Row */}
         <div className="max-w-7xl mx-auto mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <h2 className="text-2xl font-bold text-gold mb-4">📈 Financial Analytics</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="bg-black/40 border-blue-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-blue-300">Pending Deposits</CardTitle>
@@ -195,6 +196,30 @@ export default function Admin() {
               </CardContent>
             </Card>
           </div>
+        </div>
+
+        {/* Analytics Dashboard Link */}
+        <div className="max-w-7xl mx-auto mb-8">
+          <Link href="/admin/analytics">
+            <Card className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 border-purple-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-gold text-2xl mb-2">📊 View Detailed Analytics</CardTitle>
+                    <CardDescription className="text-gray-300">
+                      See comprehensive analytics including revenue, unique players, peak betting hours, and more
+                    </CardDescription>
+                  </div>
+                  <BarChart3 className="h-12 w-12 text-gold" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-gray-400">
+                  Click here to view real-time analytics dashboard with all metrics from the database
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         {/* Management Cards */}

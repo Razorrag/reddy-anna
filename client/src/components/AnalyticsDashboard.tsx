@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { DailyAnalytics, MonthlyAnalytics, YearlyAnalytics, RealtimeStats } from '@/types/game';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiClient } from '@/lib/api-client';
 
 interface AnalyticsDashboardProps {
   showBelowControls?: boolean;
@@ -38,7 +39,6 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
     return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const { token } = useAuth();
 
   const fetchAnalytics = async () => {
     try {
@@ -46,54 +46,47 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
       setError(null);
       
       // Fetch real-time stats
-      const realtimeResponse = await fetch('/api/admin/realtime-stats', {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      try {
+        const realtimeResult = await apiClient.get('/admin/realtime-stats') as any;
+        if (realtimeResult.success && realtimeResult.data) {
+          setRealtimeData(realtimeResult.data);
+          setConnectionStatus('connected');
+        } else {
+          setConnectionStatus('disconnected');
         }
-      });
-      
-      if (realtimeResponse.ok) {
-        const realtimeResult = await realtimeResponse.json();
-        setRealtimeData(realtimeResult.data);
-        setConnectionStatus('connected');
-      } else {
+      } catch (error) {
+        console.error('Failed to fetch realtime stats:', error);
         setConnectionStatus('disconnected');
       }
       
       // Fetch daily stats
-      const dailyResponse = await fetch('/api/admin/analytics?period=daily', {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      try {
+        const dailyResult = await apiClient.get('/admin/analytics?period=daily') as any;
+        if (dailyResult.success && dailyResult.data) {
+          setDailyData(dailyResult.data);
         }
-      });
-      
-      if (dailyResponse.ok) {
-        const dailyResult = await dailyResponse.json();
-        setDailyData(dailyResult.data);
+      } catch (error) {
+        console.error('Failed to fetch daily stats:', error);
       }
       
       // Fetch monthly stats
-      const monthlyResponse = await fetch(`/api/admin/analytics?period=monthly&month=${selectedMonth}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      try {
+        const monthlyResult = await apiClient.get(`/admin/analytics?period=monthly&month=${selectedMonth}`) as any;
+        if (monthlyResult.success && monthlyResult.data) {
+          setMonthlyData(monthlyResult.data);
         }
-      });
-      
-      if (monthlyResponse.ok) {
-        const monthlyResult = await monthlyResponse.json();
-        setMonthlyData(monthlyResult.data);
+      } catch (error) {
+        console.error('Failed to fetch monthly stats:', error);
       }
       
       // Fetch yearly stats
-      const yearlyResponse = await fetch(`/api/admin/analytics?period=yearly&year=${selectedYear}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      try {
+        const yearlyResult = await apiClient.get(`/admin/analytics?period=yearly&year=${selectedYear}`) as any;
+        if (yearlyResult.success && yearlyResult.data) {
+          setYearlyData(yearlyResult.data);
         }
-      });
-      
-      if (yearlyResponse.ok) {
-        const yearlyResult = await yearlyResponse.json();
-        setYearlyData(yearlyResult.data);
+      } catch (error) {
+        console.error('Failed to fetch yearly stats:', error);
       }
       
     } catch (error) {
@@ -296,28 +289,45 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Games"
-              value={dailyData.totalGames}
+              value={dailyData.totalGames || 0}
               icon={<Activity className="h-6 w-6" />}
             />
             <MetricCard
               title="Total Bets"
-              value={formatCurrency(dailyData.totalBets)}
+              value={formatCurrency(dailyData.totalBets || 0)}
               icon={<DollarSign className="h-6 w-6" />}
             />
             <MetricCard
+              title="Total Revenue"
+              value={formatCurrency(dailyData.totalRevenue || 0)}
+              icon={<TrendingUp className="h-6 w-6" />}
+            />
+            <MetricCard
               title="Payouts"
-              value={formatCurrency(dailyData.totalPayouts)}
+              value={formatCurrency(dailyData.totalPayouts || 0)}
               icon={<TrendingDown className="h-6 w-6" />}
             />
             <MetricCard
               title="Profit/Loss"
-              value={formatCurrency(dailyData.profitLoss)}
-              change={dailyData.profitLossPercentage}
-              trend={dailyData.profitLoss >= 0 ? 'up' : 'down'}
-              icon={dailyData.profitLoss >= 0 ? 
+              value={formatCurrency(dailyData.profitLoss || 0)}
+              change={dailyData.profitLossPercentage || 0}
+              trend={(dailyData.profitLoss || 0) >= 0 ? 'up' : 'down'}
+              icon={(dailyData.profitLoss || 0) >= 0 ? 
                 <TrendingUp className="h-6 w-6" /> : 
                 <TrendingDown className="h-6 w-6" />
               }
+            />
+            <MetricCard
+              title="Unique Players"
+              value={dailyData.uniquePlayers || 0}
+              icon={<Users className="h-6 w-6" />}
+            />
+            <MetricCard
+              title="Peak Bets Hour"
+              value={dailyData.peakBetsHour !== undefined && dailyData.peakBetsHour !== null 
+                ? `${dailyData.peakBetsHour}:00` 
+                : 'N/A'}
+              icon={<Activity className="h-6 w-6" />}
             />
           </div>
         </div>
@@ -351,28 +361,38 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Games"
-              value={monthlyData.totalGames}
+              value={monthlyData.totalGames || 0}
               icon={<Activity className="h-6 w-6" />}
             />
             <MetricCard
               title="Total Bets"
-              value={formatCurrency(monthlyData.totalBets)}
+              value={formatCurrency(monthlyData.totalBets || 0)}
               icon={<DollarSign className="h-6 w-6" />}
             />
             <MetricCard
+              title="Total Revenue"
+              value={formatCurrency(monthlyData.totalRevenue || 0)}
+              icon={<TrendingUp className="h-6 w-6" />}
+            />
+            <MetricCard
               title="Payouts"
-              value={formatCurrency(monthlyData.totalPayouts)}
+              value={formatCurrency(monthlyData.totalPayouts || 0)}
               icon={<TrendingDown className="h-6 w-6" />}
             />
             <MetricCard
               title="Profit/Loss"
-              value={formatCurrency(monthlyData.profitLoss)}
-              change={monthlyData.profitLossPercentage}
-              trend={monthlyData.profitLoss >= 0 ? 'up' : 'down'}
-              icon={monthlyData.profitLoss >= 0 ? 
+              value={formatCurrency(monthlyData.profitLoss || 0)}
+              change={monthlyData.profitLossPercentage || 0}
+              trend={(monthlyData.profitLoss || 0) >= 0 ? 'up' : 'down'}
+              icon={(monthlyData.profitLoss || 0) >= 0 ? 
                 <TrendingUp className="h-6 w-6" /> : 
                 <TrendingDown className="h-6 w-6" />
               }
+            />
+            <MetricCard
+              title="Unique Players"
+              value={monthlyData.uniquePlayers || 0}
+              icon={<Users className="h-6 w-6" />}
             />
           </div>
         )}
@@ -403,28 +423,38 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Games"
-              value={yearlyData.totalGames}
+              value={yearlyData.totalGames || 0}
               icon={<Activity className="h-6 w-6" />}
             />
             <MetricCard
               title="Total Bets"
-              value={formatCurrency(yearlyData.totalBets)}
+              value={formatCurrency(yearlyData.totalBets || 0)}
               icon={<DollarSign className="h-6 w-6" />}
             />
             <MetricCard
+              title="Total Revenue"
+              value={formatCurrency(yearlyData.totalRevenue || 0)}
+              icon={<TrendingUp className="h-6 w-6" />}
+            />
+            <MetricCard
               title="Payouts"
-              value={formatCurrency(yearlyData.totalPayouts)}
+              value={formatCurrency(yearlyData.totalPayouts || 0)}
               icon={<TrendingDown className="h-6 w-6" />}
             />
             <MetricCard
               title="Profit/Loss"
-              value={formatCurrency(yearlyData.profitLoss)}
-              change={yearlyData.profitLossPercentage}
-              trend={yearlyData.profitLoss >= 0 ? 'up' : 'down'}
-              icon={yearlyData.profitLoss >= 0 ? 
+              value={formatCurrency(yearlyData.profitLoss || 0)}
+              change={yearlyData.profitLossPercentage || 0}
+              trend={(yearlyData.profitLoss || 0) >= 0 ? 'up' : 'down'}
+              icon={(yearlyData.profitLoss || 0) >= 0 ? 
                 <TrendingUp className="h-6 w-6" /> : 
                 <TrendingDown className="h-6 w-6" />
               }
+            />
+            <MetricCard
+              title="Unique Players"
+              value={yearlyData.uniquePlayers || 0}
+              icon={<Users className="h-6 w-6" />}
             />
           </div>
         )}
@@ -447,6 +477,12 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
               </p>
             </div>
             <div className="text-center p-4 bg-purple-900/30 rounded-lg">
+              <h5 className="text-purple-300 text-sm font-medium mb-2">Total Revenue (Today)</h5>
+              <p className="text-xl font-bold text-white">
+                {formatCurrency(dailyData?.totalRevenue || 0)}
+              </p>
+            </div>
+            <div className="text-center p-4 bg-purple-900/30 rounded-lg">
               <h5 className="text-purple-300 text-sm font-medium mb-2">Total Payouts (Today)</h5>
               <p className="text-xl font-bold text-white">
                 {formatCurrency(dailyData?.totalPayouts || 0)}
@@ -466,6 +502,26 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
                 (dailyData?.profitLossPercentage || 0) >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
                 {(dailyData?.profitLossPercentage || 0).toFixed(2)}%
+              </p>
+            </div>
+            <div className="text-center p-4 bg-purple-900/30 rounded-lg">
+              <h5 className="text-purple-300 text-sm font-medium mb-2">Unique Players (Today)</h5>
+              <p className="text-xl font-bold text-white">
+                {dailyData?.uniquePlayers || 0}
+              </p>
+            </div>
+            <div className="text-center p-4 bg-purple-900/30 rounded-lg">
+              <h5 className="text-purple-300 text-sm font-medium mb-2">Peak Bets Hour</h5>
+              <p className="text-xl font-bold text-white">
+                {dailyData?.peakBetsHour !== undefined && dailyData?.peakBetsHour !== null 
+                  ? `${dailyData.peakBetsHour}:00` 
+                  : 'N/A'}
+              </p>
+            </div>
+            <div className="text-center p-4 bg-purple-900/30 rounded-lg">
+              <h5 className="text-purple-300 text-sm font-medium mb-2">Games (Today)</h5>
+              <p className="text-xl font-bold text-white">
+                {dailyData?.totalGames || 0}
               </p>
             </div>
           </div>

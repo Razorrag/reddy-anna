@@ -166,7 +166,7 @@ class WebRTCSignalingServer {
   }
 
   /**
-   * Admin sends SDP offer to a specific player
+   * Admin sends SDP offer to players
    */
   private handleOffer(client: WebRTCClient, message: SignalingMessage): void {
     if (client.role !== 'admin') {
@@ -174,25 +174,30 @@ class WebRTCSignalingServer {
       return;
     }
 
+    // Ensure streamId is set on the client
+    if (message.streamId && !client.streamId) {
+      client.streamId = message.streamId;
+    }
+
     if (!message.to) {
       // Broadcast offer to all players
       this.broadcastToPlayers({
         type: 'offer',
         from: client.userId,
-        streamId: client.streamId,
+        streamId: client.streamId || message.streamId,
         sdp: message.sdp
       });
+      console.log(`[WebRTC] Offer broadcasted from ${client.userId} to all players`);
     } else {
       // Send to specific player
       this.sendToClient(message.to, {
         type: 'offer',
         from: client.userId,
-        streamId: client.streamId,
+        streamId: client.streamId || message.streamId,
         sdp: message.sdp
       });
+      console.log(`[WebRTC] Offer sent from ${client.userId} to player ${message.to}`);
     }
-
-    console.log(`[WebRTC] Offer sent from ${client.userId} to ${message.to || 'all players'}`);
   }
 
   /**
@@ -204,23 +209,48 @@ class WebRTCSignalingServer {
       return;
     }
 
-    if (!message.to) {
-      // Send to all admins if no specific recipient
+    // Find the admin who started the active stream
+    let targetAdminId: string | undefined = message.to;
+    
+    if (!targetAdminId) {
+      // Find admin from active stream
+      if (message.streamId) {
+        targetAdminId = this.activeStreams.get(message.streamId);
+      } else {
+        // If no streamId, find first admin with an active stream
+        this.activeStreams.forEach((adminId) => {
+          if (!targetAdminId) {
+            const admin = this.clients.get(adminId);
+            if (admin && admin.role === 'admin') {
+              targetAdminId = adminId;
+            }
+          }
+        });
+      }
+    }
+
+    if (!targetAdminId) {
+      console.warn(`[WebRTC] No admin found to send answer to from ${client.userId}`);
+      // Fallback: send to all admins
       this.sendToAdmins({
         type: 'answer',
         from: client.userId,
-        sdp: message.sdp
+        sdp: message.sdp,
+        streamId: message.streamId
       });
-    } else {
-      // Send to specific admin
-      this.sendToClient(message.to, {
-        type: 'answer',
-        from: client.userId,
-        sdp: message.sdp
-      });
+      console.log(`[WebRTC] Answer sent from ${client.userId} to all admins (fallback)`);
+      return;
     }
 
-    console.log(`[WebRTC] Answer sent from ${client.userId} to ${message.to || 'all admins'}`);
+    // Send to specific admin
+    this.sendToClient(targetAdminId, {
+      type: 'answer',
+      from: client.userId,
+      sdp: message.sdp,
+      streamId: message.streamId
+    });
+
+    console.log(`[WebRTC] Answer sent from ${client.userId} to admin ${targetAdminId}`);
   }
 
   /**
@@ -230,28 +260,61 @@ class WebRTCSignalingServer {
     if (!message.to) {
       // If no specific recipient, send to opposite role
       if (client.role === 'admin') {
+        // Admin sends ICE candidates to all players (broadcast)
         this.sendToPlayers({
           type: 'ice-candidate',
           from: client.userId,
-          candidate: message.candidate
+          candidate: message.candidate,
+          streamId: client.streamId
         });
       } else {
-        this.sendToAdmins({
-          type: 'ice-candidate',
-          from: client.userId,
-          candidate: message.candidate
-        });
+        // Player sends ICE candidate to the admin who started the stream
+        let targetAdminId: string | undefined;
+        
+        // Find admin from active stream
+        if (message.streamId) {
+          targetAdminId = this.activeStreams.get(message.streamId);
+        } else {
+          // If no streamId, find first admin with an active stream
+          this.activeStreams.forEach((adminId) => {
+            if (!targetAdminId) {
+              const admin = this.clients.get(adminId);
+              if (admin && admin.role === 'admin') {
+                targetAdminId = adminId;
+              }
+            }
+          });
+        }
+
+        if (targetAdminId) {
+          this.sendToClient(targetAdminId, {
+            type: 'ice-candidate',
+            from: client.userId,
+            candidate: message.candidate,
+            streamId: message.streamId
+          });
+          console.log(`[WebRTC] ICE candidate sent from ${client.userId} to admin ${targetAdminId}`);
+        } else {
+          // Fallback: send to all admins
+          this.sendToAdmins({
+            type: 'ice-candidate',
+            from: client.userId,
+            candidate: message.candidate,
+            streamId: message.streamId
+          });
+          console.log(`[WebRTC] ICE candidate sent from ${client.userId} to all admins (fallback)`);
+        }
       }
     } else {
       // Send to specific recipient
       this.sendToClient(message.to, {
         type: 'ice-candidate',
         from: client.userId,
-        candidate: message.candidate
+        candidate: message.candidate,
+        streamId: message.streamId
       });
+      console.log(`[WebRTC] ICE candidate sent from ${client.userId} to ${message.to}`);
     }
-
-    console.log(`[WebRTC] ICE candidate sent from ${client.userId} to ${message.to || (client.role === 'admin' ? 'all players' : 'all admins')}`);
   }
 
   /**

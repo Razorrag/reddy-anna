@@ -22,6 +22,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import { useBalance } from '@/contexts/BalanceContext';
 import { WalletModal } from '@/components/WalletModal';
+import { apiClient } from '@/lib/api-client';
+import { useNotification } from '@/contexts/NotificationContext';
 
 const Profile: React.FC = () => {
   const [location] = useLocation();
@@ -35,6 +37,12 @@ const Profile: React.FC = () => {
     claimBonus
   } = useUserProfile();
   const { balance, refreshBalance } = useBalance();
+  const { showNotification } = useNotification();
+  
+  // Payment requests state
+  const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
+  const [loadingPaymentRequests, setLoadingPaymentRequests] = useState(false);
+  
   // WhatsApp deeplink helper
   const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '';
   const openWhatsAppRequest = (requestType: 'deposit' | 'withdraw') => {
@@ -95,6 +103,29 @@ const Profile: React.FC = () => {
       }
     }
   }, [activeTab, user, fetchGameHistory, profileState.gameHistory.length]);
+
+  // Fetch payment requests when transactions tab is active
+  const fetchPaymentRequests = async () => {
+    if (!user) return;
+    
+    try {
+      setLoadingPaymentRequests(true);
+      const response = await apiClient.get('/payment-requests') as any;
+      if (response.success && response.data) {
+        setPaymentRequests(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch payment requests:', error);
+    } finally {
+      setLoadingPaymentRequests(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'transactions' && user) {
+      fetchPaymentRequests();
+    }
+  }, [activeTab, user]);
 
   // Initialize profile form when user data is available
   useEffect(() => {
@@ -597,6 +628,60 @@ const Profile: React.FC = () => {
                 )}
               </CardContent>
             </Card>
+
+            {/* Payment Requests Card */}
+            <Card className="bg-black/50 border-gold/30 mt-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-gold">Payment Requests</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchPaymentRequests}
+                    disabled={loadingPaymentRequests}
+                    className="border-gold/30 text-gold hover:bg-gold/10"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${loadingPaymentRequests ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingPaymentRequests ? (
+                  <div className="text-center py-8 text-white/60">Loading payment requests...</div>
+                ) : paymentRequests.length === 0 ? (
+                  <div className="text-center py-8 text-white/60">No payment requests found</div>
+                ) : (
+                  <div className="space-y-3">
+                    {paymentRequests.map((request: any) => (
+                      <div key={request.id} className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-gold/10">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-3 h-3 rounded-full ${
+                            request.status === 'pending' ? 'bg-yellow-400' :
+                            request.status === 'approved' || request.status === 'completed' ? 'bg-green-400' :
+                            'bg-red-400'
+                          }`} />
+                          <div>
+                            <div className="text-white font-medium capitalize">{request.request_type || request.type}</div>
+                            <div className="text-white/60 text-sm">Amount: {formatCurrency(request.amount)}</div>
+                            <div className="text-white/40 text-xs">Requested: {formatDate(new Date(request.created_at || request.createdAt))}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <Badge variant="outline" className={`text-xs ${
+                            request.status === 'approved' || request.status === 'completed' ? 'border-green-400 text-green-400' :
+                            request.status === 'rejected' ? 'border-red-400 text-red-400' :
+                            'border-yellow-400 text-yellow-400'
+                          }`}>
+                            {request.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Game History Tab */}
@@ -695,10 +780,10 @@ const Profile: React.FC = () => {
                   <div className="p-4 bg-gold/10 rounded-lg border border-gold/30">
                     <div className="text-center">
                       <div className="text-3xl font-bold text-gold mb-2">
-                        {profileState.user?.referralCode || 'REDDY' + user.id.slice(-6).toUpperCase()}
+                        {profileState.user?.referralCode || 'RAJUGARIKOSSU' + user.id.slice(-6).toUpperCase()}
                       </div>
                       <Button
-                        onClick={() => copyToClipboard(profileState.user?.referralCode || 'REDDY' + user.id.slice(-6).toUpperCase())}
+                        onClick={() => copyToClipboard(profileState.user?.referralCode || 'RAJUGARIKOSSU' + user.id.slice(-6).toUpperCase())}
                         variant="outline"
                         className="border-gold/30 text-gold hover:bg-gold/10"
                       >
@@ -904,6 +989,33 @@ const Profile: React.FC = () => {
     window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
     return () => window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
   }, []);
+
+  // Listen for payment request updates
+  useEffect(() => {
+    const handlePaymentUpdate = (event: CustomEvent) => {
+      // Refresh payment requests
+      if (activeTab === 'transactions') {
+        fetchPaymentRequests();
+      }
+      
+      // Refresh balance
+      refreshBalance();
+      
+      // Refresh transactions
+      fetchTransactions(false);
+      
+      // Show notification
+      const { message } = event.detail;
+      if (message) {
+        showNotification(message, 'success');
+      }
+    };
+    
+    window.addEventListener('payment-request-updated', handlePaymentUpdate as EventListener);
+    return () => {
+      window.removeEventListener('payment-request-updated', handlePaymentUpdate as EventListener);
+    };
+  }, [activeTab, fetchPaymentRequests, refreshBalance, fetchTransactions, showNotification]);
 };
 
 export default Profile;
