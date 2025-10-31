@@ -101,7 +101,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
           }`}>
             {/* Large Circular Timer */}
             <div className="relative w-32 h-32 md:w-36 md:h-36">
-              <svg className="transform -rotate-90 w-32 h-32 md:w-36 md:h-36">
+              <svg className="transform -rotate-90" viewBox="0 0 128 128" width="128" height="128">
                 {/* Background circle */}
                 <circle
                   cx="64"
@@ -120,8 +120,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
                   strokeWidth="8"
                   fill="none"
                   strokeDasharray={`${2 * Math.PI * 56}`}
-                  strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}
+                  strokeDashoffset={`${2 * Math.PI * 56 * getTimerProgress()}`}
                   className="transition-all duration-1000 ease-linear"
+                  strokeLinecap="round"
                 />
               </svg>
               {/* Timer text */}

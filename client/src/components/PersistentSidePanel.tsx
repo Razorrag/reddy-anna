@@ -97,33 +97,33 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
         )}
       </div>
 
-      {/* Betting Stats - ALWAYS VISIBLE */}
+      {/* Betting Stats - ALWAYS VISIBLE - ENHANCED VISIBILITY */}
       <div className="space-y-3">
         {/* ANDAR BETS */}
-        <div className="bg-red-900/30 rounded-lg p-4 border-2 border-red-500/50 transition-all duration-300 hover:border-red-400">
-          <div className="text-sm text-gray-400 mb-1">ANDAR BETS</div>
-          <div className="text-2xl font-bold text-red-400">
+        <div className="bg-red-900/40 rounded-lg p-4 border-2 border-red-500/70 transition-all duration-300 hover:border-red-400 shadow-lg">
+          <div className="text-sm font-bold text-red-200 mb-2 uppercase tracking-wide">ANDAR BETS</div>
+          <div className="text-3xl font-bold text-red-300">
             ₹{currentRoundBets.andar.toLocaleString('en-IN')}
           </div>
-          <div className="text-xs text-gray-500 mt-1">
-            Round {gameState.currentRound}: {currentAndarPercentage.toFixed(1)}%
+          <div className="text-sm text-red-100 mt-2">
+            Round {gameState.currentRound}: <span className="font-bold text-white">{currentAndarPercentage.toFixed(1)}%</span>
           </div>
-          <div className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700">
-            Cumulative: ₹{totalCumulativeAndar.toLocaleString('en-IN')}
+          <div className="text-sm text-red-200/80 mt-2 pt-2 border-t border-red-400/30">
+            Cumulative: <span className="font-semibold text-white">₹{totalCumulativeAndar.toLocaleString('en-IN')}</span>
           </div>
         </div>
         
         {/* BAHAR BETS */}
-        <div className="bg-blue-900/30 rounded-lg p-4 border-2 border-blue-500/50 transition-all duration-300 hover:border-blue-400">
-          <div className="text-sm text-gray-400 mb-1">BAHAR BETS</div>
-          <div className="text-2xl font-bold text-blue-400">
+        <div className="bg-blue-900/40 rounded-lg p-4 border-2 border-blue-500/70 transition-all duration-300 hover:border-blue-400 shadow-lg">
+          <div className="text-sm font-bold text-blue-200 mb-2 uppercase tracking-wide">BAHAR BETS</div>
+          <div className="text-3xl font-bold text-blue-300">
             ₹{currentRoundBets.bahar.toLocaleString('en-IN')}
           </div>
-          <div className="text-xs text-gray-500 mt-1">
-            Round {gameState.currentRound}: {currentBaharPercentage.toFixed(1)}%
+          <div className="text-sm text-blue-100 mt-2">
+            Round {gameState.currentRound}: <span className="font-bold text-white">{currentBaharPercentage.toFixed(1)}%</span>
           </div>
-          <div className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700">
-            Cumulative: ₹{totalCumulativeBahar.toLocaleString('en-IN')}
+          <div className="text-sm text-blue-200/80 mt-2 pt-2 border-t border-blue-400/30">
+            Cumulative: <span className="font-semibold text-white">₹{totalCumulativeBahar.toLocaleString('en-IN')}</span>
           </div>
         </div>
         

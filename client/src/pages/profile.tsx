@@ -245,7 +245,7 @@ const Profile: React.FC = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-6 bg-black/50 border-gold/30">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5 bg-black/50 border-gold/30">
             <TabsTrigger value="overview" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
               Overview
             </TabsTrigger>
@@ -261,140 +261,42 @@ const Profile: React.FC = () => {
             <TabsTrigger value="referral" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
               Referral
             </TabsTrigger>
-            <TabsTrigger value="settings" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
-              Settings
-            </TabsTrigger>
           </TabsList>
 
-          {/* Overview Tab */}
+          {/* Overview Tab - Simplified with just sign out and delete account */}
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Balance Card */}
-              <Card className="lg:col-span-2 bg-gradient-to-r from-gold/10 to-yellow-600/10 border-gold/30">
-                <CardHeader>
-                  <CardTitle className="text-gold flex items-center gap-2 text-xl">
-                    <Wallet className="w-6 h-6" />
-                    Account Overview
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div>
-                    <div className="text-white/80 text-sm mb-2">Current Balance</div>
-                    <div className="text-4xl font-bold text-gold">
-                      {formatCurrency(balance)}
-                    </div>
-                    {profileState.bonusInfo && (
-                      <div className="mt-1 text-sm text-yellow-200/90">
-                        Bonus: {formatCurrency((profileState.bonusInfo.depositBonus || 0) + (profileState.bonusInfo.referralBonus || 0))}
-                      </div>
-                    )}
-                    <div className="mt-2">
-                      <Button
-                        onClick={refreshBalance}
-                        variant="outline"
-                        size="sm"
-                        className="border-gold/30 text-gold hover:bg-gold/10"
-                      >
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        Refresh Balance
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <div className="text-white/60 text-xs">Today</div>
-                      <div className={`text-lg font-semibold ${analytics?.todayProfit !== undefined && analytics.todayProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {analytics ? (analytics.todayProfit >= 0 ? '+' : '') + formatCurrency(analytics.todayProfit) : 'Loading...'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-white/60 text-xs">Weekly</div>
-                      <div className={`text-lg font-semibold ${analytics?.weeklyProfit !== undefined && analytics.weeklyProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {analytics ? (analytics.weeklyProfit >= 0 ? '+' : '') + formatCurrency(analytics.weeklyProfit) : 'Loading...'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-white/60 text-xs">Monthly</div>
-                      <div className={`text-lg font-semibold ${analytics?.monthlyProfit !== undefined && analytics.monthlyProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {analytics ? (analytics.monthlyProfit >= 0 ? '+' : '') + formatCurrency(analytics.monthlyProfit) : 'Loading...'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <Button
-                      onClick={() => openWhatsAppRequest('deposit')}
-                      className="bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      <TrendingUp className="w-4 h-4 mr-2" />
-                      Add Funds
-                    </Button>
-                    <Button
-                      onClick={() => openWhatsAppRequest('withdraw')}
-                      className="bg-red-600 hover:bg-red-700 text-white"
-                    >
-                      <TrendingDown className="w-4 h-4 mr-2" />
-                      Withdraw
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Quick Stats */}
-              <div className="space-y-4">
-                <Card className="bg-black/50 border-gold/20">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-gold text-lg">Statistics</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/80">Games Played</span>
-                      <span className="text-white font-bold">{analytics ? analytics.gamesPlayed.toLocaleString() : 'Loading...'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/80">Win Rate</span>
-                      <span className="text-gold font-bold">{analytics ? analytics.winRate.toFixed(1) + '%' : 'Loading...'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/80">Biggest Win</span>
-                      <span className="text-green-400 font-bold">{analytics ? formatCurrency(analytics.biggestWin) : 'Loading...'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/80">Average Bet</span>
-                      <span className="text-white font-bold">{analytics ? formatCurrency(analytics.averageBet) : 'Loading...'}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-black/50 border-gold/20">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-gold text-lg">Totals</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/80">Total Deposits</span>
-                      <span className="text-green-400 font-bold">{analytics ? formatCurrency(analytics.totalDeposits) : 'Loading...'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/80">Total Withdrawals</span>
-                      <span className="text-red-400 font-bold">{analytics ? formatCurrency(analytics.totalWithdrawals) : 'Loading...'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/80">Total Winnings</span>
-                      <span className="text-blue-400 font-bold">{analytics ? formatCurrency(analytics.totalWinnings) : 'Loading...'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/80">Total Losses</span>
-                      <span className="text-red-400 font-bold">{analytics ? formatCurrency(analytics.totalLosses) : 'Loading...'}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
+            <Card className="bg-black/50 border-gold/30">
+              <CardHeader>
+                <CardTitle className="text-gold">Account Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button
+                  onClick={() => {
+                    // Clear auth and redirect to home
+                    localStorage.removeItem('auth_token');
+                    window.location.href = '/';
+                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Sign Out
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+                      // Add delete account logic here
+                      alert('Delete account functionality to be implemented');
+                    }
+                  }}
+                  variant="outline"
+                  className="w-full border-red-500 text-red-500 hover:bg-red-500/10"
+                >
+                  Delete Account
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
 
-          {/* Profile Tab */}
+          {/* Profile Tab - Simplified */}
           <TabsContent value="profile" className="space-y-6">
             <Card className="bg-black/50 border-gold/30">
               <CardHeader>
@@ -410,137 +312,54 @@ const Profile: React.FC = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="fullName" className="text-gold">Full Name</Label>
-                      <Input
-                        id="fullName"
-                        value={profileForm.fullName}
-                        onChange={(e) => setProfileForm(prev => ({ ...prev, fullName: e.target.value }))}
-                        disabled={!editingProfile}
-                        className="bg-black/50 border-gold/30 text-white"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="email" className="text-gold">Email</Label>
-                      <Input
-                        id="email"
-                        value={user.phone}
-                        disabled
-                        className="bg-black/30 border-gold/20 text-white/60"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="mobile" className="text-gold">Mobile Number</Label>
-                      <Input
-                        id="mobile"
-                        value={profileForm.mobile}
-                        onChange={(e) => setProfileForm(prev => ({ ...prev, mobile: e.target.value }))}
-                        disabled={!editingProfile}
-                        className="bg-black/50 border-gold/30 text-white"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="dateOfBirth" className="text-gold">Date of Birth</Label>
-                      <Input
-                        id="dateOfBirth"
-                        type="date"
-                        value={profileForm.dateOfBirth}
-                        onChange={(e) => setProfileForm(prev => ({ ...prev, dateOfBirth: e.target.value }))}
-                        disabled={!editingProfile}
-                        className="bg-black/50 border-gold/30 text-white"
-                      />
-                    </div>
+                <div className="max-w-md mx-auto space-y-4">
+                  <div>
+                    <Label htmlFor="fullName" className="text-gold">Full Name</Label>
+                    <Input
+                      id="fullName"
+                      value={profileForm.fullName}
+                      onChange={(e) => setProfileForm(prev => ({ ...prev, fullName: e.target.value }))}
+                      disabled={!editingProfile}
+                      className="bg-black/50 border-gold/30 text-white"
+                    />
                   </div>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="gender" className="text-gold">Gender</Label>
-                      <Select
-                        value={profileForm.gender}
-                        onValueChange={(value) => setProfileForm(prev => ({ ...prev, gender: value }))}
-                        disabled={!editingProfile}
-                      >
-                        <SelectTrigger className="bg-black/50 border-gold/30 text-white">
-                          <SelectValue placeholder="Select gender" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-black/90 border-gold/30">
-                          <SelectItem value="male">Male</SelectItem>
-                          <SelectItem value="female">Female</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="address" className="text-gold">Address</Label>
-                      <Input
-                        id="address"
-                        value={profileForm.address}
-                        onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))}
-                        disabled={!editingProfile}
-                        className="bg-black/50 border-gold/30 text-white"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="city" className="text-gold">City</Label>
-                        <Input
-                          id="city"
-                          value={profileForm.city}
-                          onChange={(e) => setProfileForm(prev => ({ ...prev, city: e.target.value }))}
-                          disabled={!editingProfile}
-                          className="bg-black/50 border-gold/30 text-white"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="state" className="text-gold">State</Label>
-                        <Input
-                          id="state"
-                          value={profileForm.state}
-                          onChange={(e) => setProfileForm(prev => ({ ...prev, state: e.target.value }))}
-                          disabled={!editingProfile}
-                          className="bg-black/50 border-gold/30 text-white"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="pincode" className="text-gold">Pincode</Label>
-                        <Input
-                          id="pincode"
-                          value={profileForm.pincode}
-                          onChange={(e) => setProfileForm(prev => ({ ...prev, pincode: e.target.value }))}
-                          disabled={!editingProfile}
-                          className="bg-black/50 border-gold/30 text-white"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="country" className="text-gold">Country</Label>
-                        <Input
-                          id="country"
-                          value={profileForm.country}
-                          onChange={(e) => setProfileForm(prev => ({ ...prev, country: e.target.value }))}
-                          disabled={!editingProfile}
-                          className="bg-black/50 border-gold/30 text-white"
-                        />
-                      </div>
-                    </div>
+                  <div>
+                    <Label htmlFor="mobile" className="text-gold">Mobile Number</Label>
+                    <Input
+                      id="mobile"
+                      value={profileForm.mobile || user.phone}
+                      onChange={(e) => setProfileForm(prev => ({ ...prev, mobile: e.target.value }))}
+                      disabled={!editingProfile}
+                      className="bg-black/50 border-gold/30 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="password" className="text-gold">Reset Password</Label>
+                    <Button
+                      onClick={() => {
+                        // Add password reset logic here
+                        alert('Password reset functionality to be implemented');
+                      }}
+                      variant="outline"
+                      className="w-full border-gold/30 text-gold hover:bg-gold/10 mt-2"
+                    >
+                      Change Password
+                    </Button>
                   </div>
                 </div>
 
                 {editingProfile && (
-                  <div className="flex gap-4 pt-4 border-t border-gold/20">
+                  <div className="flex gap-4 pt-4 border-t border-gold/20 max-w-md mx-auto">
                     <Button
                       onClick={handleProfileUpdate}
-                      className="bg-green-600 hover:bg-green-700 text-white"
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                     >
                       Save Changes
                     </Button>
                     <Button
                       onClick={() => setEditingProfile(false)}
                       variant="outline"
-                      className="border-gold/30 text-gold hover:bg-gold/10"
+                      className="flex-1 border-gold/30 text-gold hover:bg-gold/10"
                     >
                       Cancel
                     </Button>
@@ -898,75 +717,6 @@ const Profile: React.FC = () => {
             )}
           </TabsContent>
 
-          {/* Settings Tab */}
-          <TabsContent value="settings" className="space-y-6">
-            <Card className="bg-black/50 border-gold/30">
-              <CardHeader>
-                <CardTitle className="text-gold">Account Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gold">Security</h3>
-                  <div className="space-y-3">
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
-                    >
-                      Change Password
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
-                    >
-                      Enable Two-Factor Authentication
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gold">Preferences</h3>
-                  <div className="space-y-3">
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
-                    >
-                      Notification Settings
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
-                    >
-                      Language Preferences
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
-                    >
-                      Theme Settings
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gold">Data & Privacy</h3>
-                  <div className="space-y-3">
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start border-gold/30 text-gold hover:bg-gold/10"
-                    >
-                      Download My Data
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start border-red-30 text-red-400 hover:bg-red-500/10"
-                    >
-                      Delete Account
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </div>
 

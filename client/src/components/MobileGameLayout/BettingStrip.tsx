@@ -149,8 +149,8 @@ const BettingStrip: React.FC<BettingStripProps> = ({
           <div className="flex items-center justify-between h-full">
             {/* Left side - Text and bet info */}
             <div className="flex-1 text-left pr-2">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="text-white font-bold text-sm">ANDAR</div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="text-white font-bold text-lg">ANDAR</div>
                 {hasLessAndar && (
                   <span className="px-2 py-0.5 bg-yellow-500/80 text-black text-[10px] font-bold rounded animate-pulse">
                     LESS
@@ -158,40 +158,23 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                 )}
               </div>
               
-              {/* Show bet amounts - Always visible (including during betting phase) */}
-              <div>
-                <div className="text-white text-xs font-semibold">
-                  Total: ₹{currentRoundBets.andar.toLocaleString('en-IN')}
-                </div>
-                {/* Show min/max bet limits */}
-                <div className="text-gray-500 text-[10px] mt-0.5">
-                  Min: ₹{minBet.toLocaleString('en-IN')} | Max: ₹{maxBet.toLocaleString('en-IN')}
-                </div>
-                {/* Show Round 1 amounts when in Round 2+ - Always show if in round 2+ */}
-                {gameState.currentRound >= 2 && (
-                  <div className="text-gray-400 text-xs mt-0.5">
-                    R1: ₹{gameState.round1Bets.andar.toLocaleString('en-IN')}
+              {/* Show ONLY player's individual bets - NO ADMIN DATA */}
+              <div className="space-y-0.5">
+                {gameState.playerRound1Bets.andar > 0 && (
+                  <div className="text-yellow-200 text-xs font-medium">
+                    Your Bet: ₹{gameState.playerRound1Bets.andar.toLocaleString('en-IN')}
                   </div>
                 )}
-                {/* Show current round bet for round 2 */}
-                {gameState.currentRound === 2 && (
-                  <div className="text-gray-300 text-xs font-medium">
-                    R2: ₹{currentRoundBets.andar.toLocaleString('en-IN')}
+                {gameState.currentRound >= 2 && gameState.playerRound2Bets.andar > 0 && (
+                  <div className="text-yellow-300 text-xs font-medium">
+                    R2 Bet: ₹{gameState.playerRound2Bets.andar.toLocaleString('en-IN')}
                   </div>
                 )}
-                {/* Show player's individual bets */}
-                <div className="mt-1 space-y-0.5">
-                  {gameState.playerRound1Bets.andar > 0 && (
-                    <div className="text-yellow-200 text-xs">
-                      You R1: ₹{gameState.playerRound1Bets.andar.toLocaleString('en-IN')}
-                    </div>
-                  )}
-                  {gameState.currentRound >= 2 && gameState.playerRound2Bets.andar > 0 && (
-                    <div className="text-yellow-200 text-xs">
-                      You R2: ₹{gameState.playerRound2Bets.andar.toLocaleString('en-IN')}
-                    </div>
-                  )}
-                </div>
+                {(gameState.playerRound1Bets.andar === 0 && gameState.playerRound2Bets.andar === 0) && (
+                  <div className="text-gray-400 text-xs">
+                    No bets placed
+                  </div>
+                )}
               </div>
             </div>
 
@@ -220,32 +203,35 @@ const BettingStrip: React.FC<BettingStripProps> = ({
           </div>
         </button>
 
-        {/* Opening Card Section - Center */}
-        <div className="w-16 bg-gradient-to-b from-gray-800 to-gray-900 rounded-lg px-1 py-0.5 border-2 border-gray-600/50 flex flex-col justify-center items-center">
+        {/* Opening Card Section - Center - Enhanced Visibility */}
+        <div className="w-20 bg-gradient-to-b from-yellow-900/40 to-yellow-950/40 rounded-lg px-2 py-2 border-2 border-gold/50 flex flex-col justify-center items-center shadow-lg shadow-gold/20">
           {gameState.selectedOpeningCard ? (
-            <div className="relative flex flex-col items-center justify-center">
-              {/* Symbol and Suit only - no card background */}
+            <div className="relative flex flex-col items-center justify-center gap-0.5">
+              {/* Symbol - Larger and more visible */}
               <div className={`
-                text-lg font-bold
+                text-2xl font-bold
                 text-gold
                 transform transition-all duration-300 hover:scale-110
+                drop-shadow-lg
               `}>
                 {gameState.selectedOpeningCard.display}
               </div>
+              {/* Suit - More visible */}
               <div className={`
-                text-xs font-semibold
-                text-gold
+                text-xs font-bold
+                text-gold/90
                 transform transition-all duration-300 hover:scale-110
+                uppercase
               `}>
-                {gameState.selectedOpeningCard.suit?.toUpperCase()}
+                {gameState.selectedOpeningCard.suit}
               </div>
-              {/* Glow effect */}
-              <div className="absolute inset-0 bg-yellow-400/15 rounded-lg blur-sm" />
+              {/* Enhanced Glow effect */}
+              <div className="absolute inset-0 bg-yellow-400/25 rounded-lg blur-md -z-10" />
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center">
-              <div className="text-gray-400 text-lg font-bold">?</div>
-              <div className="text-gray-500 text-xs">CARD</div>
+            <div className="flex flex-col items-center justify-center gap-1">
+              <div className="text-gold/50 text-2xl font-bold">?</div>
+              <div className="text-gold/40 text-[10px] font-semibold">OPENING</div>
             </div>
           )}
         </div>
@@ -293,49 +279,32 @@ const BettingStrip: React.FC<BettingStripProps> = ({
 
             {/* Right side - Text and bet info */}
             <div className="flex-1 text-right pl-2">
-              <div className="flex items-center justify-end gap-2 mb-2">
+              <div className="flex items-center justify-end gap-2 mb-1">
                 {hasLessBahar && (
                   <span className="px-2 py-0.5 bg-yellow-500/80 text-black text-[10px] font-bold rounded animate-pulse">
                     LESS
                   </span>
                 )}
-                <div className="text-white font-bold text-sm">BAHAR</div>
+                <div className="text-white font-bold text-lg">BAHAR</div>
               </div>
               
-              {/* Show bet amounts - Always visible (including during betting phase) */}
-              <div>
-                <div className="text-white text-xs font-semibold">
-                  Total: ₹{currentRoundBets.bahar.toLocaleString('en-IN')}
-                </div>
-                {/* Show min/max bet limits */}
-                <div className="text-gray-500 text-[10px] mt-0.5">
-                  Min: ₹{minBet.toLocaleString('en-IN')} | Max: ₹{maxBet.toLocaleString('en-IN')}
-                </div>
-                {/* Show Round 1 amounts when in Round 2+ - Always show if in round 2+ */}
-                {gameState.currentRound >= 2 && (
-                  <div className="text-gray-400 text-xs mt-0.5">
-                    R1: ₹{gameState.round1Bets.bahar.toLocaleString('en-IN')}
+              {/* Show ONLY player's individual bets - NO ADMIN DATA */}
+              <div className="space-y-0.5">
+                {gameState.playerRound1Bets.bahar > 0 && (
+                  <div className="text-yellow-200 text-xs font-medium">
+                    Your Bet: ₹{gameState.playerRound1Bets.bahar.toLocaleString('en-IN')}
                   </div>
                 )}
-                {/* Show current round bet for round 2 */}
-                {gameState.currentRound === 2 && (
-                  <div className="text-gray-300 text-xs font-medium">
-                    R2: ₹{currentRoundBets.bahar.toLocaleString('en-IN')}
+                {gameState.currentRound >= 2 && gameState.playerRound2Bets.bahar > 0 && (
+                  <div className="text-yellow-300 text-xs font-medium">
+                    R2 Bet: ₹{gameState.playerRound2Bets.bahar.toLocaleString('en-IN')}
                   </div>
                 )}
-                {/* Show player's individual bets */}
-                <div className="mt-1 space-y-0.5">
-                  {gameState.playerRound1Bets.bahar > 0 && (
-                    <div className="text-yellow-200 text-xs">
-                      You R1: ₹{gameState.playerRound1Bets.bahar.toLocaleString('en-IN')}
-                    </div>
-                  )}
-                  {gameState.currentRound >= 2 && gameState.playerRound2Bets.bahar > 0 && (
-                    <div className="text-yellow-200 text-xs">
-                      You R2: ₹{gameState.playerRound2Bets.bahar.toLocaleString('en-IN')}
-                    </div>
-                  )}
-                </div>
+                {(gameState.playerRound1Bets.bahar === 0 && gameState.playerRound2Bets.bahar === 0) && (
+                  <div className="text-gray-400 text-xs">
+                    No bets placed
+                  </div>
+                )}
               </div>
             </div>
           </div>
