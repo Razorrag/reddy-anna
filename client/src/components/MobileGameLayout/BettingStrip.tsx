@@ -178,23 +178,23 @@ const BettingStrip: React.FC<BettingStripProps> = ({
               </div>
             </div>
 
-            {/* Right side - Latest Dealt Card - Show if cards exist for current game */}
-            <div className="flex-shrink-0 flex flex-col items-center justify-center gap-1">
-              {/* Show cards if they exist - always visible when cards are dealt */}
+            {/* Right side - Latest Dealt Card ONLY - Show if cards exist for current game */}
+            <div className="flex-shrink-0 flex flex-col items-center justify-center gap-1 min-w-[40px]">
+              {/* Show ONLY the latest card, not all cards */}
               {gameState.andarCards.length > 0 ? (
                 <div className="flex flex-col items-center">
-                  {/* Show ALL dealt cards in stack */}
-                  {gameState.andarCards.map((card, index) => (
-                    <div key={index} className={`text-lg font-bold transition-all duration-300 ${card.color === 'red' ? 'text-red-300' : 'text-yellow-300'}`}>
-                      {card.display}
-                    </div>
-                  ))}
-                  {/* Card count indicator */}
-                  {gameState.andarCards.length > 1 && (
-                    <div className="text-xs text-gray-400 mt-1">
-                      ({gameState.andarCards.length})
-                    </div>
-                  )}
+                  {/* Show ONLY the last card (most recent) */}
+                  <div className={`text-2xl font-bold transition-all duration-300 ${
+                    gameState.andarCards[gameState.andarCards.length - 1].color === 'red' 
+                      ? 'text-red-300' 
+                      : 'text-yellow-300'
+                  }`}>
+                    {gameState.andarCards[gameState.andarCards.length - 1].display}
+                  </div>
+                  {/* Card count indicator - shows total count */}
+                  <div className="text-[10px] text-gray-400 mt-0.5">
+                    ({gameState.andarCards.length})
+                  </div>
                 </div>
               ) : (
                 <div className="text-gray-400 text-xs">-</div>
@@ -254,23 +254,23 @@ const BettingStrip: React.FC<BettingStripProps> = ({
           `}
         >
           <div className="flex items-center justify-between h-full">
-            {/* Left side - Latest Dealt Card - Show if cards exist for current game */}
-            <div className="flex-shrink-0 flex flex-col items-center justify-center gap-1">
-              {/* Show cards if they exist - always visible when cards are dealt */}
+            {/* Left side - Latest Dealt Card ONLY - Show if cards exist for current game */}
+            <div className="flex-shrink-0 flex flex-col items-center justify-center gap-1 min-w-[40px]">
+              {/* Show ONLY the latest card, not all cards */}
               {gameState.baharCards.length > 0 ? (
                 <div className="flex flex-col items-center">
-                  {/* Show ALL dealt cards in stack */}
-                  {gameState.baharCards.map((card, index) => (
-                    <div key={index} className={`text-lg font-bold transition-all duration-300 ${card.color === 'red' ? 'text-red-300' : 'text-yellow-300'}`}>
-                      {card.display}
-                    </div>
-                  ))}
-                  {/* Card count indicator */}
-                  {gameState.baharCards.length > 1 && (
-                    <div className="text-xs text-gray-400 mt-1">
-                      ({gameState.baharCards.length})
-                    </div>
-                  )}
+                  {/* Show ONLY the last card (most recent) */}
+                  <div className={`text-2xl font-bold transition-all duration-300 ${
+                    gameState.baharCards[gameState.baharCards.length - 1].color === 'red' 
+                      ? 'text-red-300' 
+                      : 'text-yellow-300'
+                  }`}>
+                    {gameState.baharCards[gameState.baharCards.length - 1].display}
+                  </div>
+                  {/* Card count indicator - shows total count */}
+                  <div className="text-[10px] text-gray-400 mt-0.5">
+                    ({gameState.baharCards.length})
+                  </div>
                 </div>
               ) : (
                 <div className="text-gray-400 text-xs">-</div>
