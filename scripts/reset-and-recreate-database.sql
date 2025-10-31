@@ -34,7 +34,9 @@ DROP TABLE IF EXISTS admin_credentials CASCADE;
 DROP TABLE IF EXISTS game_settings CASCADE;
 DROP TABLE IF EXISTS stream_settings CASCADE;
 DROP TABLE IF EXISTS stream_config CASCADE;
+DROP TABLE IF EXISTS stream_sessions CASCADE;
 DROP TABLE IF EXISTS admin_dashboard_settings CASCADE;
+DROP TABLE IF EXISTS token_blacklist CASCADE;
 
 -- Re-enable foreign key checks
 SET session_replication_role = 'origin';
@@ -51,8 +53,18 @@ DROP VIEW IF EXISTS admin_requests_summary CASCADE;
 
 DROP FUNCTION IF EXISTS update_request_status(UUID, VARCHAR, request_status, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS update_balance_with_request(UUID, VARCHAR, request_status, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS generate_referral_code(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS generate_referral_code(VARCHAR) CASCADE;
+-- Drop all possible variants of update_balance_atomic to avoid ambiguity
+DROP FUNCTION IF EXISTS update_balance_atomic(VARCHAR, NUMERIC) CASCADE;
+DROP FUNCTION IF EXISTS update_balance_atomic(VARCHAR, DECIMAL) CASCADE;
+DROP FUNCTION IF EXISTS update_balance_atomic(VARCHAR(20), DECIMAL(15, 2)) CASCADE;
 DROP FUNCTION IF EXISTS update_balance_atomic(TEXT, NUMERIC) CASCADE;
+DROP FUNCTION IF EXISTS update_balance_atomic(TEXT, DECIMAL) CASCADE;
+DROP FUNCTION IF EXISTS cleanup_expired_tokens() CASCADE;
+DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
+DROP FUNCTION IF EXISTS check_conditional_bonus(VARCHAR) CASCADE;
+DROP FUNCTION IF EXISTS update_stream_config_updated_at() CASCADE;
+DROP FUNCTION IF EXISTS update_daily_statistics() CASCADE;
 
 -- ============================================
 -- STEP 4: DROP ALL CUSTOM TYPES (ENUMS)
@@ -157,8 +169,8 @@ CREATE TABLE game_sessions (
   status game_status NOT NULL DEFAULT 'active',
   current_timer INTEGER DEFAULT 30,
   current_round INTEGER DEFAULT 1,
-  andar_cards TEXT[] DEFAULT ARRAY[]::TEXT[],
-  bahar_cards TEXT[] DEFAULT ARRAY[]::TEXT[],
+  andar_cards TEXT[] DEFAULT '{}',
+  bahar_cards TEXT[] DEFAULT '{}',
   winner bet_side,
   winning_card TEXT,
   winning_round INTEGER,
@@ -172,43 +184,51 @@ CREATE TABLE game_sessions (
 
 CREATE INDEX idx_game_sessions_game_id ON game_sessions(game_id);
 CREATE INDEX idx_game_sessions_status ON game_sessions(status);
+CREATE INDEX idx_game_sessions_phase ON game_sessions(phase);
+CREATE INDEX idx_game_sessions_created_at ON game_sessions(created_at);
 
 -- Player bets table
 CREATE TABLE player_bets (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id VARCHAR(20) NOT NULL,
   game_id VARCHAR(36) NOT NULL,
-  round INTEGER DEFAULT 1,
-  side bet_side NOT NULL,
+  round VARCHAR(10) NOT NULL, -- round1, round2, round3
+  side bet_side NOT NULL, -- andar or bahar
   amount DECIMAL(15, 2) NOT NULL,
+  potential_payout DECIMAL(15, 2),
+  actual_payout DECIMAL(15, 2) DEFAULT '0.00',
   status transaction_status DEFAULT 'pending',
-  payout DECIMAL(15, 2) DEFAULT '0.00',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   
+  -- Foreign key constraints
   CONSTRAINT fk_player_bets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_player_bets_game FOREIGN KEY (game_id) REFERENCES game_sessions(id) ON DELETE CASCADE
+  CONSTRAINT fk_player_bets_game FOREIGN KEY (game_id) REFERENCES game_sessions(game_id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_player_bets_user_id ON player_bets(user_id);
 CREATE INDEX idx_player_bets_game_id ON player_bets(game_id);
-CREATE INDEX idx_player_bets_created_at ON player_bets(created_at DESC);
+CREATE INDEX idx_player_bets_status ON player_bets(status);
+CREATE INDEX idx_player_bets_created_at ON player_bets(created_at);
+CREATE INDEX idx_player_bets_user_game ON player_bets(user_id, game_id);
+CREATE INDEX idx_player_bets_game_status ON player_bets(game_id, status);
 
 -- Dealt cards table
 CREATE TABLE dealt_cards (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
   game_id VARCHAR(36) NOT NULL,
-  card TEXT NOT NULL,
-  side bet_side NOT NULL,
-  position INTEGER NOT NULL,
+  card TEXT NOT NULL, -- e.g., "K♥"
+  side bet_side NOT NULL, -- andar or bahar
+  position INTEGER NOT NULL, -- 1, 2, 3...
   is_winning_card BOOLEAN DEFAULT false,
-  dealt_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   
-  CONSTRAINT fk_dealt_cards_game FOREIGN KEY (game_id) REFERENCES game_sessions(id) ON DELETE CASCADE
+  -- Foreign key constraint
+  CONSTRAINT fk_dealt_cards_game FOREIGN KEY (game_id) REFERENCES game_sessions(game_id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_dealt_cards_game_id ON dealt_cards(game_id);
+CREATE INDEX idx_dealt_cards_position ON dealt_cards(position);
 
 -- Game history table
 CREATE TABLE game_history (
@@ -223,10 +243,12 @@ CREATE TABLE game_history (
   total_payouts DECIMAL(15, 2) DEFAULT '0.00',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   
-  CONSTRAINT fk_game_history_game FOREIGN KEY (game_id) REFERENCES game_sessions(id) ON DELETE CASCADE
+  -- Foreign key constraint
+  CONSTRAINT fk_game_history_game FOREIGN KEY (game_id) REFERENCES game_sessions(game_id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_game_history_created_at ON game_history(created_at DESC);
+CREATE INDEX idx_game_history_created_at ON game_history(created_at);
+CREATE INDEX idx_game_history_game_id ON game_history(game_id);
 
 -- Game statistics table
 CREATE TABLE game_statistics (
@@ -247,8 +269,12 @@ CREATE TABLE game_statistics (
   unique_players INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   
-  CONSTRAINT fk_game_statistics_game FOREIGN KEY (game_id) REFERENCES game_sessions(id) ON DELETE CASCADE
+  -- Foreign key constraint
+  CONSTRAINT fk_game_statistics_game FOREIGN KEY (game_id) REFERENCES game_sessions(game_id) ON DELETE CASCADE
 );
+
+CREATE INDEX idx_game_statistics_game_id ON game_statistics(game_id);
+CREATE INDEX idx_game_statistics_created_at ON game_statistics(created_at);
 
 -- Daily game statistics table
 CREATE TABLE daily_game_statistics (
@@ -313,7 +339,10 @@ CREATE TABLE user_transactions (
 );
 
 CREATE INDEX idx_user_transactions_user_id ON user_transactions(user_id);
-CREATE INDEX idx_user_transactions_created_at ON user_transactions(created_at DESC);
+CREATE INDEX idx_user_transactions_type ON user_transactions(transaction_type);
+CREATE INDEX idx_user_transactions_created_at ON user_transactions(created_at);
+CREATE INDEX idx_user_transactions_user_type ON user_transactions(user_id, transaction_type);
+CREATE INDEX idx_user_transactions_user_date ON user_transactions(user_id, created_at DESC);
 
 -- Payment requests table
 CREATE TABLE payment_requests (
@@ -334,9 +363,11 @@ CREATE TABLE payment_requests (
   CONSTRAINT fk_payment_requests_admin FOREIGN KEY (admin_id) REFERENCES admin_credentials(id) ON DELETE SET NULL
 );
 
-CREATE INDEX idx_payment_requests_user_id ON payment_requests(user_id);
 CREATE INDEX idx_payment_requests_status ON payment_requests(status);
-CREATE INDEX idx_payment_requests_created_at ON payment_requests(created_at DESC);
+CREATE INDEX idx_payment_requests_user_id ON payment_requests(user_id);
+CREATE INDEX idx_payment_requests_created_at ON payment_requests(created_at);
+CREATE INDEX idx_payment_requests_type ON payment_requests(request_type);
+CREATE INDEX idx_payment_requests_user_status ON payment_requests(user_id, status);
 
 -- User referrals table
 CREATE TABLE user_referrals (
@@ -378,28 +409,84 @@ CREATE TABLE stream_settings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Stream config table
+-- Stream config table - Dual streaming configuration supporting both RTMP and WebRTC methods
 CREATE TABLE stream_config (
-  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  active_method VARCHAR(50) DEFAULT 'youtube',
-  rtmp_server_url TEXT,
-  rtmp_stream_key TEXT,
-  youtube_video_id VARCHAR(100),
-  stream_title TEXT,
-  stream_status VARCHAR(20) DEFAULT 'offline',
-  show_stream BOOLEAN DEFAULT true,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- Stream Method Configuration
+  active_method VARCHAR(10) NOT NULL DEFAULT 'rtmp' CHECK (active_method IN ('rtmp', 'webrtc')),
+  stream_status VARCHAR(20) NOT NULL DEFAULT 'offline' CHECK (stream_status IN ('online', 'offline', 'connecting', 'error')),
+  stream_title VARCHAR(255) DEFAULT 'Andar Bahar Live',
+  show_stream BOOLEAN DEFAULT true, -- Controls stream visibility to players
+  
+  -- RTMP Configuration
+  rtmp_server_url VARCHAR(255) DEFAULT 'rtmp://live.restream.io/live',
+  rtmp_stream_key VARCHAR(255),
+  rtmp_player_url VARCHAR(255) DEFAULT 'https://player.restream.io?token=2123471e69ed8bf8cb11cd207c282b1',
+  rtmp_status VARCHAR(20) DEFAULT 'offline' CHECK (rtmp_status IN ('online', 'offline', 'connecting', 'error')),
+  rtmp_last_check TIMESTAMP WITH TIME ZONE,
+  
+  -- WebRTC Configuration
+  webrtc_enabled BOOLEAN DEFAULT true,
+  webrtc_status VARCHAR(20) DEFAULT 'offline' CHECK (webrtc_status IN ('online', 'offline', 'connecting', 'error')),
+  webrtc_quality VARCHAR(20) DEFAULT 'high' CHECK (webrtc_quality IN ('low', 'medium', 'high', 'ultra')),
+  webrtc_resolution VARCHAR(10) DEFAULT '720p' CHECK (webrtc_resolution IN ('480p', '720p', '1080p')),
+  webrtc_fps INTEGER DEFAULT 30 CHECK (webrtc_fps IN (15, 24, 30, 60)),
+  webrtc_bitrate INTEGER DEFAULT 2500 CHECK (webrtc_bitrate >= 500 AND webrtc_bitrate <= 10000),
+  webrtc_audio_enabled BOOLEAN DEFAULT true,
+  webrtc_screen_source VARCHAR(20) DEFAULT 'screen' CHECK (webrtc_screen_source IN ('screen', 'window', 'tab')),
+  webrtc_room_id VARCHAR(100) DEFAULT 'andar-bahar-live',
+  webrtc_last_check TIMESTAMP WITH TIME ZONE,
+  
+  -- Analytics
+  viewer_count INTEGER DEFAULT 0 CHECK (viewer_count >= 0),
+  total_views INTEGER DEFAULT 0 CHECK (total_views >= 0),
+  stream_duration_seconds INTEGER DEFAULT 0 CHECK (stream_duration_seconds >= 0),
+  
+  -- Metadata
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_by UUID,
+  last_modified_by UUID
 );
 
 -- Admin dashboard settings table
 CREATE TABLE admin_dashboard_settings (
-  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  setting_key VARCHAR(100) NOT NULL UNIQUE,
-  setting_value TEXT NOT NULL,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  setting_key VARCHAR(100) UNIQUE NOT NULL,
+  setting_value TEXT,
   description TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_by VARCHAR(36),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Foreign key constraint
+  CONSTRAINT fk_admin_dashboard_settings_admin FOREIGN KEY (updated_by) REFERENCES admin_credentials(id) ON DELETE SET NULL
+);
+
+-- Stream sessions table for tracking
+CREATE TABLE stream_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stream_method VARCHAR(10) NOT NULL CHECK (stream_method IN ('rtmp', 'webrtc')),
+  start_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  end_time TIMESTAMP WITH TIME ZONE,
+  duration_seconds INTEGER,
+  peak_viewers INTEGER DEFAULT 0 CHECK (peak_viewers >= 0),
+  total_viewers INTEGER DEFAULT 0 CHECK (total_viewers >= 0),
+  admin_id UUID,
+  status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'ended', 'error')),
+  error_message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Token blacklist table for logout token invalidation
+CREATE TABLE token_blacklist (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  token_jti VARCHAR(255) NOT NULL UNIQUE, -- JWT ID
+  user_id VARCHAR(20) NOT NULL,
+  token_type VARCHAR(20) NOT NULL, -- 'access' or 'refresh'
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  blacklisted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  reason VARCHAR(100) DEFAULT 'logout'
 );
 
 -- User creation log table
@@ -442,34 +529,39 @@ CREATE TABLE whatsapp_messages (
   CONSTRAINT fk_whatsapp_messages_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Admin requests table
+-- Admin requests table - Central table for managing all types of admin requests
 CREATE TABLE admin_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id VARCHAR(20),
   user_phone VARCHAR(20) NOT NULL,
-  request_type transaction_type NOT NULL,
+  request_type transaction_type NOT NULL, -- deposit, withdrawal, support, balance
   amount DECIMAL(15, 2),
   currency VARCHAR(3) DEFAULT 'INR',
   payment_method VARCHAR(50),
   utr_number VARCHAR(100),
   status request_status DEFAULT 'pending',
-  priority INTEGER DEFAULT 3 CHECK (priority IN (1, 2, 3)),
+  priority INTEGER DEFAULT 3 CHECK (priority IN (1, 2, 3)), -- 1=high, 2=medium, 3=low
   admin_notes TEXT,
   admin_id VARCHAR(36),
   whatsapp_message_id VARCHAR(36),
-  balance_updated BOOLEAN DEFAULT false,
+  balance_updated BOOLEAN DEFAULT FALSE,
+  balance_update_amount DECIMAL(15, 2),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   processed_at TIMESTAMP WITH TIME ZONE,
   
+  -- Foreign key constraints
   CONSTRAINT fk_admin_requests_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_admin_requests_admin FOREIGN KEY (admin_id) REFERENCES admin_credentials(id) ON DELETE SET NULL
+  CONSTRAINT fk_admin_requests_admin FOREIGN KEY (admin_id) REFERENCES admin_credentials(id) ON DELETE SET NULL,
+  CONSTRAINT fk_admin_requests_whatsapp FOREIGN KEY (whatsapp_message_id) REFERENCES whatsapp_messages(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_admin_requests_status ON admin_requests(status);
-CREATE INDEX idx_admin_requests_priority ON admin_requests(priority);
-CREATE INDEX idx_admin_requests_created_at ON admin_requests(created_at DESC);
 CREATE INDEX idx_admin_requests_user_id ON admin_requests(user_id);
+CREATE INDEX idx_admin_requests_created_at ON admin_requests(created_at);
+CREATE INDEX idx_admin_requests_priority ON admin_requests(priority);
+CREATE INDEX idx_admin_requests_whatsapp_id ON admin_requests(whatsapp_message_id);
+CREATE INDEX idx_admin_requests_user_game_status ON admin_requests(user_id, request_type, status);
 
 -- Request audit table
 CREATE TABLE request_audit (
@@ -487,23 +579,28 @@ CREATE TABLE request_audit (
 );
 
 CREATE INDEX idx_request_audit_request_id ON request_audit(request_id);
-CREATE INDEX idx_request_audit_created_at ON request_audit(created_at DESC);
+CREATE INDEX idx_request_audit_admin_id ON request_audit(admin_id);
+CREATE INDEX idx_request_audit_created_at ON request_audit(created_at);
 
 -- ============================================
 -- DATABASE FUNCTIONS
 -- ============================================
 
 -- Function to generate unique referral code
-CREATE OR REPLACE FUNCTION generate_referral_code(p_user_id TEXT)
-RETURNS TEXT AS $$
+CREATE OR REPLACE FUNCTION generate_referral_code(
+  p_user_id VARCHAR(20)
+)
+RETURNS VARCHAR(10) AS $$
 DECLARE
-  referral_code TEXT;
-  code_exists BOOLEAN;
-  temp_code TEXT;
+  referral_code VARCHAR(10);
+  temp_code VARCHAR(10);
+  code_exists BOOLEAN := TRUE;
 BEGIN
-  LOOP
-    temp_code := UPPER(SUBSTRING(MD5(RANDOM()::TEXT || p_user_id || NOW()::TEXT) FROM 1 FOR 8));
+  -- Generate a unique 6-character referral code
+  WHILE code_exists LOOP
+    temp_code := upper(substring(md5(random()::text) from 1 for 6));
     
+    -- Check if code already exists
     SELECT EXISTS(
       SELECT 1 FROM users WHERE referral_code_generated = temp_code
     ) INTO code_exists;
@@ -514,6 +611,7 @@ BEGIN
     END IF;
   END LOOP;
   
+  -- Update user with referral code
   UPDATE users
   SET referral_code_generated = referral_code
   WHERE id = p_user_id;
@@ -522,43 +620,45 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function for atomic balance updates
+-- Atomic balance update function for race condition prevention
 CREATE OR REPLACE FUNCTION update_balance_atomic(
-  p_user_id TEXT,
-  p_amount_change NUMERIC
-)
-RETURNS TABLE(
-  success BOOLEAN,
-  new_balance NUMERIC,
-  error_message TEXT
+  p_user_id VARCHAR(20),
+  p_amount_change DECIMAL(15, 2)
+) RETURNS TABLE(
+  new_balance DECIMAL(15, 2),
+  old_balance DECIMAL(15, 2)
 ) AS $$
 DECLARE
-  v_current_balance NUMERIC;
-  v_new_balance NUMERIC;
+  v_old_balance DECIMAL(15, 2);
+  v_new_balance DECIMAL(15, 2);
 BEGIN
-  SELECT balance INTO v_current_balance
+  -- Get current balance and lock the row
+  SELECT balance INTO v_old_balance
   FROM users
   WHERE id = p_user_id
   FOR UPDATE;
   
+  -- Check if user exists
   IF NOT FOUND THEN
-    RETURN QUERY SELECT FALSE, 0::NUMERIC, 'User not found'::TEXT;
-    RETURN;
+    RAISE EXCEPTION 'User not found: %', p_user_id;
   END IF;
   
-  v_new_balance := v_current_balance + p_amount_change;
+  -- Calculate new balance
+  v_new_balance := v_old_balance + p_amount_change;
   
+  -- Prevent negative balance
   IF v_new_balance < 0 THEN
-    RETURN QUERY SELECT FALSE, v_current_balance, 'Insufficient balance'::TEXT;
-    RETURN;
+    RAISE EXCEPTION 'Insufficient balance. Current: %, Requested: %', v_old_balance, p_amount_change;
   END IF;
   
-  UPDATE users
+  -- Update balance atomically
+  UPDATE users 
   SET balance = v_new_balance,
       updated_at = NOW()
   WHERE id = p_user_id;
   
-  RETURN QUERY SELECT TRUE, v_new_balance, NULL::TEXT;
+  -- Return old and new balance
+  RETURN QUERY SELECT v_new_balance, v_old_balance;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -615,70 +715,232 @@ DECLARE
   v_request admin_requests%ROWTYPE;
   v_user users%ROWTYPE;
 BEGIN
+  -- Get the request
   SELECT * INTO v_request FROM admin_requests WHERE id = p_request_id;
   
+  -- Get the user
   SELECT * INTO v_user FROM users WHERE id = v_request.user_id;
   
-  IF v_request.request_type = 'deposit' AND p_new_status = 'approved' THEN
-    UPDATE users
-    SET balance = balance + v_request.amount,
-        updated_at = NOW()
-    WHERE id = v_request.user_id;
+  -- Update request status
+  SELECT * INTO v_request FROM update_request_status(p_request_id, p_admin_id, p_new_status, p_notes);
+  
+  -- If approved and amount is set, update balance
+  IF p_new_status = 'approved' AND v_request.amount IS NOT NULL THEN
+    -- Update user balance (deposit increases, withdrawal decreases)
+    IF v_request.request_type = 'deposit' THEN
+      UPDATE users SET balance = balance + v_request.amount
+      WHERE id = v_request.user_id;
+    ELSIF v_request.request_type = 'withdrawal' THEN
+      UPDATE users SET balance = balance - v_request.amount
+      WHERE id = v_request.user_id;
+    END IF;
     
-    INSERT INTO user_transactions (
-      user_id,
-      transaction_type,
-      amount,
-      balance_before,
-      balance_after,
-      status,
-      reference_id,
-      description
-    ) VALUES (
-      v_request.user_id,
-      'deposit',
-      v_request.amount,
-      v_user.balance,
-      v_user.balance + v_request.amount,
-      'completed',
-      v_request.id::TEXT,
-      'Deposit via admin request'
-    );
-  ELSIF v_request.request_type = 'withdrawal' AND p_new_status = 'approved' THEN
-    UPDATE users
-    SET balance = balance - v_request.amount,
-        updated_at = NOW()
-    WHERE id = v_request.user_id;
+    -- Mark balance as updated
+    UPDATE admin_requests 
+    SET balance_updated = true,
+        balance_update_amount = v_request.amount
+    WHERE id = p_request_id;
     
-    INSERT INTO user_transactions (
-      user_id,
-      transaction_type,
-      amount,
-      balance_before,
-      balance_after,
-      status,
-      reference_id,
-      description
+    -- Log the balance update action
+    INSERT INTO request_audit (
+      request_id,
+      admin_id,
+      action,
+      old_status,
+      new_status,
+      notes
     ) VALUES (
-      v_request.user_id,
-      'withdrawal',
-      v_request.amount,
-      v_user.balance,
-      v_user.balance - v_request.amount,
-      'completed',
-      v_request.id::TEXT,
-      'Withdrawal via admin request'
+      p_request_id,
+      p_admin_id,
+      'balance_update',
+      p_new_status,
+      p_new_status,
+      'Balance updated by ' || COALESCE(p_notes, 'Admin action')
     );
   END IF;
   
-  UPDATE admin_requests
-  SET balance_updated = true,
-      updated_at = NOW()
-  WHERE id = p_request_id;
-  
-  RETURN update_request_status(p_request_id, p_admin_id, p_new_status, p_notes);
+  RETURN v_request;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Function to clean up expired tokens (run periodically)
+CREATE OR REPLACE FUNCTION cleanup_expired_tokens()
+RETURNS INTEGER AS $$
+DECLARE
+  deleted_count INTEGER;
+BEGIN
+  DELETE FROM token_blacklist
+  WHERE expires_at < NOW();
+  
+  GET DIAGNOSTICS deleted_count = ROW_COUNT;
+  RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to automatically update the updated_at field
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Bonus system function for conditional bonuses
+CREATE OR REPLACE FUNCTION check_conditional_bonus(
+  p_user_id VARCHAR(20)
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+  bonus_eligible BOOLEAN := FALSE;
+  user_level INTEGER;
+  total_bets INTEGER;
+  user_record RECORD;
+BEGIN
+  -- Get user record
+  SELECT * INTO user_record FROM users WHERE id = p_user_id;
+  
+  -- Calculate user level based on games played
+  user_level := CASE 
+    WHEN user_record.games_played >= 100 THEN 5
+    WHEN user_record.games_played >= 50 THEN 4
+    WHEN user_record.games_played >= 20 THEN 3
+    WHEN user_record.games_played >= 10 THEN 2
+    ELSE 1
+  END;
+  
+  total_bets := user_record.games_played;
+  
+  -- Example bonus logic: Level 2+ users get bonus after 5+ bets
+  IF user_level >= 2 AND total_bets >= 5 THEN
+    bonus_eligible := TRUE;
+  END IF;
+  
+  RETURN bonus_eligible;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger function to update stream config timestamp
+CREATE OR REPLACE FUNCTION update_stream_config_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger function to update daily statistics
+CREATE OR REPLACE FUNCTION update_daily_statistics()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Update daily statistics
+  INSERT INTO daily_game_statistics (date, total_games, total_bets, total_payouts, total_revenue, unique_players)
+  VALUES (CURRENT_DATE, 1, NEW.amount, 0, NEW.amount, 1)
+  ON CONFLICT (date)
+  DO UPDATE SET
+    total_games = daily_game_statistics.total_games + 1,
+    total_bets = daily_game_statistics.total_bets + EXCLUDED.total_bets,
+    total_revenue = daily_game_statistics.total_revenue + EXCLUDED.total_revenue,
+    unique_players = daily_game_statistics.unique_players + 1;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================
+-- TRIGGERS
+-- ============================================
+
+-- Drop existing triggers if they exist
+DROP TRIGGER IF EXISTS update_user_updated_at ON users;
+DROP TRIGGER IF EXISTS update_game_sessions_updated_at ON game_sessions;
+DROP TRIGGER IF EXISTS update_player_bets_updated_at ON player_bets;
+DROP TRIGGER IF EXISTS update_game_settings_updated_at ON game_settings;
+DROP TRIGGER IF EXISTS update_admin_requests_updated_at ON admin_requests;
+DROP TRIGGER IF EXISTS update_whatsapp_messages_updated_at ON whatsapp_messages;
+DROP TRIGGER IF EXISTS update_daily_stats_updated_at ON daily_game_statistics;
+DROP TRIGGER IF EXISTS update_monthly_stats_updated_at ON monthly_game_statistics;
+DROP TRIGGER IF EXISTS update_yearly_stats_updated_at ON yearly_game_statistics;
+DROP TRIGGER IF EXISTS update_stream_config_updated_at ON stream_config;
+DROP TRIGGER IF EXISTS daily_stats_trigger ON player_bets;
+
+-- Create triggers for auto-update timestamps
+CREATE TRIGGER update_user_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_game_sessions_updated_at
+    BEFORE UPDATE ON game_sessions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_player_bets_updated_at
+    BEFORE UPDATE ON player_bets
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_game_settings_updated_at
+    BEFORE UPDATE ON game_settings
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_admin_requests_updated_at
+    BEFORE UPDATE ON admin_requests
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_whatsapp_messages_updated_at
+    BEFORE UPDATE ON whatsapp_messages
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_daily_stats_updated_at
+    BEFORE UPDATE ON daily_game_statistics
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_monthly_stats_updated_at
+    BEFORE UPDATE ON monthly_game_statistics
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_yearly_stats_updated_at
+    BEFORE UPDATE ON yearly_game_statistics
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_stream_config_updated_at
+    BEFORE UPDATE ON stream_config
+    FOR EACH ROW
+    EXECUTE FUNCTION update_stream_config_updated_at();
+
+-- Trigger to update daily statistics on new bets
+CREATE TRIGGER daily_stats_trigger
+  AFTER INSERT ON player_bets
+  FOR EACH ROW
+  EXECUTE FUNCTION update_daily_statistics();
+
+-- ============================================
+-- ADDITIONAL INDEXES
+-- ============================================
+
+-- Analytics indexes
+CREATE INDEX idx_daily_stats_date ON daily_game_statistics(date);
+CREATE INDEX idx_monthly_stats_month_year ON monthly_game_statistics(month_year);
+CREATE INDEX idx_yearly_stats_year ON yearly_game_statistics(year);
+
+-- Token blacklist indexes
+CREATE INDEX idx_token_blacklist_jti ON token_blacklist(token_jti);
+CREATE INDEX idx_token_blacklist_expires ON token_blacklist(expires_at);
+
+-- Stream configuration indexes
+CREATE INDEX idx_stream_config_method ON stream_config(active_method);
+CREATE INDEX idx_stream_config_status ON stream_config(stream_status);
+CREATE INDEX idx_stream_config_show_stream ON stream_config(show_stream);
+CREATE INDEX idx_stream_sessions_method ON stream_sessions(stream_method);
+CREATE INDEX idx_stream_sessions_admin ON stream_sessions(admin_id);
+CREATE INDEX idx_stream_sessions_start ON stream_sessions(start_time DESC);
 
 -- ============================================
 -- DATABASE VIEWS
@@ -737,21 +999,22 @@ ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value;
 -- DEFAULT DATA - STREAM CONFIG
 -- ============================================
 
+-- Insert default configuration for stream if table is empty
 INSERT INTO stream_config (
-  active_method,
-  rtmp_server_url,
-  rtmp_stream_key,
-  stream_title,
-  stream_status,
-  show_stream
+    active_method,
+    rtmp_server_url,
+    rtmp_stream_key,
+    stream_title,
+    stream_status,
+    show_stream
 )
 SELECT
-  'rtmp',
-  'rtmp://live.restream.io/live',
-  're_10541509_eventd4960ba1734c49369fc0d114295801a0',
-  'RAJU GARI KOSSU Andar Bahar Live',
-  'offline',
-  true
+    'rtmp',
+    'rtmp://live.restream.io/live',
+    're_10541509_eventd4960ba1734c49369fc0d114295801a0',
+    'Andar Bahar Live',
+    'offline',
+    true
 WHERE NOT EXISTS (SELECT 1 FROM stream_config LIMIT 1);
 
 -- ============================================
@@ -794,6 +1057,20 @@ ON CONFLICT (id) DO UPDATE SET
   password_hash = EXCLUDED.password_hash,
   balance = EXCLUDED.balance,
   status = EXCLUDED.status;
+
+-- ============================================
+-- PERMISSIONS
+-- ============================================
+
+-- Grant necessary permissions for admin operations
+GRANT SELECT, INSERT, UPDATE ON admin_requests TO authenticated;
+GRANT SELECT, INSERT ON request_audit TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON admin_dashboard_settings TO authenticated;
+GRANT EXECUTE ON FUNCTION update_request_status TO authenticated;
+GRANT EXECUTE ON FUNCTION update_balance_with_request TO authenticated;
+GRANT EXECUTE ON FUNCTION update_updated_at_column TO authenticated;
+GRANT EXECUTE ON FUNCTION update_balance_atomic TO authenticated;
+GRANT EXECUTE ON FUNCTION cleanup_expired_tokens TO authenticated;
 
 -- ============================================
 -- GRANT PERMISSIONS (if needed)
