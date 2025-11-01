@@ -36,7 +36,8 @@ interface MobileGameLayoutProps {
   isScreenSharing: boolean;
 }
 
-const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
+// CRITICAL: Memoize entire layout to prevent unnecessary re-renders that could disrupt video stream
+const MobileGameLayout: React.FC<MobileGameLayoutProps> = React.memo(({
   gameState,
   // user,
   userBalance,
@@ -68,10 +69,22 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
         />
 
         {/* Video Area - 65-70% screen height with overlays */}
-        <VideoArea 
-          className="flex-1 relative"
-          isScreenSharing={isScreenSharing}
-        />
+        {/* ✅ CRITICAL: Video area completely isolated from page interactions */}
+        <div
+          style={{
+            contain: 'layout style paint', // Isolate video area
+            isolation: 'isolate', // New stacking context
+            flex: 1,
+            position: 'relative',
+            zIndex: 1, // Below other UI elements but isolated
+          }}
+        >
+          <VideoArea 
+            className="w-full h-full"
+            isScreenSharing={isScreenSharing}
+            isGameLive={gameState.phase !== 'idle'} // ✅ Pass stable prop instead of using gameState inside VideoArea
+          />
+        </div>
 
         {/* Betting Strip - Andar/Opening Card/Bahar */}
         <BettingStrip
@@ -120,6 +133,30 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if critical props change
+  // ✅ ENHANCED: When streaming, ignore balance/position changes to protect stream
+  const phaseChanged = prevProps.gameState.phase !== nextProps.gameState.phase;
+  const timerChanged = prevProps.gameState.countdownTimer !== nextProps.gameState.countdownTimer;
+  const screenSharingChanged = prevProps.isScreenSharing !== nextProps.isScreenSharing;
+  
+  // ✅ If streaming, only re-render on phase/timer/screenSharing changes
+  if (prevProps.isScreenSharing || nextProps.isScreenSharing) {
+    return !(phaseChanged || timerChanged || screenSharingChanged);
+  }
+  
+  // ✅ When not streaming, allow normal re-renders
+  const balanceChanged = prevProps.userBalance !== nextProps.userBalance;
+  const selectedAmountChanged = prevProps.selectedBetAmount !== nextProps.selectedBetAmount;
+  const selectedPositionChanged = prevProps.selectedPosition !== nextProps.selectedPosition;
+  const chipSelectorChanged = prevProps.showChipSelector !== nextProps.showChipSelector;
+  const placingBetChanged = prevProps.isPlacingBet !== nextProps.isPlacingBet;
+  
+  // Return true to SKIP re-render, false to allow re-render
+  return !(phaseChanged || timerChanged || balanceChanged || screenSharingChanged || 
+           selectedAmountChanged || selectedPositionChanged || chipSelectorChanged || placingBetChanged);
+});
+
+MobileGameLayout.displayName = 'MobileGameLayout';
 
 export default MobileGameLayout;

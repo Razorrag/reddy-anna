@@ -1,6 +1,6 @@
 // Payment Processing System
 import { v4 as uuidv4 } from 'uuid';
-import { IStorage, storage } from './storage-supabase';
+import { IStorage, storage, parseBalance } from './storage-supabase';
 import { validateUPI, validateBankDetails, validateAmount } from './validation';
 
 export interface PaymentMethod {
@@ -45,16 +45,48 @@ export const processPayment = async (request: PaymentRequest): Promise<PaymentRe
       const result = await processDeposit(request);
       if (result.success) {
         status = 'success';
-        // Add amount to user balance
-        await storage.updateUserBalance(request.userId, request.amount);
         
-        // CRITICAL FIX: Apply deposit bonus automatically
+        // ✅ CRITICAL FIX: Use transaction-like pattern for atomic deposit + bonus
+        let depositApplied = false;
         try {
-          await applyDepositBonus(request.userId, request.amount);
-          console.log(`✅ Deposit bonus applied for user ${request.userId} on deposit of ₹${request.amount}`);
-        } catch (bonusError) {
-          console.error('⚠️ Failed to apply deposit bonus:', bonusError);
-          // Don't fail the deposit if bonus fails
+          // Add amount to user balance
+          await storage.updateUserBalance(request.userId, request.amount);
+          depositApplied = true;
+          
+          // Apply deposit bonus - if this fails, rollback deposit
+          try {
+            await applyDepositBonus(request.userId, request.amount);
+            console.log(`✅ Deposit bonus applied for user ${request.userId} on deposit of ₹${request.amount}`);
+          } catch (bonusError) {
+            console.error('⚠️ Failed to apply deposit bonus:', bonusError);
+            // ✅ CRITICAL FIX: Rollback deposit if bonus fails
+            if (depositApplied) {
+              try {
+                await storage.updateUserBalance(request.userId, -request.amount);
+                console.log(`✅ Deposit rolled back due to bonus failure`);
+                return { 
+                  success: false, 
+                  status: 'failed', 
+                  error: 'Deposit processed but bonus application failed. Deposit has been refunded.' 
+                };
+              } catch (rollbackError) {
+                console.error('❌ CRITICAL: Failed to rollback deposit after bonus failure:', rollbackError);
+                // Log for manual intervention
+                return { 
+                  success: false, 
+                  status: 'failed', 
+                  error: 'Deposit processed but bonus application failed. Manual intervention required.' 
+                };
+              }
+            }
+          }
+        } catch (balanceError) {
+          console.error('❌ Failed to update balance:', balanceError);
+          return { 
+            success: false, 
+            status: 'failed', 
+            error: 'Failed to update balance' 
+          };
         }
       } else {
         status = 'failed';
@@ -112,8 +144,8 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         // In a real implementation, this would integrate with a UPI payment gateway
         console.log(`Processing UPI deposit of ${amount} to ${method.details.upiId}`);
         
-        // Apply deposit bonus
-        await applyDepositBonus(userId, amount);
+        // NOTE: Bonus is now applied ONLY in processPayment() line 52-58
+        // This prevents duplicate bonus application
         
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
@@ -132,8 +164,7 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         // Process bank transfer
         console.log(`Processing bank deposit of ${amount} to account ${method.details.accountNumber}`);
         
-        // Apply deposit bonus
-        await applyDepositBonus(userId, amount);
+        // NOTE: Bonus is now applied ONLY in processPayment() line 52-58
         
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
@@ -150,8 +181,7 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         }
         console.log(`Processing wallet deposit of ${amount} to ${method.details.walletType}`);
         
-        // Apply deposit bonus
-        await applyDepositBonus(userId, amount);
+        // NOTE: Bonus is now applied ONLY in processPayment() line 52-58
         
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
@@ -169,8 +199,7 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         // In a real implementation, this would integrate with a card payment processor
         console.log(`Processing card deposit of ${amount}`);
         
-        // Apply deposit bonus
-        await applyDepositBonus(userId, amount);
+        // NOTE: Bonus is now applied ONLY in processPayment() line 52-58
         
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
@@ -270,7 +299,7 @@ export const getUserBalance = async (userId: string): Promise<{ success: boolean
       return { success: false, error: 'User not found' };
     }
 
-    return { success: true, balance: parseFloat(user.balance) };
+    return { success: true, balance: parseBalance(user.balance) };
   } catch (error) {
     console.error('Balance retrieval error:', error);
     return { success: false, error: 'Failed to retrieve balance' };
@@ -325,8 +354,8 @@ export const applyDepositBonus = async (userId: string, depositAmount: number): 
         userId,
         transactionType: 'bonus',
         amount: bonusAmount,
-        balanceBefore: parseFloat(user.balance),
-        balanceAfter: parseFloat(user.balance), // Bonus NOT added to main balance yet - LOCKED
+        balanceBefore: parseBalance(user.balance),
+        balanceAfter: parseBalance(user.balance), // Bonus NOT added to main balance yet - LOCKED
         referenceId: `bonus_deposit_${Date.now()}`,
         description: `Deposit bonus (${bonusPercentage}% of ₹${depositAmount}) - LOCKED until ₹${wageringRequirement.toFixed(2)} wagered`
       });
@@ -368,8 +397,8 @@ export const applyReferralBonus = async (referrerId: string, depositAmount: numb
         userId: referrerId,
         transactionType: 'bonus',
         amount: bonusAmount,
-        balanceBefore: parseFloat(referrer.balance),
-        balanceAfter: parseFloat(referrer.balance), // Bonus not added to main balance yet
+        balanceBefore: parseBalance(referrer.balance),
+        balanceAfter: parseBalance(referrer.balance), // Bonus not added to main balance yet
         referenceId: `referral_bonus_${Date.now()}`,
         description: `Referral bonus for user deposit of ₹${depositAmount}`
       });
@@ -445,7 +474,7 @@ const autoCreditBonus = async (userId: string, bonusInfo: { depositBonus: number
       return false;
     }
     
-    const balanceBefore = parseFloat(user.balance);
+    const balanceBefore = parseBalance(user.balance);
     const newBalance = balanceBefore + bonusInfo.totalBonus;
     
     // Add to main balance
@@ -500,7 +529,7 @@ export const applyAvailableBonus = async (userId: string): Promise<boolean> => {
         return false;
       }
       
-      const balanceBefore = parseFloat(user.balance);
+      const balanceBefore = parseBalance(user.balance);
       const newBalance = balanceBefore + bonusInfo.totalBonus;
       
       // Add to main balance

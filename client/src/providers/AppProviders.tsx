@@ -10,6 +10,7 @@ import { NotificationProvider } from '../contexts/NotificationContext';
 import { AuthProvider } from '../contexts/AuthContext';
 import { UserProfileProvider } from '../contexts/UserProfileContext';
 import { BalanceProvider } from '../contexts/BalanceContext';
+import { AdminStreamProvider } from '../contexts/AdminStreamContext';
 import { queryClient } from '../lib/queryClient';
 
 interface AppProvidersProps {
@@ -29,7 +30,9 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
                   <GameStateProvider>
                     <NotificationProvider>
                       <WebSocketProvider>
-                        {children}
+                        <AdminStreamProvider>
+                          {children}
+                        </AdminStreamProvider>
                       </WebSocketProvider>
                     </NotificationProvider>
                   </GameStateProvider>

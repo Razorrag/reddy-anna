@@ -1,0 +1,56 @@
+═══════════════════════════════════════════════════════════════════
+  🚀 SUPABASE DATABASE RESET - SIMPLE INSTRUCTIONS
+═══════════════════════════════════════════════════════════════════
+
+STEP 1: Open Supabase
+→ Go to: https://app.supabase.com
+→ Select your project
+→ Click "SQL Editor" in left sidebar
+
+STEP 2: Open the SQL File
+→ Open file: scripts/supabase-reset-database.sql
+→ Select ALL content (Ctrl+A)
+→ Copy it (Ctrl+C)
+
+STEP 3: Run in Supabase
+→ Paste into SQL Editor (Ctrl+V)
+→ Click "Run" button (or press Ctrl+Enter)
+→ Wait 30-60 seconds for completion
+
+STEP 4: Verify Success
+→ Look for: "✅ Database reset completed successfully!"
+→ Check counts: 2 admins, 8 users created
+
+STEP 5: Test Login
+→ Admin: username = admin, password = admin123
+→ Player: phone = 9876543210, password = Test@123
+
+═══════════════════════════════════════════════════════════════════
+  🔐 QUICK LOGIN CREDENTIALS
+═══════════════════════════════════════════════════════════════════
+
+ADMIN:
+  Username: admin
+  Password: admin123
+
+TEST PLAYERS (All passwords: Test@123):
+  9876543210 - ₹1,00,000
+  9876543211 - ₹50,000
+  9876543212 - ₹75,000
+  8686886632 - ₹5,00,000 (Owner)
+
+═══════════════════════════════════════════════════════════════════
+  ✅ THAT'S IT!
+═══════════════════════════════════════════════════════════════════
+
+Your database is now reset with:
+✓ Fresh password hashes
+✓ 2 admin accounts
+✓ 8 test users with balances
+✓ All settings configured
+✓ Ready to test!
+
+═══════════════════════════════════════════════════════════════════
+
+
+

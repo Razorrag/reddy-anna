@@ -148,6 +148,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [authState.token, refreshAccessToken, logout, showNotification]);
 
   const webSocketManagerRef = useRef<WebSocketManager | null>(null);
+  const sendWebSocketMessageRef = useRef<((message: Omit<WebSocketMessage, 'timestamp'>) => void) | null>(null);
 
   const handleWebSocketMessage = useCallback(async (data: WebSocketMessage) => {
     if (data.type === 'error') {
@@ -180,7 +181,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           console.log('📊 Received game state sync:', {
             phase: gameState.phase,
             round: gameState.currentRound,
-            hasOpeningCard: !!gameState.openingCard
+            hasOpeningCard: !!gameState.openingCard,
+            isScreenSharing: gameState.isScreenSharingActive
           });
           
           const {
@@ -197,7 +199,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             userBets,
             playerRound1Bets,
             playerRound2Bets,
-            userBalance
+            userBalance,
+            isScreenSharingActive
           } = gameState;
           
           setPhase(phase as any);
@@ -217,6 +220,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           if (playerRound1Bets) updatePlayerRoundBets(1, playerRound1Bets);
           if (playerRound2Bets) updatePlayerRoundBets(2, playerRound2Bets);
           if (userBalance !== undefined) updatePlayerWallet(userBalance);
+          
+          // CRITICAL: Restore streaming state so stream continues after refresh
+          if (isScreenSharingActive !== undefined) {
+            console.log('📺 Restoring stream state:', isScreenSharingActive);
+            setScreenSharing(isScreenSharingActive);
+          }
         }
         break;
       }
@@ -349,7 +358,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           userBets,
           playerRound1Bets,
           playerRound2Bets,
-          userBalance
+          userBalance,
+          isScreenSharingActive
         } = gameStateData;
         
         if (phase) setPhase(phase as any);
@@ -376,6 +386,25 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         if (playerRound1Bets) updatePlayerRoundBets(1, playerRound1Bets);
         if (playerRound2Bets) updatePlayerRoundBets(2, playerRound2Bets);
         if (userBalance !== undefined) updatePlayerWallet(userBalance);
+        
+        // CRITICAL: Maintain streaming state during game updates
+        if (isScreenSharingActive !== undefined) {
+          console.log('📺 Updating stream state during game sync:', isScreenSharingActive);
+          setScreenSharing(isScreenSharingActive);
+          
+          // ✅ FIX: Admin is auto-notified, but send viewer-join with correct streamId as fallback
+          if (isScreenSharingActive && authState.user?.role !== 'admin' && authState.user?.role !== 'super_admin') {
+            const storedStreamId = sessionStorage.getItem('webrtc_streamId') || 'default-stream';
+            console.log('🔔 Stream is active on reconnect - sending viewer-join with stored streamId:', storedStreamId);
+            sendWebSocketMessage({
+              type: 'webrtc:signal',
+              data: {
+                type: 'viewer-join',
+                streamId: storedStreamId // ✅ Use stored streamId from stream-start message
+              }
+            });
+          }
+        }
         
         console.log('✅ Game state synced on reconnect');
         break;
@@ -640,13 +669,81 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       case 'webrtc:signal': {
         const signalData = data as WebRTCSignalMessage;
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('📡 [WEBSOCKET] Raw webrtc:signal received:', {
+          hasData: !!signalData.data,
+          dataType: signalData.data?.type,
+          from: signalData.data?.from,
+          streamId: signalData.data?.streamId
+        });
+        
         if (signalData.data) {
-          console.log('📡 WebRTC signal received:', signalData.data.type);
+          console.log('📡 [WEBSOCKET] WebRTC signal type:', signalData.data.type);
           switch (signalData.data.type) {
             case 'stream-start':
-              // Set global state to TRUE
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              console.log('✅ [WEBSOCKET] Stream start received');
+              console.log('✅ [WEBSOCKET] Message details:', {
+                from: signalData.data.from,
+                streamId: signalData.data.streamId,
+                hasFrom: !!signalData.data.from,
+                hasStreamId: !!signalData.data.streamId
+              });
+              console.log('✅ [WEBSOCKET] Updating game state immediately');
+              
+              // ✅ FIX: Set global state to TRUE immediately
+              console.log('✅ [WEBSOCKET] Calling setScreenSharing(true)...');
               setScreenSharing(true);
-              console.log('✅ Screen sharing started - UI updated');
+              console.log('✅ [WEBSOCKET] setScreenSharing(true) called');
+              
+              // ✅ NOTE: State update is async, so we log but don't expect immediate change
+              // The state will update in the next render cycle
+              console.log('✅ [WEBSOCKET] State update queued (React state is async)');
+              
+              console.log('✅ [WEBSOCKET] Screen sharing started - UI should update');
+              
+              // ✅ CRITICAL: Store the received streamId for later use
+              const receivedStreamId = signalData.data.streamId;
+              if (receivedStreamId) {
+                // Store in sessionStorage for persistence across component remounts
+                sessionStorage.setItem('webrtc_streamId', receivedStreamId);
+                console.log('💾 Stored streamId:', receivedStreamId);
+                
+                // ✅ CRITICAL FIX #7: Dispatch event for WebRTCPlayer to send viewer-join
+                window.dispatchEvent(new CustomEvent('webrtc_stream_start', {
+                  detail: { streamId: receivedStreamId }
+                }));
+              } else {
+                console.warn('⚠️ No streamId in stream-start message');
+              }
+              
+              // ✅ CRITICAL FIX: Immediately send viewer-join for non-admin users
+              // This ensures admin knows we want to receive the stream
+              if (authState.user?.role !== 'admin' && authState.user?.role !== 'super_admin') {
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log('🔔 [WEBSOCKET] Stream started - sending viewer-join signal to admin');
+                console.log('🔔 [WEBSOCKET] StreamId:', receivedStreamId || 'default-stream');
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                
+                const sendMessage = sendWebSocketMessageRef.current;
+                if (sendMessage) {
+                  sendMessage({
+                    type: 'webrtc:signal',
+                    data: {
+                      type: 'viewer-join',
+                      streamId: receivedStreamId || 'default-stream'
+                    }
+                  });
+                  console.log('✅ [WEBSOCKET] viewer-join sent successfully');
+                } else {
+                  console.warn('⚠️ sendWebSocketMessage not available yet, viewer-join will be sent by WebRTCPlayer');
+                }
+              }
+              
+              // ✅ FIX: Dispatch webrtc_stream_start event for WebRTCPlayer to resume retrying
+              window.dispatchEvent(new CustomEvent('webrtc_stream_start', { detail: signalData.data }));
+              console.log('✅ [WEBSOCKET] webrtc_stream_start event dispatched');
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
               break;
             case 'stream-stop':
               // Set global state to FALSE
@@ -665,8 +762,23 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               break;
             case 'offer':
               // Fire event for WebRTCPlayer to pick up
-              console.log('📡 WebRTC offer received - dispatching to WebRTCPlayer');
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              console.log('📡 [WEBSOCKET] WebRTC offer received from server');
+              console.log('📡 [WEBSOCKET] Offer details:', { 
+                type: signalData.data.type, 
+                from: signalData.data.from, 
+                streamId: signalData.data.streamId,
+                sdpType: typeof signalData.data.sdp,
+                hasSdpObject: !!signalData.data.sdp,
+                sdpObjectType: signalData.data.sdp?.type,
+                sdpStringLength: typeof signalData.data.sdp === 'string' 
+                  ? signalData.data.sdp.length 
+                  : (signalData.data.sdp?.sdp?.length || 0)
+              });
+              console.log('📡 [WEBSOCKET] Dispatching webrtc_offer_received event to WebRTCPlayer');
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
               window.dispatchEvent(new CustomEvent('webrtc_offer_received', { detail: signalData.data }));
+              console.log('✅ [WEBSOCKET] Event dispatched successfully');
               break;
             case 'answer':
               // Fire event for WebRTCPlayer to pick up
@@ -677,6 +789,29 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               // Fire event for WebRTCPlayer to pick up
               console.log('🧊 WebRTC ICE candidate received - dispatching to WebRTCPlayer');
               window.dispatchEvent(new CustomEvent('webrtc_ice_candidate_received', { detail: signalData.data }));
+              break;
+            case 'new-viewer':
+              // Fire event for AdminStreamContext to create a new peer connection
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              console.log('🆕 [WEBSOCKET] New viewer joined');
+              console.log('🆕 [WEBSOCKET] Viewer details:', {
+                from: signalData.data.from,
+                hasFrom: !!signalData.data.from
+              });
+              console.log('🆕 [WEBSOCKET] Dispatching webrtc_new_viewer event to AdminStreamContext');
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              window.dispatchEvent(new CustomEvent('webrtc_new_viewer', { detail: signalData.data }));
+              console.log('✅ [WEBSOCKET] webrtc_new_viewer event dispatched');
+              break;
+            case 'viewer-left':
+              // Fire event for AdminStreamContext to clean up a peer connection
+              console.log('👋 Viewer left - dispatching to AdminStreamContext');
+              window.dispatchEvent(new CustomEvent('webrtc_viewer_left', { detail: signalData.data }));
+              break;
+            case 'stream-not-available':
+              // Fire event for WebRTCPlayer to stop retrying and wait for stream-start
+              console.log('⚠️ Stream not available - dispatching to WebRTCPlayer');
+              window.dispatchEvent(new CustomEvent('webrtc_stream_not_available', { detail: signalData.data }));
               break;
           }
         }
@@ -698,7 +833,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       default:
         console.log('Unknown message type:', data.type);
     }
-  }, [addAndarCard, addBaharCard, clearCards, gameState.playerRound1Bets, gameState.playerRound2Bets, logout, resetGame, setCurrentRound, setCountdown, setPhase, setSelectedOpeningCard, setWinner, showNotification, updatePlayerRoundBets, updateTotalBets, updatePlayerWallet, authState.user?.id, authState.isAuthenticated, isWebSocketAuthenticated]);
+  }, [addAndarCard, addBaharCard, clearCards, gameState.playerRound1Bets, gameState.playerRound2Bets, logout, resetGame, setCurrentRound, setCountdown, setPhase, setSelectedOpeningCard, setWinner, showNotification, updatePlayerRoundBets, updateTotalBets, updatePlayerWallet, authState.user?.id, authState.isAuthenticated, isWebSocketAuthenticated, setScreenSharing, authState.user?.role]);
 
   const initWebSocketManager = useCallback(() => {
     if (webSocketManagerRef.current) {
@@ -791,6 +926,11 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     
     webSocketManagerRef.current.send(messageWithTimestamp);
   }, [showNotification]);
+
+  // ✅ CRITICAL: Update ref whenever sendWebSocketMessage changes
+  useEffect(() => {
+    sendWebSocketMessageRef.current = sendWebSocketMessage;
+  }, [sendWebSocketMessage]);
 
   const startGame = async (timerDuration?: number) => {
     if (!gameState.selectedOpeningCard) {
@@ -915,6 +1055,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       // If WebSocket is already connected, don't reconnect (WebSocketManager handles token updates automatically)
       if (webSocketManagerRef.current && webSocketManagerRef.current.getStatus() !== ConnectionStatus.DISCONNECTED) {
         console.log('✅ WebSocket already connected - token updates handled automatically');
+        // ✅ FIX: Admin is auto-notified, but send viewer-join with correct streamId as fallback
+        if (gameState.isScreenSharingActive && authState.user?.role !== 'admin' && authState.user?.role !== 'super_admin') {
+          const storedStreamId = sessionStorage.getItem('webrtc_streamId') || 'default-stream';
+          console.log('🔔 WebSocket already connected with active stream - sending viewer-join with stored streamId:', storedStreamId);
+          sendWebSocketMessage({ type: 'webrtc:signal', data: { type: 'viewer-join', streamId: storedStreamId } });
+        }
         return;
       }
 
@@ -936,7 +1082,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         webSocketManagerRef.current?.disconnect();
       }
     };
-  }, [authState.authChecked, authState.isAuthenticated, authState.token, initWebSocketManager]); // Depend on auth state
+  }, [authState.authChecked, authState.isAuthenticated, authState.token, initWebSocketManager, gameState.isScreenSharingActive, gameState.gameId, sendWebSocketMessage]); // Depend on auth state
 
   // Subscribe to game state only after WebSocket is authenticated
   useEffect(() => {

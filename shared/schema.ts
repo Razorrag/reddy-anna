@@ -23,6 +23,9 @@ export const users = pgTable("users", {
   referral_bonus_available: decimal("referral_bonus_available", { precision: 15, scale: 2 }).default("0.00"),
   original_deposit_amount: decimal("original_deposit_amount", { precision: 15, scale: 2 }).default("0.00"),
   total_bonus_earned: decimal("total_bonus_earned", { precision: 15, scale: 2 }).default("0.00"),
+  bonus_locked: boolean("bonus_locked").default(false), // Whether bonus is locked until wagering requirement is met
+  wagering_requirement: decimal("wagering_requirement", { precision: 15, scale: 2 }).default("0.00"), // Total wagering required to unlock bonus
+  wagering_completed: decimal("wagering_completed", { precision: 15, scale: 2 }).default("0.00"), // Total wagering completed so far
   last_login: timestamp("last_login"),
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),

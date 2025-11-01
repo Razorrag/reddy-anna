@@ -47,16 +47,49 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
   const fetchHistory = async () => {
     setLoading(true);
     try {
+      console.log('📜 GameHistoryModal: Fetching game history...');
       const response = await apiClient.get<EnhancedGameHistoryEntry[]>('/api/game/history?limit=50');
+      
+      let historyData: EnhancedGameHistoryEntry[] = [];
+      
       if (Array.isArray(response)) {
-        setHistory(response);
-        setSelectedRound(null); // Reset to default view (last game)
+        historyData = response;
       } else if (response && typeof response === 'object' && 'data' in response) {
-        setHistory((response as any).data || []);
-        setSelectedRound(null);
+        historyData = Array.isArray((response as any).data) ? (response as any).data : [];
       }
-    } catch (error) {
-      console.error('Failed to fetch game history:', error);
+      
+      // Filter and validate history entries
+      const validHistory = historyData.filter(game => {
+        const hasRequiredFields = 
+          game && 
+          game.openingCard && 
+          game.winner && 
+          game.winningCard &&
+          (game.winner === 'andar' || game.winner === 'bahar');
+        
+        if (!hasRequiredFields && game) {
+          console.warn('⚠️ GameHistoryModal: Skipping invalid game entry:', {
+            gameId: game.gameId || game.id,
+            hasOpeningCard: !!game.openingCard,
+            hasWinner: !!game.winner,
+            hasWinningCard: !!game.winningCard,
+            winner: game.winner
+          });
+        }
+        
+        return hasRequiredFields;
+      });
+      
+      console.log(`📜 GameHistoryModal: Found ${validHistory.length} valid games out of ${historyData.length} total`);
+      
+      setHistory(validHistory);
+      setSelectedRound(null); // Reset to default view (last game)
+    } catch (error: any) {
+      console.error('❌ GameHistoryModal: Failed to fetch game history:', {
+        message: error.message,
+        response: error.response,
+        status: error.status
+      });
       setHistory([]);
     } finally {
       setLoading(false);

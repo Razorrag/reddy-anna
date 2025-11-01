@@ -9,7 +9,6 @@ import AdminPayments from "@/pages/admin-payments.tsx";
 import AdminBonus from "@/pages/admin-bonus.tsx";
 import BackendSettings from "@/pages/backend-settings.tsx";
 import AdminWhatsAppSettings from "@/pages/admin-whatsapp-settings.tsx";
-import AdminStreamSettings from "@/pages/admin-stream-settings.tsx";
 import GameHistoryPage from "@/pages/GameHistoryPage.tsx";
 
 import Login from "@/pages/login.tsx";
@@ -91,11 +90,6 @@ function Router() {
       <Route path="/admin/whatsapp-settings">
         <ProtectedAdminRoute>
           <AdminWhatsAppSettings />
-        </ProtectedAdminRoute>
-      </Route>
-      <Route path="/admin/stream-settings">
-        <ProtectedAdminRoute>
-          <AdminStreamSettings />
         </ProtectedAdminRoute>
       </Route>
       <Route path="/admin/game-history">

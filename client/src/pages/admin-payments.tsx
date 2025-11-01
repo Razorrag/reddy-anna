@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +32,7 @@ interface PaymentRequest {
 }
 
 export default function AdminPayments() {
+  const [location] = useLocation();
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -38,6 +40,21 @@ export default function AdminPayments() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // Parse URL query parameters on mount
+  useEffect(() => {
+    const params = new URLSearchParams(location.split('?')[1]);
+    const filterParam = params.get('filter');
+    const statusParam = params.get('status');
+    
+    if (filterParam && (filterParam === 'deposit' || filterParam === 'withdrawal')) {
+      setTypeFilter(filterParam);
+    }
+    
+    if (statusParam && (statusParam === 'pending' || statusParam === 'approved' || statusParam === 'rejected')) {
+      setStatusFilter(statusParam);
+    }
+  }, [location]);
 
   const fetchPaymentRequests = async () => {
     try {

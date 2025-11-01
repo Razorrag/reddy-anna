@@ -14,6 +14,14 @@ import {
   type UserReferral,
 } from "@shared/schema";
 
+// ✅ CRITICAL FIX: Balance parsing helper for type consistency
+export function parseBalance(balance: string | number | null | undefined): number {
+  if (balance === null || balance === undefined) return 0;
+  if (typeof balance === 'number') return balance;
+  const parsed = parseFloat(String(balance));
+  return isNaN(parsed) ? 0 : parsed;
+}
+
 // Analytics interfaces
 export interface GameStatistics {
   id: string;
@@ -106,9 +114,15 @@ export interface IStorage {
   // Game session operations
   createGameSession(session: InsertGameSession): Promise<GameSession>;
   getCurrentGameSession(): Promise<GameSession | undefined>;
+  getActiveGameSession(): Promise<GameSession | undefined>;
   getGameSession(gameId: string): Promise<GameSession | undefined>;
   updateGameSession(gameId: string, updates: Partial<GameSession>): Promise<void>;
   completeGameSession(gameId: string, winner: string, winningCard: string): Promise<void>;
+  restoreGameStateFromDatabase(gameId: string): Promise<{
+    session: GameSession;
+    dealtCards: DealtCard[];
+    bets: PlayerBet[];
+  }>;
   
   // Betting operations
   placeBet(bet: InsertBet): Promise<PlayerBet>;
@@ -701,8 +715,8 @@ export class SupabaseStorage implements IStorage {
         throw new Error('User not found');
       }
 
-      // Calculate new balance (ensure it doesn't go negative)
-      const currentBalance = parseFloat(userData.balance) || 0;
+      // ✅ CRITICAL FIX: Use parseBalance helper for consistency
+      const currentBalance = parseBalance(userData.balance);
       const newBalance = Math.max(0, currentBalance + amountChange);
 
       // Update the balance
@@ -1047,6 +1061,16 @@ export class SupabaseStorage implements IStorage {
     if (updates.winningCard !== undefined) dbUpdates.winning_card = updates.winningCard;
     if ((updates as any).winningRound !== undefined) dbUpdates.winning_round = (updates as any).winningRound;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
+    
+    // NEW: Handle timer tracking fields
+    if ((updates as any).timerStartedAt !== undefined) {
+      dbUpdates.timer_started_at = (updates as any).timerStartedAt instanceof Date 
+        ? (updates as any).timerStartedAt.toISOString()
+        : (updates as any).timerStartedAt;
+    }
+    if ((updates as any).timerDuration !== undefined) {
+      dbUpdates.timer_duration = (updates as any).timerDuration;
+    }
 
     const { error } = await supabaseServer
       .from('game_sessions')
@@ -1073,6 +1097,37 @@ export class SupabaseStorage implements IStorage {
 
     if (error) {
       console.error('Error completing game session:', error);
+      throw error;
+    }
+  }
+
+  async getActiveGameSession(): Promise<GameSession | undefined> {
+    // Get the most recent active game session
+    // This is the same as getCurrentGameSession but with a clearer name
+    return this.getCurrentGameSession();
+  }
+
+  async restoreGameStateFromDatabase(gameId: string): Promise<{
+    session: GameSession;
+    dealtCards: DealtCard[];
+    bets: PlayerBet[];
+  }> {
+    try {
+      // Get game session
+      const session = await this.getGameSession(gameId);
+      if (!session) {
+        throw new Error(`Game session ${gameId} not found`);
+      }
+
+      // Get dealt cards
+      const dealtCards = await this.getDealtCards(gameId);
+
+      // Get all bets
+      const bets = await this.getBetsForGame(gameId);
+
+      return { session, dealtCards, bets };
+    } catch (error) {
+      console.error(`Error restoring game state for ${gameId}:`, error);
       throw error;
     }
   }
@@ -1421,90 +1476,181 @@ export class SupabaseStorage implements IStorage {
   }
 
   async saveGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry> {
-    // Convert camelCase to snake_case for Supabase
-    const { data, error } = await supabaseServer
-      .from('game_history')
-      .insert({
+    try {
+      console.log('💾 Storage.saveGameHistory called with:', {
+        gameId: history.gameId,
+        openingCard: history.openingCard,
+        winner: history.winner,
+        winningCard: history.winningCard,
+        totalCards: history.totalCards,
+        round: (history as any).round
+      });
+      
+      // Convert camelCase to snake_case for Supabase
+      const insertData = {
         id: randomUUID(),
         game_id: history.gameId,
         opening_card: history.openingCard,
         winner: history.winner,
         winning_card: history.winningCard,
         total_cards: history.totalCards,
-        round: (history as any).round,
-        created_at: new Date()
-      })
-      .select()
-      .single();
+        round: (history as any).round || 1,
+        created_at: new Date().toISOString()
+      };
+      
+      console.log('📤 Inserting into game_history table:', insertData);
+      
+      const { data, error } = await supabaseServer
+        .from('game_history')
+        .insert(insertData)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error saving game history:', error);
-      throw new Error('Failed to save game history');
+      if (error) {
+        console.error('❌ Database error saving game history:', {
+          error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        throw new Error(`Failed to save game history: ${error.message}`);
+      }
+
+      console.log('✅ Game history inserted successfully:', {
+        id: data?.id,
+        game_id: data?.game_id,
+        winner: data?.winner
+      });
+
+      return data;
+    } catch (error: any) {
+      console.error('❌ Exception in saveGameHistory:', {
+        message: error.message,
+        stack: error.stack,
+        historyData: history
+      });
+      throw error;
     }
-
-    return data;
   }
 
   async getGameHistory(limit: number = 50): Promise<any[]> {
-    // Join game_history with game_statistics to get complete data
-    const { data: historyData, error: historyError } = await supabaseServer
-      .from('game_history')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    try {
+      console.log('📜 Fetching game history with limit:', limit);
+      
+      // Join game_history with game_statistics to get complete data
+      const { data: historyData, error: historyError } = await supabaseServer
+        .from('game_history')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
-    if (historyError) {
-      console.error('Error getting game history:', historyError);
-      return [];
-    }
+      if (historyError) {
+        console.error('❌ Error getting game history:', historyError);
+        return [];
+      }
 
-    if (!historyData || historyData.length === 0) {
-      return [];
-    }
+      if (!historyData || historyData.length === 0) {
+        console.log('📜 No game history found in database');
+        return [];
+      }
 
-    // Get game statistics for each game
-    const gameIds = historyData.map((h: any) => h.game_id);
-    const { data: statsData, error: statsError } = await supabaseServer
-      .from('game_statistics')
-      .select('*')
-      .in('game_id', gameIds);
+      console.log(`📜 Found ${historyData.length} game history entries`);
 
-    if (statsError) {
-      console.error('Error getting game statistics:', statsError);
-    }
-
-    // Create a map of game_id to statistics
-    const statsMap = new Map();
-    if (statsData) {
-      statsData.forEach((stat: any) => {
-        statsMap.set(stat.game_id, stat);
+      // Filter out incomplete records (must have openingCard, winner, winningCard)
+      const validHistory = historyData.filter((h: any) => {
+        const hasRequiredFields = 
+          h.opening_card && 
+          h.winner && 
+          h.winning_card &&
+          h.game_id;
+        
+        if (!hasRequiredFields) {
+          console.warn('⚠️ Skipping incomplete game history entry:', {
+            id: h.id,
+            game_id: h.game_id,
+            hasOpeningCard: !!h.opening_card,
+            hasWinner: !!h.winner,
+            hasWinningCard: !!h.winning_card
+          });
+        }
+        
+        return hasRequiredFields;
       });
+
+      if (validHistory.length === 0) {
+        console.warn('⚠️ No valid game history entries found (all missing required fields)');
+        return [];
+      }
+
+      console.log(`📜 ${validHistory.length} valid game history entries after filtering`);
+
+      // Get game statistics for each game (optional - don't fail if missing)
+      const gameIds = validHistory.map((h: any) => h.game_id);
+      let statsMap = new Map();
+      
+      if (gameIds.length > 0) {
+        const { data: statsData, error: statsError } = await supabaseServer
+          .from('game_statistics')
+          .select('*')
+          .in('game_id', gameIds);
+
+        if (statsError) {
+          console.warn('⚠️ Error getting game statistics (non-critical):', statsError.message);
+          // Continue without statistics - they're optional
+        } else if (statsData && statsData.length > 0) {
+          statsData.forEach((stat: any) => {
+            statsMap.set(stat.game_id, stat);
+          });
+          console.log(`📊 Found statistics for ${statsMap.size} games`);
+        } else {
+          console.log('📊 No game statistics found (games will have default values)');
+        }
+      }
+
+      // Combine history with statistics
+      const enhancedHistory = validHistory.map((history: any) => {
+        const stats = statsMap.get(history.game_id);
+        
+        // Ensure all required fields are present and valid
+        const enhancedEntry = {
+          id: history.id,
+          gameId: history.game_id || history.id, // Fallback to id if game_id missing
+          openingCard: history.opening_card || '',
+          winner: (history.winner || '').toLowerCase() as 'andar' | 'bahar',
+          winningCard: history.winning_card || '',
+          totalCards: history.total_cards || 0,
+          round: history.round || 1, // Default to 1 if not present
+          createdAt: history.created_at || new Date().toISOString(),
+          // Statistics data (with defaults if not available)
+          totalBets: stats ? parseFloat(stats.total_bets || '0') : 0,
+          andarTotalBet: stats ? parseFloat(stats.andar_total_bet || '0') : 0,
+          baharTotalBet: stats ? parseFloat(stats.bahar_total_bet || '0') : 0,
+          totalWinnings: stats ? parseFloat(stats.total_winnings || '0') : 0,
+          andarBetsCount: stats ? (stats.andar_bets_count || 0) : 0,
+          baharBetsCount: stats ? (stats.bahar_bets_count || 0) : 0,
+          totalPlayers: stats ? (stats.total_players || 0) : 0,
+        };
+
+        // Validate winner is either 'andar' or 'bahar'
+        if (enhancedEntry.winner !== 'andar' && enhancedEntry.winner !== 'bahar') {
+          console.warn('⚠️ Invalid winner value:', enhancedEntry.winner, 'for game:', enhancedEntry.gameId);
+          // Try to infer from opening card or default to 'andar'
+          enhancedEntry.winner = 'andar';
+        }
+
+        return enhancedEntry;
+      });
+
+      console.log(`✅ Returning ${enhancedHistory.length} enhanced game history entries`);
+      return enhancedHistory;
+    } catch (error: any) {
+      console.error('❌ Exception in getGameHistory:', {
+        message: error.message,
+        stack: error.stack
+      });
+      return [];
     }
-
-    // Combine history with statistics
-    const enhancedHistory = historyData.map((history: any) => {
-      const stats = statsMap.get(history.game_id);
-      return {
-        id: history.id,
-        gameId: history.game_id,
-        openingCard: history.opening_card,
-        winner: history.winner,
-        winningCard: history.winning_card,
-        totalCards: history.total_cards,
-        round: history.round || 1, // Default to 1 if not present
-        createdAt: history.created_at,
-        // Statistics data (with defaults if not available)
-        totalBets: stats ? parseFloat(stats.total_bets || '0') : 0,
-        andarTotalBet: stats ? parseFloat(stats.andar_total_bet || '0') : 0,
-        baharTotalBet: stats ? parseFloat(stats.bahar_total_bet || '0') : 0,
-        totalWinnings: stats ? parseFloat(stats.total_winnings || '0') : 0,
-        andarBetsCount: stats ? (stats.andar_bets_count || 0) : 0,
-        baharBetsCount: stats ? (stats.bahar_bets_count || 0) : 0,
-        totalPlayers: stats ? (stats.total_players || 0) : 0,
-      };
-    });
-
-    return enhancedHistory;
   }
 
   async getUserBets(userId: string, limit: number = 50, offset: number = 0): Promise<PlayerBet[]> {
@@ -1848,27 +1994,43 @@ export class SupabaseStorage implements IStorage {
   }
 
   async createDailyStats(stats: Omit<DailyGameStatistics, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
-    const { error } = await supabaseServer
-      .from('daily_game_statistics')
-      .insert({
-        date: stats.date,
-        total_games: stats.totalGames,
-        total_bets: stats.totalBets,
-        total_payouts: stats.totalPayouts,
-        total_revenue: stats.totalRevenue,
-        profit_loss: stats.profitLoss,
-        profit_loss_percentage: stats.profitLossPercentage,
-        unique_players: stats.uniquePlayers,
-        peak_bets_hour: stats.peakBetsHour,
-        created_at: new Date(),
-        updated_at: new Date()
-      });
+    try {
+      // Convert date to string format (YYYY-MM-DD)
+      const dateStr = stats.date instanceof Date 
+        ? stats.date.toISOString().split('T')[0]
+        : (typeof stats.date === 'string' ? stats.date : new Date(stats.date).toISOString().split('T')[0]);
+      
+      const { error } = await supabaseServer
+        .from('daily_game_statistics')
+        .insert({
+          date: dateStr,
+          total_games: stats.totalGames || 0,
+          total_bets: (stats.totalBets || 0).toString(),
+          total_payouts: (stats.totalPayouts || 0).toString(),
+          total_revenue: (stats.totalRevenue || 0).toString(),
+          profit_loss: (stats.profitLoss || 0).toString(),
+          profit_loss_percentage: stats.profitLossPercentage || 0,
+          unique_players: stats.uniquePlayers || 0,
+          peak_bets_hour: stats.peakBetsHour || 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
 
-    if (error) {
-      console.error('❌ Error creating daily stats:', error);
+      if (error) {
+        console.error('❌ Error creating daily stats:', error);
+        console.error('   Attempted to insert:', {
+          date: dateStr,
+          total_games: stats.totalGames,
+          total_bets: stats.totalBets,
+          total_payouts: stats.totalPayouts
+        });
+        throw error;
+      }
+      console.log('✅ New daily stats record created for:', dateStr);
+    } catch (error) {
+      console.error('❌ Exception in createDailyStats:', error);
       throw error;
     }
-    console.log('✅ New daily stats record created');
   }
 
   async updateDailyStats(date: Date, updates: Partial<DailyGameStatistics>): Promise<void> {
@@ -1888,63 +2050,80 @@ export class SupabaseStorage implements IStorage {
   }
 
   async incrementDailyStats(date: Date, increments: Partial<DailyGameStatistics>): Promise<void> {
-    const dateStr = date.toISOString().split('T')[0];
-    
-    // Check if record exists by querying database directly
-    const { data: existingData, error: fetchError } = await supabaseServer
-      .from('daily_game_statistics')
-      .select('*')
-      .eq('date', dateStr)
-      .single();
-    
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error checking existing daily stats:', fetchError);
-      throw fetchError;
-    }
-    
-    if (existingData) {
-      // Update existing record using snake_case fields
-      const existing = this.transformDailyStats(existingData);
-      if (!existing) throw new Error('Failed to parse existing stats');
+    try {
+      const dateStr = date.toISOString().split('T')[0];
       
-      // Calculate profit loss percentage
-      const newTotalBets = existing.totalBets + (increments.totalBets || 0);
-      const newProfitLoss = existing.profitLoss + (increments.profitLoss || 0);
-      const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
-      
-      const { error } = await supabaseServer
-        .from('daily_game_statistics')
-        .update({
-          total_games: existing.totalGames + (increments.totalGames || 0),
-          total_bets: newTotalBets.toString(), // Convert to string for DECIMAL field
-          total_payouts: (existing.totalPayouts + (increments.totalPayouts || 0)).toString(),
-          total_revenue: (existing.totalRevenue + (increments.totalRevenue || 0)).toString(),
-          profit_loss: newProfitLoss.toString(),
-          profit_loss_percentage: newProfitLossPercentage,
-          unique_players: existing.uniquePlayers + (increments.uniquePlayers || 0),
-          updated_at: new Date()
-        })
-        .eq('date', dateStr);
-      
-      if (error) {
-        console.error('❌ Error updating daily stats:', error);
-        throw error;
-      }
-      console.log('✅ Daily stats updated in database for:', dateStr);
-    } else {
-      // Create new record
-      console.log('📝 Creating new daily stats record for:', dateStr);
-      await this.createDailyStats({
-        date,
+      console.log(`📊 Incrementing daily stats for ${dateStr}:`, {
         totalGames: increments.totalGames || 0,
         totalBets: increments.totalBets || 0,
         totalPayouts: increments.totalPayouts || 0,
-        totalRevenue: increments.totalRevenue || 0,
-        profitLoss: increments.profitLoss || 0,
-        profitLossPercentage: increments.profitLossPercentage || 0,
-        uniquePlayers: increments.uniquePlayers || 0,
-        peakBetsHour: increments.peakBetsHour || 0
+        profitLoss: increments.profitLoss || 0
       });
+      
+      // Check if record exists by querying database directly
+      const { data: existingData, error: fetchError } = await supabaseServer
+        .from('daily_game_statistics')
+        .select('*')
+        .eq('date', dateStr)
+        .single();
+      
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error checking existing daily stats:', fetchError);
+        throw fetchError;
+      }
+      
+      if (existingData) {
+        // Update existing record using snake_case fields
+        const existing = this.transformDailyStats(existingData);
+        if (!existing) {
+          console.error('Failed to parse existing daily stats');
+          throw new Error('Failed to parse existing stats');
+        }
+        
+        // Calculate profit loss percentage
+        const newTotalBets = existing.totalBets + (increments.totalBets || 0);
+        const newProfitLoss = existing.profitLoss + (increments.profitLoss || 0);
+        const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
+        
+        const { error } = await supabaseServer
+          .from('daily_game_statistics')
+          .update({
+            total_games: existing.totalGames + (increments.totalGames || 0),
+            total_bets: newTotalBets.toString(), // Convert to string for DECIMAL field
+            total_payouts: (existing.totalPayouts + (increments.totalPayouts || 0)).toString(),
+            total_revenue: (existing.totalRevenue + (increments.totalRevenue || 0)).toString(),
+            profit_loss: newProfitLoss.toString(),
+            profit_loss_percentage: newProfitLossPercentage,
+            unique_players: existing.uniquePlayers + (increments.uniquePlayers || 0),
+            updated_at: new Date().toISOString()
+          })
+          .eq('date', dateStr);
+        
+        if (error) {
+          console.error('❌ Error updating daily stats:', error);
+          throw error;
+        }
+        console.log('✅ Daily stats updated in database for:', dateStr);
+      } else {
+        // Create new record
+        console.log('📝 Creating new daily stats record for:', dateStr);
+        await this.createDailyStats({
+          date,
+          totalGames: increments.totalGames || 0,
+          totalBets: increments.totalBets || 0,
+          totalPayouts: increments.totalPayouts || 0,
+          totalRevenue: increments.totalRevenue || 0,
+          profitLoss: increments.profitLoss || 0,
+          profitLossPercentage: increments.profitLossPercentage || 0,
+          uniquePlayers: increments.uniquePlayers || 0,
+          peakBetsHour: increments.peakBetsHour || 0
+        });
+        console.log('✅ New daily stats record created successfully');
+      }
+    } catch (error) {
+      console.error('❌ Exception in incrementDailyStats:', error);
+      // Don't throw - we don't want to break game completion if stats update fails
+      // But log it so we can debug
     }
   }
 
@@ -2224,54 +2403,92 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getTodayGameCount(): Promise<number> {
-    const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabaseServer
-      .from('game_sessions')
-      .select('*', { count: 'exact', head: true})
-      .eq('status', 'completed')
-      .gte('created_at', today)
-      .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
-    
-    if (error) {
-      console.error('Error getting today\'s game count:', error);
+    try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      const { count, error } = await supabaseServer
+        .from('game_sessions')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .gte('created_at', startOfDay.toISOString())
+        .lte('created_at', endOfDay.toISOString());
+      
+      if (error) {
+        console.error('Error getting today\'s game count:', error);
+        return 0;
+      }
+      
+      return count || 0;
+    } catch (error) {
+      console.error('Exception getting today\'s game count:', error);
       return 0;
     }
-    
-    return data?.length || 0;
   }
 
   async getTodayBetsTotal(): Promise<number> {
-    const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabaseServer
-      .from('player_bets')
-      .select('amount')
-      .gte('created_at', today)
-      .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
-    
-    if (error) {
-      console.error('Error getting today\'s bets total:', error);
+    try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      const { data, error } = await supabaseServer
+        .from('player_bets')
+        .select('amount')
+        .gte('created_at', startOfDay.toISOString())
+        .lte('created_at', endOfDay.toISOString());
+      
+      if (error) {
+        console.error('Error getting today\'s bets total:', error);
+        return 0;
+      }
+      
+      if (!data || data.length === 0) {
+        return 0;
+      }
+      
+      return data.reduce((sum: number, bet: any) => {
+        const amount = typeof bet.amount === 'string' ? parseFloat(bet.amount) : (bet.amount || 0);
+        return sum + amount;
+      }, 0);
+    } catch (error) {
+      console.error('Exception getting today\'s bets total:', error);
       return 0;
     }
-    
-    return data?.reduce((sum, bet) => sum + parseFloat(bet.amount), 0) || 0;
   }
 
   async getTodayUniquePlayers(): Promise<number> {
-    const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabaseServer
-      .from('player_bets')
-      .select('user_id')
-      .gte('created_at', today)
-      .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
-    
-    if (error) {
-      console.error('Error getting today\'s unique players:', error);
+    try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      const { data, error } = await supabaseServer
+        .from('player_bets')
+        .select('user_id')
+        .gte('created_at', startOfDay.toISOString())
+        .lte('created_at', endOfDay.toISOString());
+      
+      if (error) {
+        console.error('Error getting today\'s unique players:', error);
+        return 0;
+      }
+      
+      if (!data || data.length === 0) {
+        return 0;
+      }
+      
+      // Get unique user IDs
+      const uniqueUsers = new Set(data.map((bet: any) => bet.user_id || bet.userId).filter(Boolean));
+      return uniqueUsers.size;
+    } catch (error) {
+      console.error('Exception getting today\'s unique players:', error);
       return 0;
     }
-    
-    // Get unique user IDs
-    const uniqueUsers = new Set(data?.map(bet => bet.user_id) || []);
-    return uniqueUsers.size;
   }
 
   // Bonus and referral methods implementation
@@ -2585,11 +2802,11 @@ export class SupabaseStorage implements IStorage {
     try {
       // Get current user data
       const user = await this.getUser(userId);
-      if (!user || !user.bonus_locked) {
+      if (!user || !(user as any).bonus_locked) {
         return; // No locked bonus to track
       }
       
-      const currentCompleted = parseFloat(user.wagering_completed || '0');
+      const currentCompleted = parseFloat((user as any).wagering_completed || '0');
       const newCompleted = currentCompleted + betAmount;
       
       const { error } = await supabaseServer
@@ -2605,7 +2822,7 @@ export class SupabaseStorage implements IStorage {
         throw error;
       }
       
-      const requirement = parseFloat(user.wagering_requirement || '0');
+      const requirement = parseFloat((user as any).wagering_requirement || '0');
       const progress = requirement > 0 ? (newCompleted / requirement) * 100 : 0;
       console.log(`📊 Wagering tracked for user ${userId}: ₹${newCompleted.toFixed(2)} / ₹${requirement.toFixed(2)} (${progress.toFixed(1)}%)`);
     } catch (error) {
@@ -2617,12 +2834,12 @@ export class SupabaseStorage implements IStorage {
   async checkAndUnlockBonus(userId: string): Promise<{ unlocked: boolean; amount: number } | null> {
     try {
       const user = await this.getUser(userId);
-      if (!user || !user.bonus_locked) {
+      if (!user || !(user as any).bonus_locked) {
         return null;
       }
       
-      const requirement = parseFloat(user.wagering_requirement || '0');
-      const completed = parseFloat(user.wagering_completed || '0');
+      const requirement = parseFloat((user as any).wagering_requirement || '0');
+      const completed = parseFloat((user as any).wagering_completed || '0');
       
       // Check if requirement met
       if (completed >= requirement && requirement > 0) {
@@ -2692,14 +2909,14 @@ export class SupabaseStorage implements IStorage {
         return null;
       }
       
-      const requirement = parseFloat(user.wagering_requirement || '0');
-      const completed = parseFloat(user.wagering_completed || '0');
+      const requirement = parseFloat((user as any).wagering_requirement || '0');
+      const completed = parseFloat((user as any).wagering_completed || '0');
       const remaining = Math.max(0, requirement - completed);
       const percentage = requirement > 0 ? (completed / requirement) * 100 : 0;
       const depositBonus = parseFloat(user.deposit_bonus_available || '0');
       const referralBonus = parseFloat(user.referral_bonus_available || '0');
       const bonusLocked = depositBonus + referralBonus;
-      const isLocked = user.bonus_locked || false;
+      const isLocked = (user as any).bonus_locked || false;
       
       return {
         requirement,
@@ -3247,24 +3464,43 @@ export class SupabaseStorage implements IStorage {
 
     const requestType = paymentRequest.request_type || paymentRequest.type;
     
-    // Use database transaction to ensure atomic operation
+    // ✅ CRITICAL FIX: Use transaction-like pattern for atomic operation with rollback
+    let requestUpdated = false;
+    let depositApplied = false;
+    let bonusApplied = false;
+    
     try {
-      // Update the payment request status
+      // Step 1: Update the payment request status
       await this.updatePaymentRequest(requestId, 'approved', adminId);
+      requestUpdated = true;
 
       // Handle deposits and withdrawals differently
       if (requestType === 'deposit') {
-        // For deposits: add to user balance
+        // Step 2: For deposits: add to user balance
         await this.updateUserBalance(userId, amount);
+        depositApplied = true;
         
-        // CRITICAL FIX: Apply deposit bonus when admin approves deposit
+        // Step 3: Apply deposit bonus when admin approves deposit
         try {
           const { applyDepositBonus } = await import('./payment');
           await applyDepositBonus(userId, amount);
+          bonusApplied = true;
           console.log(`✅ Deposit bonus applied for user ${userId} on admin-approved deposit of ₹${amount}`);
         } catch (bonusError) {
           console.error('⚠️ Failed to apply deposit bonus on approval:', bonusError);
-          // Don't fail the approval if bonus fails
+          // ✅ CRITICAL FIX: Rollback deposit if bonus fails
+          if (depositApplied && !bonusApplied) {
+            try {
+              await this.updateUserBalance(userId, -amount);
+              await this.updatePaymentRequest(requestId, 'pending', adminId); // Revert status
+              console.log(`✅ Deposit rolled back due to bonus failure`);
+              throw new Error('Bonus application failed. Payment request has been reverted.');
+            } catch (rollbackError) {
+              console.error('❌ CRITICAL: Failed to rollback payment request:', rollbackError);
+              // Log for manual intervention
+              throw new Error('Bonus application failed and rollback failed. Manual intervention required.');
+            }
+          }
         }
       } else if (requestType === 'withdrawal') {
         // For withdrawals: subtract from user balance (amount is positive)
@@ -3273,7 +3509,24 @@ export class SupabaseStorage implements IStorage {
       }
     } catch (error) {
       console.error('Error approving payment request:', error);
-      throw new Error('Failed to approve payment request');
+      
+      // ✅ CRITICAL FIX: Rollback on any error
+      // Only rollback if deposit was applied but bonus failed
+      if (requestType === 'deposit' && depositApplied && !bonusApplied) {
+        try {
+          if (requestUpdated) {
+            await this.updatePaymentRequest(requestId, 'pending', adminId);
+          }
+          if (depositApplied) {
+            await this.updateUserBalance(userId, -amount);
+          }
+        } catch (rollbackError) {
+          console.error('❌ CRITICAL: Failed to rollback payment request:', rollbackError);
+          // Log for manual intervention
+        }
+      }
+      
+      throw new Error('Failed to approve payment request: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 }

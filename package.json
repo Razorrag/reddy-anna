@@ -27,7 +27,8 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "db:push": "drizzle-kit push",
-    "verify-data-flow": "tsx scripts/verify-data-flow.ts"
+    "verify-data-flow": "tsx scripts/verify-data-flow.ts",
+    "check-game-history": "tsx scripts/check-game-history.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

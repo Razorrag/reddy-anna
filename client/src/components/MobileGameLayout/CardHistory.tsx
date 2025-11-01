@@ -40,13 +40,40 @@ const CardHistory: React.FC<CardHistoryProps> = ({
         
         if (games.length > 0) {
           // Transform API data to match component format
+          // Filter and validate games have all required fields
           const formattedResults = games
-            .filter(game => game.winner) // Only show games with winners
-            .map(game => ({
-              winner: (game.winner || '').toLowerCase(),
-              round: game.round || 1,
-              gameId: game.gameId || game.id || `game-${Date.now()}-${Math.random()}`
-            }))
+            .filter(game => {
+              // Ensure game has required fields
+              const hasRequired = 
+                game && 
+                game.winner && 
+                (game.winner.toLowerCase() === 'andar' || game.winner.toLowerCase() === 'bahar') &&
+                game.gameId;
+              
+              if (!hasRequired && game) {
+                console.warn('⚠️ CardHistory: Skipping invalid game entry:', {
+                  gameId: game.gameId || game.id,
+                  winner: game.winner,
+                  hasWinner: !!game.winner,
+                  hasGameId: !!game.gameId
+                });
+              }
+              
+              return hasRequired;
+            })
+            .map(game => {
+              // Ensure winner is lowercase and valid
+              const winner = (game.winner || '').toLowerCase();
+              const validWinner = (winner === 'andar' || winner === 'bahar') ? winner : 'andar';
+              
+              return {
+                winner: validWinner,
+                round: game.round || 1,
+                gameId: game.gameId || game.id || `game-${Date.now()}-${Math.random()}`,
+                openingCard: game.openingCard || '',
+                winningCard: game.winningCard || ''
+              };
+            })
             .slice(0, 10); // Limit to 10 most recent
           
           console.log('📜 CardHistory: Formatted results:', formattedResults);

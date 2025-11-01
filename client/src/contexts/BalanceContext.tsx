@@ -64,14 +64,24 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const isAdmin = authState.user?.role === 'admin' || authState.user?.role === 'super_admin';
 
   const updateBalance = useCallback(async (newBalance: number, source: string = 'api', transactionType?: string, amount?: number) => {
+    // CRITICAL: Debounce rapid updates to prevent event storm
+    const now = Date.now();
+    const timeSinceLastUpdate = now - state.lastUpdated;
+    
+    // Skip if same balance and updated within last 500ms (prevents duplicate events)
+    if (timeSinceLastUpdate < 500 && Math.abs(newBalance - state.currentBalance) < 0.01) {
+      console.log('⏭️ Skipping duplicate balance update');
+      return;
+    }
+
     dispatch({
       type: 'SET_BALANCE',
       payload: { balance: newBalance, source }
     });
 
-    // Emit custom event for other contexts
+    // Emit custom event for other contexts (ONCE per actual change)
     window.dispatchEvent(new CustomEvent('balance-updated', {
-      detail: { balance: newBalance, source, timestamp: Date.now(), transactionType, amount }
+      detail: { balance: newBalance, source, timestamp: now, transactionType, amount }
     }));
 
     // Update localStorage
@@ -82,7 +92,7 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         user.balance = newBalance;
         localStorage.setItem('user', JSON.stringify(user));
         
-        // Notify server via API to broadcast to other WebSocket clients
+        // Notify server via API ONLY if not already from websocket (prevent ping-pong)
         if (source !== 'websocket') {
           try {
             await apiClient.notifyBalanceUpdate(user.id, newBalance, transactionType, amount);
@@ -94,7 +104,7 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         console.error('Failed to update localStorage balance:', error);
       }
     }
-  }, []);
+  }, [state.currentBalance, state.lastUpdated]);
 
   const refreshBalance = useCallback(async () => {
     // Skip balance refresh for admin users

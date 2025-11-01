@@ -16,6 +16,21 @@ interface WSClient {
 }
 
 /**
+ * Helper function to get current streaming status
+ * Returns true if admin is currently streaming
+ */
+function getStreamingStatus(): boolean {
+  try {
+    const { webrtcSignaling } = require('../webrtc-signaling');
+    const activeStreams = webrtcSignaling.getActiveStreams();
+    return activeStreams.length > 0;
+  } catch (error) {
+    console.error('Error getting streaming status:', error);
+    return false;
+  }
+}
+
+/**
  * Register all game-related socket handlers
  * This function is now integrated with the main WebSocket connection in routes.ts
  */
@@ -253,6 +268,11 @@ export async function handlePlayerBet(client: WSClient, data: any) {
     }
 
     console.log(`✅ BET CONFIRMED: ${userId} bet ₹${amount} on ${side}, new balance: ₹${newBalance}`);
+    
+    // Invalidate cache after bet placement
+    if (typeof (global as any).invalidateGameStateCache === 'function') {
+      (global as any).invalidateGameStateCache();
+    }
   } catch (error: any) {
     console.error('Bet error:', error);
     sendError(ws, error.message || 'Failed to place bet');
@@ -366,6 +386,11 @@ export async function handleStartGame(client: WSClient, data: any) {
       }));
 
       console.log(`✅ GAME STARTED: Game ${(global as any).currentGameState.gameId} started by admin ${userId}`);
+      
+      // Invalidate cache after game starts
+      if (typeof (global as any).invalidateGameStateCache === 'function') {
+        (global as any).invalidateGameStateCache();
+      }
     } else {
       sendError(ws, 'Game state not available');
     }
@@ -581,6 +606,11 @@ export async function handleDealCard(client: WSClient, data: any) {
     }));
 
     console.log(`✅ CARD DEALT: ${data.card} on ${data.side} by admin ${userId}`);
+    
+    // Invalidate cache after card is dealt
+    if (typeof (global as any).invalidateGameStateCache === 'function') {
+      (global as any).invalidateGameStateCache();
+    }
   } catch (error: any) {
     console.error('Deal card error:', error);
     sendError(ws, error.message || 'Failed to deal card');
@@ -591,7 +621,7 @@ export async function handleDealCard(client: WSClient, data: any) {
  * Handle game subscription
  */
 export async function handleGameSubscribe(client: WSClient, data: any) {
-  const { ws, userId } = client;
+  const { ws, userId, role } = client;
 
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     console.error('Client not connected');
@@ -602,7 +632,7 @@ export async function handleGameSubscribe(client: WSClient, data: any) {
     // Use getCurrentGameStateForUser function from routes.ts
     const gameStateFn = (global as any).getCurrentGameStateForUser;
     if (typeof gameStateFn === 'function') {
-      const gameState = await gameStateFn(userId);
+      const gameState = await gameStateFn(userId, role);
 
       ws.send(JSON.stringify({
         type: 'game_state',

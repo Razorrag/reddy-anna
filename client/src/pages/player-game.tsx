@@ -73,6 +73,12 @@ const PlayerGame: React.FC = () => {
     }
   }, [balance, userBalance]);
 
+  // ✅ CRITICAL: Log when isScreenSharingActive changes
+  useEffect(() => {
+    console.log('🎮 [PLAYER-GAME] isScreenSharingActive changed:', gameState.isScreenSharingActive);
+    console.log('🎮 [PLAYER-GAME] Will pass to MobileGameLayout:', gameState.isScreenSharingActive || false);
+  }, [gameState.isScreenSharingActive]);
+
   // Listen for balance updates
   useEffect(() => {
     const handleBalanceUpdate = (event: CustomEvent) => {
@@ -329,7 +335,22 @@ const PlayerGame: React.FC = () => {
       )}
 
       {(!shouldShowAuthLoading && !shouldShowWsLoading) && (
-      <div className="relative top-0">
+      <div 
+        className="relative top-0"
+        // ✅ CRITICAL: Prevent any page-level events from affecting video
+        style={{
+          contain: 'layout', // Layout containment for isolation
+          position: 'relative',
+        }}
+        // ✅ Block propagation of events that might affect video
+        onClick={(e) => {
+          // Only stop propagation if click is near video area (optional optimization)
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-video-area]')) {
+            e.stopPropagation();
+          }
+        }}
+      >
         <MobileGameLayout
 
           gameState={gameState}
@@ -348,7 +369,11 @@ const PlayerGame: React.FC = () => {
           onShowChipSelector={handleShowChipSelector}
           showChipSelector={showChipSelector}
           isPlacingBet={isPlacingBet}
-          isScreenSharing={gameState.isScreenSharingActive || false}
+          isScreenSharing={(() => {
+            const value = gameState.isScreenSharingActive || false;
+            console.log('🎮 [PLAYER-GAME] Passing isScreenSharing to MobileGameLayout:', value);
+            return value;
+          })()}
         />
       </div>
       )}

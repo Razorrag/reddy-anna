@@ -80,10 +80,37 @@ app.use(cors({
     
     // In production, check against configured origins
     if (process.env.NODE_ENV === 'production') {
-      // Allow configured domains and their subdomains
-      const isAllowed = allowedOrigins.some(allowed => {
-        return origin === allowed || origin.endsWith(`.${allowed.replace(/^https?:\/\//, '')}`);
-      });
+      // ✅ CRITICAL FIX: More robust origin matching with proper URL parsing
+      let isAllowed = false;
+      try {
+        const originUrl = new URL(origin);
+        const originHost = originUrl.hostname;
+        
+        isAllowed = allowedOrigins.some(allowed => {
+          try {
+            const allowedUrl = new URL(allowed);
+            const allowedHost = allowedUrl.hostname;
+            
+            // Exact match
+            if (origin === allowed) return true;
+            
+            // Subdomain match (e.g., api.example.com matches example.com)
+            if (originHost.endsWith('.' + allowedHost) || originHost === allowedHost) {
+              return true;
+            }
+          } catch {
+            // Invalid URL format, try string matching
+            const allowedHost = allowed.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+            return originHost === allowedHost || originHost.endsWith('.' + allowedHost);
+          }
+          return false;
+        });
+      } catch {
+        // Fallback to simple string matching if URL parsing fails
+        isAllowed = allowedOrigins.some(allowed => {
+          return origin === allowed || origin.endsWith(`.${allowed.replace(/^https?:\/\//, '')}`);
+        });
+      }
       
       if (isAllowed) {
         return callback(null, true);
@@ -190,6 +217,78 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+
+  // ✅ CRITICAL FIX: Global error handlers for graceful shutdown
+  let isShuttingDown = false;
+  
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (error: Error) => {
+    console.error('❌ Uncaught Exception:', error);
+    console.error('Stack:', error.stack);
+    
+    // Graceful shutdown
+    if (!isShuttingDown) {
+      isShuttingDown = true;
+      
+      // Clean up intervals
+      try {
+        const { cleanupGameIntervals } = require('./routes');
+        if (cleanupGameIntervals) {
+          cleanupGameIntervals();
+        }
+      } catch (cleanupError) {
+        console.error('Error during cleanup:', cleanupError);
+      }
+      
+      // Give time for cleanup, then exit
+      setTimeout(() => {
+        process.exit(1);
+      }, 1000);
+    }
+  });
+
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+    console.error('❌ Unhandled Rejection:', reason);
+    console.error('Promise:', promise);
+    
+    // Log error but don't crash in production
+    if (process.env.NODE_ENV !== 'production') {
+      // In development, exit to catch bugs early
+      process.exit(1);
+    }
+  });
+
+  // Graceful shutdown on SIGTERM/SIGINT
+  const gracefulShutdown = async (signal: string) => {
+    console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+    isShuttingDown = true;
+    
+    // Clean up game timer interval
+    try {
+      const { cleanupGameIntervals } = require('./routes');
+      if (cleanupGameIntervals) {
+        cleanupGameIntervals();
+      }
+    } catch (cleanupError) {
+      console.error('Error cleaning up game intervals:', cleanupError);
+    }
+    
+    // Close server
+    server.close(() => {
+      console.log('✅ HTTP server closed');
+      process.exit(0);
+    });
+    
+    // Force close after 10 seconds
+    setTimeout(() => {
+      console.error('⚠️ Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

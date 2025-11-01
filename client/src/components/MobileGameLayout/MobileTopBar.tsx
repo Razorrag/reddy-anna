@@ -133,16 +133,9 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
                 <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"/>
                 <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd"/>
               </svg>
-              <div className="flex flex-col leading-tight -space-y-0.5">
-                <span className="text-yellow-300 font-bold text-base tracking-wide">
-                  ₹{displayBalance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                </span>
-                {hasBonus && (
-                  <span className="text-[11px] text-yellow-200/90">
-                    Bonus: ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                  </span>
-                )}
-              </div>
+              <span className="text-yellow-300 font-bold text-base tracking-wide">
+                ₹{displayBalance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </span>
             </button>
           </div>
         </div>

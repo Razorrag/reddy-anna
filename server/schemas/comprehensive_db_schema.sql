@@ -220,8 +220,8 @@ CREATE TABLE IF NOT EXISTS user_referrals (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   
   -- Foreign key constraints
-  CONSTRAINT fk_user_referrals_referrer FOREIGN KEY (referrer_user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_user_referrals_referred FOREIGN KEY (referred_user_id) REFERENCES users(id) ON DELETE CASCADE
+  CONSTRAINT user_referrals_referrer_user_id_fkey FOREIGN KEY (referrer_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT user_referrals_referred_user_id_fkey FOREIGN KEY (referred_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Stream settings table

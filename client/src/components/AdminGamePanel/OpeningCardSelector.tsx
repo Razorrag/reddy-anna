@@ -76,16 +76,24 @@ const OpeningCardSelector: React.FC = () => {
     }
   };
 
+  // Check if game is active
+  const isGameActive = gameState.phase !== 'idle' && gameState.phase !== 'opening';
+
   return (
-    <div className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-sm rounded-lg p-5 border-2 border-gold/30">
-      <h2 className="text-xl font-bold text-gold mb-3">
-        🎴 Select Opening Card
+    <div className={`bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-sm rounded-lg p-5 border-2 ${isGameActive ? 'border-green-500/30' : 'border-gold/30'}`}>
+      <h2 className="text-xl font-bold text-gold mb-3 flex items-center justify-between">
+        <span>🎴 {isGameActive ? 'Opening Card (Game Active)' : 'Select Opening Card'}</span>
+        {isGameActive && (
+          <span className="text-xs bg-green-500/20 text-green-400 px-3 py-1 rounded-full border border-green-500/30">
+            ✓ Game Started
+          </span>
+        )}
       </h2>
       
       {/* Selected Card Display */}
       {selectedCard && (
-        <div className="bg-gradient-to-r from-gold/20 to-yellow-600/20 border-2 border-gold rounded-lg p-4 mb-3 text-center">
-          <div className="text-sm text-gray-400 mb-1">Selected Opening Card</div>
+        <div className={`bg-gradient-to-r ${isGameActive ? 'from-green-500/20 to-emerald-600/20 border-green-500' : 'from-gold/20 to-yellow-600/20 border-gold'} border-2 rounded-lg p-4 mb-3 text-center`}>
+          <div className="text-sm text-gray-400 mb-1">{isGameActive ? 'Opening Card (Active)' : 'Selected Opening Card'}</div>
           <div className={`text-5xl font-bold ${selectedCard.color === 'red' ? 'text-red-500' : 'text-white'}`}>
             {selectedCard.display}
           </div>

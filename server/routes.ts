@@ -2,7 +2,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage-supabase";
+import { storage, parseBalance } from "./storage-supabase";
 import { registerUser, loginUser, loginAdmin, requireAuth } from './auth';
 import { processPayment, getTransactionHistory, applyDepositBonus, applyReferralBonus, checkConditionalBonus, applyAvailableBonus } from './payment';
 import {
@@ -224,6 +224,8 @@ class GameState {
     phase: 'idle' as GamePhase,
     currentRound: 1 as 1 | 2 | 3,
     timer: 0,
+    timerStartedAt: null as Date | null, // NEW: Track when timer started
+    timerDuration: 30, // NEW: Store timer duration
     andarCards: [] as string[],
     baharCards: [] as string[],
     winner: null as string | null,
@@ -272,6 +274,27 @@ class GameState {
   
   get timer() { return this.state.timer; }
   set timer(value: number) { this.state.timer = value; }
+  
+  get timerStartedAt() { return this.state.timerStartedAt; }
+  set timerStartedAt(value: Date | null) { this.state.timerStartedAt = value; }
+  
+  get timerDuration() { return this.state.timerDuration; }
+  set timerDuration(value: number) { this.state.timerDuration = value; }
+  
+  // NEW: Method to calculate remaining time from stored timer
+  getRemainingTimer(): number {
+    if (!this.state.timerStartedAt || this.state.phase === 'idle' || this.state.phase === 'complete') {
+      return this.state.timer;
+    }
+    
+    const elapsed = Math.floor((Date.now() - this.state.timerStartedAt.getTime()) / 1000);
+    const remaining = Math.max(0, this.state.timerDuration - elapsed);
+    
+    // Update timer value
+    this.state.timer = remaining;
+    
+    return remaining;
+  }
   
   get andarCards() { return this.state.andarCards; }
   get baharCards() { return this.state.baharCards; }
@@ -374,6 +397,8 @@ class GameState {
       phase: 'idle' as GamePhase,
       currentRound: 1 as 1 | 2 | 3,
       timer: 0,
+      timerStartedAt: null, // NEW
+      timerDuration: 30, // NEW
       andarCards: [],
       baharCards: [],
       winner: null,
@@ -394,18 +419,135 @@ class GameState {
 
 const currentGameState = new GameState();
 
-// Helper function to get current game state for new connections
-const getCurrentGameStateForUser = async (userId: string) => {
+// ✅ CRITICAL FIX: Export cleanup function for server shutdown
+export function cleanupGameIntervals() {
+  if (currentGameState.timerInterval) {
+    clearInterval(currentGameState.timerInterval);
+    currentGameState.timerInterval = null;
+    console.log('✅ Game timer interval cleared');
+  }
+}
+
+// ✅ CRITICAL FIX: Store interval references per WebSocket connection
+const wsIntervals = new Map<any, {
+  activityInterval?: NodeJS.Timeout;
+  pingInterval?: NodeJS.Timeout;
+}>();
+
+// Game state cache for performance optimization
+interface CachedGameState {
+  state: any;
+  timestamp: number;
+  ttl: number; // Time to live in milliseconds (default: 2000ms = 2 seconds)
+}
+
+let gameStateCache: CachedGameState | null = null;
+const CACHE_TTL = 2000; // 2 seconds cache
+
+// ✅ CRITICAL FIX: Function to invalidate cache with logging
+function invalidateGameStateCache(): void {
+  const oldCache = gameStateCache;
+  gameStateCache = null;
+  
+  // ✅ Log cache invalidation for debugging
+  if (oldCache) {
+    console.log('✅ Game state cache invalidated');
+  }
+}
+
+// Function to get cached or fresh game state
+async function getCachedGameState(userId: string, userRole?: string): Promise<any> {
+  const now = Date.now();
+  
+  // Check if cache is valid (exists and not expired)
+  if (gameStateCache && (now - gameStateCache.timestamp) < gameStateCache.ttl) {
+    // Cache hit - return cached state but update user-specific data
+    const cachedState = { ...gameStateCache.state };
+    
+    // Still fetch user-specific data (balance, bets) for this user
+    try {
+      const user = await storage.getUser(userId);
+      const userBalance = user ? parseBalance(user.balance) : 0;
+      
+      const userBets = (!user || userRole === 'admin' || userRole === 'super_admin') 
+        ? [] 
+        : await storage.getBetsForGame(currentGameState.gameId);
+      
+      const round1Bets = { andar: 0, bahar: 0 };
+      const round2Bets = { andar: 0, bahar: 0 };
+      
+      userBets.forEach((bet: any) => {
+        const amount = parseFloat(bet.amount);
+        if (bet.round === '1' || bet.round === 1) {
+          round1Bets[bet.side as 'andar' | 'bahar'] += amount;
+        } else if (bet.round === '2' || bet.round === 2) {
+          round2Bets[bet.side as 'andar' | 'bahar'] += amount;
+        }
+      });
+      
+      // Update user-specific fields in cached state
+      cachedState.userBalance = userBalance;
+      cachedState.userBets = {
+        round1: round1Bets,
+        round2: round2Bets
+      };
+      cachedState.playerRound1Bets = round1Bets;
+      cachedState.playerRound2Bets = round2Bets;
+      
+      return cachedState;
+    } catch (error) {
+      // ✅ CRITICAL FIX: If user fetch fails, invalidate cache and fetch fresh
+      console.warn('Failed to fetch user data for cache, invalidating and fetching fresh:', error);
+      invalidateGameStateCache();
+      // Fall through to fetch fresh state
+    }
+  }
+  
+  // Cache miss or expired - fetch fresh state
+  const freshState = await getCurrentGameStateForUserDirect(userId, userRole);
+  
+  // ✅ CRITICAL FIX: Always update cache with fresh state to prevent stale data
+  if (freshState) {
+    gameStateCache = {
+      state: freshState,
+      timestamp: Date.now(),
+      ttl: CACHE_TTL
+    };
+  }
+  
+  return freshState;
+}
+
+// Helper function to get current game state for new connections (original implementation)
+const getCurrentGameStateForUserDirect = async (userId: string, userRole?: string) => {
   try {
     // Get user information
     const user = await storage.getUser(userId);
+    let userBalance = 0;
+    
+    // Handle missing user gracefully
     if (!user) {
-      console.error('User not found for game state synchronization:', userId);
-      return null;
+      if (userRole === 'admin' || userRole === 'super_admin') {
+        // Admin users don't have entries in users table, use defaults
+        console.log('Admin user accessing game state (not in users table):', userId);
+        userBalance = 0;
+      } else {
+        // Regular user not found - could be new signup, race condition, or deleted account
+        // Allow them to connect with zero balance rather than blocking
+        console.warn('User not found in database, allowing connection with defaults:', userId);
+        userBalance = 0;
+      }
+    } else {
+      userBalance = parseBalance(user.balance);
     }
+    
+    // IMPORTANT: Always return game state, never null
+    // Even if user doesn't exist, they can watch the game
 
     // Get user's current bets from database
-    const userBets = await storage.getBetsForGame(currentGameState.gameId);
+    const userBets = (!user || userRole === 'admin' || userRole === 'super_admin') 
+      ? [] 
+      : await storage.getBetsForGame(currentGameState.gameId);
     
     // Calculate user's round bets
     const round1Bets = { andar: 0, bahar: 0 };
@@ -420,6 +562,27 @@ const getCurrentGameStateForUser = async (userId: string) => {
       }
     });
 
+    // Check if there are active WebRTC streams
+    const activeStreams = webrtcSignaling.getActiveStreams();
+    let isScreenSharingActive = activeStreams.length > 0;
+
+    // NEW: Also check database for stream status if WebRTC is empty
+    if (!isScreenSharingActive) {
+      try {
+        const streamConfig = await streamStorage.getStreamConfig();
+        if (streamConfig && streamConfig.streamStatus === 'online') {
+          isScreenSharingActive = true;
+          // Add to active streams list if RTMP is active
+          activeStreams.push({
+            streamId: `rtmp-${streamConfig.id}`,
+            adminUserId: 'admin' // You may want to track actual admin ID
+          } as any);
+        }
+      } catch (error) {
+        console.warn('Failed to check stream config:', error);
+      }
+    }
+    
     // Enhanced game state with proper synchronization
     const gameStateForUser = {
       gameId: currentGameState.gameId,
@@ -435,7 +598,7 @@ const getCurrentGameStateForUser = async (userId: string) => {
       round1Bets: currentGameState.round1Bets,
       round2Bets: currentGameState.round2Bets,
       // User-specific data
-      userBalance: parseFloat(user.balance) || 0,
+      userBalance: userBalance,
       userBets: {
         round1: round1Bets,
         round2: round2Bets
@@ -475,7 +638,10 @@ const getCurrentGameStateForUser = async (userId: string) => {
         }))
       ],
       // Game history placeholder
-      history: [] // Would be populated from database
+      history: [], // Would be populated from database
+      // CRITICAL: Include streaming status so players see stream after refresh
+      isScreenSharingActive: isScreenSharingActive,
+      activeStreams: activeStreams
     };
 
     console.log(`[GAME_STATE] Synchronized state for user ${userId}:`, {
@@ -492,8 +658,185 @@ const getCurrentGameStateForUser = async (userId: string) => {
   }
 };
 
+// Wrapper function that uses cache
+const getCurrentGameStateForUser = async (userId: string, userRole?: string) => {
+  try {
+    // Use cached version for better performance
+    return await getCachedGameState(userId, userRole);
+  } catch (error) {
+    console.error('Error getting cached game state, falling back to direct:', error);
+    // Fallback to non-cached version
+    return await getCurrentGameStateForUserDirect(userId, userRole);
+  }
+};
+
 // Make getCurrentGameStateForUser globally available for WebSocket handlers
 (global as any).getCurrentGameStateForUser = getCurrentGameStateForUser;
+// Make cache invalidation globally available for handlers
+(global as any).invalidateGameStateCache = invalidateGameStateCache;
+
+// NEW: Restore game state from database on server startup
+async function restoreGameStateFromDatabase(): Promise<boolean> {
+  try {
+    console.log('🔄 Attempting to restore game state from database...');
+    
+    // Get active game session
+    const activeSession = await storage.getActiveGameSession();
+    
+    if (!activeSession) {
+      console.log('✅ No active game session found - starting with clean state');
+      return false;
+    }
+    
+    // Only restore if game is not completed
+    if (activeSession.status === 'completed' || activeSession.phase === 'complete') {
+      console.log('✅ Active game session is completed - starting with clean state');
+      return false;
+    }
+    
+    // ✅ FIX: Handle both snake_case and camelCase from database
+    const gameId = (activeSession as any).game_id || activeSession.gameId;
+    if (!gameId) {
+      console.warn('⚠️ Active game session found but missing gameId/game_id - starting with clean state');
+      return false;
+    }
+    
+    console.log(`✅ Found active game session: ${gameId}`);
+    console.log(`   Phase: ${activeSession.phase}, Round: ${(activeSession as any).current_round || 1}`);
+    
+    // Restore game state data from database
+    const { session, dealtCards, bets } = await storage.restoreGameStateFromDatabase(gameId);
+    
+    // Restore game state object
+    await currentGameState.withLock(async () => {
+      currentGameState.gameId = session.gameId;
+      currentGameState.openingCard = session.openingCard || null;
+      currentGameState.phase = session.phase as GamePhase;
+      currentGameState.currentRound = (session as any).current_round || 1;
+      currentGameState.winner = session.winner || null;
+      currentGameState.winningCard = session.winningCard || null;
+      
+      // Restore timer
+      if (session.currentTimer !== undefined && session.currentTimer !== null) {
+        // Calculate remaining time if timer was running
+        const timerStartedAt = (session as any).timer_started_at 
+          ? new Date((session as any).timer_started_at) 
+          : null;
+        const timerDuration = (session as any).timer_duration || 30;
+        
+        if (timerStartedAt && session.phase === 'betting') {
+          currentGameState.timerStartedAt = timerStartedAt;
+          currentGameState.timerDuration = timerDuration;
+          const elapsed = Math.floor((Date.now() - timerStartedAt.getTime()) / 1000);
+          currentGameState.timer = Math.max(0, timerDuration - elapsed);
+        } else {
+          currentGameState.timer = session.currentTimer || 0;
+        }
+      }
+      
+      // Restore dealt cards
+      currentGameState.clearCards();
+      dealtCards.forEach((card) => {
+        if (card.side === 'andar') {
+          currentGameState.addAndarCard(card.card);
+        } else if (card.side === 'bahar') {
+          currentGameState.addBaharCard(card.card);
+        }
+      });
+      
+      // Restore bets
+      currentGameState.round1Bets = { andar: 0, bahar: 0 };
+      currentGameState.round2Bets = { andar: 0, bahar: 0 };
+      currentGameState.userBets.clear();
+      
+      bets.forEach((bet) => {
+        const amount = parseFloat(bet.amount);
+        const round = bet.round === '1' || bet.round === 1 ? 1 : 2;
+        
+        if (round === 1) {
+          currentGameState.round1Bets[bet.side as 'andar' | 'bahar'] += amount;
+        } else {
+          currentGameState.round2Bets[bet.side as 'andar' | 'bahar'] += amount;
+        }
+        
+        // Restore user bets map
+        if (!currentGameState.userBets.has(bet.userId)) {
+          currentGameState.userBets.set(bet.userId, {
+            round1: { andar: 0, bahar: 0 },
+            round2: { andar: 0, bahar: 0 }
+          });
+        }
+        
+        const userBets = currentGameState.userBets.get(bet.userId)!;
+        if (round === 1) {
+          userBets.round1[bet.side as 'andar' | 'bahar'] += amount;
+        } else {
+          userBets.round2[bet.side as 'andar' | 'bahar'] += amount;
+        }
+      });
+      
+      // Set betting locked based on phase
+      currentGameState.bettingLocked = session.phase !== 'betting';
+    });
+    
+    // Restore timer if game is in betting phase
+    if (session.phase === 'betting' && currentGameState.timer > 0) {
+      const remainingTime = currentGameState.getRemainingTimer();
+      if (remainingTime > 0) {
+        // Restart timer with remaining time
+        if (typeof (global as any).startTimer === 'function') {
+          (global as any).startTimer(remainingTime, () => {
+            console.log('🎯 Restored timer expired, moving to dealing phase');
+            currentGameState.phase = 'dealing';
+            currentGameState.bettingLocked = true;
+            
+            if (typeof (global as any).broadcast !== 'undefined') {
+              (global as any).broadcast({
+                type: 'phase_change',
+                data: {
+                  phase: 'dealing',
+                  round: currentGameState.currentRound,
+                  message: 'Betting closed. Admin can now deal cards.'
+                }
+              });
+            }
+          });
+        }
+      }
+    }
+    
+    console.log('✅ Game state restored successfully:', {
+      gameId: currentGameState.gameId,
+      phase: currentGameState.phase,
+      currentRound: currentGameState.currentRound,
+      timer: currentGameState.timer,
+      dealtCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
+      totalBets: currentGameState.userBets.size
+    });
+    
+    // Notify connected clients about restored state
+    if (typeof (global as any).broadcast !== 'undefined') {
+      (global as any).broadcast({
+        type: 'game_state_restored',
+        data: {
+          message: 'Game state restored from database',
+          gameId: currentGameState.gameId,
+          phase: currentGameState.phase,
+          currentRound: currentGameState.currentRound
+        }
+      });
+    }
+    
+    // Invalidate cache to ensure fresh state
+    invalidateGameStateCache();
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to restore game state from database:', error);
+    // Don't throw - allow server to start with clean state
+    return false;
+  }
+}
 
 // Helper function to get appropriate join message
 const getJoinMessage = (phase: string, currentRound: number): string => {
@@ -543,12 +886,27 @@ function broadcastToRole(message: any, role: 'player' | 'admin') {
 
 // Timer management
 function startTimer(duration: number, onComplete: () => void) {
+  // Clear any existing timer
   if (currentGameState.timerInterval) {
     clearInterval(currentGameState.timerInterval);
   }
   
+  // Set timer values
   currentGameState.timer = duration;
+  currentGameState.timerDuration = duration;
+  currentGameState.timerStartedAt = new Date();
   currentGameState.bettingLocked = false;
+  
+  // Save timer start time to database
+  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+    storage.updateGameSession(currentGameState.gameId, {
+      currentTimer: duration,
+      timerStartedAt: currentGameState.timerStartedAt,
+      timerDuration: duration
+    } as any).catch(err => {
+      console.error('Failed to save timer start time:', err);
+    });
+  }
   
   broadcast({
     type: 'timer_update',
@@ -559,8 +917,20 @@ function startTimer(duration: number, onComplete: () => void) {
     }
   });
   
+  // Invalidate cache when timer starts
+  invalidateGameStateCache();
+  
   currentGameState.timerInterval = setInterval(() => {
     currentGameState.timer--;
+    
+    // Update database timer value periodically (every 5 seconds to reduce DB load)
+    if (currentGameState.timer % 5 === 0 && currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+      storage.updateGameSession(currentGameState.gameId, {
+        currentTimer: currentGameState.timer
+      } as any).catch(err => {
+        console.error('Failed to update timer:', err);
+      });
+    }
     
     broadcast({
       type: 'timer_update',
@@ -577,7 +947,13 @@ function startTimer(duration: number, onComplete: () => void) {
         currentGameState.timerInterval = null;
       }
       
+      currentGameState.timer = 0;
+      currentGameState.timerStartedAt = null;
       currentGameState.bettingLocked = true;
+      
+      // Invalidate cache when timer expires
+      invalidateGameStateCache();
+      
       onComplete();
     }
   }, 1000);
@@ -839,8 +1215,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.log(`[WS] Client ${client.userId} added to active clients. Total: ${clients.size}`);
               console.log(`[WebRTC] Client registered with signaling: ${webrtcClientId}`);
                
-              // Get current game state for this user
-              const gameStateForUser = await getCurrentGameStateForUser(client.userId);
+              // Get current game state for this user (pass role to handle admin vs player)
+              const gameStateForUser = await getCurrentGameStateForUser(client.userId, decoded.role);
                
               // Send authentication success with game state
               ws.send(JSON.stringify({
@@ -994,12 +1370,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Route based on the nested signal type
             switch (signalData.type) {
               case 'stream-start':
-                console.log('🎬 Stream start signal from admin');
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log('🎬 [SERVER] Stream start signal from admin');
+                console.log(`🎬 [SERVER] Admin ID: ${webrtcClientId}`);
+                console.log(`🎬 [SERVER] StreamId: ${signalData.streamId || 'auto-generated'}`);
+                console.log(`🎬 [SERVER] Full signalData:`, JSON.stringify(signalData, null, 2));
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                
+                const streamId = signalData.streamId || `stream-${Date.now()}`;
+                console.log(`🎬 [SERVER] Processing stream-start with streamId: ${streamId}`);
+                
                 webrtcSignaling.handleMessage(webrtcClientId, {
                   type: 'stream-start',
                   from: webrtcClientId,
-                  streamId: signalData.streamId || `stream-${Date.now()}`
+                  streamId: streamId
                 });
+                
+                console.log(`✅ [SERVER] Stream-start handled and broadcasted to all players`);
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                 break;
                 
               case 'stream-stop':
@@ -1044,19 +1432,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 break;
                 
               case 'offer':
-                console.log('📤 WebRTC offer from admin');
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log('📤 [SERVER] WebRTC offer from admin');
+                console.log(`📤 [SERVER] Offer to: ${signalData.to}`);
+                console.log(`📤 [SERVER] SDP type: ${typeof signalData.sdp}`);
+                console.log(`📤 [SERVER] SDP object type: ${signalData.sdp?.type}`);
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                 if (client.role === 'admin') {
+                  // ✅ CRITICAL FIX: Pass the entire SDP object (RTCSessionDescriptionInit) through
+                  // Don't extract just the string - the player expects the full object
                   webrtcSignaling.handleMessage(webrtcClientId, {
                     type: 'offer',
                     from: webrtcClientId,
-                    sdp: signalData.sdp,
+                    to: signalData.to, // ✅ CRITICAL: Pass the 'to' field for player client ID
+                    sdp: signalData.sdp, // ✅ Pass full RTCSessionDescriptionInit object
                     streamId: signalData.streamId
                   });
+                  console.log(`✅ [SERVER] Offer routed to player ${signalData.to}`);
                 }
                 break;
                 
               case 'answer':
-                console.log('📥 WebRTC answer from player');
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log('📥 [SERVER] WebRTC answer from player');
+                console.log(`📥 [SERVER] Answer from: ${webrtcClientId}`);
+                console.log(`📥 [SERVER] Answer to: ${signalData.to || 'auto-detect'}`);
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                 if (client.role === 'player') {
                   webrtcSignaling.handleMessage(webrtcClientId, {
                     type: 'answer',
@@ -1064,6 +1465,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     to: signalData.to || undefined,
                     sdp: signalData.sdp
                   });
+                  console.log(`✅ [SERVER] Answer routed to admin`);
                 }
                 break;
                 
@@ -1075,6 +1477,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   to: signalData.to || undefined,
                   candidate: signalData.candidate
                 });
+                break;
+              
+              // ✅ FIX: Add viewer-join handler
+              case 'viewer-join':
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log('👤 [SERVER] Viewer join request from player');
+                console.log(`👤 [SERVER] Player ID: ${webrtcClientId}`);
+                console.log(`👤 [SERVER] StreamId: ${signalData.streamId || 'default-stream'}`);
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                if (client.role === 'player') {
+                  webrtcSignaling.handleMessage(webrtcClientId, {
+                    type: 'viewer-join',
+                    from: webrtcClientId,
+                    streamId: signalData.streamId || 'default-stream'
+                  });
+                  console.log(`✅ [SERVER] Viewer-join processed, will notify admin if stream active`);
+                }
                 break;
                 
               default:
@@ -1288,8 +1707,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
     
+    // ✅ CRITICAL FIX: Store interval references for proper cleanup
+    const intervals: {
+      activityInterval?: NodeJS.Timeout;
+      pingInterval?: NodeJS.Timeout;
+    } = {};
+    wsIntervals.set(ws, intervals);
+    
     // Activity monitoring for authenticated clients
-    const activityInterval = setInterval(() => {
+    intervals.activityInterval = setInterval(() => {
       const now = Date.now();
       const activityThreshold = 5 * 60 * 1000; // 5 minutes
       const tokenExpiryThreshold = 2 * 60 * 1000; // 2 minutes before expiry
@@ -1339,11 +1765,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }, 60000); // Check every minute
     
-    // Handle connection close
+    // ✅ CRITICAL FIX: Handle connection close with proper cleanup
     ws.on('close', () => {
       console.log('WebSocket connection closed');
-      // Cleanup activity monitor
-      try { clearInterval(activityInterval); } catch {}
+      
+      // ✅ Clear all intervals for this connection
+      const connIntervals = wsIntervals.get(ws);
+      if (connIntervals) {
+        if (connIntervals.activityInterval) {
+          clearInterval(connIntervals.activityInterval);
+        }
+        if (connIntervals.pingInterval) {
+          clearInterval(connIntervals.pingInterval);
+        }
+        wsIntervals.delete(ws);
+      }
+      
+      // Cleanup activity monitor (backup cleanup)
+      try { 
+        if (intervals.activityInterval) {
+          clearInterval(intervals.activityInterval);
+        }
+      } catch {}
+      
       if (client && clients.has(client)) {
         clients.delete(client);
         console.log(`Client ${client.userId} removed. Active clients: ${clients.size}`);
@@ -1362,14 +1806,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Don't remove the client immediately - let the close event handle it
     });
     
-    // Set up ping/pong to detect dead connections (Keep-alive)
-    const pingInterval = setInterval(() => {
+    // ✅ CRITICAL FIX: Set up ping/pong with proper cleanup
+    intervals.pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
         // Only send ping if the connection is still open
         ws.ping();
       } else {
         // Connection is no longer open, clear the interval
-        clearInterval(pingInterval);
+        if (intervals.pingInterval) {
+          clearInterval(intervals.pingInterval);
+          intervals.pingInterval = undefined;
+        }
       }
     }, 30000); // Ping every 30 seconds for better connection keeping
     
@@ -1652,6 +2099,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stream Routes - Dual streaming (RTMP and WebRTC)
   app.use("/api/stream", streamRoutes);
   
+  // ✅ Stream Status API endpoint for restoration on refresh
+  app.get("/api/admin/stream/status", requireAuth, async (req, res) => {
+    try {
+      const adminId = (req as any).user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      // Check if user is admin
+      if ((req as any).user?.role !== 'admin' && (req as any).user?.role !== 'super_admin') {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden - Admin access required'
+        });
+      }
+
+      // Get stream status from WebRTC signaling server
+      const status = webrtcSignaling.getStreamStatus(adminId);
+      
+      res.json({
+        success: true,
+        isActive: status.isActive,
+        streamId: status.streamId
+      });
+    } catch (error) {
+      console.error('Error getting stream status:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  });
+  
   // Admin Routes
   app.use("/api/admin", adminUserRoutes);
   app.use("/api/user", userRoutes);
@@ -1738,14 +2221,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (result.success) {
         const updatedUser = await storage.getUser(userId);
         if (updatedUser) {
-          console.log(`💰 Admin processed payment: ${userId} -> ${parseFloat(updatedUser.balance)} (${type})`);
+          console.log(`💰 Admin processed payment: ${userId} -> ${parseBalance(updatedUser.balance)} (${type})`);
           
           // Add updated balance to the result for API consumers
           const responseWithUser = {
             ...result,
             user: {
               id: userId,
-              balance: parseFloat(updatedUser.balance)
+              balance: parseBalance(updatedUser.balance)
             }
           };
           res.json(responseWithUser);
@@ -1829,7 +2312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        const currentBalance = parseFloat(user.balance) || 0;
+        const currentBalance = parseBalance(user.balance);
         if (currentBalance < numAmount) {
           return res.status(400).json({
             success: false,
@@ -1950,7 +2433,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get updated user balance
       const updatedUser = await storage.getUser(request.user_id);
-      const newBalance = updatedUser ? parseFloat(updatedUser.balance) : 0;
+      const newBalance = updatedUser ? parseBalance(updatedUser.balance) : 0;
       
       // Send WebSocket notification to user about payment approval
       try {
@@ -2699,14 +3182,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (result.success) {
         const updatedUser = await storage.getUser(userId);
         if (updatedUser) {
-          console.log(`💰 Admin processed payment: ${userId} -> ${parseFloat(updatedUser.balance)} (${type})`);
+          console.log(`💰 Admin processed payment: ${userId} -> ${parseBalance(updatedUser.balance)} (${type})`);
           
           // Add updated balance to the result for API consumers
           const responseWithUser = {
             ...result,
             user: {
               id: userId,
-              balance: parseFloat(updatedUser.balance)
+              balance: parseBalance(updatedUser.balance)
             }
           };
           res.json(responseWithUser);
@@ -2887,7 +3370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        const currentBalance = parseFloat(user.balance) || 0;
+        const currentBalance = parseBalance(user.balance);
         if (currentBalance < numAmount) {
           return res.status(400).json({
             success: false,
@@ -3657,24 +4140,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { limit = 50 } = req.query;
       const limitNum = parseInt(limit as string) || 50;
+      
+      console.log('📜 API: Fetching game history with limit:', limitNum);
+      
       const history = await storage.getGameHistory(limitNum);
+      
       // Ensure we always return an array, even if empty
-      const formattedHistory = (history || []).map(game => ({
-        ...game,
-        // Ensure all required fields have defaults
-        totalBets: game.totalBets || 0,
-        andarTotalBet: game.andarTotalBet || 0,
-        baharTotalBet: game.baharTotalBet || 0,
-        totalWinnings: game.totalWinnings || 0,
-        andarBetsCount: game.andarBetsCount || 0,
-        baharBetsCount: game.baharBetsCount || 0,
-        totalPlayers: game.totalPlayers || 0,
-        round: game.round || 1
-      }));
+      const formattedHistory = (history || []).map(game => {
+        // Validate and ensure all required fields are present
+        const formatted = {
+          id: game.id || '',
+          gameId: game.gameId || game.id || '',
+          openingCard: game.openingCard || '',
+          winner: (game.winner || '').toLowerCase() as 'andar' | 'bahar',
+          winningCard: game.winningCard || '',
+          totalCards: game.totalCards || 0,
+          round: game.round || 1,
+          createdAt: game.createdAt || new Date().toISOString(),
+          // Statistics fields (with defaults)
+          totalBets: game.totalBets || 0,
+          andarTotalBet: game.andarTotalBet || 0,
+          baharTotalBet: game.baharTotalBet || 0,
+          totalWinnings: game.totalWinnings || 0,
+          andarBetsCount: game.andarBetsCount || 0,
+          baharBetsCount: game.baharBetsCount || 0,
+          totalPlayers: game.totalPlayers || 0,
+        };
+
+        // Ensure winner is valid
+        if (formatted.winner !== 'andar' && formatted.winner !== 'bahar') {
+          console.warn('⚠️ API: Invalid winner value in history:', formatted.winner);
+          formatted.winner = 'andar'; // Default fallback
+        }
+
+        return formatted;
+      });
+
+      console.log(`✅ API: Returning ${formattedHistory.length} game history entries`);
+      
       res.json(formattedHistory);
-    } catch (error) {
-      console.error("Get game history error:", error);
-      res.status(500).json({ error: "Failed to get game history" });
+    } catch (error: any) {
+      console.error("❌ API: Get game history error:", {
+        message: error.message,
+        stack: error.stack
+      });
+      res.status(500).json({ 
+        error: "Failed to get game history",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
   
@@ -3960,6 +4473,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ success: false, error: 'Failed to retrieve game history' });
     }
   });
+  
+  // NEW: Restore game state from database on startup
+  // Call this AFTER all routes are registered but BEFORE server starts listening
+  // This ensures we have access to storage, broadcast, etc.
+  restoreGameStateFromDatabase().then(restored => {
+    if (restored) {
+      console.log('✅ Game state restored from database on startup');
+    } else {
+      console.log('ℹ️ No active game to restore - starting with clean state');
+    }
+  }).catch(err => {
+    console.error('⚠️ Error during game state restoration:', err);
+    // Continue anyway - server should start even if restoration fails
+  });
 
   return httpServer;
 }
@@ -3975,12 +4502,16 @@ async function transitionToRound2() {
     try {
       await storage.updateGameSession(currentGameState.gameId, {
         phase: 'betting',
-        currentTimer: 30
-      });
+        currentTimer: 30,
+        round: 2 // Update current round
+      } as any);
     } catch (error) {
       console.error('⚠️ Error updating game session for Round 2:', error);
     }
   }
+  
+  // Invalidate cache when transitioning to round 2
+  invalidateGameStateCache();
   
   broadcast({
     type: 'start_round_2',
@@ -4024,6 +4555,9 @@ async function transitionToRound3() {
   
   currentGameState.currentRound = 3;
   currentGameState.phase = 'dealing';
+  
+  // Invalidate cache when transitioning to round 3
+  invalidateGameStateCache();
   currentGameState.bettingLocked = true;
   currentGameState.timer = 0;
   
@@ -4129,7 +4663,7 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     try {
       // Get updated user balance after payout
       const updatedUser = await storage.getUser(userId);
-      const newBalance = updatedUser ? parseFloat(updatedUser.balance) : 0;
+      const newBalance = updatedUser ? parseBalance(updatedUser.balance) : 0;
       
       clients.forEach(client => {
         if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
@@ -4301,31 +4835,88 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   });
   
   // Only save to database if not in test mode
-  console.log('💾 Saving game history:', {
+  const isValidGameId = currentGameState.gameId && currentGameState.gameId !== 'default-game';
+  
+  // Validate all required fields before saving
+  const hasRequiredFields = 
+    isValidGameId &&
+    currentGameState.openingCard &&
+    winner &&
+    winningCard &&
+    (winner === 'andar' || winner === 'bahar');
+  
+  console.log('💾 Attempting to save game history:', {
     gameId: currentGameState.gameId,
+    gameIdType: typeof currentGameState.gameId,
+    isValid: isValidGameId,
+    hasRequiredFields,
     openingCard: currentGameState.openingCard,
     winner,
     winningCard,
     totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
-    isValid: currentGameState.gameId && currentGameState.gameId !== 'default-game'
+    phase: currentGameState.phase,
+    currentRound: currentGameState.currentRound
   });
   
-  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+  if (hasRequiredFields) {
     try {
-      const historyResult = await storage.saveGameHistory({
-        gameId: currentGameState.gameId,
+      const historyData = {
+        gameId: currentGameState.gameId!,
         openingCard: currentGameState.openingCard!,
+        winner: winner as 'andar' | 'bahar',
+        winningCard: winningCard,
+        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
+        round: currentGameState.currentRound || 1
+      };
+      
+      console.log('📝 Calling storage.saveGameHistory() with validated data:', historyData);
+      
+      const historyResult = await storage.saveGameHistory(historyData as any);
+      
+      console.log('✅ Game history saved successfully:', {
+        id: historyResult?.id,
+        gameId: historyResult?.game_id || historyResult?.gameId,
+        openingCard: historyResult?.opening_card || historyResult?.openingCard,
+        winner: historyResult?.winner,
+        winningCard: historyResult?.winning_card || historyResult?.winningCard,
+        round: historyResult?.round || 1,
+        created: historyResult?.created_at
+      });
+    } catch (error: any) {
+      console.error('❌ ERROR saving game history:', {
+        message: error.message,
+        stack: error.stack,
+        gameId: currentGameState.gameId,
+        openingCard: currentGameState.openingCard,
         winner,
         winningCard,
-        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length
+        errorDetails: error
       });
-      console.log('✅ Game history saved:', historyResult);
-    } catch (error) {
-      console.error('⚠️ Error saving game history:', error);
     }
   } else {
-    console.log('⚠️ Skipping game history save - invalid gameId:', currentGameState.gameId);
+    const missingFields = [];
+    if (!isValidGameId) missingFields.push('gameId');
+    if (!currentGameState.openingCard) missingFields.push('openingCard');
+    if (!winner) missingFields.push('winner');
+    if (!winningCard) missingFields.push('winningCard');
+    if (winner && winner !== 'andar' && winner !== 'bahar') missingFields.push('winner (invalid value)');
+    
+    console.warn('⚠️ SKIPPING game history save - missing required fields:', {
+      reason: 'Invalid or missing required fields',
+      gameId: currentGameState.gameId,
+      isNull: currentGameState.gameId === null,
+      isUndefined: currentGameState.gameId === undefined,
+      isDefault: currentGameState.gameId === 'default-game',
+      isEmpty: currentGameState.gameId === '',
+      missingFields,
+      openingCard: currentGameState.openingCard || 'MISSING',
+      winner: winner || 'MISSING',
+      winningCard: winningCard || 'MISSING'
+    });
   }
+  
+  // Invalidate cache after game completes
+  invalidateGameStateCache();
   
   // Auto-restart: Reset to idle after 5 seconds
   console.log('⏰ Auto-restarting game in 5 seconds...');

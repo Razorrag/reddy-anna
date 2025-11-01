@@ -15,11 +15,15 @@ import {
   Video,
   RefreshCw,
   TrendingDown,
-  DollarSign
+  DollarSign,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Clock,
+  ExternalLink
 } from "lucide-react";
 import AdminLayout from "@/components/AdminLayout";
-import BetMonitoringDashboard from "@/components/BetMonitoringDashboard";
 import { useAdminStats } from "@/hooks/useAdminStats";
+import StreamControlPanelAdvanced from "@/components/AdminGamePanel/StreamControlPanelAdvanced";
 
 export default function Admin() {
   const { stats, loading, error, refetch } = useAdminStats();
@@ -59,7 +63,7 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Quick Stats */}
+        {/* Financial Stats */}
         <div className="max-w-7xl mx-auto mb-8">
           {error && (
             <div className="mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400">
@@ -70,44 +74,14 @@ export default function Admin() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gold">Total Users</CardTitle>
-                <Users className="h-4 w-4 text-gold" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-white">
-                  {loading ? '...' : (stats?.totalUsers || 0).toLocaleString('en-IN')}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  {loading ? 'Loading...' : `${stats?.activeUsers || 0} active`}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gold">Today's Games</CardTitle>
-                <Activity className="h-4 w-4 text-gold" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-white">
-                  {loading ? '...' : stats?.totalGamesToday || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  {loading ? 'Loading...' : `${stats?.activeGames || 0} live now`}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gold">Total Bets</CardTitle>
+                <CardTitle className="text-sm font-medium text-gold">Today's Bets</CardTitle>
                 <DollarSign className="h-4 w-4 text-gold" />
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-white">
                   {loading ? '...' : formatCurrency(stats?.todayBets || 0)}
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Today's bets</p>
+                <p className="text-xs text-gray-400 mt-1">Total bets today</p>
               </CardContent>
             </Card>
 
@@ -129,56 +103,133 @@ export default function Admin() {
                 <p className="text-xs text-gray-400 mt-1">Profit/Loss</p>
               </CardContent>
             </Card>
-          </div>
-          
-          {/* User Status Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-            <Card className="bg-black/40 border-green-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
+
+            <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-green-400">Active Users</CardTitle>
-                <Users className="h-4 w-4 text-green-400" />
+                <CardTitle className="text-sm font-medium text-gold">Today's Payouts</CardTitle>
+                <Gift className="h-4 w-4 text-green-400" />
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-green-400">
-                  {loading ? '...' : stats?.activeUsers || 0}
+                  {loading ? '...' : formatCurrency(stats?.todayPayouts || 0)}
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Currently active</p>
+                <p className="text-xs text-gray-400 mt-1">Paid to winners</p>
               </CardContent>
             </Card>
 
-            <Card className="bg-black/40 border-yellow-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
+            <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-yellow-400">Suspended</CardTitle>
-                <Activity className="h-4 w-4 text-yellow-400" />
+                <CardTitle className="text-sm font-medium text-gold">Net House Profit</CardTitle>
+                <CreditCard className="h-4 w-4 text-gold" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-yellow-400">
-                  {loading ? '...' : stats?.suspendedUsers || 0}
+                <div className={`text-3xl font-bold ${
+                  (stats?.netHouseProfit || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                }`}>
+                  {loading ? '...' : formatCurrency(stats?.netHouseProfit || 0)}
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Temporarily suspended</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-red-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-red-400">Banned</CardTitle>
-                <Users className="h-4 w-4 text-red-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-red-400">
-                  {loading ? '...' : stats?.bannedUsers || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Permanently banned</p>
+                <p className="text-xs text-gray-400 mt-1">All-time profit</p>
               </CardContent>
             </Card>
           </div>
         </div>
 
-        {/* Bet Monitoring (moved from Game Control) */}
+        {/* Live Pending Requests Monitoring */}
         <div className="max-w-7xl mx-auto mb-8">
-          <h2 className="text-2xl font-bold text-gold mb-4">🧭 Bet Monitor</h2>
-          <div className="bg-black/40 border-gold/30 backdrop-blur-sm rounded-lg p-4">
-            <BetMonitoringDashboard />
+          <h2 className="text-2xl font-bold text-gold mb-4 flex items-center gap-2">
+            <Clock className="w-6 h-6" />
+            Live Pending Requests
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Pending Deposits - Clickable */}
+            <Link href="/admin/payments?filter=deposit&status=pending">
+              <Card className="bg-gradient-to-br from-blue-900/40 to-blue-800/40 border-blue-400/50 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer relative overflow-hidden group">
+                <div className="absolute top-0 right-0 bg-blue-500/20 px-3 py-1 rounded-bl-lg flex items-center gap-1 text-xs text-blue-300">
+                  <ExternalLink className="w-3 h-3" />
+                  View All
+                </div>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center">
+                        <ArrowDownLeft className="w-6 h-6 text-blue-400" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-blue-300 text-lg">Pending Deposits</CardTitle>
+                        <CardDescription className="text-blue-400/70 text-xs">
+                          Awaiting approval
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm text-gray-400">Count:</span>
+                      <span className="text-4xl font-bold text-blue-400">
+                        {loading ? '...' : stats?.pendingDeposits || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between pt-2 border-t border-blue-400/20">
+                      <span className="text-sm text-gray-400">Total Amount:</span>
+                      <span className="text-2xl font-bold text-white">
+                        {loading ? '...' : formatCurrency(stats?.pendingDepositsAmount || 0)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-blue-300/70 mt-2 flex items-center gap-1">
+                      <Activity className="w-3 h-3 animate-pulse" />
+                      Auto-refreshing every 15 seconds
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+
+            {/* Pending Withdrawals - Clickable */}
+            <Link href="/admin/payments?filter=withdrawal&status=pending">
+              <Card className="bg-gradient-to-br from-red-900/40 to-red-800/40 border-red-400/50 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer relative overflow-hidden group">
+                <div className="absolute top-0 right-0 bg-red-500/20 px-3 py-1 rounded-bl-lg flex items-center gap-1 text-xs text-red-300">
+                  <ExternalLink className="w-3 h-3" />
+                  View All
+                </div>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
+                        <ArrowUpRight className="w-6 h-6 text-red-400" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-red-300 text-lg">Pending Withdrawals</CardTitle>
+                        <CardDescription className="text-red-400/70 text-xs">
+                          Awaiting approval
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm text-gray-400">Count:</span>
+                      <span className="text-4xl font-bold text-red-400">
+                        {loading ? '...' : stats?.pendingWithdrawals || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between pt-2 border-t border-red-400/20">
+                      <span className="text-sm text-gray-400">Total Amount:</span>
+                      <span className="text-2xl font-bold text-white">
+                        {loading ? '...' : formatCurrency(stats?.pendingWithdrawalsAmount || 0)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-red-300/70 mt-2 flex items-center gap-1">
+                      <Activity className="w-3 h-3 animate-pulse" />
+                      Auto-refreshing every 15 seconds
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           </div>
         </div>
 
@@ -229,107 +280,21 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Additional Stats Row */}
+        {/* Stream Settings */}
         <div className="max-w-7xl mx-auto mb-8">
-          <h2 className="text-2xl font-bold text-gold mb-4">📈 Financial Analytics</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="bg-black/40 border-blue-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-blue-300">Pending Deposits</CardTitle>
-                <TrendingUp className="h-4 w-4 text-blue-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-blue-400">
-                  {loading ? '...' : stats?.pendingDeposits || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Awaiting approval</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-red-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-red-300">Pending Withdrawals</CardTitle>
-                <TrendingDown className="h-4 w-4 text-red-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-red-400">
-                  {loading ? '...' : stats?.pendingWithdrawals || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Awaiting approval</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-green-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-green-300">Today's Payouts</CardTitle>
-                <DollarSign className="h-4 w-4 text-green-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-green-400">
-                  {loading ? '...' : formatCurrency(stats?.todayPayouts || 0)}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Paid to winners</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-purple-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-purple-300">Active Players</CardTitle>
-                <Users className="h-4 w-4 text-purple-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-purple-400">
-                  {loading ? '...' : stats?.activePlayers || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Online now</p>
-              </CardContent>
-            </Card>
+          <h2 className="text-2xl font-bold text-gold mb-4 flex items-center gap-2">
+            <Video className="w-6 h-6" />
+            Stream Settings
+          </h2>
+          <div className="bg-black/40 border-gold/30 backdrop-blur-sm rounded-lg p-6">
+            <StreamControlPanelAdvanced />
           </div>
-        </div>
-
-        {/* Analytics Dashboard Link */}
-        <div className="max-w-7xl mx-auto mb-8">
-          <Link href="/admin/analytics">
-            <Card className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 border-purple-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-gold text-2xl mb-2">📊 View Detailed Analytics</CardTitle>
-                    <CardDescription className="text-gray-300">
-                      See comprehensive analytics including revenue, unique players, peak betting hours, and more
-                    </CardDescription>
-                  </div>
-                  <BarChart3 className="h-12 w-12 text-gold" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-gray-400">
-                  Click here to view real-time analytics dashboard with all metrics from the database
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
         </div>
 
         {/* Management Cards */}
         <div className="max-w-7xl mx-auto">
           <h2 className="text-2xl font-bold text-gold mb-6">📊 Management Features</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Stream Settings */}
-            <Link href="/admin/stream-settings">
-              <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer">
-                <CardHeader>
-                  <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                    <Video className="w-8 h-8 text-white" />
-                  </div>
-                  <CardTitle className="text-center text-gold text-xl mb-2">Stream Settings</CardTitle>
-                  <CardDescription className="text-center text-gray-400">
-                    Configure WebRTC & RTMP streaming
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-
             {/* Game Control */}
             <Link href="/admin/game">
               <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer">

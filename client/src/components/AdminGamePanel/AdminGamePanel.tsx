@@ -24,7 +24,8 @@ import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
 import PersistentSidePanel from '@/components/PersistentSidePanel';
 import WinnerCelebration from '@/components/WinnerCelebration';
-import StreamControlPanel from './StreamControlPanel';
+import StreamControlPanelAdvanced from './StreamControlPanelAdvanced';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Home } from 'lucide-react';
 
 const AdminGamePanel: React.FC = () => {
@@ -128,17 +129,55 @@ const AdminGamePanel: React.FC = () => {
 
         {/* Management Dashboard Removed - Access from main admin dashboard */}
 
-        {/* Tab Content - Keep StreamControlPanel mounted but hidden to prevent stream from stopping */}
-        <div style={{ display: activeTab === 'stream' ? 'block' : 'none' }}>
-          <StreamControlPanel />
+        {/* Tab Content - StreamControlPanelAdvanced uses persistent context, safe to hide/show */}
+        {/* ✅ Use CSS class instead of display:none to prevent lifecycle issues */}
+        {/* ✅ Wrap with ErrorBoundary to prevent admin page collapse */}
+        <div className={activeTab === 'stream' ? '' : 'hidden'}>
+          <ErrorBoundary
+            fallback={
+              <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-8 text-center">
+                <h2 className="text-red-300 text-xl mb-4">⚠️ Stream Control Error</h2>
+                <p className="text-red-400 mb-4">An error occurred in the stream control panel.</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
+                >
+                  Reload Page
+                </button>
+              </div>
+            }
+          >
+            <StreamControlPanelAdvanced />
+          </ErrorBoundary>
         </div>
         
         {activeTab === 'game' && (
           <div className="space-y-4">
-            {/* STEP 1: Opening Card Selection (Only at start) */}
-            {(gameState.phase === 'idle' || gameState.phase === 'opening') && (
+            {/* Debug Info */}
+            <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-3 text-sm">
+              <span className="text-blue-300">Current Phase: <strong className="text-white">{gameState.phase}</strong></span>
+              <span className="ml-4 text-blue-300">Round: <strong className="text-white">{gameState.currentRound}</strong></span>
+              {gameState.phase !== 'idle' && gameState.phase !== 'opening' && (
+                <span className="ml-4 text-yellow-300">→ Click "Reset Game" to start new game</span>
+              )}
+            </div>
+
+            {/* STEP 1: Opening Card Selection - ALWAYS VISIBLE */}
+            {/* Show in all phases - when complete, it's disabled but visible so admin knows to reset */}
+            <div className={
+              (gameState.phase === 'idle' || gameState.phase === 'opening' || !gameState.phase) 
+                ? '' 
+                : 'opacity-60 pointer-events-none'
+            }>
+              {gameState.phase === 'complete' && (
+                <div className="bg-yellow-900/40 border border-yellow-500/50 rounded-xl p-4 mb-4 text-center">
+                  <div className="text-lg font-bold text-yellow-300 mb-1">
+                    🎉 Game Complete! Click "Reset Game" above to start a new game
+                  </div>
+                </div>
+              )}
               <OpeningCardSelector />
-            )}
+            </div>
 
           {/* STEP 2: Betting Phase - Efficient Grid Layout */}
           {gameState.phase === 'betting' && (
