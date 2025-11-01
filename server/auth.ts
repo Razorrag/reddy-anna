@@ -20,7 +20,21 @@ export const hashPassword = async (password: string): Promise<string> => {
 };
 
 export const validatePassword = async (password: string, hashedPassword: string): Promise<boolean> => {
-  return await bcrypt.compare(password, hashedPassword);
+  try {
+    console.log('🔐 Comparing password:', {
+      passwordLength: password?.length,
+      hashedPasswordLength: hashedPassword?.length,
+      passwordPreview: password?.substring(0, 3) + '***',
+      hashedPasswordPreview: hashedPassword?.substring(0, 10) + '...'
+    });
+    
+    const result = await bcrypt.compare(password, hashedPassword);
+    console.log('🔑 Password comparison result:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Error during password validation:', error);
+    return false;
+  }
 };
 
 // Generate JWT access token with shorter expiration
@@ -280,13 +294,20 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
 
     // Verify password
     if (!user.password_hash) {
-      console.log('No password found for user:', user.id);
+      console.log('❌ No password hash found for user:', user.id);
       return { success: false, error: 'Invalid credentials' };
     }
     
+    console.log('🔐 Validating password for user:', {
+      userId: user.id,
+      hasPasswordHash: !!user.password_hash,
+      passwordHashLength: user.password_hash?.length,
+      passwordProvidedLength: password.length
+    });
+    
     const isValid = await validatePassword(password, user.password_hash);
     if (!isValid) {
-      console.log('Invalid password for user:', user.id);
+      console.log('❌ Invalid password for user:', user.id);
       return { success: false, error: 'Invalid password' };
     }
 
@@ -329,11 +350,19 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
 // 👑 LOGIN ADMIN WITH USERNAME AND PASSWORD
 export const loginAdmin = async (username: string, password: string): Promise<AuthResult> => {
   try {
-    const sanitizedUsername = sanitizeInput(username).toLowerCase();
+    // CRITICAL FIX: Convert username to lowercase for case-insensitive login
+    // Database stores usernames in lowercase ("admin"), but users may type "Admin" or "ADMIN"
+    const sanitizedUsername = sanitizeInput(username).trim().toLowerCase();
 
-    console.log('Admin login attempt:', { sanitizedUsername, passwordProvided: !!password });
+    console.log('Admin login attempt:', { 
+      originalUsername: username,
+      sanitizedUsername, 
+      passwordProvided: !!password,
+      passwordLength: password?.length 
+    });
 
     if (!sanitizedUsername || !password) {
+      console.log('❌ Login validation failed: missing username or password');
       return { success: false, error: 'Username and password are required' };
     }
 
@@ -368,14 +397,23 @@ export const loginAdmin = async (username: string, password: string): Promise<Au
 
     // Verify admin password
     if (!admin.password_hash) {
-      console.log('No password hash found for admin:', admin.id);
+      console.log('❌ No password hash found for admin:', admin.id);
       return { success: false, error: 'Invalid credentials' };
     }
     
+    console.log('🔐 Validating password for admin:', {
+      adminId: admin.id,
+      hasPasswordHash: !!admin.password_hash,
+      passwordHashLength: admin.password_hash?.length,
+      passwordProvided: password,
+      passwordProvidedLength: password.length
+    });
+    
     const isValid = await validatePassword(password, admin.password_hash);
-    console.log('Admin password validation result:', isValid);
+    console.log('🔑 Admin password validation result:', isValid);
     
     if (!isValid) {
+      console.log('❌ Invalid password for admin:', admin.id);
       return { success: false, error: 'Invalid password' };
     }
 
