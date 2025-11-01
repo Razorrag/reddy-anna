@@ -7,6 +7,8 @@ interface WinnerCelebrationProps {
   payoutMessage: string;
   round: number;
   onComplete: () => void;
+  andarTotal?: number;
+  baharTotal?: number;
 }
 
 const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
@@ -14,7 +16,9 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
   winningCard,
   payoutMessage,
   round,
-  onComplete
+  onComplete,
+  andarTotal = 0,
+  baharTotal = 0
 }) => {
   const [countdown, setCountdown] = useState(5);
   const [showConfetti, setShowConfetti] = useState(true);
@@ -46,7 +50,7 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
     };
   }, [winner, onComplete]);
 
-  // Listen for celebration event to capture per-user win amount
+  // Listen for celebration event to capture per-user win amount and game totals
   useEffect(() => {
     const handler = (e: any) => {
       if (e?.detail?.localWinAmount != null) {
@@ -56,6 +60,11 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
     window.addEventListener('game-complete-celebration', handler as EventListener);
     return () => window.removeEventListener('game-complete-celebration', handler as EventListener);
   }, []);
+
+  // Calculate winning amounts
+  const winnerTotal = winner === 'andar' ? andarTotal : baharTotal;
+  const loserTotal = winner === 'andar' ? baharTotal : andarTotal;
+  const winnerPayout = winnerTotal * 2; // 1:1 payout = double the bet
 
   if (!winner) return null;
 
@@ -162,6 +171,7 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
               className="bg-black/40 rounded-xl p-6 mb-6 border border-gray-700"
             >
             {localWinAmount != null ? (
+              // Player view - show their personal winnings
               <div className="text-center">
                 {localWinAmount > 0 ? (
                   <div>
@@ -173,8 +183,43 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
                 )}
               </div>
             ) : (
-              <div className="text-center text-2xl font-semibold text-yellow-400">
-                {payoutMessage}
+              // Admin view - show total game winnings
+              <div className="space-y-4">
+                <div className="text-center text-2xl font-semibold text-yellow-400 mb-4">
+                  {payoutMessage}
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-600">
+                  <div className={`rounded-lg p-4 ${winner === 'andar' ? 'bg-green-900/50 border-2 border-green-500' : 'bg-red-900/50 border border-red-700'}`}>
+                    <div className="text-xs text-gray-400 mb-1">Andar Total Bets</div>
+                    <div className="text-xl font-bold text-white mb-2">
+                      ₹{andarTotal.toLocaleString('en-IN')}
+                    </div>
+                    {winner === 'andar' && (
+                      <>
+                        <div className="text-xs text-green-300 mb-1">Total Won</div>
+                        <div className="text-lg font-bold text-green-400">
+                          ₹{(andarTotal * 2).toLocaleString('en-IN')}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  
+                  <div className={`rounded-lg p-4 ${winner === 'bahar' ? 'bg-green-900/50 border-2 border-green-500' : 'bg-blue-900/50 border border-blue-700'}`}>
+                    <div className="text-xs text-gray-400 mb-1">Bahar Total Bets</div>
+                    <div className="text-xl font-bold text-white mb-2">
+                      ₹{baharTotal.toLocaleString('en-IN')}
+                    </div>
+                    {winner === 'bahar' && (
+                      <>
+                        <div className="text-xs text-green-300 mb-1">Total Won</div>
+                        <div className="text-lg font-bold text-green-400">
+                          ₹{(baharTotal * 2).toLocaleString('en-IN')}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
             </motion.div>

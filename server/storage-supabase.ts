@@ -1762,22 +1762,42 @@ export class SupabaseStorage implements IStorage {
 
   // Helper function to transform snake_case to camelCase for daily stats
   private transformDailyStats(data: any): DailyGameStatistics | null {
-    if (!data) return null;
+    if (!data) {
+      console.log('⚠️ transformDailyStats: data is null/undefined');
+      return null;
+    }
     
-    return {
+    console.log('🔄 transformDailyStats input:', {
+      id: data.id,
+      total_games: data.total_games,
+      totalGames: data.totalGames,
+      total_bets: data.total_bets,
+      totalBets: data.totalBets,
+      total_bets_type: typeof data.total_bets,
+      total_payouts: data.total_payouts,
+      total_revenue: data.total_revenue,
+      profit_loss: data.profit_loss
+    });
+    
+    // Use parseBalance for DECIMAL fields (total_bets, total_payouts, total_revenue, profit_loss)
+    // Use Number for INTEGER fields (total_games, unique_players, peak_bets_hour)
+    const transformed = {
       id: data.id,
       date: data.date ? new Date(data.date) : new Date(),
       totalGames: Number(data.total_games ?? data.totalGames ?? 0),
-      totalBets: Number(data.total_bets ?? data.totalBets ?? 0),
-      totalPayouts: Number(data.total_payouts ?? data.totalPayouts ?? 0),
-      totalRevenue: Number(data.total_revenue ?? data.totalRevenue ?? 0),
-      profitLoss: Number(data.profit_loss ?? data.profitLoss ?? 0),
+      totalBets: this.parseBalance(data.total_bets ?? data.totalBets ?? 0),
+      totalPayouts: this.parseBalance(data.total_payouts ?? data.totalPayouts ?? 0),
+      totalRevenue: this.parseBalance(data.total_revenue ?? data.totalRevenue ?? 0),
+      profitLoss: this.parseBalance(data.profit_loss ?? data.profitLoss ?? 0),
       profitLossPercentage: Number(data.profit_loss_percentage ?? data.profitLossPercentage ?? 0),
       uniquePlayers: Number(data.unique_players ?? data.uniquePlayers ?? 0),
       peakBetsHour: Number(data.peak_bets_hour ?? data.peakBetsHour ?? 0),
       createdAt: data.created_at ? new Date(data.created_at) : new Date(),
       updatedAt: data.updated_at ? new Date(data.updated_at) : new Date()
     };
+    
+    console.log('✅ transformDailyStats output:', transformed);
+    return transformed;
   }
 
   // Daily statistics methods
@@ -1789,12 +1809,26 @@ export class SupabaseStorage implements IStorage {
       .eq('date', dateStr)
       .single();
 
+    console.log('🔍 getDailyStats query:', {
+      dateStr,
+      error: error ? { code: error.code, message: error.message } : null,
+      data: data,
+      dataType: typeof data
+    });
+
     if (error && error.code !== 'PGRST116') {
       console.error('Error getting daily stats:', error);
       return null;
     }
 
-    return this.transformDailyStats(data);
+    if (!data) {
+      console.log('⚠️ No data found for date:', dateStr);
+      return null;
+    }
+
+    const transformed = this.transformDailyStats(data);
+    console.log('🔄 Transformed daily stats:', transformed);
+    return transformed;
   }
 
   async getDailyStatsByRange(startDate: Date, endDate: Date): Promise<DailyGameStatistics[]> {
@@ -1831,9 +1865,10 @@ export class SupabaseStorage implements IStorage {
       });
 
     if (error) {
-      console.error('Error creating daily stats:', error);
+      console.error('❌ Error creating daily stats:', error);
       throw error;
     }
+    console.log('✅ New daily stats record created');
   }
 
   async updateDailyStats(date: Date, updates: Partial<DailyGameStatistics>): Promise<void> {
@@ -1881,10 +1916,10 @@ export class SupabaseStorage implements IStorage {
         .from('daily_game_statistics')
         .update({
           total_games: existing.totalGames + (increments.totalGames || 0),
-          total_bets: newTotalBets,
-          total_payouts: existing.totalPayouts + (increments.totalPayouts || 0),
-          total_revenue: existing.totalRevenue + (increments.totalRevenue || 0),
-          profit_loss: newProfitLoss,
+          total_bets: newTotalBets.toString(), // Convert to string for DECIMAL field
+          total_payouts: (existing.totalPayouts + (increments.totalPayouts || 0)).toString(),
+          total_revenue: (existing.totalRevenue + (increments.totalRevenue || 0)).toString(),
+          profit_loss: newProfitLoss.toString(),
           profit_loss_percentage: newProfitLossPercentage,
           unique_players: existing.uniquePlayers + (increments.uniquePlayers || 0),
           updated_at: new Date()
@@ -1892,11 +1927,13 @@ export class SupabaseStorage implements IStorage {
         .eq('date', dateStr);
       
       if (error) {
-        console.error('Error updating daily stats:', error);
+        console.error('❌ Error updating daily stats:', error);
         throw error;
       }
+      console.log('✅ Daily stats updated in database for:', dateStr);
     } else {
       // Create new record
+      console.log('📝 Creating new daily stats record for:', dateStr);
       await this.createDailyStats({
         date,
         totalGames: increments.totalGames || 0,
@@ -1915,14 +1952,15 @@ export class SupabaseStorage implements IStorage {
   private transformMonthlyStats(data: any): MonthlyGameStatistics | null {
     if (!data) return null;
     
+    // Use parseBalance for DECIMAL fields
     return {
       id: data.id,
       monthYear: data.month_year ?? data.monthYear ?? '',
       totalGames: Number(data.total_games ?? data.totalGames ?? 0),
-      totalBets: Number(data.total_bets ?? data.totalBets ?? 0),
-      totalPayouts: Number(data.total_payouts ?? data.totalPayouts ?? 0),
-      totalRevenue: Number(data.total_revenue ?? data.totalRevenue ?? 0),
-      profitLoss: Number(data.profit_loss ?? data.profitLoss ?? 0),
+      totalBets: this.parseBalance(data.total_bets ?? data.totalBets ?? 0),
+      totalPayouts: this.parseBalance(data.total_payouts ?? data.totalPayouts ?? 0),
+      totalRevenue: this.parseBalance(data.total_revenue ?? data.totalRevenue ?? 0),
+      profitLoss: this.parseBalance(data.profit_loss ?? data.profitLoss ?? 0),
       profitLossPercentage: Number(data.profit_loss_percentage ?? data.profitLossPercentage ?? 0),
       uniquePlayers: Number(data.unique_players ?? data.uniquePlayers ?? 0),
       createdAt: data.created_at ? new Date(data.created_at) : new Date(),
@@ -2044,14 +2082,15 @@ export class SupabaseStorage implements IStorage {
   private transformYearlyStats(data: any): YearlyGameStatistics | null {
     if (!data) return null;
     
+    // Use parseBalance for DECIMAL fields
     return {
       id: data.id,
       year: Number(data.year ?? 0),
       totalGames: Number(data.total_games ?? data.totalGames ?? 0),
-      totalBets: Number(data.total_bets ?? data.totalBets ?? 0),
-      totalPayouts: Number(data.total_payouts ?? data.totalPayouts ?? 0),
-      totalRevenue: Number(data.total_revenue ?? data.totalRevenue ?? 0),
-      profitLoss: Number(data.profit_loss ?? data.profitLoss ?? 0),
+      totalBets: this.parseBalance(data.total_bets ?? data.totalBets ?? 0),
+      totalPayouts: this.parseBalance(data.total_payouts ?? data.totalPayouts ?? 0),
+      totalRevenue: this.parseBalance(data.total_revenue ?? data.totalRevenue ?? 0),
+      profitLoss: this.parseBalance(data.profit_loss ?? data.profitLoss ?? 0),
       profitLossPercentage: Number(data.profit_loss_percentage ?? data.profitLossPercentage ?? 0),
       uniquePlayers: Number(data.unique_players ?? data.uniquePlayers ?? 0),
       createdAt: data.created_at ? new Date(data.created_at) : new Date(),

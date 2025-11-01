@@ -3820,6 +3820,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const stats = await storage.getDailyStats(today);
+        
+        // Debug logging
+        console.log('📊 Daily stats query:', {
+          date: today.toISOString().split('T')[0],
+          stats: stats,
+          statsType: typeof stats,
+          isNull: stats === null,
+          isUndefined: stats === undefined
+        });
+        
         // Provide default values if no stats exist
         const defaultStats = {
           totalGames: 0,
@@ -3831,7 +3841,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           uniquePlayers: 0,
           peakBetsHour: 0
         };
-        res.json({ success: true, data: stats || defaultStats });
+        
+        const result = stats || defaultStats;
+        console.log('📊 Returning daily stats:', result);
+        res.json({ success: true, data: result });
       } else if (period === 'monthly') {
         const monthYear = month ? month as string : new Date().toISOString().slice(0, 7); // YYYY-MM
         const stats = await storage.getMonthlyStats(monthYear);
@@ -4189,10 +4202,24 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   const companyProfitLoss = totalBetsAmount - totalPayoutsAmount;
   const profitLossPercentage = totalBetsAmount > 0 ? (companyProfitLoss / totalBetsAmount) * 100 : 0;
   
+  console.log('🎮 Game completion summary:', {
+    gameId: currentGameState.gameId,
+    winner,
+    winningCard,
+    totalBetsAmount,
+    totalPayoutsAmount,
+    companyProfitLoss,
+    uniquePlayers,
+    round1Bets: currentGameState.round1Bets,
+    round2Bets: currentGameState.round2Bets,
+    isValid: currentGameState.gameId && currentGameState.gameId !== 'default-game'
+  });
+  
   // Store game statistics
   if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
     try {
-      await storage.saveGameStatistics({
+      console.log('💾 Saving game statistics...');
+      const gameStatsResult = await storage.saveGameStatistics({
         gameId: currentGameState.gameId,
         totalPlayers: uniquePlayers,
         totalBets: totalBetsAmount,
@@ -4208,10 +4235,21 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         uniquePlayers: uniquePlayers,
         gameDuration: 0 // Default to 0 for now, could be calculated later
       });
+      console.log('✅ Game statistics saved successfully:', gameStatsResult?.id);
       
       // Update daily statistics
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+      console.log('📅 Incrementing daily stats for:', todayStr, {
+        totalGames: 1,
+        totalBets: totalBetsAmount,
+        totalPayouts: totalPayoutsAmount,
+        totalRevenue: companyProfitLoss,
+        profitLoss: companyProfitLoss,
+        uniquePlayers: uniquePlayers
+      });
+      
       await storage.incrementDailyStats(today, {
         totalGames: 1,
         totalBets: totalBetsAmount,
@@ -4220,9 +4258,11 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         profitLoss: companyProfitLoss,
         uniquePlayers: uniquePlayers
       });
+      console.log('✅ Daily stats incremented');
       
       // Update monthly stats
       const monthYear = today.toISOString().slice(0, 7); // YYYY-MM
+      console.log('📅 Incrementing monthly stats for:', monthYear);
       await storage.incrementMonthlyStats(monthYear, {
         totalGames: 1,
         totalBets: totalBetsAmount,
@@ -4231,9 +4271,11 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         profitLoss: companyProfitLoss,
         uniquePlayers: uniquePlayers
       });
+      console.log('✅ Monthly stats incremented');
       
       // Update yearly stats
       const year = today.getFullYear();
+      console.log('📅 Incrementing yearly stats for:', year);
       await storage.incrementYearlyStats(year, {
         totalGames: 1,
         totalBets: totalBetsAmount,
@@ -4242,6 +4284,7 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         profitLoss: companyProfitLoss,
         uniquePlayers: uniquePlayers
       });
+      console.log('✅ Yearly stats incremented');
     } catch (error) {
       console.error('⚠️ Error saving game statistics:', error);
     }
@@ -4293,18 +4336,30 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   });
   
   // Only save to database if not in test mode
+  console.log('💾 Saving game history:', {
+    gameId: currentGameState.gameId,
+    openingCard: currentGameState.openingCard,
+    winner,
+    winningCard,
+    totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
+    isValid: currentGameState.gameId && currentGameState.gameId !== 'default-game'
+  });
+  
   if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
     try {
-      await storage.saveGameHistory({
+      const historyResult = await storage.saveGameHistory({
         gameId: currentGameState.gameId,
         openingCard: currentGameState.openingCard!,
         winner,
         winningCard,
         totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length
       });
+      console.log('✅ Game history saved:', historyResult);
     } catch (error) {
       console.error('⚠️ Error saving game history:', error);
     }
+  } else {
+    console.log('⚠️ Skipping game history save - invalid gameId:', currentGameState.gameId);
   }
   
   // Auto-restart: Reset to idle after 5 seconds

@@ -247,8 +247,10 @@ const AdminGamePanel: React.FC = () => {
         <WinnerCelebration
           winner={celebrationData.winner}
           winningCard={celebrationData.winningCard}
-          payoutMessage={celebrationData.payoutMessage}
+          payoutMessage={celebrationData.payoutMessage || ''}
           round={celebrationData.round}
+          andarTotal={celebrationData.andarTotal || 0}
+          baharTotal={celebrationData.baharTotal || 0}
           onComplete={handleCelebrationComplete}
         />
       )}
