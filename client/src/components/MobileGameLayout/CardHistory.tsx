@@ -25,11 +25,18 @@ const CardHistory: React.FC<CardHistoryProps> = ({
     const fetchHistory = async () => {
       setLoading(true);
       try {
+        console.log('📜 CardHistory: Fetching game history...');
         // Use the public game history endpoint that doesn't require authentication
         const response = await apiClient.get<any[]>('/api/game/history?limit=10');
         
+        console.log('📜 CardHistory: Raw response:', response);
+        console.log('📜 CardHistory: Response type:', typeof response);
+        console.log('📜 CardHistory: Is array?', Array.isArray(response));
+        
         // Handle response - should be an array directly
         const games = Array.isArray(response) ? response : [];
+        
+        console.log('📜 CardHistory: Games array length:', games.length);
         
         if (games.length > 0) {
           // Transform API data to match component format
@@ -42,12 +49,19 @@ const CardHistory: React.FC<CardHistoryProps> = ({
             }))
             .slice(0, 10); // Limit to 10 most recent
           
+          console.log('📜 CardHistory: Formatted results:', formattedResults);
           setRecentResults(formattedResults);
         } else {
+          console.log('📜 CardHistory: No games found, setting empty array');
           setRecentResults([]);
         }
       } catch (error: any) {
-        console.error('Failed to load card history:', error);
+        console.error('❌ CardHistory: Failed to load:', error);
+        console.error('❌ CardHistory: Error details:', {
+          message: error.message,
+          response: error.response,
+          status: error.status
+        });
         // Set empty array on error to avoid showing mock data
         setRecentResults([]);
       } finally {
@@ -62,6 +76,8 @@ const CardHistory: React.FC<CardHistoryProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  console.log('📜 CardHistory: Rendering with', recentResults.length, 'results');
+
   return (
     <div className={`flex items-center justify-between ${className}`}>
       {/* Label and Recent Results */}
@@ -69,7 +85,7 @@ const CardHistory: React.FC<CardHistoryProps> = ({
         <span className="text-gray-400 text-sm font-medium">Card History</span>
         
         {loading ? (
-          <div className="text-xs text-gray-500">Loading...</div>
+          <div className="text-xs text-yellow-400 animate-pulse">Loading history...</div>
         ) : (
           <div className="flex gap-2">
             {recentResults.length > 0 ? (
@@ -78,10 +94,10 @@ const CardHistory: React.FC<CardHistoryProps> = ({
                   key={result.gameId || index}
                   className={`
                     w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold
-                    transition-all duration-200 hover:scale-110 cursor-pointer
+                    transition-all duration-200 hover:scale-110 cursor-pointer shadow-lg
                     ${result.winner === 'andar' 
-                      ? 'bg-red-600 text-white border border-red-500' 
-                      : 'bg-blue-900 text-white border border-blue-700'
+                      ? 'bg-red-600 text-white border-2 border-red-400' 
+                      : 'bg-blue-900 text-white border-2 border-blue-600'
                     }
                   `}
                   title={`Round ${result.round} - ${result.winner.toUpperCase()} won`}
@@ -90,7 +106,9 @@ const CardHistory: React.FC<CardHistoryProps> = ({
                 </div>
               ))
             ) : (
-              <div className="text-xs text-gray-500">No history</div>
+              <div className="text-xs text-gray-400">
+                {loading ? 'Loading...' : 'No games yet'}
+              </div>
             )}
           </div>
         )}

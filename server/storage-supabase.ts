@@ -2555,6 +2555,166 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
+  // WAGERING REQUIREMENT SYSTEM for bonus unlock
+  
+  async setUserWageringRequirement(userId: string, amount: number): Promise<void> {
+    try {
+      const { error } = await supabaseServer
+        .from('users')
+        .update({
+          wagering_requirement: amount.toString(),
+          wagering_completed: '0.00',
+          bonus_locked: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+        
+      if (error) {
+        console.error('Error setting wagering requirement:', error);
+        throw error;
+      }
+      
+      console.log(`📊 Wagering requirement set for user ${userId}: ₹${amount.toFixed(2)}`);
+    } catch (error) {
+      console.error('Error in setUserWageringRequirement:', error);
+      throw error;
+    }
+  }
+
+  async trackWagering(userId: string, betAmount: number): Promise<void> {
+    try {
+      // Get current user data
+      const user = await this.getUser(userId);
+      if (!user || !user.bonus_locked) {
+        return; // No locked bonus to track
+      }
+      
+      const currentCompleted = parseFloat(user.wagering_completed || '0');
+      const newCompleted = currentCompleted + betAmount;
+      
+      const { error } = await supabaseServer
+        .from('users')
+        .update({
+          wagering_completed: newCompleted.toString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+        
+      if (error) {
+        console.error('Error tracking wagering:', error);
+        throw error;
+      }
+      
+      const requirement = parseFloat(user.wagering_requirement || '0');
+      const progress = requirement > 0 ? (newCompleted / requirement) * 100 : 0;
+      console.log(`📊 Wagering tracked for user ${userId}: ₹${newCompleted.toFixed(2)} / ₹${requirement.toFixed(2)} (${progress.toFixed(1)}%)`);
+    } catch (error) {
+      console.error('Error in trackWagering:', error);
+      throw error;
+    }
+  }
+
+  async checkAndUnlockBonus(userId: string): Promise<{ unlocked: boolean; amount: number } | null> {
+    try {
+      const user = await this.getUser(userId);
+      if (!user || !user.bonus_locked) {
+        return null;
+      }
+      
+      const requirement = parseFloat(user.wagering_requirement || '0');
+      const completed = parseFloat(user.wagering_completed || '0');
+      
+      // Check if requirement met
+      if (completed >= requirement && requirement > 0) {
+        // Get total locked bonus
+        const depositBonus = parseFloat(user.deposit_bonus_available || '0');
+        const referralBonus = parseFloat(user.referral_bonus_available || '0');
+        const totalBonus = depositBonus + referralBonus;
+        
+        if (totalBonus > 0) {
+          // Add bonus to main balance
+          const currentBalance = parseFloat(user.balance);
+          const newBalance = currentBalance + totalBonus;
+          
+          const { error } = await supabaseServer
+            .from('users')
+            .update({
+              balance: newBalance.toString(),
+              deposit_bonus_available: '0.00',
+              referral_bonus_available: '0.00',
+              bonus_locked: false,
+              wagering_requirement: '0.00',
+              wagering_completed: '0.00',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', userId);
+          
+          if (error) {
+            console.error('Error unlocking bonus:', error);
+            throw error;
+          }
+          
+          // Add transaction record
+          await this.addTransaction({
+            userId,
+            transactionType: 'bonus_unlocked',
+            amount: totalBonus,
+            balanceBefore: currentBalance,
+            balanceAfter: newBalance,
+            referenceId: `bonus_unlocked_${Date.now()}`,
+            description: `Bonus unlocked after wagering ₹${completed.toFixed(2)} (requirement: ₹${requirement.toFixed(2)})`
+          });
+          
+          console.log(`✅ BONUS UNLOCKED! ₹${totalBonus} added to user ${userId} balance after completing wagering requirement`);
+          
+          return { unlocked: true, amount: totalBonus };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error in checkAndUnlockBonus:', error);
+      throw error;
+    }
+  }
+
+  async getWageringProgress(userId: string): Promise<{
+    requirement: number;
+    completed: number;
+    remaining: number;
+    percentage: number;
+    bonusLocked: number;
+    isLocked: boolean;
+  } | null> {
+    try {
+      const user = await this.getUser(userId);
+      if (!user) {
+        return null;
+      }
+      
+      const requirement = parseFloat(user.wagering_requirement || '0');
+      const completed = parseFloat(user.wagering_completed || '0');
+      const remaining = Math.max(0, requirement - completed);
+      const percentage = requirement > 0 ? (completed / requirement) * 100 : 0;
+      const depositBonus = parseFloat(user.deposit_bonus_available || '0');
+      const referralBonus = parseFloat(user.referral_bonus_available || '0');
+      const bonusLocked = depositBonus + referralBonus;
+      const isLocked = user.bonus_locked || false;
+      
+      return {
+        requirement,
+        completed,
+        remaining,
+        percentage: Math.min(100, percentage),
+        bonusLocked,
+        isLocked
+      };
+    } catch (error) {
+      console.error('Error in getWageringProgress:', error);
+      return null;
+    }
+  }
+
   async addTransaction(transaction: {
     userId: string;
     transactionType: string;

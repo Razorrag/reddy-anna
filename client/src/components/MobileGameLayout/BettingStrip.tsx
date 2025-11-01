@@ -64,11 +64,8 @@ const BettingStrip: React.FC<BettingStripProps> = ({
   const currentRoundBets = gameState.currentRound === 1 ? gameState.round1Bets : gameState.round2Bets;
   const currentPlayerBets = gameState.currentRound === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
   
-  // Determine which side has less bets (for highlighting)
-  const andarTotal = gameState.round1Bets.andar + gameState.round2Bets.andar;
-  const baharTotal = gameState.round1Bets.bahar + gameState.round2Bets.bahar;
-  const hasLessAndar = andarTotal < baharTotal;
-  const hasLessBahar = baharTotal < andarTotal;
+  // REMOVED: "LESS" indicator - This is sensitive admin data that should NOT be shown to players!
+  // Players should NOT see which side has fewer bets as it influences their betting decisions
 
   // Calculate asymmetric payout multipliers based on round and potential winner
   const getPayoutMultiplier = (side: BetSide): string => {
@@ -151,11 +148,6 @@ const BettingStrip: React.FC<BettingStripProps> = ({
             <div className="flex-1 text-left pr-2">
               <div className="flex items-center gap-2 mb-1">
                 <div className="text-white font-bold text-lg">ANDAR</div>
-                {hasLessAndar && (
-                  <span className="px-2 py-0.5 bg-yellow-500/80 text-black text-[10px] font-bold rounded animate-pulse">
-                    LESS
-                  </span>
-                )}
               </div>
               
               {/* Show ONLY player's individual bets - NO ADMIN DATA */}
@@ -280,11 +272,6 @@ const BettingStrip: React.FC<BettingStripProps> = ({
             {/* Right side - Text and bet info */}
             <div className="flex-1 text-right pl-2">
               <div className="flex items-center justify-end gap-2 mb-1">
-                {hasLessBahar && (
-                  <span className="px-2 py-0.5 bg-yellow-500/80 text-black text-[10px] font-bold rounded animate-pulse">
-                    LESS
-                  </span>
-                )}
                 <div className="text-white font-bold text-lg">BAHAR</div>
               </div>
               

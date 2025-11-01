@@ -1945,31 +1945,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       await storage.approvePaymentRequest(id, request.user_id, request.amount, req.user.id);
       
-      // If deposit approved, check if bonus threshold reached for auto-credit
-      if (request.request_type === 'deposit') {
-        try {
-          const { checkAndAutoCreditBonus } = await import('./payment');
-          const autoCredited = await checkAndAutoCreditBonus(request.user_id);
-          if (autoCredited) {
-            console.log(`✅ Bonus auto-credited for user ${request.user_id} after deposit approval (threshold reached)`);
-            // Notify user about auto-credit
-            clients.forEach(c => {
-              if (c.userId === request.user_id && c.ws.readyState === WebSocket.OPEN) {
-                c.ws.send(JSON.stringify({
-                  type: 'bonus_update',
-                  data: {
-                    message: 'Bonus automatically credited to your balance!',
-                    timestamp: Date.now()
-                  }
-                }));
-              }
-            });
-          }
-        } catch (bonusError) {
-          console.error(`⚠️ Error checking bonus threshold after deposit:`, bonusError);
-          // Don't fail approval if bonus check fails
-        }
-      }
+      // REMOVED: Old threshold-based auto-credit system
+      // Now using wagering requirement system - bonus unlocks when user wagers enough
       
       // Get updated user balance
       const updatedUser = await storage.getUser(request.user_id);
@@ -2328,6 +2305,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bonus Information Route
+  // Get wagering progress (NEW - for locked bonus system)
+  app.get("/api/user/wagering-progress", generalLimiter, async (req, res) => {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+      
+      const userId = req.user.id;
+      const progress = await storage.getWageringProgress(userId);
+      
+      res.json({
+        success: true,
+        progress
+      });
+    } catch (error: any) {
+      console.error('Wagering progress retrieval error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve wagering progress'
+      });
+    }
+  });
+
   app.get("/api/user/bonus-info", generalLimiter, async (req, res) => {
     try {
       // The unified requireAuth middleware should have set req.user
@@ -4114,47 +4117,9 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         // CRITICAL FIX: Update user game statistics (total_winnings, total_losses, games_played, games_won)
         await storage.updateUserGameStats(userId, userWon, userTotalBet, payout);
         
-        // Check conditional bonus threshold (auto-apply if ±30% from original deposit)
-        try {
-          const bonusApplied = await storage.applyConditionalBonus(userId);
-          if (bonusApplied) {
-            console.log(`✅ Conditional bonus auto-applied for user ${userId} after game completion`);
-            // Notify user about bonus
-            clients.forEach(c => {
-              if (c.userId === userId && c.ws.readyState === WebSocket.OPEN) {
-                c.ws.send(JSON.stringify({
-                  type: 'conditional_bonus_applied',
-                  data: {
-                    message: 'Bonus automatically added to your balance!',
-                    timestamp: Date.now()
-                  }
-                }));
-              }
-            });
-          }
-          
-          // Also check bonus claim threshold (auto-credit when bonus amount reaches threshold)
-          const { checkAndAutoCreditBonus } = await import('./payment');
-          const autoCredited = await checkAndAutoCreditBonus(userId);
-          if (autoCredited) {
-            console.log(`✅ Bonus auto-credited for user ${userId} after game completion (threshold reached)`);
-            // Notify user about auto-credit
-            clients.forEach(c => {
-              if (c.userId === userId && c.ws.readyState === WebSocket.OPEN) {
-                c.ws.send(JSON.stringify({
-                  type: 'bonus_update',
-                  data: {
-                    message: 'Bonus automatically credited to your balance!',
-                    timestamp: Date.now()
-                  }
-                }));
-              }
-            });
-          }
-        } catch (bonusError) {
-          console.error(`⚠️ Error checking conditional bonus for user ${userId}:`, bonusError);
-          // Don't fail payout if bonus check fails
-        }
+        // REMOVED: Old conditional bonus and threshold auto-credit system
+        // Now using wagering requirement system - bonus unlocks when user places enough bets
+        // Wagering is tracked in handlePlayerBet() function in server/socket/game-handlers.ts
       } catch (error) {
         console.error(`⚠️ Error updating bet status for user ${userId}:`, error);
       }

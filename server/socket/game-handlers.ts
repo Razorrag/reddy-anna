@@ -98,6 +98,19 @@ export async function handlePlayerBet(client: WSClient, data: any) {
 
     // Add bet to current game state (only after successful balance deduction)
     const roundNum = parseInt(round);
+    
+    console.log(`🎲 ADDING BET TO GAME STATE:`, {
+      userId,
+      side,
+      amount,
+      round: roundNum,
+      BEFORE: {
+        round1Bets: (global as any).currentGameState?.round1Bets,
+        round2Bets: (global as any).currentGameState?.round2Bets,
+        userBetsSize: (global as any).currentGameState?.userBets?.size
+      }
+    });
+    
     if (roundNum === 1) {
       if ((global as any).currentGameState?.userBets?.get) {
         if (!(global as any).currentGameState.userBets.has(userId)) {
@@ -106,6 +119,14 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         const userBets = (global as any).currentGameState.userBets.get(userId);
         userBets.round1[side] += amount;
         (global as any).currentGameState.round1Bets[side] += amount;
+        
+        console.log(`✅ BET ADDED TO ROUND 1:`, {
+          AFTER: {
+            round1Bets: (global as any).currentGameState.round1Bets,
+            userBetsSize: (global as any).currentGameState.userBets.size,
+            thisUserBets: userBets
+          }
+        });
       }
     } else if (roundNum === 2) {
       if ((global as any).currentGameState?.userBets?.get) {
@@ -115,6 +136,14 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         const userBets = (global as any).currentGameState.userBets.get(userId);
         userBets.round2[side] += amount;
         (global as any).currentGameState.round2Bets[side] += amount;
+        
+        console.log(`✅ BET ADDED TO ROUND 2:`, {
+          AFTER: {
+            round2Bets: (global as any).currentGameState.round2Bets,
+            userBetsSize: (global as any).currentGameState.userBets.size,
+            thisUserBets: userBets
+          }
+        });
       }
     }
 
@@ -134,6 +163,31 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       } catch (error) {
         console.error('Error storing bet:', error);
       }
+    }
+
+    // WAGERING REQUIREMENT: Track bet towards bonus unlock
+    try {
+      await storage.trackWagering(userId, amount);
+      
+      // Check if wagering requirement met and unlock bonus
+      const bonusUnlocked = await storage.checkAndUnlockBonus(userId);
+      
+      if (bonusUnlocked && bonusUnlocked.unlocked) {
+        // Notify user that bonus is now unlocked!
+        ws.send(JSON.stringify({
+          type: 'bonus_unlocked',
+          data: {
+            message: `🎉 Bonus unlocked! ₹${bonusUnlocked.amount.toLocaleString()} added to your balance.`,
+            amount: bonusUnlocked.amount,
+            timestamp: Date.now()
+          }
+        }));
+        
+        console.log(`🎉 BONUS UNLOCKED for user ${userId}: ₹${bonusUnlocked.amount}`);
+      }
+    } catch (wageringError) {
+      console.error('Error tracking wagering:', wageringError);
+      // Don't fail the bet if wagering tracking fails
     }
 
     // Send bet confirmation back to the user
@@ -418,6 +472,23 @@ export async function handleDealCard(client: WSClient, data: any) {
       (global as any).currentGameState.winner = data.side === 'andar' ? 'andar' : 'bahar';
       (global as any).currentGameState.winningCard = data.card;
       (global as any).currentGameState.phase = 'complete';
+
+      // CRITICAL DEBUG: Log state BEFORE completing game
+      console.log(`🏁 ABOUT TO COMPLETE GAME - Current State:`, {
+        winner: data.side,
+        card: data.card,
+        round: (global as any).currentGameState.currentRound,
+        round1Bets: (global as any).currentGameState.round1Bets,
+        round2Bets: (global as any).currentGameState.round2Bets,
+        userBetsCount: (global as any).currentGameState.userBets.size,
+        userBetsEntries: Array.from((global as any).currentGameState.userBets.entries()),
+        TOTAL_BETS: (
+          (global as any).currentGameState.round1Bets.andar +
+          (global as any).currentGameState.round1Bets.bahar +
+          (global as any).currentGameState.round2Bets.andar +
+          (global as any).currentGameState.round2Bets.bahar
+        )
+      });
 
       // Complete the game with payouts using global completeGame if available
       if (typeof (global as any).completeGame === 'function') {

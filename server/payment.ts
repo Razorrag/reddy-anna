@@ -294,11 +294,11 @@ export const addBonus = async (userId: string, bonusAmount: number, reason: stri
   }
 };
 
-// New bonus-related functions
+// New bonus-related functions with WAGERING REQUIREMENTS
 export const applyDepositBonus = async (userId: string, depositAmount: number): Promise<boolean> => {
   try {
-    // Get deposit bonus percentage from settings
-    const depositBonusPercent = await storage.getGameSetting('default_deposit_bonus_percent') || '5';
+    // Get deposit bonus percentage from settings (default 30%)
+    const depositBonusPercent = await storage.getGameSetting('default_deposit_bonus_percent') || '30';
     const bonusPercentage = parseFloat(depositBonusPercent);
     
     // Calculate bonus amount
@@ -308,8 +308,15 @@ export const applyDepositBonus = async (userId: string, depositAmount: number): 
       return false;
     }
     
-    // Add bonus to user's bonus field (not main balance yet)
+    // Get wagering multiplier from settings (default 0.3 = 30% of deposit must be wagered)
+    const wageringMultiplier = parseFloat(await storage.getGameSetting('wagering_multiplier') || '0.3');
+    const wageringRequirement = depositAmount * wageringMultiplier;
+    
+    // Add bonus to user's LOCKED bonus field (not main balance yet)
     await storage.addUserBonus(userId, bonusAmount, 'deposit_bonus', depositAmount);
+    
+    // Set wagering requirement - bonus stays locked until this is met
+    await storage.setUserWageringRequirement(userId, wageringRequirement);
     
     // Add to user transactions
     const user = await storage.getUser(userId);
@@ -319,16 +326,17 @@ export const applyDepositBonus = async (userId: string, depositAmount: number): 
         transactionType: 'bonus',
         amount: bonusAmount,
         balanceBefore: parseFloat(user.balance),
-        balanceAfter: parseFloat(user.balance), // Bonus not added to main balance yet
+        balanceAfter: parseFloat(user.balance), // Bonus NOT added to main balance yet - LOCKED
         referenceId: `bonus_deposit_${Date.now()}`,
-        description: `Deposit bonus (${bonusPercentage}% of ₹${depositAmount})`
+        description: `Deposit bonus (${bonusPercentage}% of ₹${depositAmount}) - LOCKED until ₹${wageringRequirement.toFixed(2)} wagered`
       });
     }
     
-    console.log(`Deposit bonus of ₹${bonusAmount} added for user ${userId}`);
+    console.log(`✅ Deposit bonus of ₹${bonusAmount} added as LOCKED for user ${userId}`);
+    console.log(`   📊 Wagering requirement: ₹${wageringRequirement.toFixed(2)} (${wageringMultiplier * 100}% of deposit)`);
+    console.log(`   🔒 Bonus will unlock after user wagers ₹${wageringRequirement.toFixed(2)}`);
     
-    // Check if bonus threshold reached and auto-credit if needed
-    await checkAndAutoCreditBonus(userId);
+    // DO NOT auto-credit bonus - user must meet wagering requirement first!
     
     return true;
   } catch (error) {
@@ -388,24 +396,37 @@ export const checkConditionalBonus = async (userId: string): Promise<boolean> =>
   }
 };
 
-// Check if bonus has reached threshold and auto-credit it
+// Check if WAGERING REQUIREMENT met and unlock bonus
+// This replaces the old threshold-based system
+export const checkAndUnlockBonus = async (userId: string): Promise<{ unlocked: boolean; amount: number } | null> => {
+  try {
+    const result = await storage.checkAndUnlockBonus(userId);
+    return result;
+  } catch (error) {
+    console.error('Error checking wagering requirement:', error);
+    return null;
+  }
+};
+
+// DEPRECATED: Old threshold-based auto-credit (kept for backward compatibility but disabled)
 export const checkAndAutoCreditBonus = async (userId: string): Promise<boolean> => {
   try {
-    // Get bonus claim threshold setting (default 500)
+    // Get bonus claim threshold setting
     const claimThresholdSetting = await storage.getGameSetting('bonus_claim_threshold');
-    const claimThreshold = parseFloat(claimThresholdSetting || '500');
+    const claimThreshold = parseFloat(claimThresholdSetting || '0');
     
+    // If threshold is 0, use wagering requirement system instead (NEW SYSTEM)
     if (claimThreshold <= 0) {
-      // If threshold is 0 or not set, don't auto-credit
-      return false;
+      console.log('ℹ️  Threshold-based auto-credit disabled. Using wagering requirement system.');
+      const result = await checkAndUnlockBonus(userId);
+      return result ? result.unlocked : false;
     }
     
-    // Get current bonus info
+    // OLD SYSTEM (only if threshold > 0 in settings)
     const bonusInfo = await storage.getUserBonusInfo(userId);
     
-    // Check if total bonus has reached or exceeded the threshold
     if (bonusInfo.totalBonus >= claimThreshold) {
-      console.log(`✅ Bonus threshold reached! Total bonus: ₹${bonusInfo.totalBonus}, Threshold: ₹${claimThreshold}`);
+      console.log(`⚠️  OLD SYSTEM: Bonus threshold reached! Total bonus: ₹${bonusInfo.totalBonus}`);
       return await autoCreditBonus(userId, bonusInfo);
     }
     
