@@ -2229,11 +2229,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .reduce((sum, t) => sum + (t.amount || 0), 0);
       const gamesPlayed = userBets?.length || 0;
       const totalWinnings = gameHistory?.reduce((sum, game) => sum + (game.payout || 0), 0) || 0;
-      const totalLosses = userBets?.reduce((sum, bet) => sum + parseFloat(bet.amount), 0) || 0;
+      // Parse bet amounts properly (handle both string and number types)
+      const totalLosses = userBets?.reduce((sum, bet) => {
+        const amount = typeof bet.amount === 'string' ? parseFloat(bet.amount) : (bet.amount || 0);
+        return sum + amount;
+      }, 0) || 0;
       const wins = gameHistory?.filter(game => game.result === 'win').length || 0;
       const winRate = gamesPlayed > 0 ? (wins / gamesPlayed) * 100 : 0;
       const biggestWin = gameHistory?.reduce((max, game) => Math.max(max, game.payout || 0), 0) || 0;
+      // Calculate average bet (handle both string and number types)
       const averageBet = gamesPlayed > 0 ? totalLosses / gamesPlayed : 0;
+      
+      // Ensure user balance is a number
+      const userBalance = typeof user.balance === 'string' ? parseFloat(user.balance) : (user.balance || 0);
 
       // Calculate profit/loss for different time periods
       const today = new Date();
@@ -2250,7 +2258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const monthlyProfit = monthGames.reduce((sum, game) => sum + (game.payout || 0) - (game.betAmount || 0), 0);
 
       const analytics = {
-        currentBalance: user.balance,
+        currentBalance: userBalance,
         totalDeposits,
         totalWithdrawals,
         gamesPlayed,

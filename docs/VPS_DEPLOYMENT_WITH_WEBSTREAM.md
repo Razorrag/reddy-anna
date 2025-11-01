@@ -39,12 +39,12 @@ Screen sharing **REQUIRES HTTPS** on VPS. HTTP will NOT work.
 ### Option A: Self-Signed Certificate (Testing)
 
 ```bash
-# Generate self-signed certificate
+# Generate self-signed certificate for IP 91.108.110.72
 openssl req -x509 -newkey rsa:2048 -nodes \
   -keyout server.key \
   -out server.crt \
   -days 365 \
-  -subj "/CN=your-vps-ip"
+  -subj "/CN=91.108.110.72"
 ```
 
 ### Option B: Let's Encrypt (Production - Recommended)
@@ -109,7 +109,7 @@ WHERE id = (SELECT id FROM stream_config LIMIT 1);
 Or use the API:
 
 ```bash
-curl -X POST https://your-vps/api/stream/rtmp/config \
+curl -X POST https://91.108.110.72/api/stream/rtmp/config \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -201,14 +201,14 @@ sudo ufw status
 
 ```bash
 # Test HTTPS endpoint
-curl -k https://your-vps-ip:443/api/health
+curl -k https://91.108.110.72:443/api/health
 
 # Should return JSON with status
 ```
 
 ### 2. Check Screen Sharing
 
-1. Open browser: `https://your-vps-ip:443` (or `https://yourdomain.com`)
+1. Open browser: `https://91.108.110.72:443` (or `https://yourdomain.com`)
 2. Login as admin
 3. Go to Admin Panel → Stream Control
 4. Click "Start Screen Share"
@@ -269,7 +269,7 @@ curl -k https://your-vps-ip:443/api/health
 
 **Fix:**
 1. Verify RTMP credentials in database
-2. Check stream status: `curl https://your-vps/api/stream/config`
+2. Check stream status: `curl https://91.108.110.72/api/stream/config`
 3. Ensure OBS is streaming to Restream.io
 4. Check Restream.io dashboard for stream status
 

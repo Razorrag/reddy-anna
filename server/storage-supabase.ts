@@ -254,6 +254,9 @@ export class SupabaseStorage implements IStorage {
     return Number(balance) || 0;
   }
 
+  // NOTE: User and PlayerBet types match database schema (snake_case)
+  // Transformation to camelCase happens at route level where needed
+
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     // Retry logic for failed fetches
@@ -327,7 +330,7 @@ export class SupabaseStorage implements IStorage {
           throw error;
         }
 
-        // Convert balance to number
+        // Convert balance to number to fix type inconsistency
         if (data && data.balance) {
           data.balance = this.parseBalance(data.balance) as any;
         }
@@ -380,7 +383,7 @@ export class SupabaseStorage implements IStorage {
           throw error;
         }
 
-        // Convert balance to number
+        // Convert balance to number to fix type inconsistency
         if (data && data.balance) {
           data.balance = this.parseBalance(data.balance) as any;
         }
@@ -432,6 +435,10 @@ export class SupabaseStorage implements IStorage {
           throw error;
         }
 
+        // Convert balance to number to fix type inconsistency
+        if (data && data.balance) {
+          data.balance = this.parseBalance(data.balance) as any;
+        }
         return data;
       } catch (error: any) {
         lastError = error;
@@ -527,7 +534,7 @@ export class SupabaseStorage implements IStorage {
           throw error;
         }
 
-        // Convert balance to number
+        // Convert balance to number to fix type inconsistency
         if (data && data.balance) {
           data.balance = this.parseBalance(data.balance) as any;
         }
@@ -1538,23 +1545,28 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
 
-    // Transform the data to include game results
-    return (data || []).map((bet: any) => ({
-      id: bet.id,
-      gameId: bet.game_id,
-      openingCard: bet.game_sessions?.opening_card,
-      winner: bet.game_sessions?.winner,
-      yourBet: {
-        side: bet.side,
-        amount: bet.amount,
-        round: bet.round
-      },
-      result: bet.game_sessions?.winner === bet.side ? 'win' : 'loss',
-      payout: bet.game_sessions?.winner === bet.side ? bet.amount * 2 : 0,
-      totalCards: 0, // Placeholder
-      round: bet.game_sessions?.current_round || 1,
-      createdAt: bet.created_at
-    }));
+    // Transform the data to include game results (keep original transformation logic)
+    return (data || []).map((bet: any) => {
+      const betAmount = this.parseBalance(bet.amount);
+      return {
+        id: bet.id,
+        gameId: bet.game_id,
+        openingCard: bet.game_sessions?.opening_card,
+        winner: bet.game_sessions?.winner,
+        winningCard: bet.game_sessions?.winning_card,
+        yourBet: {
+          side: bet.side,
+          amount: betAmount,
+          round: bet.round
+        },
+        result: bet.game_sessions?.winner === bet.side ? 'win' : 'loss',
+        payout: bet.game_sessions?.winner === bet.side ? betAmount * 2 : 0,
+        betAmount: betAmount, // Also include as betAmount for analytics
+        totalCards: 0, // Placeholder
+        round: bet.game_sessions?.current_round || 1,
+        createdAt: bet.created_at ? new Date(bet.created_at) : new Date()
+      };
+    });
   }
   
   // Settings operations
@@ -1661,6 +1673,30 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
+  // Helper function to transform snake_case to camelCase for game statistics
+  private transformGameStatistics(data: any): GameStatistics | null {
+    if (!data) return null;
+    
+    return {
+      id: data.id,
+      gameId: data.game_id ?? data.gameId ?? '',
+      totalPlayers: Number(data.total_players ?? data.totalPlayers ?? 0),
+      totalBets: Number(data.total_bets ?? data.totalBets ?? 0),
+      totalWinnings: Number(data.total_winnings ?? data.totalWinnings ?? 0),
+      houseEarnings: Number(data.house_earnings ?? data.houseEarnings ?? 0),
+      andarBetsCount: Number(data.andar_bets_count ?? data.andarBetsCount ?? 0),
+      baharBetsCount: Number(data.bahar_bets_count ?? data.baharBetsCount ?? 0),
+      andarTotalBet: Number(data.andar_total_bet ?? data.andarTotalBet ?? 0),
+      baharTotalBet: Number(data.bahar_total_bet ?? data.baharTotalBet ?? 0),
+      profitLoss: Number(data.profit_loss ?? data.profitLoss ?? 0),
+      profitLossPercentage: Number(data.profit_loss_percentage ?? data.profitLossPercentage ?? 0),
+      housePayout: Number(data.house_payout ?? data.housePayout ?? 0),
+      gameDuration: Number(data.game_duration ?? data.gameDuration ?? 0),
+      uniquePlayers: Number(data.unique_players ?? data.uniquePlayers ?? 0),
+      createdAt: data.created_at ? new Date(data.created_at) : new Date()
+    };
+  }
+
   // Analytics methods implementation
   async saveGameStatistics(stats: Omit<GameStatistics, 'id' | 'createdAt'>): Promise<GameStatistics> {
     const { data, error } = await supabaseServer
@@ -1690,7 +1726,7 @@ export class SupabaseStorage implements IStorage {
       throw new Error('Failed to save game statistics');
     }
 
-    return data as GameStatistics;
+    return this.transformGameStatistics(data) as GameStatistics;
   }
 
   async getGameStatistics(gameId: string): Promise<GameStatistics | null> {
@@ -1705,7 +1741,7 @@ export class SupabaseStorage implements IStorage {
       return null;
     }
 
-    return data as GameStatistics;
+    return this.transformGameStatistics(data);
   }
 
   async getGameStatisticsByDateRange(startDate: Date, endDate: Date): Promise<GameStatistics[]> {
@@ -1721,7 +1757,27 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
 
-    return data as GameStatistics[] || [];
+    return (data || []).map(item => this.transformGameStatistics(item)).filter(Boolean) as GameStatistics[];
+  }
+
+  // Helper function to transform snake_case to camelCase for daily stats
+  private transformDailyStats(data: any): DailyGameStatistics | null {
+    if (!data) return null;
+    
+    return {
+      id: data.id,
+      date: data.date ? new Date(data.date) : new Date(),
+      totalGames: Number(data.total_games ?? data.totalGames ?? 0),
+      totalBets: Number(data.total_bets ?? data.totalBets ?? 0),
+      totalPayouts: Number(data.total_payouts ?? data.totalPayouts ?? 0),
+      totalRevenue: Number(data.total_revenue ?? data.totalRevenue ?? 0),
+      profitLoss: Number(data.profit_loss ?? data.profitLoss ?? 0),
+      profitLossPercentage: Number(data.profit_loss_percentage ?? data.profitLossPercentage ?? 0),
+      uniquePlayers: Number(data.unique_players ?? data.uniquePlayers ?? 0),
+      peakBetsHour: Number(data.peak_bets_hour ?? data.peakBetsHour ?? 0),
+      createdAt: data.created_at ? new Date(data.created_at) : new Date(),
+      updatedAt: data.updated_at ? new Date(data.updated_at) : new Date()
+    };
   }
 
   // Daily statistics methods
@@ -1738,7 +1794,7 @@ export class SupabaseStorage implements IStorage {
       return null;
     }
 
-    return data as DailyGameStatistics;
+    return this.transformDailyStats(data);
   }
 
   async getDailyStatsByRange(startDate: Date, endDate: Date): Promise<DailyGameStatistics[]> {
@@ -1754,7 +1810,7 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
 
-    return data as DailyGameStatistics[] || [];
+    return (data || []).map(item => this.transformDailyStats(item)).filter(Boolean) as DailyGameStatistics[];
   }
 
   async createDailyStats(stats: Omit<DailyGameStatistics, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
@@ -1799,19 +1855,37 @@ export class SupabaseStorage implements IStorage {
   async incrementDailyStats(date: Date, increments: Partial<DailyGameStatistics>): Promise<void> {
     const dateStr = date.toISOString().split('T')[0];
     
-    // Check if record exists
-    let existing = await this.getDailyStats(date);
+    // Check if record exists by querying database directly
+    const { data: existingData, error: fetchError } = await supabaseServer
+      .from('daily_game_statistics')
+      .select('*')
+      .eq('date', dateStr)
+      .single();
     
-    if (existing) {
-      // Update existing record
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error('Error checking existing daily stats:', fetchError);
+      throw fetchError;
+    }
+    
+    if (existingData) {
+      // Update existing record using snake_case fields
+      const existing = this.transformDailyStats(existingData);
+      if (!existing) throw new Error('Failed to parse existing stats');
+      
+      // Calculate profit loss percentage
+      const newTotalBets = existing.totalBets + (increments.totalBets || 0);
+      const newProfitLoss = existing.profitLoss + (increments.profitLoss || 0);
+      const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
+      
       const { error } = await supabaseServer
         .from('daily_game_statistics')
         .update({
           total_games: existing.totalGames + (increments.totalGames || 0),
-          total_bets: existing.totalBets + (increments.totalBets || 0),
+          total_bets: newTotalBets,
           total_payouts: existing.totalPayouts + (increments.totalPayouts || 0),
           total_revenue: existing.totalRevenue + (increments.totalRevenue || 0),
-          profit_loss: existing.profitLoss + (increments.profitLoss || 0),
+          profit_loss: newProfitLoss,
+          profit_loss_percentage: newProfitLossPercentage,
           unique_players: existing.uniquePlayers + (increments.uniquePlayers || 0),
           updated_at: new Date()
         })
@@ -1837,6 +1911,25 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
+  // Helper function to transform snake_case to camelCase for monthly stats
+  private transformMonthlyStats(data: any): MonthlyGameStatistics | null {
+    if (!data) return null;
+    
+    return {
+      id: data.id,
+      monthYear: data.month_year ?? data.monthYear ?? '',
+      totalGames: Number(data.total_games ?? data.totalGames ?? 0),
+      totalBets: Number(data.total_bets ?? data.totalBets ?? 0),
+      totalPayouts: Number(data.total_payouts ?? data.totalPayouts ?? 0),
+      totalRevenue: Number(data.total_revenue ?? data.totalRevenue ?? 0),
+      profitLoss: Number(data.profit_loss ?? data.profitLoss ?? 0),
+      profitLossPercentage: Number(data.profit_loss_percentage ?? data.profitLossPercentage ?? 0),
+      uniquePlayers: Number(data.unique_players ?? data.uniquePlayers ?? 0),
+      createdAt: data.created_at ? new Date(data.created_at) : new Date(),
+      updatedAt: data.updated_at ? new Date(data.updated_at) : new Date()
+    };
+  }
+
   // Monthly statistics methods
   async getMonthlyStats(monthYear: string): Promise<MonthlyGameStatistics | null> {
     const { data, error } = await supabaseServer
@@ -1850,7 +1943,7 @@ export class SupabaseStorage implements IStorage {
       return null;
     }
 
-    return data as MonthlyGameStatistics;
+    return this.transformMonthlyStats(data);
   }
 
   async getMonthlyStatsByRange(startMonth: string, endMonth: string): Promise<MonthlyGameStatistics[]> {
@@ -1866,7 +1959,7 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
 
-    return data as MonthlyGameStatistics[] || [];
+    return (data || []).map(item => this.transformMonthlyStats(item)).filter(Boolean) as MonthlyGameStatistics[];
   }
 
   async createMonthlyStats(stats: Omit<MonthlyGameStatistics, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
@@ -1892,19 +1985,37 @@ export class SupabaseStorage implements IStorage {
   }
 
   async incrementMonthlyStats(monthYear: string, increments: Partial<MonthlyGameStatistics>): Promise<void> {
-    // Check if record exists
-    let existing = await this.getMonthlyStats(monthYear);
+    // Check if record exists by querying database directly
+    const { data: existingData, error: fetchError } = await supabaseServer
+      .from('monthly_game_statistics')
+      .select('*')
+      .eq('month_year', monthYear)
+      .single();
     
-    if (existing) {
-      // Update existing record
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error('Error checking existing monthly stats:', fetchError);
+      throw fetchError;
+    }
+    
+    if (existingData) {
+      // Update existing record using snake_case fields
+      const existing = this.transformMonthlyStats(existingData);
+      if (!existing) throw new Error('Failed to parse existing stats');
+      
+      // Calculate profit loss percentage
+      const newTotalBets = existing.totalBets + (increments.totalBets || 0);
+      const newProfitLoss = existing.profitLoss + (increments.profitLoss || 0);
+      const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
+      
       const { error } = await supabaseServer
         .from('monthly_game_statistics')
         .update({
           total_games: existing.totalGames + (increments.totalGames || 0),
-          total_bets: existing.totalBets + (increments.totalBets || 0),
+          total_bets: newTotalBets,
           total_payouts: existing.totalPayouts + (increments.totalPayouts || 0),
           total_revenue: existing.totalRevenue + (increments.totalRevenue || 0),
-          profit_loss: existing.profitLoss + (increments.profitLoss || 0),
+          profit_loss: newProfitLoss,
+          profit_loss_percentage: newProfitLossPercentage,
           unique_players: existing.uniquePlayers + (increments.uniquePlayers || 0),
           updated_at: new Date()
         })
@@ -1929,6 +2040,25 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
+  // Helper function to transform snake_case to camelCase for yearly stats
+  private transformYearlyStats(data: any): YearlyGameStatistics | null {
+    if (!data) return null;
+    
+    return {
+      id: data.id,
+      year: Number(data.year ?? 0),
+      totalGames: Number(data.total_games ?? data.totalGames ?? 0),
+      totalBets: Number(data.total_bets ?? data.totalBets ?? 0),
+      totalPayouts: Number(data.total_payouts ?? data.totalPayouts ?? 0),
+      totalRevenue: Number(data.total_revenue ?? data.totalRevenue ?? 0),
+      profitLoss: Number(data.profit_loss ?? data.profitLoss ?? 0),
+      profitLossPercentage: Number(data.profit_loss_percentage ?? data.profitLossPercentage ?? 0),
+      uniquePlayers: Number(data.unique_players ?? data.uniquePlayers ?? 0),
+      createdAt: data.created_at ? new Date(data.created_at) : new Date(),
+      updatedAt: data.updated_at ? new Date(data.updated_at) : new Date()
+    };
+  }
+
   // Yearly statistics methods
   async getYearlyStats(year: number): Promise<YearlyGameStatistics | null> {
     const { data, error } = await supabaseServer
@@ -1942,7 +2072,7 @@ export class SupabaseStorage implements IStorage {
       return null;
     }
 
-    return data as YearlyGameStatistics;
+    return this.transformYearlyStats(data);
   }
 
   async getYearlyStatsByRange(startYear: number, endYear: number): Promise<YearlyGameStatistics[]> {
@@ -1958,7 +2088,7 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
 
-    return data as YearlyGameStatistics[] || [];
+    return (data || []).map(item => this.transformYearlyStats(item)).filter(Boolean) as YearlyGameStatistics[];
   }
 
   async createYearlyStats(stats: Omit<YearlyGameStatistics, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
@@ -1984,19 +2114,37 @@ export class SupabaseStorage implements IStorage {
   }
 
   async incrementYearlyStats(year: number, increments: Partial<YearlyGameStatistics>): Promise<void> {
-    // Check if record exists
-    let existing = await this.getYearlyStats(year);
+    // Check if record exists by querying database directly
+    const { data: existingData, error: fetchError } = await supabaseServer
+      .from('yearly_game_statistics')
+      .select('*')
+      .eq('year', year)
+      .single();
     
-    if (existing) {
-      // Update existing record
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error('Error checking existing yearly stats:', fetchError);
+      throw fetchError;
+    }
+    
+    if (existingData) {
+      // Update existing record using snake_case fields
+      const existing = this.transformYearlyStats(existingData);
+      if (!existing) throw new Error('Failed to parse existing stats');
+      
+      // Calculate profit loss percentage
+      const newTotalBets = existing.totalBets + (increments.totalBets || 0);
+      const newProfitLoss = existing.profitLoss + (increments.profitLoss || 0);
+      const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
+      
       const { error } = await supabaseServer
         .from('yearly_game_statistics')
         .update({
           total_games: existing.totalGames + (increments.totalGames || 0),
-          total_bets: existing.totalBets + (increments.totalBets || 0),
+          total_bets: newTotalBets,
           total_payouts: existing.totalPayouts + (increments.totalPayouts || 0),
           total_revenue: existing.totalRevenue + (increments.totalRevenue || 0),
-          profit_loss: existing.profitLoss + (increments.profitLoss || 0),
+          profit_loss: newProfitLoss,
+          profit_loss_percentage: newProfitLossPercentage,
           unique_players: existing.uniquePlayers + (increments.uniquePlayers || 0),
           updated_at: new Date()
         })

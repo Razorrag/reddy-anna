@@ -21,7 +21,7 @@ openssl req -x509 -newkey rsa:2048 -nodes \
   -keyout server.key \
   -out server.crt \
   -days 365 \
-  -subj "/CN=your-vps-ip"
+  -subj "/CN=91.108.110.72"
 
 # Or get Let's Encrypt certificate (if you have a domain)
 certbot certonly --standalone -d yourdomain.com
@@ -96,7 +96,7 @@ sudo apt install caddy
 
 # Create Caddyfile (no Nginx needed!)
 cat > /etc/caddy/Caddyfile <<EOF
-your-vps-ip {
+91.108.110.72 {
     reverse_proxy localhost:5000
     
     # WebSocket support
@@ -203,21 +203,21 @@ sudo netstat -tuln | grep -E ':(3478|49152|5000|443)'
 
 1. **Check HTTPS (MUST BE HTTPS!):**
    ```
-   Open: https://your-vps-ip:443 (if using HTTPS on 443)
-   OR: https://your-vps-ip:5000 (if using HTTPS on 5000)
+   Open: https://91.108.110.72:443 (if using HTTPS on 443)
+   OR: https://91.108.110.72:5000 (if using HTTPS on 5000)
    Should see: Secure connection (padlock icon) OR warning (self-signed cert)
    ```
 
 2. **Test HTTP (should show error in console):**
    ```
-   Open: http://your-vps-ip:5000
+   Open: http://91.108.110.72:5000
    Try screen sharing - should show error: "Screen sharing requires HTTPS"
    ```
 
 3. **Test WebSocket:**
    ```javascript
    // In browser console (HTTPS page)
-   const ws = new WebSocket('wss://your-vps-ip/ws');
+   const ws = new WebSocket('wss://91.108.110.72/ws');
    ws.onopen = () => console.log('✅ WebSocket connected');
    ws.onerror = (e) => console.error('❌ WebSocket error:', e);
    ```

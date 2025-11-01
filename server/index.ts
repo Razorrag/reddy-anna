@@ -327,13 +327,16 @@ app.use((req, res, next) => {
         app.set('wssHttp', wssFromRoutes);
       }
       
-      const httpsPort = parseInt(process.env.HTTPS_PORT || '443', 10);
+      // Use HTTPS_PORT if specified, otherwise use PORT for HTTPS (better for VPS with single port)
+      const httpsPort = process.env.HTTPS_PORT 
+        ? parseInt(process.env.HTTPS_PORT, 10) 
+        : parseInt(process.env.PORT || '5000', 10); // Use same port as PORT if HTTPS_PORT not specified
       
       // Listen with error handling
       httpsServer.on('error', (error: Error) => {
         log('❌ HTTPS server error:', error.message);
         if (error.message.includes('EADDRINUSE')) {
-          log(`   Port ${httpsPort} is already in use. Change HTTPS_PORT in .env or stop the other service.`);
+          log(`   Port ${httpsPort} is already in use. Change HTTPS_PORT or PORT in .env or stop the other service.`);
         } else if (error.message.includes('EACCES')) {
           log(`   Permission denied on port ${httpsPort}. Run with sudo or use a port >= 1024.`);
         } else if (error.message.includes('certificate')) {
@@ -345,14 +348,17 @@ app.use((req, res, next) => {
         log(`✅ HTTPS server serving on https://${host}:${httpsPort}`);
         log(`✅ WebSocket server running on wss://${host}:${httpsPort}/ws`);
         log(`🔧 Admin panel: Game Control available`);
-        log(`⚠️  Screen sharing REQUIRES HTTPS - use https://your-vps-ip:${httpsPort}`);
+        log(`⚠️  Screen sharing REQUIRES HTTPS - use https://91.108.110.72:${httpsPort}`);
         log(`💡 For Let's Encrypt, use fullchain.pem as SSL_CERT_PATH`);
+        if (httpsPort !== 443 && !process.env.HTTPS_PORT) {
+          log(`💡 Using PORT (${httpsPort}) for HTTPS. To use different ports, set HTTPS_PORT=443 and PORT=5000`);
+        }
       });
       
-      // Optional: Redirect HTTP to HTTPS
-      if (process.env.HTTP_TO_HTTPS_REDIRECT === 'true') {
+      // Optional: Redirect HTTP to HTTPS (only if different ports are used)
+      if (process.env.HTTP_TO_HTTPS_REDIRECT === 'true' && httpsPort !== port) {
         server.listen(port, host, () => {
-          log(`✅ HTTP server serving on http://${host}:${port} (redirects to HTTPS)`);
+          log(`✅ HTTP server serving on http://${host}:${port} (redirects to HTTPS on port ${httpsPort})`);
           
           // Redirect all HTTP requests to HTTPS
           app.use((req, res, next) => {
@@ -363,11 +369,14 @@ app.use((req, res, next) => {
             next();
           });
         });
+      } else if (httpsPort === port) {
+        // If same port, don't start HTTP server - HTTPS handles everything
+        log(`✅ HTTPS is using the same port as PORT (${port}) - HTTP server not started (use HTTPS only)`);
       } else {
-        // Keep HTTP server for non-localhost access without redirect
+        // Keep HTTP server for non-localhost access without redirect (different ports)
         server.listen(port, host, () => {
           log(`⚠️  HTTP server serving on http://${host}:${port}`);
-          log(`⚠️  WARNING: Screen sharing will NOT work on HTTP! Use HTTPS: https://your-vps-ip:${httpsPort}`);
+          log(`⚠️  WARNING: Screen sharing will NOT work on HTTP! Use HTTPS: https://91.108.110.72:${httpsPort}`);
         });
       }
     } catch (error) {

@@ -87,7 +87,7 @@ If port 443 is in use (by Nginx, Apache, or another service):
 HTTPS_PORT=8443
 ```
 
-Then access via: `https://your-vps-ip:8443`
+Then access via: `https://91.108.110.72:8443`
 
 **Option B: Stop conflicting service**
 ```bash
@@ -241,7 +241,7 @@ sudo ss -tuln | grep :443
 ```bash
 openssl req -x509 -newkey rsa:2048 -nodes \
   -keyout server.key -out server.crt -days 365 \
-  -subj "/CN=your-vps-ip"
+  -subj "/CN=91.108.110.72"
 ```
 
 ### Get Let's Encrypt Certificate
@@ -277,7 +277,7 @@ pm2 logs andar-bahar
 
 1. **Access via HTTPS:**
    ```
-   https://your-vps-ip:443
+   https://91.108.110.72:443
    ```
 
 2. **Check browser console:**
@@ -287,7 +287,7 @@ pm2 logs andar-bahar
 3. **Test WebSocket:**
    ```javascript
    // In browser console
-   const ws = new WebSocket('wss://your-vps-ip:443/ws');
+   const ws = new WebSocket('wss://91.108.110.72:443/ws');
    ws.onopen = () => console.log('✅ WebSocket connected');
    ws.onerror = (e) => console.error('❌ WebSocket error:', e);
    ```
@@ -311,7 +311,7 @@ If you're still experiencing SSL protocol errors after trying all the above:
 
 2. **Test certificate manually:**
    ```bash
-   openssl s_client -connect your-vps-ip:443 -showcerts
+   openssl s_client -connect 91.108.110.72:443 -showcerts
    ```
 
 3. **Verify certificate chain:**

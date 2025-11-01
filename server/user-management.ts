@@ -96,13 +96,25 @@ export const getUserDetails = async (userId: string): Promise<UserManagementResp
       return { success: false, error: 'User not found' };
     }
 
-    // Format response
+    // Format response with proper field mapping
     const userResponse = {
       id: user.id,
       username: user.phone, // Use phone as username since that's our identifier
-      balance: user.balance,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at
+      phone: user.phone,
+      fullName: user.full_name,
+      balance: typeof user.balance === 'string' ? parseFloat(user.balance) : (user.balance || 0),
+      role: user.role,
+      status: user.status,
+      totalWinnings: typeof user.total_winnings === 'string' ? parseFloat(user.total_winnings) : (user.total_winnings || 0),
+      totalLosses: typeof user.total_losses === 'string' ? parseFloat(user.total_losses) : (user.total_losses || 0),
+      gamesPlayed: user.games_played || 0,
+      gamesWon: user.games_won || 0,
+      referralCode: user.referral_code,
+      referralCodeGenerated: user.referral_code_generated,
+      depositBonusAvailable: typeof user.deposit_bonus_available === 'string' ? parseFloat(user.deposit_bonus_available) : (user.deposit_bonus_available || 0),
+      referralBonusAvailable: typeof user.referral_bonus_available === 'string' ? parseFloat(user.referral_bonus_available) : (user.referral_bonus_available || 0),
+      createdAt: user.created_at ? new Date(user.created_at) : new Date(),
+      updatedAt: user.updated_at ? new Date(user.updated_at) : new Date()
     };
 
     return { success: true, user: userResponse };
