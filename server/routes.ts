@@ -1294,6 +1294,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
           }
 
+          // Handle new WebRTC message types
+          case 'request_stream': {
+            if (!client || !isAuthenticated) {
+              sendError(ws, 'Authentication required to request stream');
+              return;
+            }
+
+            const { roomId } = (message as any).data;
+            console.log(`[STREAM] Player ${client.userId} requesting stream for room ${roomId}`);
+            
+            // Check if there's an active stream and notify player
+            const activeStreams = webrtcSignaling.getActiveStreams();
+            if (activeStreams.length > 0) {
+              // Notify player about active stream
+              ws.send(JSON.stringify({
+                type: 'webrtc:signal',
+                data: {
+                  type: 'stream-start',
+                  from: activeStreams[0].adminUserId,
+                  streamId: activeStreams[0].streamId
+                }
+              }));
+            }
+            break;
+          }
+
+          case 'webrtc_offer': {
+            if (!client || !isAuthenticated || !webrtcClientId) {
+              console.log('⚠️ WebRTC offer received but client not properly initialized');
+              return;
+            }
+
+            const offerData = (message as any).data;
+            console.log(`📡 WebRTC offer from ${client.role} ${client.userId}`);
+            
+            if (client.role === 'admin') {
+              webrtcSignaling.handleMessage(webrtcClientId, {
+                type: 'offer',
+                from: webrtcClientId,
+                sdp: offerData.offer,
+                streamId: offerData.streamId,
+                roomId: offerData.roomId
+              });
+            }
+            break;
+          }
+
+          case 'webrtc_answer': {
+            if (!client || !isAuthenticated || !webrtcClientId) {
+              console.log('⚠️ WebRTC answer received but client not properly initialized');
+              return;
+            }
+
+            const answerData = (message as any).data;
+            console.log(`📡 WebRTC answer from ${client.role} ${client.userId}`);
+            
+            if (client.role === 'player') {
+              webrtcSignaling.handleMessage(webrtcClientId, {
+                type: 'answer',
+                from: webrtcClientId,
+                sdp: answerData.answer,
+                roomId: answerData.roomId
+              });
+            }
+            break;
+          }
+
+          case 'webrtc_ice_candidate': {
+            if (!client || !isAuthenticated || !webrtcClientId) {
+              console.log('⚠️ WebRTC ICE candidate received but client not properly initialized');
+              return;
+            }
+
+            const candidateData = (message as any).data;
+            console.log(`🧊 WebRTC ICE candidate from ${client.role} ${client.userId}`);
+            
+            webrtcSignaling.handleMessage(webrtcClientId, {
+              type: 'ice-candidate',
+              from: webrtcClientId,
+              candidate: candidateData.candidate,
+              roomId: candidateData.roomId
+            });
+            break;
+          }
+
           // Handle stream viewer leave
           case 'stream_viewer_leave': {
             if (!client || !isAuthenticated) {

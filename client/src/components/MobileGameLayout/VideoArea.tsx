@@ -80,7 +80,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
       {/* Live Video Stream - Fill available space; allow cropping (object-cover) */}
       <div className="absolute inset-0">
         <StreamPlayer
-          isLive={gameState.phase !== 'idle'}
           isScreenSharing={isScreenSharing}
           className="w-full h-full object-cover"
         />

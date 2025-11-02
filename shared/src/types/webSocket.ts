@@ -305,8 +305,28 @@ export type WebRTCSignalMessage = WebSocketMessageBase<'webrtc:signal', {
   from?: string;
   to?: string;
   streamId?: string;
+  roomId?: string;
   sdp?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
+}>;
+
+export type RequestStreamMessage = WebSocketMessageBase<'request_stream', {
+  roomId: string;
+}>;
+
+export type WebRTCOfferMessageNew = WebSocketMessageBase<'webrtc_offer', {
+  offer: RTCSessionDescriptionInit;
+  roomId: string;
+}>;
+
+export type WebRTCAnswerMessageNew = WebSocketMessageBase<'webrtc_answer', {
+  answer: RTCSessionDescriptionInit;
+  roomId: string;
+}>;
+
+export type WebRTCIceCandidateMessageNew = WebSocketMessageBase<'webrtc_ice_candidate', {
+  candidate: RTCIceCandidateInit;
+  roomId: string;
 }>;
 
 export type StreamViewerJoinMessage = WebSocketMessageBase<'stream_viewer_join', {
@@ -458,6 +478,10 @@ export type WebSocketMessage =
   | WebRTCAnswerMessage
   | WebRTCIceCandidateMessage
   | WebRTCSignalMessage
+  | RequestStreamMessage
+  | WebRTCOfferMessageNew
+  | WebRTCAnswerMessageNew
+  | WebRTCIceCandidateMessageNew
   | StreamViewerJoinMessage
   | StreamViewerLeaveMessage
   | StreamJoinResponseMessage

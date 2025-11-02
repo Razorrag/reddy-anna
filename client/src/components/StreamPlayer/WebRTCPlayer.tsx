@@ -1,303 +1,335 @@
-/**
- * WebRTC Player Component
- * 
- * Receives WebRTC stream from admin's screen share
- * Used for browser-based streaming
- */
-
-import { useEffect, useRef, useState } from 'react';
-import { useWebSocket } from '../../contexts/WebSocketContext';
-import { Wifi, WifiOff } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useWebSocket } from '@/contexts/WebSocketContext';
 
 interface WebRTCPlayerProps {
   roomId: string;
-  streamTitle?: string;
 }
 
-export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
+const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
+  const { sendWebSocketMessage } = useWebSocket();
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'failed'>('connecting');
-  const [isPaused, setIsPaused] = useState(false);
-  const isMountedRef = useRef(true);
-  const { sendWebSocketMessage } = useWebSocket();
+  const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
-  useEffect(() => {
-    console.log('🌐 WebRTC Player: Mounting and initializing for room:', roomId);
-    isMountedRef.current = true;
-    initializeWebRTC();
+  // Create WebRTC peer connection
+  const createPeerConnection = (): RTCPeerConnection => {
+    const configuration = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
 
-    // FIXED: Handle WebRTC offers directly from WebSocket messages
-    // The WebSocketContext already dispatches 'webrtc_offer_received' events
-    const handleOffer = async (event: any) => {
-      const { sdp } = event.detail; // expect SDP under `sdp`
-      console.log('📡 Received WebRTC offer:', sdp);
-      
-      if (peerConnectionRef.current && sdp) {
-        try {
-          await peerConnectionRef.current.setRemoteDescription(sdp);
-          const answer = await peerConnectionRef.current.createAnswer();
-          await peerConnectionRef.current.setLocalDescription(answer);
-          
-          console.log('📤 Sending WebRTC answer');
-          sendWebSocketMessage({
-            type: 'webrtc:signal',
-            data: {
-              type: 'answer',
-              sdp: answer
-            },
-          });
-        } catch (error) {
-          console.error('❌ Error handling WebRTC offer:', error);
-        }
+    const pc = new RTCPeerConnection(configuration);
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendWebSocketMessage({
+          type: 'webrtc_ice_candidate' as any,
+          data: {
+            candidate: event.candidate,
+            roomId: roomId
+          }
+        });
       }
     };
 
-    // Listen for WebRTC offers from WebSocket context
-    window.addEventListener('webrtc_offer_received', handleOffer);
-    
-    // Also handle ICE candidates
-    const handleIceCandidate = async (event: any) => {
-      const { candidate } = event.detail;
-      console.log('🧊 Received ICE candidate:', candidate);
+    // Handle connection state changes
+    pc.onconnectionstatechange = () => {
+      console.log('🎥 WebRTC connection state:', pc.connectionState);
+      setConnectionState(pc.connectionState as any);
       
-      if (peerConnectionRef.current && candidate) {
-        try {
-          await peerConnectionRef.current.addIceCandidate(candidate);
-        } catch (error) {
-          console.error('❌ Error adding ICE candidate:', error);
-        }
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        // Attempt reconnection after a delay
+        setTimeout(() => {
+          if (!isReconnecting) {
+            console.log('🔄 Attempting to reconnect WebRTC...');
+            reconnectWebRTC();
+          }
+        }, 3000);
       }
     };
-    
-    window.addEventListener('webrtc_ice_candidate_received', handleIceCandidate);
 
-    // Handle stream pause/resume
-    const handleStreamPause = () => {
-      console.log('⏸️ Stream paused by admin');
-      setIsPaused(true);
+    // Handle incoming tracks
+    pc.ontrack = (event) => {
+      console.log('🎥 Received remote track:', event.track.kind);
+      if (videoRef.current && event.streams[0]) {
+        videoRef.current.srcObject = event.streams[0];
+        videoRef.current.play().catch(error => {
+          console.error('Error playing video:', error);
+        });
+      }
     };
 
-    const handleStreamResume = () => {
-      console.log('▶️ Stream resumed by admin');
-      setIsPaused(false);
-    };
+    return pc;
+  };
 
-    window.addEventListener('webrtc_stream_pause', handleStreamPause);
-    window.addEventListener('webrtc_stream_resume', handleStreamResume);
-
-    return () => {
-      console.log('🌐 WebRTC Player: Unmounting and cleaning up');
-      isMountedRef.current = false;
-      window.removeEventListener('webrtc_offer_received', handleOffer);
-      window.removeEventListener('webrtc_ice_candidate_received', handleIceCandidate);
-      window.removeEventListener('webrtc_stream_pause', handleStreamPause);
-      window.removeEventListener('webrtc_stream_resume', handleStreamResume);
-      cleanup();
-    };
-  }, [roomId, sendWebSocketMessage]);
-
+  // Initialize WebRTC connection
   const initializeWebRTC = async () => {
     try {
-      console.log('🌐 Initializing WebRTC Player for room:', roomId);
-      
-      // Create peer connection with enhanced configuration for VPS
-      const peerConnection = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
-        ],
-        iceTransportPolicy: 'all' as RTCIceTransportPolicy,
-        bundlePolicy: 'max-bundle' as RTCBundlePolicy,
-        rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy
-      });
+      console.log('🎥 Initializing WebRTC player for room:', roomId);
+      setConnectionState('connecting');
 
+      // Create peer connection
+      const peerConnection = createPeerConnection();
       peerConnectionRef.current = peerConnection;
 
-      // Simplified connection state logging without auto-recovery
-      peerConnection.onconnectionstatechange = () => {
-        const state = peerConnection.connectionState;
-        console.log(`🔌 WebRTC Player Connection State: ${state}`);
-        setConnectionState(state as any);
-        
-        if (state === 'connected') {
-          console.log('✅ WebRTC connection established!');
-        } else if (state === 'failed') {
-          console.error('❌ WebRTC connection failed. Manual retry required.');
-        } else if (state === 'disconnected') {
-          console.warn('⚠️ WebRTC connection disconnected.');
-        }
-      };
-
-      // Enhanced ICE connection state logging
-      peerConnection.oniceconnectionstatechange = () => {
-        const iceState = peerConnection.iceConnectionState;
-        console.log(`🧊 ICE Connection State: ${iceState}`);
-        
-        if (iceState === 'failed') {
-          console.error('❌ ICE connection failed. STUN/TURN servers may be unreachable.');
-        }
-      };
-
-      // Log ICE gathering state
-      peerConnection.onicegatheringstatechange = () => {
-        console.log(`🧊 ICE Gathering State: ${peerConnection.iceGatheringState}`);
-      };
-
-      // Handle incoming tracks (video/audio from admin)
-      peerConnection.ontrack = (event) => {
-        console.log('📺 Received remote track:', {
-          kind: event.track.kind,
-          id: event.track.id,
-          streams: event.streams.length
-        });
-        if (isMountedRef.current && videoRef.current && event.streams[0]) {
-          console.log('📺 Setting video stream to video element');
-          videoRef.current.srcObject = event.streams[0];
-          setConnectionState('connected');
-          console.log('✅ Video stream attached successfully');
-        }
-      };
-
-      // Handle ICE candidates
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          console.log('🧊 ICE Candidate generated:', {
-            candidate: event.candidate.candidate?.substring(0, 50) + '...',
-            sdpMLineIndex: event.candidate.sdpMLineIndex
-          });
-          // Send via WebSocket (type will be handled by backend)
-          sendWebSocketMessage({
-            type: 'webrtc:signal',
-            data: {
-              type: 'ice-candidate',
-              candidate: event.candidate
-            }
-          });
-        } else {
-          console.log('🧊 ICE candidate gathering complete');
-        }
-      };
-
-      // Enhanced error handling
-      peerConnection.onicecandidateerror = (event) => {
-        console.error('❌ ICE Candidate Error:', event);
-      };
-
-      // Note: WebRTC signaling (offers, answers, ICE candidates) will be handled
-      // via WebSocket messages. The WebSocket context will need to be extended
-      // to handle these message types in a future enhancement.
-      
-      // For now, this component is ready to receive WebRTC streams
-      // when the signaling is properly connected.
-      
-      console.log('🔌 WebRTC Player waiting for admin to start screen share');
-      
-      // Notify that we're ready to receive stream
+      // Request current stream from server
       sendWebSocketMessage({
-        type: 'stream_viewer_join',
-        data: { roomId }
+        type: 'request_stream' as any,
+        data: {
+          roomId: roomId
+        }
       });
 
-      console.log('✅ WebRTC Player initialized successfully');
     } catch (error) {
-      console.error('❌ Error initializing WebRTC:', error);
-      setConnectionState('failed');
+      console.error('Failed to initialize WebRTC:', error);
+      setConnectionState('error');
     }
   };
 
-  const cleanup = () => {
-    console.log('🧹 Cleaning up WebRTC Player');
+  // Reconnection logic
+  const reconnectWebRTC = async () => {
+    if (isReconnecting) return;
     
-    // Notify we're leaving
-    sendWebSocketMessage({
-      type: 'stream_viewer_leave',
-      data: { roomId }
-    });
-
-    // Close peer connection
+    setIsReconnecting(true);
+    
+    // Clean up existing connection
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
 
-    // Clear video source
+    // Clear video
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+
+    // Wait a bit before reconnecting
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Reinitialize
+    await initializeWebRTC();
+    setIsReconnecting(false);
   };
 
-  // Show connection status overlay (only for paused or failed states)
-  const renderStatusOverlay = () => {
-    // Don't show overlay during normal connecting - stream broadcasts automatically
-    if (connectionState === 'connected' && !isPaused) return null;
-    if (connectionState === 'connecting') return null;
+  // Handle WebRTC signaling messages
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+        
+        // Handle WebRTC signaling messages
+        if (message.type === 'webrtc:signal') {
+          const data = message.data;
+          
+          switch (data.type) {
+            case 'offer':
+              handleOffer(data);
+              break;
+              
+            case 'answer':
+              handleAnswer(data);
+              break;
+              
+            case 'ice-candidate':
+              handleIceCandidate(data);
+              break;
+              
+            case 'stream-start':
+              console.log('🎥 Stream started, initializing WebRTC...');
+              initializeWebRTC();
+              break;
+              
+            case 'stream-stop':
+              console.log('🎥 Stream stopped, cleaning up...');
+              cleanupWebRTC();
+              break;
+          }
+        }
+      } catch (error) {
+        console.error('Error handling WebSocket message:', error);
+      }
+    };
 
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-10">
-        <div className="text-center p-6">
-          {isPaused && connectionState === 'connected' && (
-            <>
-              <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-4 mx-auto">
-                <div className="flex gap-1">
-                  <div className="w-2 h-8 bg-yellow-400 rounded"></div>
-                  <div className="w-2 h-8 bg-yellow-400 rounded"></div>
-                </div>
-              </div>
-              <p className="text-white text-lg mb-2">Stream Paused</p>
-              <p className="text-gray-400 text-sm">Admin has paused the stream</p>
-            </>
-          )}
-          
-          {connectionState === 'disconnected' && (
-            <>
-              <WifiOff className="w-16 h-16 text-yellow-400 mb-4 mx-auto animate-pulse" />
-              <p className="text-white text-lg mb-2">Reconnecting...</p>
-              <p className="text-gray-400 text-sm">Attempting to reconnect to stream...</p>
-            </>
-          )}
-          
-          {connectionState === 'failed' && (
-            <>
-              <WifiOff className="w-16 h-16 text-red-400 mb-4 mx-auto" />
-              <p className="text-white text-lg mb-2">Connection Failed</p>
-              <p className="text-gray-400 text-sm">Unable to establish connection</p>
-              <button
-                onClick={initializeWebRTC}
-                className="mt-4 px-4 py-2 bg-gold hover:bg-gold/80 text-gray-900 rounded-lg font-semibold transition-colors"
-              >
-                Retry
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    );
+    // Listen for WebSocket messages
+    const ws = (window as any).websocket;
+    if (ws) {
+      ws.addEventListener('message', handleMessage);
+    }
+
+    return () => {
+      if (ws) {
+        ws.removeEventListener('message', handleMessage);
+      }
+    };
+  }, [roomId]);
+
+  // Handle WebRTC offer
+  const handleOffer = async (data: any) => {
+    if (!peerConnectionRef.current) {
+      console.log('🎥 Creating peer connection for offer');
+      peerConnectionRef.current = createPeerConnection();
+    }
+
+    try {
+      await peerConnectionRef.current.setRemoteDescription(
+        new RTCSessionDescription(data.sdp)
+      );
+      
+      const answer = await peerConnectionRef.current.createAnswer();
+      await peerConnectionRef.current.setLocalDescription(answer);
+
+      sendWebSocketMessage({
+        type: 'webrtc_answer' as any,
+        data: {
+          answer: answer,
+          roomId: roomId
+        }
+      });
+
+      console.log('🎥 Sent WebRTC answer');
+    } catch (error) {
+      console.error('Error handling WebRTC offer:', error);
+      setConnectionState('error');
+    }
   };
+
+  // Handle WebRTC answer
+  const handleAnswer = async (data: any) => {
+    if (!peerConnectionRef.current) return;
+
+    try {
+      await peerConnectionRef.current.setRemoteDescription(
+        new RTCSessionDescription(data.sdp)
+      );
+      console.log('🎥 WebRTC answer received and set');
+    } catch (error) {
+      console.error('Error handling WebRTC answer:', error);
+      setConnectionState('error');
+    }
+  };
+
+  // Handle ICE candidate
+  const handleIceCandidate = async (data: any) => {
+    if (!peerConnectionRef.current) return;
+
+    try {
+      await peerConnectionRef.current.addIceCandidate(
+        new RTCIceCandidate(data.candidate)
+      );
+      console.log('🎥 ICE candidate added');
+    } catch (error) {
+      console.error('Error adding ICE candidate:', error);
+    }
+  };
+
+  // Cleanup WebRTC connection
+  const cleanupWebRTC = () => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    setConnectionState('disconnected');
+  };
+
+  // Initialize on mount
+  useEffect(() => {
+    console.log('🎥 WebRTCPlayer mounted for room:', roomId);
+    
+    // Request current stream status
+    sendWebSocketMessage({
+      type: 'request_stream' as any,
+      data: {
+        roomId: roomId
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      console.log('🎥 WebRTCPlayer unmounting, cleaning up...');
+      cleanupWebRTC();
+    };
+  }, [roomId]);
+
+  // Get connection state color and text
+  const getConnectionInfo = () => {
+    switch (connectionState) {
+      case 'connected':
+        return { color: 'text-green-400', text: '🟢 Connected', bg: 'bg-green-900/20' };
+      case 'connecting':
+        return { color: 'text-yellow-400', text: '🟡 Connecting...', bg: 'bg-yellow-900/20' };
+      case 'error':
+        return { color: 'text-red-400', text: '🔴 Connection Error', bg: 'bg-red-900/20' };
+      default:
+        return { color: 'text-gray-400', text: '⚫ Disconnected', bg: 'bg-gray-900/20' };
+    }
+  };
+
+  const connectionInfo = getConnectionInfo();
 
   return (
-    <div className="absolute inset-0 w-full h-full bg-black">
+    <div className="relative w-full h-full bg-black">
+      {/* Video Element */}
       <video
         ref={videoRef}
-        className="w-full h-full object-contain"
         autoPlay
         playsInline
         muted={false}
-        style={{
-          imageRendering: 'auto',
-          willChange: 'auto'
-        }}
-        onLoadedMetadata={() => {
-          if (videoRef.current) {
-            videoRef.current.play().catch(err => {
-              console.warn('Video autoplay prevented:', err);
-            });
-          }
-        }}
+        className="w-full h-full object-cover"
+        style={{ display: connectionState === 'connected' ? 'block' : 'none' }}
       />
-      
-      {renderStatusOverlay()}
+
+      {/* Connection Status Overlay */}
+      {connectionState !== 'connected' && (
+        <div className={`absolute inset-0 flex items-center justify-center ${connectionInfo.bg}`}>
+          <div className="text-center">
+            <div className={`text-6xl mb-4 ${connectionInfo.color}`}>
+              {connectionState === 'connecting' ? '🔄' : connectionState === 'error' ? '❌' : '📺'}
+            </div>
+            <div className={`text-xl font-semibold ${connectionInfo.color}`}>
+              {connectionInfo.text}
+            </div>
+            {connectionState === 'disconnected' && (
+              <div className="text-sm text-gray-400 mt-2">
+                Waiting for admin to start sharing...
+              </div>
+            )}
+            {connectionState === 'error' && (
+              <button
+                onClick={reconnectWebRTC}
+                className="mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                disabled={isReconnecting}
+              >
+                {isReconnecting ? 'Reconnecting...' : 'Reconnect'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Connection Indicator */}
+      <div className="absolute top-4 right-4">
+        <div className={`px-3 py-1 rounded-full text-xs font-medium ${connectionInfo.bg} ${connectionInfo.color} backdrop-blur-sm`}>
+          {connectionInfo.text}
+        </div>
+      </div>
+
+      {/* Room Info */}
+      <div className="absolute bottom-4 left-4">
+        <div className="px-3 py-1 rounded-full text-xs font-medium bg-black/50 text-white backdrop-blur-sm">
+          Room: {roomId}
+        </div>
+      </div>
     </div>
   );
-}
+};
+
+export default WebRTCPlayer;

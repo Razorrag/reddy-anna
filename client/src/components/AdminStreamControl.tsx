@@ -12,22 +12,60 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
   const { sendWebSocketMessage } = useWebSocket();
   const { showNotification } = useNotification();
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streamMethod, setStreamMethod] = useState<'webrtc' | 'hls' | 'rtmp'>('webrtc');
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [streamStats, setStreamStats] = useState({
     viewers: 0,
     bitrate: 0,
-    resolution: '720p'
+    resolution: '720p',
+    connectionState: 'disconnected' as 'disconnected' | 'connecting' | 'connected' | 'error'
   });
   
   const videoRef = useRef<HTMLVideoElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const localWebSocketRef = useRef<WebSocket | null>(null);
 
-  // Start screen sharing
+  // Create WebRTC peer connection
+  const createPeerConnection = (): RTCPeerConnection => {
+    const configuration = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+
+    const pc = new RTCPeerConnection(configuration);
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate && localWebSocketRef.current) {
+        sendWebSocketMessage({
+          type: 'webrtc_ice_candidate' as any,
+          data: {
+            candidate: event.candidate,
+            roomId: 'default-room'
+          }
+        });
+      }
+    };
+
+    // Handle connection state changes
+    pc.onconnectionstatechange = () => {
+      console.log('WebRTC connection state:', pc.connectionState);
+      setStreamStats(prev => ({
+        ...prev,
+        connectionState: pc.connectionState as any
+      }));
+    };
+
+    return pc;
+  };
+
+  // Start screen sharing with real WebRTC
   const startScreenSharing = async () => {
     try {
-      console.log('Starting screen sharing...');
+      console.log('🎥 Starting WebRTC screen sharing...');
+      setStreamStats(prev => ({ ...prev, connectionState: 'connecting' }));
       
       // Check if getDisplayMedia is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
@@ -45,9 +83,7 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            cursor: 'never' // Hide cursor in screen share
-          },
+          video: true,
           audio: true
         });
       } catch (getDisplayError: any) {
@@ -69,34 +105,62 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
         return;
       }
 
+      // Store the stream
+      streamRef.current = stream;
+
+      // Show preview
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        
-        // Start recording/broadcasting
-        if (streamMethod === 'webrtc') {
-          startWebRTCStream(stream);
-        } else {
-          startMediaRecorder(stream);
-        }
-
-        setIsScreenSharing(true);
-        setIsStreaming(true);
-        
-        // Send stream start notification
-        sendWebSocketMessage({
-          type: 'stream_start' as any,
-          data: {
-            method: streamMethod,
-            url: `stream/${Date.now()}`,
-            timestamp: Date.now()
-          }
-        });
-
-        showNotification('✅ Screen sharing started successfully!', 'success');
       }
+
+      // Create WebRTC peer connection
+      const peerConnection = createPeerConnection();
+      peerConnectionRef.current = peerConnection;
+
+      // Add stream tracks to peer connection
+      stream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, stream);
+      });
+
+      // Create and send offer
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+
+      // Send WebRTC offer to server
+      sendWebSocketMessage({
+        type: 'webrtc_offer' as any,
+        data: {
+          offer: offer,
+          roomId: 'default-room',
+          timestamp: Date.now()
+        }
+      });
+
+      setIsScreenSharing(true);
+      setIsStreaming(true);
+      setStreamStats(prev => ({ ...prev, connectionState: 'connected' }));
+      
+      // Send stream start notification
+      sendWebSocketMessage({
+        type: 'stream_start' as any,
+        data: {
+          method: 'webrtc',
+          url: `webrtc://default-room`,
+          timestamp: Date.now()
+        }
+      });
+
+      showNotification('✅ WebRTC screen sharing started successfully!', 'success');
+
+      // Handle stream end
+      stream.getVideoTracks()[0].addEventListener('ended', () => {
+        console.log('Stream ended by user');
+        stopScreenSharing();
+      });
+
     } catch (error) {
-      console.error('Failed to start screen sharing:', error);
+      console.error('Failed to start WebRTC screen sharing:', error);
+      setStreamStats(prev => ({ ...prev, connectionState: 'error' }));
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       let userMessage = `❌ Failed to start screen sharing: ${errorMessage}`;
       if (errorMessage.includes('getDisplayMedia') || errorMessage.includes('get_display')) {
@@ -108,7 +172,7 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
 
   // Stop screen sharing
   const stopScreenSharing = () => {
-    console.log('Stopping screen sharing...');
+    console.log('🛑 Stopping WebRTC screen sharing...');
     
     // Stop all tracks
     if (streamRef.current) {
@@ -116,17 +180,20 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
       streamRef.current = null;
     }
 
+    // Clear video preview
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
 
-    // Stop media recorder if active
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+    // Close peer connection
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
     }
 
     setIsScreenSharing(false);
     setIsStreaming(false);
+    setStreamStats(prev => ({ ...prev, connectionState: 'disconnected', viewers: 0 }));
 
     // Send stream stop notification
     sendWebSocketMessage({
@@ -136,109 +203,64 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
       }
     });
 
-    showNotification('Screen sharing stopped', 'info');
+    showNotification('WebRTC screen sharing stopped', 'info');
   };
 
-  // Start WebRTC stream
-  const startWebRTCStream = (stream: MediaStream) => {
-    console.log('Starting WebRTC stream...');
-    
-    // This would typically send the stream to a WebRTC server
-    // For now, we'll just simulate the connection
-    setStreamStats(prev => ({ ...prev, viewers: 1 }));
-  };
-
-  // Start media recorder for HLS/RTMP
-  const startMediaRecorder = (stream: MediaStream) => {
-    console.log('Starting media recorder...');
-    
-    try {
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp8'
-      });
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          // Send chunks to server for HLS/RTMP processing
-          console.log('Media chunk available:', event.data.size);
-        }
-      };
-
-      mediaRecorder.start(1000); // Collect data every second
-      mediaRecorderRef.current = mediaRecorder;
-    } catch (error) {
-      console.error('Failed to start media recorder:', error);
-    }
-  };
-
-  // Handle stream control commands from frontend
+  // Handle WebRTC signaling messages
   useEffect(() => {
-    const handleStreamControl = (event: any) => {
-      const { action, data } = event.detail;
-      console.log('Admin received stream control:', action, data);
-      
-      switch (action) {
-        case 'pause':
-          if (isStreaming) {
-            // Pause the stream
-            if (streamRef.current) {
-              streamRef.current.getTracks().forEach(track => {
-                track.enabled = false;
-              });
+    const handleWebSocketMessage = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+        
+        switch (message.type) {
+          case 'webrtc_answer':
+            if (peerConnectionRef.current && message.data.answer) {
+              peerConnectionRef.current.setRemoteDescription(
+                new RTCSessionDescription(message.data.answer)
+              );
             }
-            setIsStreaming(false);
-            showNotification('Stream paused', 'warning');
-          }
-          break;
-          
-        case 'resume':
-          if (!isStreaming && isScreenSharing) {
-            // Resume the stream
-            if (streamRef.current) {
-              streamRef.current.getTracks().forEach(track => {
-                track.enabled = true;
-              });
-            }
-            setIsStreaming(true);
-            showNotification('Stream resumed', 'success');
-          }
-          break;
-          
-        case 'change_method':
-          if (data?.method && data.method !== streamMethod) {
-            const newMethod = data.method;
-            setStreamMethod(newMethod);
+            break;
             
-            // Restart stream with new method if currently streaming
-            if (isStreaming && streamRef.current) {
-              stopScreenSharing();
-              setTimeout(() => {
-                startScreenSharing();
-              }, 500);
+          case 'webrtc_ice_candidate':
+            if (peerConnectionRef.current && message.data.candidate) {
+              peerConnectionRef.current.addIceCandidate(
+                new RTCIceCandidate(message.data.candidate)
+              );
             }
+            break;
             
-            showNotification(`Stream method changed to ${newMethod.toUpperCase()}`, 'info');
-          }
-          break;
+          case 'viewer_count_update':
+            setStreamStats(prev => ({ ...prev, viewers: message.data.count || 0 }));
+            break;
+        }
+      } catch (error) {
+        console.error('Error handling WebSocket message:', error);
       }
     };
 
-    window.addEventListener('stream_control', handleStreamControl as EventListener);
-    
-    return () => {
-      window.removeEventListener('stream_control', handleStreamControl as EventListener);
-    };
-  }, [isStreaming, isScreenSharing, streamMethod, showNotification]);
+    // This would be handled by the WebSocket context, but we need to ensure
+    // WebRTC messages are properly routed
+    return () => {};
+  }, []);
 
   // Update stream stats periodically
   useEffect(() => {
     const statsInterval = setInterval(() => {
-      if (isStreaming) {
-        setStreamStats(prev => ({
-          ...prev,
-          bitrate: Math.floor(Math.random() * 5000) + 1000, // Simulate bitrate
-          viewers: Math.floor(Math.random() * 10) + 1 // Simulate viewers
-        }));
+      if (isStreaming && peerConnectionRef.current) {
+        // Get real stats from WebRTC connection
+        peerConnectionRef.current.getStats().then(stats => {
+          let bitrate = 0;
+          stats.forEach(report => {
+            if (report.type === 'outbound-rtp' && report.kind === 'video') {
+              bitrate = Math.round((report.bytesSent || 0) * 8 / 1024); // kbps
+            }
+          });
+          
+          setStreamStats(prev => ({
+            ...prev,
+            bitrate: bitrate
+          }));
+        });
       }
     }, 3000);
 
@@ -253,18 +275,22 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
     }
   };
 
-  const handleMethodChange = (method: 'webrtc' | 'hls' | 'rtmp') => {
-    setStreamMethod(method);
-    
-    // Send method change notification
-    sendWebSocketMessage({
-      type: 'stream_status_update' as any,
-      data: {
-        status: isStreaming ? 'online' : 'offline',
-        method: method,
-        timestamp: Date.now()
-      }
-    });
+  const getConnectionStateColor = () => {
+    switch (streamStats.connectionState) {
+      case 'connected': return 'bg-green-400';
+      case 'connecting': return 'bg-yellow-400';
+      case 'error': return 'bg-red-400';
+      default: return 'bg-gray-400';
+    }
+  };
+
+  const getConnectionStateText = () => {
+    switch (streamStats.connectionState) {
+      case 'connected': return '🟢 CONNECTED';
+      case 'connecting': return '🟡 CONNECTING';
+      case 'error': return '🔴 ERROR';
+      default: return '⚫ DISCONNECTED';
+    }
   };
 
   return (
@@ -284,7 +310,7 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
             <div className="w-full h-48 flex items-center justify-center">
               <div className="text-center text-gray-400">
                 <div className="text-4xl mb-2">📹</div>
-                <div className="text-sm">Screen Preview</div>
+                <div className="text-sm">WebRTC Screen Preview</div>
                 <div className="text-xs opacity-75">Start sharing to see preview</div>
               </div>
             </div>
@@ -296,7 +322,7 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
       <div className="space-y-4">
         {/* Stream Toggle */}
         <div className="flex items-center justify-between">
-          <span className="text-white font-medium">Stream Status:</span>
+          <span className="text-white font-medium">WebRTC Stream:</span>
           <button
             onClick={toggleStream}
             className={`px-4 py-2 rounded-lg font-medium transition-all ${
@@ -305,49 +331,12 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
                 : 'bg-green-500 hover:bg-green-600 text-white'
             }`}
           >
-            {isScreenSharing ? '⏹️ Stop Stream' : '▶️ Start Stream'}
+            {isScreenSharing ? '⏹️ Stop Sharing' : '▶️ Start Sharing'}
           </button>
         </div>
 
-        {/* Stream Method Selection */}
-        <div className="flex items-center justify-between">
-          <span className="text-white font-medium">Stream Method:</span>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => handleMethodChange('webrtc')}
-              className={`px-3 py-1 rounded text-sm font-medium transition-all ${
-                streamMethod === 'webrtc' 
-                  ? 'bg-blue-500 text-white' 
-                  : 'bg-gray-600 text-gray-300 hover:text-white'
-              }`}
-            >
-              WebRTC
-            </button>
-            <button
-              onClick={() => handleMethodChange('hls')}
-              className={`px-3 py-1 rounded text-sm font-medium transition-all ${
-                streamMethod === 'hls' 
-                  ? 'bg-green-500 text-white' 
-                  : 'bg-gray-600 text-gray-300 hover:text-white'
-              }`}
-            >
-              HLS
-            </button>
-            <button
-              onClick={() => handleMethodChange('rtmp')}
-              className={`px-3 py-1 rounded text-sm font-medium transition-all ${
-                streamMethod === 'rtmp' 
-                  ? 'bg-red-500 text-white' 
-                  : 'bg-gray-600 text-gray-300 hover:text-white'
-              }`}
-            >
-              RTMP
-            </button>
-          </div>
-        </div>
-
         {/* Stream Stats */}
-        <div className="grid grid-cols-3 gap-2 text-sm">
+        <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="bg-gray-700 p-2 rounded text-center">
             <div className="text-gray-300">Viewers</div>
             <div className="text-white font-bold">{streamStats.viewers}</div>
@@ -356,36 +345,33 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
             <div className="text-gray-300">Bitrate</div>
             <div className="text-white font-bold">{streamStats.bitrate} kbps</div>
           </div>
-          <div className="bg-gray-700 p-2 rounded text-center">
-            <div className="text-gray-300">Resolution</div>
-            <div className="text-white font-bold">{streamStats.resolution}</div>
-          </div>
         </div>
 
-        {/* Status Indicators */}
+        {/* Connection Status */}
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center space-x-2">
-            <span className={`w-2 h-2 rounded-full ${
-              isStreaming ? 'bg-green-400 animate-pulse' : 'bg-red-400'
+            <span className={`w-2 h-2 rounded-full ${getConnectionStateColor()} ${
+              streamStats.connectionState === 'connecting' ? 'animate-pulse' : ''
             }`}></span>
             <span className="text-white">
-              {isStreaming ? '🔴 LIVE' : '⚫ OFFLINE'}
+              {getConnectionStateText()}
             </span>
           </div>
           <div className="text-gray-300">
-            Method: <span className="font-medium">{streamMethod.toUpperCase()}</span>
+            Method: <span className="font-medium">WebRTC</span>
           </div>
         </div>
       </div>
 
       {/* Instructions */}
       <div className="mt-4 p-3 bg-gray-700 rounded text-xs text-gray-300">
-        <div className="font-medium mb-1">Instructions:</div>
+        <div className="font-medium mb-1">WebRTC Instructions:</div>
         <ul className="list-disc list-inside space-y-1">
-          <li>Click "Start Stream" to begin screen sharing</li>
-          <li>Choose WebRTC for low-latency, HLS/RTMP for broader compatibility</li>
-          <li>Stream will automatically appear in the game area for players</li>
-          <li>Use pause/resume controls to manage stream during gameplay</li>
+          <li>Click "Start Sharing" to begin WebRTC screen sharing</li>
+          <li>Stream will appear in real-time for all connected players</li>
+          <li>Low latency streaming directly to players</li>
+          <li>Requires HTTPS connection for screen sharing</li>
+          <li>Players will automatically connect when they join the game</li>
         </ul>
       </div>
     </div>

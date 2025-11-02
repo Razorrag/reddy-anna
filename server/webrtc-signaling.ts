@@ -1,18 +1,3 @@
-/**
- * WEBRTC SIGNALING SERVER
- * 
- * This module handles WebRTC signaling for screen sharing between admin and players.
- * 
- * Flow:
- * 1. Admin captures screen and creates RTCPeerConnection
- * 2. Admin sends SDP offer to server
- * 3. Server broadcasts offer to all connected players
- * 4. Players create RTCPeerConnection and send SDP answer back
- * 5. Server forwards answer to admin
- * 6. ICE candidates are exchanged for NAT traversal
- * 7. Direct peer-to-peer connection established
- */
-
 import { WebSocket } from 'ws';
 
 interface WebRTCClient {
@@ -23,10 +8,11 @@ interface WebRTCClient {
 }
 
 interface SignalingMessage {
-  type: 'offer' | 'answer' | 'ice-candidate' | 'stream-start' | 'stream-stop';
-  from: string;
+  type: 'stream-start' | 'stream-stop' | 'stream-pause' | 'stream-resume' | 'offer' | 'answer' | 'ice-candidate' | 'webrtc_offer' | 'webrtc_answer' | 'webrtc_ice_candidate';
+  from?: string;
   to?: string;
   streamId?: string;
+  roomId?: string;
   sdp?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
 }
@@ -90,14 +76,17 @@ class WebRTCSignalingServer {
         break;
 
       case 'offer':
+      case 'webrtc_offer':
         this.handleOffer(client, message);
         break;
 
       case 'answer':
+      case 'webrtc_answer':
         this.handleAnswer(client, message);
         break;
 
       case 'ice-candidate':
+      case 'webrtc_ice_candidate':
         this.handleIceCandidate(client, message);
         break;
 
@@ -215,6 +204,7 @@ class WebRTCSignalingServer {
         type: 'offer',
         from: client.userId,
         streamId: client.streamId || message.streamId,
+        roomId: message.roomId,
         sdp: message.sdp
       });
       console.log(`[WebRTC] Offer broadcasted from ${client.userId} to all players`);
@@ -224,6 +214,7 @@ class WebRTCSignalingServer {
         type: 'offer',
         from: client.userId,
         streamId: client.streamId || message.streamId,
+        roomId: message.roomId,
         sdp: message.sdp
       });
       console.log(`[WebRTC] Offer sent from ${client.userId} to player ${message.to}`);
@@ -239,7 +230,7 @@ class WebRTCSignalingServer {
       return;
     }
 
-    // Find the admin who started the active stream
+    // Find admin who started the active stream
     let targetAdminId: string | undefined = message.to;
     
     if (!targetAdminId) {
@@ -283,14 +274,14 @@ class WebRTCSignalingServer {
       // If no specific recipient, send to opposite role
       if (client.role === 'admin') {
         // Admin sends ICE candidates to all players (broadcast)
-        this.sendToPlayers({
+        this.broadcastToPlayers({
           type: 'ice-candidate',
           from: client.userId,
           candidate: message.candidate,
           streamId: client.streamId
         });
       } else {
-        // Player sends ICE candidate to the admin who started the stream
+        // Player sends ICE candidate to admin who started the stream
         let targetAdminId: string | undefined;
         
         // Find admin from active stream
@@ -357,7 +348,7 @@ class WebRTCSignalingServer {
     }
 
     try {
-      // Send message in the format expected by the frontend
+      // Send message in format expected by the frontend
       client.ws.send(JSON.stringify({
         type: 'webrtc:signal',
         data: message
