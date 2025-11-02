@@ -67,7 +67,7 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
   };
 
   // Initialize WebRTC connection
-  const initializeWebRTC = async () => {
+  const initializeWebRTC = useCallback(async () => {
     try {
       console.log('🎥 Initializing WebRTC player for room:', roomId);
       setConnectionState('connecting');
@@ -88,7 +88,7 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
       console.error('Failed to initialize WebRTC:', error);
       setConnectionState('error');
     }
-  };
+  }, [roomId, sendWebSocketMessage]);
 
   // Reconnection logic
   const reconnectWebRTC = async () => {
@@ -115,60 +115,22 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
     setIsReconnecting(false);
   };
 
-  // Handle WebRTC signaling messages
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const message = JSON.parse(event.data);
-        
-        // Handle WebRTC signaling messages
-        if (message.type === 'webrtc:signal') {
-          const data = message.data;
-          
-          switch (data.type) {
-            case 'offer':
-              handleOffer(data);
-              break;
-              
-            case 'answer':
-              handleAnswer(data);
-              break;
-              
-            case 'ice-candidate':
-              handleIceCandidate(data);
-              break;
-              
-            case 'stream-start':
-              console.log('🎥 Stream started, initializing WebRTC...');
-              initializeWebRTC();
-              break;
-              
-            case 'stream-stop':
-              console.log('🎥 Stream stopped, cleaning up...');
-              cleanupWebRTC();
-              break;
-          }
-        }
-      } catch (error) {
-        console.error('Error handling WebSocket message:', error);
-      }
-    };
-
-    // Listen for WebSocket messages
-    const ws = (window as any).websocket;
-    if (ws) {
-      ws.addEventListener('message', handleMessage);
+  // Cleanup WebRTC connection
+  const cleanupWebRTC = useCallback(() => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
     }
 
-    return () => {
-      if (ws) {
-        ws.removeEventListener('message', handleMessage);
-      }
-    };
-  }, [roomId]);
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
 
-  // Handle WebRTC offer
-  const handleOffer = async (data: any) => {
+    setConnectionState('disconnected');
+  }, []);
+
+  // Handle WebRTC offer signal
+  const handleOfferSignal = useCallback(async (data: any) => {
     if (!peerConnectionRef.current) {
       console.log('🎥 Creating peer connection for offer');
       peerConnectionRef.current = createPeerConnection();
@@ -195,10 +157,10 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
       console.error('Error handling WebRTC offer:', error);
       setConnectionState('error');
     }
-  };
+  }, [roomId, sendWebSocketMessage]);
 
-  // Handle WebRTC answer
-  const handleAnswer = async (data: any) => {
+  // Handle WebRTC answer signal
+  const handleAnswerSignal = useCallback(async (data: any) => {
     if (!peerConnectionRef.current) return;
 
     try {
@@ -210,10 +172,10 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
       console.error('Error handling WebRTC answer:', error);
       setConnectionState('error');
     }
-  };
+  }, []);
 
-  // Handle ICE candidate
-  const handleIceCandidate = async (data: any) => {
+  // Handle ICE candidate signal
+  const handleIceCandidateSignal = useCallback(async (data: any) => {
     if (!peerConnectionRef.current) return;
 
     try {
@@ -224,21 +186,56 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
     } catch (error) {
       console.error('Error adding ICE candidate:', error);
     }
-  };
+  }, []);
 
-  // Cleanup WebRTC connection
-  const cleanupWebRTC = () => {
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
+  // Handle WebRTC signaling messages via CustomEvents from WebSocketContext
+  useEffect(() => {
+    const handleOffer = (event: CustomEvent) => {
+      const signalData = event.detail;
+      console.log('🎥 Player received WebRTC offer:', signalData);
+      handleOfferSignal(signalData);
+    };
 
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    const handleAnswer = (event: CustomEvent) => {
+      const signalData = event.detail;
+      console.log('🎥 Player received WebRTC answer:', signalData);
+      handleAnswerSignal(signalData);
+    };
 
-    setConnectionState('disconnected');
-  };
+    const handleIceCandidate = (event: CustomEvent) => {
+      const signalData = event.detail;
+      console.log('🧊 Player received ICE candidate:', signalData);
+      handleIceCandidateSignal(signalData);
+    };
+
+    const handleStreamStart = () => {
+      console.log('🎥 Stream started, initializing WebRTC...');
+      initializeWebRTC();
+    };
+
+    const handleStreamStop = () => {
+      console.log('🎥 Stream stopped, cleaning up...');
+      cleanupWebRTC();
+    };
+
+    // Listen to CustomEvents dispatched by WebSocketContext
+    window.addEventListener('webrtc_offer_received', handleOffer as EventListener);
+    window.addEventListener('webrtc_answer_received', handleAnswer as EventListener);
+    window.addEventListener('webrtc_ice_candidate_received', handleIceCandidate as EventListener);
+    
+    // Listen to stream status events (dispatched by WebSocketContext when stream-start/stop messages arrive)
+    window.addEventListener('webrtc_stream_start', handleStreamStart);
+    window.addEventListener('webrtc_stream_stop', handleStreamStop);
+
+    return () => {
+      window.removeEventListener('webrtc_offer_received', handleOffer as EventListener);
+      window.removeEventListener('webrtc_answer_received', handleAnswer as EventListener);
+      window.removeEventListener('webrtc_ice_candidate_received', handleIceCandidate as EventListener);
+      window.removeEventListener('webrtc_stream_start', handleStreamStart);
+      window.removeEventListener('webrtc_stream_stop', handleStreamStop);
+    };
+  }, [roomId, handleOfferSignal, handleAnswerSignal, handleIceCandidateSignal, cleanupWebRTC, initializeWebRTC, sendWebSocketMessage]);
+
 
   // Initialize on mount
   useEffect(() => {
@@ -257,7 +254,7 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
       console.log('🎥 WebRTCPlayer unmounting, cleaning up...');
       cleanupWebRTC();
     };
-  }, [roomId]);
+  }, [roomId, cleanupWebRTC]);
 
   // Get connection state color and text
   const getConnectionInfo = () => {

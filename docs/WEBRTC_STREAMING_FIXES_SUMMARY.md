@@ -301,13 +301,65 @@ For production, consider:
 | `shared/src/types/webSocket.ts` | Type definitions | Added WebRTC message types |
 | `client/src/contexts/WebSocketContext.tsx` | WebSocket context | Enhanced message routing for WebRTC |
 
+## Post-Implementation Fixes
+
+After the initial implementation, several critical issues were identified and fixed:
+
+### ✅ Fixed: Admin Message Handling
+**Issue:** `AdminStreamControl.tsx` had a broken useEffect that didn't actually listen to WebSocket messages for incoming WebRTC answers and ICE candidates.
+
+**Fix:** Updated to listen to CustomEvents dispatched by `WebSocketContext`:
+- Now properly listens to `webrtc_answer_received` events
+- Now properly listens to `webrtc_ice_candidate_received` events
+- Properly sets remote description from player answers
+- Properly adds ICE candidates from players
+
+### ✅ Fixed: Player Message Handling
+**Issue:** `WebRTCPlayer.tsx` was trying to access `window.websocket` which doesn't exist, causing messages to never be received.
+
+**Fix:** Updated to listen to CustomEvents dispatched by `WebSocketContext`:
+- Now listens to `webrtc_offer_received` events from admin
+- Now listens to `webrtc_answer_received` events (for future use)
+- Now listens to `webrtc_ice_candidate_received` events from admin
+- Now listens to `webrtc_stream_start` and `webrtc_stream_stop` events
+- All handlers wrapped in useCallback for proper React optimization
+- Proper dependency arrays for all useEffect hooks
+
+### ✅ Fixed: Event Dispatching
+**Issue:** `WebSocketContext.tsx` wasn't dispatching CustomEvents for stream-start and stream-stop, so players couldn't react to stream state changes.
+
+**Fix:** Added event dispatching in `WebSocketContext.tsx`:
+- Now dispatches `webrtc_stream_start` CustomEvent when stream starts
+- Now dispatches `webrtc_stream_stop` CustomEvent when stream stops
+- Maintains existing event dispatching for offer/answer/ice-candidate
+
+### ✅ Message Flow Verification
+**Confirmed Correct Flow:**
+1. **Admin → Players (Offer):** Admin sends `webrtc_offer` → Server routes to `webrtcSignaling.handleMessage` → Server broadcasts `webrtc:signal` with type 'offer' to all players → `WebSocketContext` dispatches `webrtc_offer_received` → `WebRTCPlayer` handles offer and creates answer
+2. **Players → Admin (Answer):** Player sends `webrtc_answer` → Server routes to `webrtcSignaling.handleMessage` → Server sends `webrtc:signal` with type 'answer' to admin → `WebSocketContext` dispatches `webrtc_answer_received` → `AdminStreamControl` sets remote description
+3. **ICE Candidates:** Both sides exchange ICE candidates through same flow → Server routes appropriately → `WebSocketContext` dispatches events → Both components handle ICE candidates
+
 ## Conclusion
 
-The WebRTC streaming system has been completely overhauled to address the original issues:
+The WebRTC streaming system has been completely overhauled and **fully fixed** to address the original issues:
 
 ✅ **Fixed:** Client-side streaming stops - Now persistent with reconnection  
 ✅ **Fixed:** Players not connecting to existing streams - Auto-notification system implemented  
 ✅ **Fixed:** Connection reliability - Added recovery mechanisms and error handling  
 ✅ **Fixed:** Missing WebRTC implementation - Full end-to-end WebRTC system implemented  
+✅ **Fixed:** Message handling issues - All components now properly listen to CustomEvents  
+✅ **Fixed:** Event dispatching - Complete event system for WebRTC signaling  
+✅ **Fixed:** Admin ICE candidate sending - Removed broken `localWebSocketRef` check that prevented ICE candidates from being sent
 
-The system now provides reliable, persistent WebRTC streaming with automatic connection management and comprehensive error handling.
+### ✅ Final Fix: Admin ICE Candidate Sending (CRITICAL)
+
+**Issue:** `AdminStreamControl.tsx` had a critical bug where ICE candidates were never sent from admin to players. The code checked `if (event.candidate && localWebSocketRef.current)` but `localWebSocketRef` was never initialized, so `localWebSocketRef.current` was always `null`, blocking all ICE candidate messages.
+
+**Fix:** 
+- Removed the unused `localWebSocketRef` declaration
+- Removed the broken check from ICE candidate handler
+- Now correctly sends ICE candidates: `if (event.candidate)` only
+
+**Impact:** This was a critical bug that would prevent WebRTC connections from establishing. ICE candidates are required for NAT traversal and connection establishment. Without this fix, streams would never connect.
+
+The system now provides reliable, persistent WebRTC streaming with automatic connection management, comprehensive error handling, proper message routing through CustomEvents, and **complete ICE candidate exchange between admin and players**.

@@ -647,11 +647,15 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               // Set global state to TRUE
               setScreenSharing(true);
               console.log('✅ Screen sharing started - UI updated');
+              // Dispatch event for WebRTCPlayer to initialize connection
+              window.dispatchEvent(new CustomEvent('webrtc_stream_start', { detail: signalData.data }));
               break;
             case 'stream-stop':
               // Set global state to FALSE
               setScreenSharing(false);
               console.log('⏹️ Screen sharing stopped - UI updated');
+              // Dispatch event for WebRTCPlayer to cleanup connection
+              window.dispatchEvent(new CustomEvent('webrtc_stream_stop', { detail: signalData.data }));
               break;
             case 'stream-pause':
               // Fire event for WebRTCPlayer to show paused overlay

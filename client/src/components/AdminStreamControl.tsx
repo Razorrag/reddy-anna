@@ -23,7 +23,6 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const localWebSocketRef = useRef<WebSocket | null>(null);
 
   // Create WebRTC peer connection
   const createPeerConnection = (): RTCPeerConnection => {
@@ -38,7 +37,7 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
 
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
-      if (event.candidate && localWebSocketRef.current) {
+      if (event.candidate) {
         sendWebSocketMessage({
           type: 'webrtc_ice_candidate' as any,
           data: {
@@ -206,42 +205,47 @@ const AdminStreamControl: React.FC<AdminStreamControlProps> = ({
     showNotification('WebRTC screen sharing stopped', 'info');
   };
 
-  // Handle WebRTC signaling messages
+  // Handle WebRTC signaling messages via CustomEvents from WebSocketContext
   useEffect(() => {
-    const handleWebSocketMessage = (event: MessageEvent) => {
-      try {
-        const message = JSON.parse(event.data);
-        
-        switch (message.type) {
-          case 'webrtc_answer':
-            if (peerConnectionRef.current && message.data.answer) {
-              peerConnectionRef.current.setRemoteDescription(
-                new RTCSessionDescription(message.data.answer)
-              );
-            }
-            break;
-            
-          case 'webrtc_ice_candidate':
-            if (peerConnectionRef.current && message.data.candidate) {
-              peerConnectionRef.current.addIceCandidate(
-                new RTCIceCandidate(message.data.candidate)
-              );
-            }
-            break;
-            
-          case 'viewer_count_update':
-            setStreamStats(prev => ({ ...prev, viewers: message.data.count || 0 }));
-            break;
-        }
-      } catch (error) {
-        console.error('Error handling WebSocket message:', error);
+    const handleAnswer = (event: CustomEvent) => {
+      const signalData = event.detail;
+      console.log('📥 Admin received WebRTC answer:', signalData);
+      
+      if (peerConnectionRef.current && signalData.sdp) {
+        peerConnectionRef.current.setRemoteDescription(
+          new RTCSessionDescription(signalData.sdp)
+        ).then(() => {
+          console.log('✅ Admin set remote description from answer');
+        }).catch(error => {
+          console.error('❌ Error setting remote description:', error);
+        });
       }
     };
 
-    // This would be handled by the WebSocket context, but we need to ensure
-    // WebRTC messages are properly routed
-    return () => {};
-  }, []);
+    const handleIceCandidate = (event: CustomEvent) => {
+      const signalData = event.detail;
+      console.log('🧊 Admin received ICE candidate:', signalData);
+      
+      if (peerConnectionRef.current && signalData.candidate) {
+        peerConnectionRef.current.addIceCandidate(
+          new RTCIceCandidate(signalData.candidate)
+        ).then(() => {
+          console.log('✅ Admin added ICE candidate');
+        }).catch(error => {
+          console.error('❌ Error adding ICE candidate:', error);
+        });
+      }
+    };
+
+    // Listen to CustomEvents dispatched by WebSocketContext
+    window.addEventListener('webrtc_answer_received', handleAnswer as EventListener);
+    window.addEventListener('webrtc_ice_candidate_received', handleIceCandidate as EventListener);
+
+    return () => {
+      window.removeEventListener('webrtc_answer_received', handleAnswer as EventListener);
+      window.removeEventListener('webrtc_ice_candidate_received', handleIceCandidate as EventListener);
+    };
+  }, []); // Empty deps: handlers only use peerConnectionRef.current (ref), which doesn't need to be in deps
 
   // Update stream stats periodically
   useEffect(() => {
