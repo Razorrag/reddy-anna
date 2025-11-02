@@ -1,5 +1,7 @@
 // Game-related type definitions
 
+import type { WebSocketMessage } from '../../../shared/src/types/webSocket';
+
 export interface Card {
   id: string;
   suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
