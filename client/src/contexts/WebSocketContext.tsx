@@ -177,6 +177,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         console.log('✅ WebSocket authenticated successfully:', data.data);
         setIsWebSocketAuthenticated(true); // Mark as authenticated
         const gameState = data.data.gameState;
+        const bufferedEvents = data.data.bufferedEvents;
+        
         if (gameState) {
           console.log('📊 Received game state sync:', {
             phase: gameState.phase,
@@ -205,8 +207,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           setCountdown(countdownTimer || timer || 0);
           setWinner(winner);
           setCurrentRound(currentRound as any);
-          if (openingCard && typeof openingCard === 'string') setSelectedOpeningCard(parseDisplayCard(openingCard));
+          // Clear cards first, then set opening card so it doesn't get cleared
           clearCards();
+          if (openingCard && typeof openingCard === 'string') setSelectedOpeningCard(parseDisplayCard(openingCard));
           andarCards?.forEach((c: any) => addAndarCard(typeof c === 'string' ? parseDisplayCard(c) : c));
           baharCards?.forEach((c: any) => addBaharCard(typeof c === 'string' ? parseDisplayCard(c) : c));
           if (round1Bets) updateTotalBets(round1Bets);
@@ -218,6 +221,41 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           if (playerRound1Bets) updatePlayerRoundBets(1, playerRound1Bets);
           if (playerRound2Bets) updatePlayerRoundBets(2, playerRound2Bets);
           if (userBalance !== undefined) updatePlayerWallet(userBalance);
+          
+          // Replay buffered events if any
+          if (bufferedEvents && Array.isArray(bufferedEvents) && bufferedEvents.length > 0) {
+            console.log(`🔄 Replaying ${bufferedEvents.length} buffered events`);
+            // Events will be handled by their respective handlers
+            bufferedEvents.forEach((event: any) => {
+              // Process buffered events in sequence
+              setTimeout(() => {
+                handleWebSocketMessage({ type: event.type, data: event.data } as any);
+              }, 100);
+            });
+          }
+          
+          // Fetch fresh data from API to ensure consistency
+          setTimeout(async () => {
+            try {
+              // Fetch balance
+              const balanceRes = await apiClient.get<{success: boolean, balance: number}>('/user/balance');
+              if (balanceRes.success && balanceRes.balance !== undefined) {
+                updatePlayerWallet(balanceRes.balance);
+              }
+            } catch (error) {
+              console.error('Error fetching data after WebSocket sync:', error);
+            }
+          }, 500);
+        }
+        break;
+      }
+
+      case 'buffered_event': {
+        // Handle individual buffered events sent separately
+        console.log('📦 Received buffered event:', data.data);
+        const event = data.data;
+        if (event && event.type) {
+          handleWebSocketMessage({ type: event.type, data: event.data } as any);
         }
         break;
       }
@@ -314,7 +352,23 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'bet_confirmed':
         console.log('Bet confirmed:', data.data);
         showNotification(`Bet placed: ₹${data.data.amount} on ${data.data.side}`, 'success');
-        updatePlayerWallet(data.data.newBalance);
+        
+        // Immediately update balance from WebSocket (highest priority)
+        const betBalance = data.data.newBalance;
+        if (betBalance !== undefined && betBalance !== null) {
+          updatePlayerWallet(betBalance);
+          // Dispatch balance event for other contexts to update immediately
+          const balanceEvent = new CustomEvent('balance-websocket-update', {
+            detail: { 
+              balance: betBalance, 
+              amount: -data.data.amount, // Negative for bet deduction
+              type: 'bet', 
+              timestamp: Date.now() 
+            }
+          });
+          window.dispatchEvent(balanceEvent);
+        }
+        
         const currentBets = data.data.round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
         const newBets = {
           ...currentBets,
@@ -358,12 +412,15 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         if (countdownTimer !== undefined || timer !== undefined) setCountdown(countdownTimer || timer || 0);
         if (winner !== undefined) setWinner(winner);
         if (currentRound !== undefined) setCurrentRound(currentRound as any);
+        // Clear cards first, then set opening card so it doesn't get cleared
+        if (andarCards || baharCards || openingCard) {
+          clearCards();
+        }
         if (openingCard) {
           const parsed = typeof openingCard === 'string' ? parseDisplayCard(openingCard) : openingCard;
           setSelectedOpeningCard(parsed);
         }
         if (andarCards || baharCards) {
-          clearCards();
           andarCards?.forEach((c: any) => addAndarCard(typeof c === 'string' ? parseDisplayCard(c) : c));
           baharCards?.forEach((c: any) => addBaharCard(typeof c === 'string' ? parseDisplayCard(c) : c));
         }

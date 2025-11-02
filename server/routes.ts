@@ -394,6 +394,92 @@ class GameState {
 
 const currentGameState = new GameState();
 
+// Function to persist game state to database
+async function persistGameState() {
+  try {
+    const existingSession = await storage.getGameSession(currentGameState.gameId);
+    
+    const updateData: any = {
+      phase: currentGameState.phase,
+      current_round: currentGameState.currentRound,
+      current_timer: currentGameState.timer,
+      opening_card: currentGameState.openingCard,
+      andar_cards: currentGameState.andarCards,
+      bahar_cards: currentGameState.baharCards,
+      winner: currentGameState.winner,
+      winning_card: currentGameState.winningCard,
+      total_andar_bets: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+      total_bahar_bets: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
+      status: currentGameState.phase === 'complete' ? 'completed' : 'active',
+    };
+
+    if (existingSession) {
+      await storage.updateGameSession(currentGameState.gameId, updateData);
+    } else if (currentGameState.phase !== 'idle') {
+      // Create new session if game is active and session doesn't exist
+      await storage.createGameSession({
+        game_id: currentGameState.gameId,
+        openingCard: currentGameState.openingCard || undefined,
+        phase: currentGameState.phase,
+        currentTimer: currentGameState.timer,
+        round: currentGameState.currentRound,
+      } as any);
+      
+      // Then update it with all the details
+      await storage.updateGameSession(currentGameState.gameId, updateData);
+    }
+  } catch (error) {
+    console.error('Error persisting game state:', error);
+  }
+}
+
+// Function to restore active game state from database on server startup
+async function restoreActiveGameState() {
+  try {
+    const activeSession = await storage.getActiveGameSession();
+    if (activeSession && activeSession.status === 'active') {
+      console.log('🔄 Restoring active game state from database...');
+      
+      // Restore game state from database
+      currentGameState.gameId = activeSession.game_id;
+      currentGameState.phase = activeSession.phase as GamePhase;
+      currentGameState.currentRound = (activeSession.current_round || 1) as 1 | 2 | 3;
+      currentGameState.timer = activeSession.current_timer || 0;
+      currentGameState.openingCard = activeSession.opening_card;
+      currentGameState.andarCards = activeSession.andar_cards || [];
+      currentGameState.baharCards = activeSession.bahar_cards || [];
+      currentGameState.winner = activeSession.winner;
+      currentGameState.winningCard = activeSession.winning_card;
+      
+      // Restore bets from database
+      const bets = await storage.getBetsForGame(activeSession.game_id);
+      const round1Bets = { andar: 0, bahar: 0 };
+      const round2Bets = { andar: 0, bahar: 0 };
+      
+      bets.forEach((bet: any) => {
+        const amount = parseFloat(bet.amount || '0');
+        if (bet.round === '1' || bet.round === 1) {
+          round1Bets[bet.side as 'andar' | 'bahar'] += amount;
+        } else if (bet.round === '2' || bet.round === 2) {
+          round2Bets[bet.side as 'andar' | 'bahar'] += amount;
+        }
+      });
+      
+      currentGameState.round1Bets = round1Bets;
+      currentGameState.round2Bets = round2Bets;
+      
+      console.log('✅ Active game state restored:', {
+        gameId: currentGameState.gameId,
+        phase: currentGameState.phase,
+        round: currentGameState.currentRound,
+        timer: currentGameState.timer
+      });
+    }
+  } catch (error) {
+    console.error('Error restoring game state:', error);
+  }
+}
+
 // Helper function to get current game state for new connections
 const getCurrentGameStateForUser = async (userId: string) => {
   try {
@@ -416,7 +502,8 @@ const getCurrentGameStateForUser = async (userId: string) => {
     }
 
     // Get user's current bets from database (only for non-admin users)
-    const userBets = user.role === 'admin' ? [] : await storage.getBetsForGame(currentGameState.gameId);
+    // CRITICAL FIX: Use getBetsForUser instead of getBetsForGame to only get current user's bets
+    const userBets = user.role === 'admin' ? [] : await storage.getBetsForUser(userId, currentGameState.gameId);
     
     // Calculate user's round bets
     const round1Bets = { andar: 0, bahar: 0 };
@@ -536,11 +623,44 @@ const getJoinMessage = (phase: string, currentRound: number): string => {
 // WebSocket broadcast functions
 function broadcast(message: any, excludeClient?: WSClient) {
   const messageStr = JSON.stringify({...message, timestamp: Date.now()});
+  
+  // Buffer important game events for replay on reconnection
+  const gameId = (global as any).currentGameState?.gameId;
+  if (gameId && shouldBufferEvent(message.type)) {
+    try {
+      const { eventBuffer } = require('./socket/event-buffer');
+      eventBuffer.addEvent(gameId, message.type, message.data);
+    } catch (error) {
+      // Event buffer not available - continue without buffering
+      console.warn('Event buffer not available:', error);
+    }
+  }
+  
   clients.forEach(client => {
     if (client !== excludeClient && client.ws.readyState === WebSocket.OPEN) {
       client.ws.send(messageStr);
     }
   });
+}
+
+/**
+ * Determine if an event type should be buffered for replay
+ */
+function shouldBufferEvent(eventType: string): boolean {
+  const bufferableEvents = [
+    'game_start',
+    'phase_change',
+    'card_dealt',
+    'round_start',
+    'timer_update',
+    'bet_confirmed',
+    'payout_received',
+    'game_complete',
+    'game_reset',
+    'start_round_2',
+    'start_final_draw'
+  ];
+  return bufferableEvents.includes(eventType);
 }
 
 function broadcastToRole(message: any, role: 'player' | 'admin') {
@@ -561,6 +681,9 @@ function startTimer(duration: number, onComplete: () => void) {
   currentGameState.timer = duration;
   currentGameState.bettingLocked = false;
   
+  // Persist timer start
+  persistGameState().catch(err => console.error('Error persisting timer start:', err));
+  
   broadcast({
     type: 'timer_update',
     data: {
@@ -570,6 +693,7 @@ function startTimer(duration: number, onComplete: () => void) {
     }
   });
   
+  let lastPersistTime = Date.now();
   currentGameState.timerInterval = setInterval(() => {
     currentGameState.timer--;
     
@@ -582,6 +706,13 @@ function startTimer(duration: number, onComplete: () => void) {
       }
     });
     
+    // Persist state every 5 seconds during timer countdown
+    const now = Date.now();
+    if (now - lastPersistTime >= 5000) {
+      persistGameState().catch(err => console.error('Error persisting timer update:', err));
+      lastPersistTime = now;
+    }
+    
     if (currentGameState.timer <= 0) {
       if (currentGameState.timerInterval) {
         clearInterval(currentGameState.timerInterval);
@@ -589,6 +720,8 @@ function startTimer(duration: number, onComplete: () => void) {
       }
       
       currentGameState.bettingLocked = true;
+      // Persist final timer state
+      persistGameState().catch(err => console.error('Error persisting timer end:', err));
       onComplete();
     }
   }, 1000);
@@ -852,17 +985,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
                
               // Get current game state for this user
               const gameStateForUser = await getCurrentGameStateForUser(client.userId);
+              
+              // Get buffered events for replay on reconnection
+              let bufferedEvents: any[] = [];
+              const gameId = (global as any).currentGameState?.gameId;
+              if (gameId) {
+                try {
+                  const { eventBuffer } = require('./socket/event-buffer');
+                  // Get recent events from last 30 seconds
+                  const sinceTimestamp = Date.now() - 30000;
+                  bufferedEvents = eventBuffer.getEventsSince(gameId, sinceTimestamp);
+                  
+                  // Limit to last 10 events to avoid overwhelming client
+                  if (bufferedEvents.length > 10) {
+                    bufferedEvents = bufferedEvents.slice(-10);
+                  }
+                } catch (error) {
+                  // Event buffer not available - continue without replay
+                  console.warn('Event buffer not available for replay:', error);
+                }
+              }
                
-              // Send authentication success with game state
+              // Send authentication success with game state and buffered events
               ws.send(JSON.stringify({
                 type: 'authenticated',
                 data: {
                   userId: decoded.id,
                   expiresIn: decoded.exp ? decoded.exp - now : 3600,
-                  gameState: gameStateForUser
+                  gameState: gameStateForUser,
+                  bufferedEvents: bufferedEvents.length > 0 ? bufferedEvents : undefined
                 }
               }));
-              console.log(`✅ WebSocket authenticated: ${decoded.id} (${decoded.role || 'player'})`);
+              
+              // Send buffered events separately if there are many
+              if (bufferedEvents.length > 10) {
+                bufferedEvents.forEach(event => {
+                  ws.send(JSON.stringify({
+                    type: 'buffered_event',
+                    data: event
+                  }));
+                });
+              }
+              
+              console.log(`✅ WebSocket authenticated: ${decoded.id} (${decoded.role || 'player'})${bufferedEvents.length > 0 ? ` - Replayed ${bufferedEvents.length} events` : ''}`);
             } catch (error) {
               console.error('WebSocket authentication error:', error instanceof Error ? error.message : String(error));
               
@@ -975,18 +1140,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           case 'activity_ping': {
-            // Handle client activity ping to keep connection alive
+            // Handle client activity ping to keep connection alive and detect stale connections
             if (!client || !isAuthenticated) {
               return;
             }
             
-            client.lastActivity = Date.now();
+            const now = Date.now();
+            client.lastActivity = now;
+            
+            // Check if connection is stale (no activity for 5 minutes)
+            const timeSinceLastActivity = now - (client.lastActivity || client.authenticatedAt || now);
+            if (timeSinceLastActivity > 300000) { // 5 minutes
+              console.warn(`⚠️ Stale connection detected for ${client.userId} - last activity: ${timeSinceLastActivity}ms ago`);
+            }
             
             ws.send(JSON.stringify({
               type: 'activity_pong',
               data: {
-                timestamp: Date.now(),
-                tokenExpiry: client.tokenExpiry
+                timestamp: now,
+                tokenExpiry: client.tokenExpiry,
+                serverTime: now
               }
             }));
             break;
@@ -4119,6 +4292,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Restore active game state on server startup
+  await restoreActiveGameState();
+  
   return httpServer;
 }
 async function transitionToRound2() {
@@ -4128,17 +4304,8 @@ async function transitionToRound2() {
   currentGameState.phase = 'betting';
   currentGameState.bettingLocked = false;
   
-  // Only update database if not in test mode
-  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
-    try {
-      await storage.updateGameSession(currentGameState.gameId, {
-        phase: 'betting',
-        currentTimer: 30
-      });
-    } catch (error) {
-      console.error('⚠️ Error updating game session for Round 2:', error);
-    }
-  }
+  // Persist state change
+  await persistGameState();
   
   broadcast({
     type: 'start_round_2',
@@ -4155,16 +4322,8 @@ async function transitionToRound2() {
     currentGameState.phase = 'dealing';
     currentGameState.bettingLocked = true;
     
-    // Only update database if not in test mode
-    if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
-      try {
-        await storage.updateGameSession(currentGameState.gameId, {
-          phase: 'dealing'
-        });
-      } catch (error) {
-        console.error('⚠️ Error updating game session for Round 2 dealing:', error);
-      }
-    }
+    // Persist state change
+    await persistGameState();
     
     broadcast({
       type: 'phase_change',
@@ -4185,17 +4344,8 @@ async function transitionToRound3() {
   currentGameState.bettingLocked = true;
   currentGameState.timer = 0;
   
-  // Only update database if not in test mode
-  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
-    try {
-      await storage.updateGameSession(currentGameState.gameId, {
-        phase: 'dealing',
-        currentTimer: 0
-      });
-    } catch (error) {
-      console.error('⚠️ Error updating game session for Round 3:', error);
-    }
-  }
+  // Persist state change
+  await persistGameState();
   
   broadcast({
     type: 'start_final_draw',
@@ -4222,19 +4372,8 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     currentGameState.timerInterval = null;
   }
   
-  // Only update database if not in test mode
-  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
-    try {
-      await storage.updateGameSession(currentGameState.gameId, {
-        phase: 'complete',
-        winner,
-        winningCard,
-        status: 'completed'
-      });
-    } catch (error) {
-      console.error('⚠️ Error updating game session:', error);
-    }
-  }
+  // Persist game completion
+  await persistGameState();
   
   // Calculate payouts and analytics
   const payouts: Record<string, number> = {};

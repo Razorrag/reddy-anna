@@ -107,6 +107,7 @@ export interface IStorage {
   createGameSession(session: InsertGameSession): Promise<GameSession>;
   getCurrentGameSession(): Promise<GameSession | undefined>;
   getGameSession(gameId: string): Promise<GameSession | undefined>;
+  getActiveGameSession(): Promise<GameSession | null>;
   updateGameSession(gameId: string, updates: Partial<GameSession>): Promise<void>;
   completeGameSession(gameId: string, winner: string, winningCard: string): Promise<void>;
   
@@ -259,12 +260,44 @@ export interface IStorage {
 }
 
 export class SupabaseStorage implements IStorage {
+  // Circuit breaker for database operations
+  private circuitBreaker: any = null;
+
+  constructor() {
+    // Lazy load circuit breaker to avoid circular dependencies
+    try {
+      const { dbCircuitBreaker } = require('../lib/circuit-breaker');
+      this.circuitBreaker = dbCircuitBreaker;
+    } catch (error) {
+      // Circuit breaker not available - operations will still work without it
+      console.warn('Circuit breaker not available:', error);
+    }
+  }
+
   // Helper function to convert decimal balance to number
   private parseBalance(balance: any): number {
     if (typeof balance === 'string') {
       return parseFloat(balance) || 0;
     }
     return Number(balance) || 0;
+  }
+
+  /**
+   * Execute database operation with circuit breaker protection
+   */
+  private async executeWithCircuitBreaker<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.circuitBreaker) {
+      try {
+        return await this.circuitBreaker.execute(fn);
+      } catch (error: any) {
+        if (error.message?.includes('Circuit breaker is OPEN')) {
+          throw new Error('Database temporarily unavailable. Please try again in a few moments.');
+        }
+        throw error;
+      }
+    }
+    // No circuit breaker - execute directly
+    return await fn();
   }
 
   // User operations
@@ -750,93 +783,182 @@ export class SupabaseStorage implements IStorage {
   }
 
   /**
-   * Atomically deduct balance - prevents race conditions
+   * Atomically deduct balance - prevents race conditions with retry logic
    * Returns new balance if successful, throws error if insufficient funds
+   * Implements exponential backoff for retries on concurrent update conflicts
    */
-  async deductBalanceAtomic(userId: string, amount: number): Promise<number> {
-    try {
-      // Get current balance with row lock
-      const { data: user, error: selectError } = await supabaseServer
-        .from('users')
-        .select('balance')
-        .eq('id', userId)
-        .single();
+  async deductBalanceAtomic(userId: string, amount: number, maxRetries: number = 5): Promise<number> {
+    return await this.executeWithCircuitBreaker(async () => {
+      let lastError: any;
+      let lastBalance: number = 0;
 
-      if (selectError || !user) {
-        throw new Error('User not found');
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          // Get current balance
+          const { data: user, error: selectError } = await supabaseServer
+            .from('users')
+            .select('balance')
+            .eq('id', userId)
+            .single();
+
+          if (selectError || !user) {
+            throw new Error('User not found');
+          }
+
+          const currentBalance = parseFloat(user.balance || '0');
+          lastBalance = currentBalance;
+          
+          // Check if sufficient balance
+          if (currentBalance < amount) {
+            throw new Error(`Insufficient balance. You have ₹${currentBalance.toFixed(2)}, but bet is ₹${amount.toFixed(2)}`);
+          }
+
+          const newBalance = currentBalance - amount;
+
+          // Update balance atomically with optimistic locking
+          const { data: updatedData, error: updateError } = await supabaseServer
+            .from('users')
+            .update({ 
+              balance: newBalance.toString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', userId)
+            // Double-check balance hasn't changed (optimistic locking prevents race conditions)
+            .eq('balance', currentBalance.toString())
+            .select('balance')
+            .single();
+
+          // Check if update actually succeeded (row was found and updated)
+          if (updateError) {
+            // Check if it's a concurrent modification conflict
+            if (updateError.code === 'PGRST116' || updateError.message?.includes('No rows found')) {
+              // Balance changed between read and write - retry with exponential backoff
+              if (attempt < maxRetries) {
+                const backoffDelay = Math.min(50 * Math.pow(2, attempt - 1), 500); // 50ms, 100ms, 200ms, 400ms, 500ms max
+                await new Promise(resolve => setTimeout(resolve, backoffDelay));
+                continue; // Retry the operation
+              }
+            }
+            throw new Error('Failed to update balance - please try again');
+          }
+
+          // Success - return new balance
+          return newBalance;
+        } catch (error: any) {
+          lastError = error;
+          
+          // If it's not a retryable error (like insufficient balance or user not found), throw immediately
+          if (error.message?.includes('Insufficient balance') || 
+              error.message?.includes('User not found')) {
+            throw error;
+          }
+
+          // For network errors, retry with exponential backoff
+          if ((error.message?.includes('fetch failed') || 
+               error.code === 'ECONNREFUSED' || 
+               error.code === 'ETIMEDOUT' ||
+               error.name === 'AbortError') && 
+              attempt < maxRetries) {
+            const backoffDelay = Math.min(100 * Math.pow(2, attempt - 1), 1000); // 100ms, 200ms, 400ms, 800ms, 1000ms max
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            continue;
+          }
+
+          // If this was the last attempt or non-retryable error, throw
+          if (attempt === maxRetries) {
+            console.error(`Atomic balance deduction failed after ${maxRetries} attempts:`, error);
+            throw error;
+          }
+        }
       }
 
-      const currentBalance = parseFloat(user.balance || '0');
-      
-      // Check if sufficient balance
-      if (currentBalance < amount) {
-        throw new Error(`Insufficient balance. You have ₹${currentBalance}, but bet is ₹${amount}`);
-      }
-
-      const newBalance = currentBalance - amount;
-
-      // Update balance atomically
-      const { error: updateError } = await supabaseServer
-        .from('users')
-        .update({ 
-          balance: newBalance.toString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId)
-        // Double-check balance hasn't changed (optimistic locking)
-        .eq('balance', currentBalance.toString());
-
-      if (updateError) {
-        throw new Error('Failed to update balance - please try again');
-      }
-
-      return newBalance;
-    } catch (error: any) {
-      console.error('Atomic balance deduction failed:', error);
-      throw error;
-    }
+      // Final fallback
+      console.error(`Atomic balance deduction failed after ${maxRetries} attempts. Last error:`, lastError);
+      throw lastError || new Error('Failed to deduct balance after multiple attempts');
+    });
   }
 
   /**
-   * Atomically add balance - prevents race conditions
+   * Atomically add balance - prevents race conditions with retry logic
    * Returns new balance if successful
+   * Implements exponential backoff for retries on concurrent update conflicts
    */
-  async addBalanceAtomic(userId: string, amount: number): Promise<number> {
-    try {
-      // Get current balance with row lock
-      const { data: user, error: selectError } = await supabaseServer
-        .from('users')
-        .select('balance')
-        .eq('id', userId)
-        .single();
+  async addBalanceAtomic(userId: string, amount: number, maxRetries: number = 5): Promise<number> {
+    let lastError: any;
 
-      if (selectError || !user) {
-        throw new Error('User not found');
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Get current balance
+        const { data: user, error: selectError } = await supabaseServer
+          .from('users')
+          .select('balance')
+          .eq('id', userId)
+          .single();
+
+        if (selectError || !user) {
+          throw new Error('User not found');
+        }
+
+        const currentBalance = parseFloat(user.balance || '0');
+        const newBalance = currentBalance + amount;
+
+        // Update balance atomically with optimistic locking
+        const { error: updateError } = await supabaseServer
+          .from('users')
+          .update({ 
+            balance: newBalance.toString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId)
+          // Double-check balance hasn't changed (optimistic locking prevents race conditions)
+          .eq('balance', currentBalance.toString());
+
+        // Check if update actually succeeded
+        if (updateError) {
+          // Check if it's a concurrent modification conflict
+          if (updateError.code === 'PGRST116' || updateError.message?.includes('No rows found')) {
+            // Balance changed between read and write - retry with exponential backoff
+            if (attempt < maxRetries) {
+              const backoffDelay = Math.min(50 * Math.pow(2, attempt - 1), 500); // 50ms, 100ms, 200ms, 400ms, 500ms max
+              await new Promise(resolve => setTimeout(resolve, backoffDelay));
+              continue; // Retry the operation
+            }
+          }
+          throw new Error('Failed to update balance - please try again');
+        }
+
+        // Success - return new balance
+        return newBalance;
+      } catch (error: any) {
+        lastError = error;
+        
+        // If it's not a retryable error, throw immediately
+        if (error.message?.includes('User not found')) {
+          throw error;
+        }
+
+        // For network errors, retry with exponential backoff
+        if ((error.message?.includes('fetch failed') || 
+             error.code === 'ECONNREFUSED' || 
+             error.code === 'ETIMEDOUT' ||
+             error.name === 'AbortError') && 
+            attempt < maxRetries) {
+          const backoffDelay = Math.min(100 * Math.pow(2, attempt - 1), 1000); // 100ms, 200ms, 400ms, 800ms, 1000ms max
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          continue;
+        }
+
+        // If this was the last attempt or non-retryable error, throw
+        if (attempt === maxRetries) {
+          console.error(`Atomic balance addition failed after ${maxRetries} attempts:`, error);
+          throw error;
+        }
       }
-
-      const currentBalance = parseFloat(user.balance || '0');
-      const newBalance = currentBalance + amount;
-
-      // Update balance atomically
-      const { error: updateError } = await supabaseServer
-        .from('users')
-        .update({ 
-          balance: newBalance.toString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId)
-        // Double-check balance hasn't changed (optimistic locking)
-        .eq('balance', currentBalance.toString());
-
-      if (updateError) {
-        throw new Error('Failed to update balance - please try again');
-      }
-
-      return newBalance;
-    } catch (error: any) {
-      console.error('Atomic balance addition failed:', error);
-      throw error;
     }
+
+    // Final fallback
+    console.error(`Atomic balance addition failed after ${maxRetries} attempts. Last error:`, lastError);
+    throw lastError || new Error('Failed to add balance after multiple attempts');
   }
 
   async updateUserGameStats(userId: string, won: boolean, betAmount: number, payoutAmount: number): Promise<void> {
@@ -1063,6 +1185,27 @@ export class SupabaseStorage implements IStorage {
       console.error('Error updating game session:', error);
       throw error;
     }
+  }
+
+  async getActiveGameSession(): Promise<GameSession | null> {
+    const { data, error } = await supabaseServer
+      .from('game_sessions')
+      .select('*')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      // If no active session found, that's okay
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      console.error('Error getting active game session:', error);
+      return null;
+    }
+
+    return data || null;
   }
 
   async completeGameSession(gameId: string, winner: string, winningCard: string): Promise<void> {

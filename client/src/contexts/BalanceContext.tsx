@@ -8,10 +8,11 @@ interface BalanceState {
   isLoading: boolean;
   error: string | null;
   source: 'websocket' | 'api' | 'localStorage';
+  lastWebSocketUpdate: number; // Track WebSocket update timestamp for race condition protection
 }
 
 type BalanceAction =
-  | { type: 'SET_BALANCE'; payload: { balance: number; source: string } }
+  | { type: 'SET_BALANCE'; payload: { balance: number; source: string; timestamp?: number } }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'REFRESH_BALANCE' };
@@ -21,18 +22,35 @@ const initialState: BalanceState = {
   lastUpdated: 0,
   isLoading: false,
   error: null,
-  source: 'localStorage'
+  source: 'localStorage',
+  lastWebSocketUpdate: 0
 };
 
 const balanceReducer = (state: BalanceState, action: BalanceAction): BalanceState => {
   switch (action.type) {
-    case 'SET_BALANCE':
+    case 'SET_BALANCE': {
+      const timestamp = action.payload.timestamp || Date.now();
+      const source = action.payload.source as 'websocket' | 'api' | 'localStorage';
+      
+      // Race condition protection: Prioritize WebSocket updates over API/local updates
+      // If we have a recent WebSocket update and the new update is from API/localStorage, ignore it
+      if (source !== 'websocket' && state.lastWebSocketUpdate > 0) {
+        const timeSinceWebSocketUpdate = timestamp - state.lastWebSocketUpdate;
+        // If WebSocket updated within last 2 seconds, ignore API/localStorage updates
+        if (timeSinceWebSocketUpdate < 2000) {
+          console.log(`⚠️ Ignoring ${source} balance update - WebSocket update too recent (${timeSinceWebSocketUpdate}ms ago)`);
+          return state;
+        }
+      }
+      
       return {
         ...state,
         currentBalance: action.payload.balance,
-        lastUpdated: Date.now(),
-        source: action.payload.source as 'websocket' | 'api' | 'localStorage'
+        lastUpdated: timestamp,
+        source: source,
+        lastWebSocketUpdate: source === 'websocket' ? timestamp : state.lastWebSocketUpdate
       };
+    }
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
     case 'SET_ERROR':
@@ -64,9 +82,10 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const isAdmin = authState.user?.role === 'admin' || authState.user?.role === 'super_admin';
 
   const updateBalance = useCallback(async (newBalance: number, source: string = 'api', transactionType?: string, amount?: number) => {
+    const timestamp = Date.now();
     dispatch({
       type: 'SET_BALANCE',
-      payload: { balance: newBalance, source }
+      payload: { balance: newBalance, source, timestamp }
     });
 
     // Emit custom event for other contexts
@@ -158,8 +177,30 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   // Listen for WebSocket balance updates
   useEffect(() => {
     const handleWebSocketBalanceUpdate = (event: CustomEvent) => {
-      const { balance: newBalance } = event.detail;
-      updateBalance(newBalance, 'websocket');
+      const { balance: newBalance, timestamp } = event.detail;
+      // Use timestamp from event or current time for race condition tracking
+      const updateTimestamp = timestamp || Date.now();
+      dispatch({
+        type: 'SET_BALANCE',
+        payload: { balance: newBalance, source: 'websocket', timestamp: updateTimestamp }
+      });
+      
+      // Also emit the standard balance-updated event for other contexts
+      window.dispatchEvent(new CustomEvent('balance-updated', {
+        detail: { balance: newBalance, source: 'websocket', timestamp: updateTimestamp }
+      }));
+      
+      // Update localStorage
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          user.balance = newBalance;
+          localStorage.setItem('user', JSON.stringify(user));
+        } catch (error) {
+          console.error('Failed to update localStorage balance:', error);
+        }
+      }
     };
 
     const handleRefreshBalance = () => {

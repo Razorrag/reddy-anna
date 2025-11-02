@@ -92,7 +92,20 @@ export async function handlePlayerBet(client: WSClient, data: any) {
     try {
       newBalance = await storage.deductBalanceAtomic(userId, amount);
     } catch (error: any) {
-      sendError(ws, error.message || 'Failed to place bet');
+      // Provide user-friendly error messages
+      let errorMessage = error.message || 'Failed to place bet';
+      
+      if (error.message?.includes('temporarily unavailable')) {
+        errorMessage = 'Service temporarily unavailable. The system is experiencing high load. Please try again in a few moments.';
+      } else if (error.message?.includes('Insufficient balance')) {
+        errorMessage = error.message; // Keep the detailed balance message
+      } else if (error.message?.includes('connection failed') || error.message?.includes('network')) {
+        errorMessage = 'Database connection failed. Please check your internet connection and try again. If the problem persists, contact support.';
+      } else if (error.message?.includes('Database')) {
+        errorMessage = 'Database error. Please try again. If the problem persists, contact support.';
+      }
+      
+      sendError(ws, errorMessage);
       return;
     }
 
@@ -273,6 +286,13 @@ export async function handleStartGame(client: WSClient, data: any) {
       });
 
       console.log(`✅ Game session created: ${(global as any).currentGameState.gameId}`);
+      
+      // Persist game state after creation
+      if (typeof (global as any).persistGameState === 'function') {
+        (global as any).persistGameState().catch((err: any) => 
+          console.error('Error persisting game state after start:', err)
+        );
+      }
 
       // Get timer duration from data - check both timer and timerDuration fields
       // Also check game settings if not provided
@@ -448,6 +468,13 @@ export async function handleDealCard(client: WSClient, data: any) {
         }
       });
     }
+    
+    // Persist state after card dealt
+    if (typeof (global as any).persistGameState === 'function') {
+      (global as any).persistGameState().catch((err: any) => 
+        console.error('Error persisting game state after card dealt:', err)
+      );
+    }
 
     // Check if round should end after this card
     const currentRound = (global as any).currentGameState.currentRound;
@@ -460,6 +487,13 @@ export async function handleDealCard(client: WSClient, data: any) {
       (global as any).currentGameState.winner = data.side === 'andar' ? 'andar' : 'bahar';
       (global as any).currentGameState.winningCard = data.card;
       (global as any).currentGameState.phase = 'complete';
+      
+      // Persist game completion
+      if (typeof (global as any).persistGameState === 'function') {
+        (global as any).persistGameState().catch((err: any) => 
+          console.error('Error persisting game completion:', err)
+        );
+      }
 
       // Complete the game with payouts using global completeGame if available
       if (typeof (global as any).completeGame === 'function') {

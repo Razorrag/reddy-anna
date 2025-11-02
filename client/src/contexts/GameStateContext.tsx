@@ -292,6 +292,26 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         type: 'SET_USER_ROLE',
         payload: user.role === 'super_admin' ? 'admin' : (user.role || 'player')
       });
+      
+      // Fetch fresh balance on mount/refresh
+      const fetchBalance = async () => {
+        try {
+          const balanceRes = await apiClient.get<{success: boolean, balance: number}>('/user/balance');
+          if (balanceRes.success && balanceRes.balance !== undefined) {
+            const balanceNum = Number(balanceRes.balance);
+            if (!isNaN(balanceNum)) {
+              dispatch({
+                type: 'UPDATE_PLAYER_WALLET',
+                payload: balanceNum
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching balance on mount:', error);
+        }
+      };
+      
+      fetchBalance();
     } else {
       // Initialize with default guest user
       dispatch({
@@ -524,8 +544,9 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
-    // This function now only updates local state
+    // This function now only updates local state optimistically
     // The actual bet placement is handled by WebSocket messages
+    // Balance will be updated via WebSocket bet_confirmed message (prevents race conditions)
     if (gameState.currentRound === 1) {
       const newBets: RoundBets = {
         ...gameState.playerRound1Bets,
@@ -540,12 +561,13 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       updatePlayerRoundBets(2, newBets);
     }
     
-    // Update local balance immediately for UI responsiveness
+    // Update local balance optimistically for UI responsiveness
+    // This will be overridden by WebSocket bet_confirmed message (which is authoritative)
     const newBalance = currentBalance - amount;
     updatePlayerWallet(newBalance);
     
-    // Update balance in BalanceContext
-    await updateBalance(newBalance, 'api', 'bet', amount);
+    // Note: BalanceContext will be updated via WebSocket bet_confirmed message
+    // This ensures server is source of truth and prevents race conditions
   };
 
   const value: GameStateContextType = {

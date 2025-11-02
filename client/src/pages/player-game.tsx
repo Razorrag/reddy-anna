@@ -117,9 +117,31 @@ const PlayerGame: React.FC = () => {
     }
 
     setIsPlacingBet(true);
+    
+    // Import retry utility
+    const { retryWithBackoff } = await import('../lib/retry-utils');
+    
     try {
-      // Validate balance before placing bet
-      const balanceCheck = await apiClient.get<{success: boolean, balance: number | string, error?: string}>('/user/balance');
+      // Validate balance before placing bet with retry logic
+      const balanceCheck = await retryWithBackoff(
+        async () => {
+          return await apiClient.get<{success: boolean, balance: number | string, error?: string}>('/user/balance');
+        },
+        {
+          maxRetries: 3,
+          initialDelay: 100,
+          maxDelay: 1000,
+          retryableErrors: (error: any) => {
+            // Retry on network errors, but not on insufficient balance
+            return error.message?.includes('fetch failed') ||
+                   error.message?.includes('timeout') ||
+                   error.message?.includes('network') ||
+                   error.code === 'ECONNREFUSED' ||
+                   error.code === 'ETIMEDOUT' ||
+                   error.name === 'AbortError';
+          }
+        }
+      );
       
       // Convert balance to number if it's a string
       const balanceAsNumber = typeof balanceCheck.balance === 'string' 
@@ -139,19 +161,49 @@ const PlayerGame: React.FC = () => {
       // Optimistically update balance
       updateBalance(userBalance - selectedBetAmount, 'local');
 
-      // Place bet via WebSocket for game logic
-      await placeBetWebSocket(position, selectedBetAmount);
+      // Place bet via WebSocket for game logic with retry
+      await retryWithBackoff(
+        async () => {
+          await placeBetWebSocket(position, selectedBetAmount);
+        },
+        {
+          maxRetries: 3,
+          initialDelay: 100,
+          maxDelay: 1000,
+          retryableErrors: (error: any) => {
+            // Retry on network/connection errors, but not on validation errors
+            return error.message?.includes('fetch failed') ||
+                   error.message?.includes('timeout') ||
+                   error.message?.includes('network') ||
+                   error.message?.includes('connection') ||
+                   error.code === 'ECONNREFUSED' ||
+                   error.code === 'ETIMEDOUT' ||
+                   error.name === 'AbortError';
+          }
+        }
+      );
       
       showNotification(`Bet placed: ₹${selectedBetAmount} on ${position.toUpperCase()} (Round ${gameState.currentRound})`, 'success');
-    } catch (error) {
+    } catch (error: any) {
       // Revert balance if bet fails
       updateBalance(userBalance, 'local');
       console.error('Failed to place bet:', error);
-      showNotification('Failed to place bet', 'error');
+      
+      // Provide better error messages
+      let errorMessage = 'Failed to place bet';
+      if (error.message?.includes('Insufficient balance')) {
+        errorMessage = 'Insufficient balance. Please check your account balance.';
+      } else if (error.message?.includes('temporarily unavailable')) {
+        errorMessage = 'Service temporarily unavailable. Please try again in a moment.';
+      } else if (error.message?.includes('timeout') || error.message?.includes('network')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      showNotification(errorMessage, 'error');
     } finally {
       setIsPlacingBet(false);
     }
-  }, [selectedBetAmount, gameState, placeBetWebSocket, showNotification, balance, updateBalance]);
+  }, [selectedBetAmount, gameState, placeBetWebSocket, showNotification, balance, updateBalance, userBalance]);
 
   // Handle bet position selection
   const handlePositionSelect = useCallback((position: BetSide) => {
