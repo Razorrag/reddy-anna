@@ -153,21 +153,14 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                 <div className="text-white font-bold text-lg">ANDAR</div>
               </div>
               
-              {/* Show ONLY player's individual bets - NO ADMIN DATA */}
+              {/* Show ONLY player's individual bets - NO ADMIN DATA - Round 1 and Round 2 separately */}
               <div className="space-y-0.5">
-                {gameState.playerRound1Bets.andar > 0 && (
-                  <div className="text-yellow-200 text-xs font-medium">
-                    Your Bet: ₹{gameState.playerRound1Bets.andar.toLocaleString('en-IN')}
-                  </div>
-                )}
-                {gameState.currentRound >= 2 && gameState.playerRound2Bets.andar > 0 && (
+                <div className="text-yellow-200 text-xs font-medium">
+                  Round 1: ₹{gameState.playerRound1Bets.andar.toLocaleString('en-IN')}
+                </div>
+                {gameState.currentRound >= 2 && (
                   <div className="text-yellow-300 text-xs font-medium">
-                    R2 Bet: ₹{gameState.playerRound2Bets.andar.toLocaleString('en-IN')}
-                  </div>
-                )}
-                {(gameState.playerRound1Bets.andar === 0 && gameState.playerRound2Bets.andar === 0) && (
-                  <div className="text-gray-400 text-xs">
-                    No bets placed
+                    Round 2: ₹{gameState.playerRound2Bets.andar.toLocaleString('en-IN')}
                   </div>
                 )}
               </div>
@@ -283,21 +276,14 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                 <div className="text-white font-bold text-lg">BAHAR</div>
               </div>
               
-              {/* Show ONLY player's individual bets - NO ADMIN DATA */}
+              {/* Show ONLY player's individual bets - NO ADMIN DATA - Round 1 and Round 2 separately */}
               <div className="space-y-0.5">
-                {gameState.playerRound1Bets.bahar > 0 && (
-                  <div className="text-yellow-200 text-xs font-medium">
-                    Your Bet: ₹{gameState.playerRound1Bets.bahar.toLocaleString('en-IN')}
-                  </div>
-                )}
-                {gameState.currentRound >= 2 && gameState.playerRound2Bets.bahar > 0 && (
+                <div className="text-yellow-200 text-xs font-medium">
+                  Round 1: ₹{gameState.playerRound1Bets.bahar.toLocaleString('en-IN')}
+                </div>
+                {gameState.currentRound >= 2 && (
                   <div className="text-yellow-300 text-xs font-medium">
-                    R2 Bet: ₹{gameState.playerRound2Bets.bahar.toLocaleString('en-IN')}
-                  </div>
-                )}
-                {(gameState.playerRound1Bets.bahar === 0 && gameState.playerRound2Bets.bahar === 0) && (
-                  <div className="text-gray-400 text-xs">
-                    No bets placed
+                    Round 2: ₹{gameState.playerRound2Bets.bahar.toLocaleString('en-IN')}
                   </div>
                 )}
               </div>
