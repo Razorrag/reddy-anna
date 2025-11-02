@@ -370,6 +370,15 @@ export type AnalyticsUpdateMessage = WebSocketMessageBase<'analytics_update', {
   data: any;
 }>;
 
+export type GameHistoryUpdateMessage = WebSocketMessageBase<'game_history_update', {
+  gameId: string;
+  winner: string;
+  winningCard: string;
+  totalBets: number;
+  totalPayouts: number;
+  createdAt: string;
+}>;
+
 export type AdminNotificationMessage = WebSocketMessageBase<'admin_notification', {
   type: string;
   data: any;
@@ -387,6 +396,7 @@ export type ConditionalBonusAppliedMessage = WebSocketMessageBase<'conditional_b
 
 export type PayoutReceivedMessage = WebSocketMessageBase<'payout_received', {
   amount: number;
+  balance: number;
   winner: string;
   round: number;
 }>;
@@ -490,6 +500,7 @@ export type WebSocketMessage =
   | StatusUpdateMessage
   | AdminBetUpdateMessage
   | AnalyticsUpdateMessage
+  | GameHistoryUpdateMessage
   | AdminNotificationMessage
   | BonusUpdateMessage
   | ConditionalBonusAppliedMessage

@@ -4318,29 +4318,29 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       
       clients.forEach(client => {
         if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
-          // Send payout notification
+          // Send payout notification with balance included for immediate update
           client.ws.send(JSON.stringify({
             type: 'payout_received',
             data: {
               amount: payout,
+              balance: newBalance,
               winner,
               round: currentGameState.currentRound,
               yourBets: bets
             }
           }));
           
-          // Send balance update notification
-          if (payout > 0) {
-            client.ws.send(JSON.stringify({
-              type: 'balance_update',
-              data: {
-                balance: newBalance,
-                amount: payout,
-                type: 'win',
-                timestamp: Date.now()
-              }
-            }));
-          }
+          // Always send balance update notification (for both winners and losers)
+          // This ensures the UI gets the correct balance immediately without API delay
+          client.ws.send(JSON.stringify({
+            type: 'balance_update',
+            data: {
+              balance: newBalance,
+              amount: payout,
+              type: payout > 0 ? 'win' : 'loss',
+              timestamp: Date.now()
+            }
+          }));
         }
       });
     } catch (error) {
@@ -4408,6 +4408,94 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     } catch (error) {
       console.error('⚠️ Error saving game statistics:', error);
     }
+  }
+  
+  // Broadcast analytics updates to all admin clients after game completion
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Get updated analytics data
+    const updatedDailyStats = await storage.getDailyStats(today);
+    const monthYear = today.toISOString().slice(0, 7);
+    const updatedMonthlyStats = await storage.getMonthlyStats(monthYear);
+    const year = today.getFullYear();
+    const updatedYearlyStats = await storage.getYearlyStats(year);
+    const todayStats = await storage.getTodayStats();
+    const todayGameCount = await storage.getTodayGameCount();
+    const todayBetTotal = await storage.getTodayBetsTotal();
+    const todayPlayers = await storage.getTodayUniquePlayers();
+    
+    // Broadcast real-time stats update (frontend will convert to 'realtime-analytics-update' event)
+    broadcastToRole({
+      type: 'analytics_update',
+      data: {
+        currentGame: {
+          id: currentGameState.gameId,
+          phase: 'complete',
+          currentRound: currentGameState.currentRound,
+          timer: 0,
+          andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+          baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
+          bettingLocked: true,
+          totalPlayers: uniquePlayers
+        },
+        todayStats,
+        todayGameCount,
+        todayBetTotal,
+        todayPlayers
+      }
+    }, 'admin');
+    
+    // Broadcast daily analytics update
+    if (updatedDailyStats) {
+      broadcastToRole({
+        type: 'analytics_update',
+        data: {
+          type: 'daily',
+          data: updatedDailyStats
+        }
+      }, 'admin');
+    }
+    
+    // Broadcast monthly analytics update
+    if (updatedMonthlyStats) {
+      broadcastToRole({
+        type: 'analytics_update',
+        data: {
+          type: 'monthly',
+          data: updatedMonthlyStats
+        }
+      }, 'admin');
+    }
+    
+    // Broadcast yearly analytics update
+    if (updatedYearlyStats) {
+      broadcastToRole({
+        type: 'analytics_update',
+        data: {
+          type: 'yearly',
+          data: updatedYearlyStats
+        }
+      }, 'admin');
+    }
+    
+    // Broadcast game history update
+    broadcastToRole({
+      type: 'game_history_update',
+      data: {
+        gameId: currentGameState.gameId,
+        winner,
+        winningCard,
+        totalBets: totalBetsAmount,
+        totalPayouts: totalPayoutsAmount,
+        createdAt: new Date().toISOString()
+      }
+    }, 'admin');
+    
+    console.log('✅ Analytics updates broadcasted to admin clients');
+  } catch (error) {
+    console.error('⚠️ Error broadcasting analytics updates:', error);
   }
   
   // Determine payout message and winner display based on winner and round

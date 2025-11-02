@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,31 @@ import { useAdminStats } from "@/hooks/useAdminStats";
 
 export default function Admin() {
   const { stats, loading, error, refetch } = useAdminStats();
+
+  // Listen for real-time updates from WebSocket
+  useEffect(() => {
+    // Listen for game history updates
+    const handleGameHistoryUpdate = () => {
+      console.log('📊 Game history update received, refreshing admin stats...');
+      refetch();
+    };
+    
+    // Listen for analytics updates
+    const handleAnalyticsUpdate = (event: CustomEvent) => {
+      console.log('📈 Analytics update received on admin page:', event.detail);
+      // Stats will be updated by AnalyticsDashboard component
+      // But we can refresh main stats too
+      refetch();
+    };
+    
+    window.addEventListener('game_history_update', handleGameHistoryUpdate as EventListener);
+    window.addEventListener('analytics-update', handleAnalyticsUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('game_history_update', handleGameHistoryUpdate as EventListener);
+      window.removeEventListener('analytics-update', handleAnalyticsUpdate as EventListener);
+    };
+  }, [refetch]);
 
   const formatCurrency = (amount: number) => {
     if (amount >= 10000000) {

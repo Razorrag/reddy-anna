@@ -54,20 +54,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
     }
   };
 
-  // Get phase text
-  const getPhaseText = () => {
-    switch (gameState.phase) {
-      case 'betting':
-        return 'Betting';
-      case 'dealing':
-        return gameState.currentRound === 3 ? 'Final Draw' : 'Dealing';
-      case 'complete':
-        return 'Complete';
-      default:
-        return 'Waiting';
-    }
-  };
-
   // Calculate timer progress for circular display
   const getTimerProgress = () => {
     if (gameState.phase !== 'betting') return 0;
@@ -99,38 +85,64 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
             gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
           }`}>
             {/* Large Circular Timer */}
-            <div className="relative w-32 h-32 md:w-36 md:h-36">
-              <svg className="transform -rotate-90" viewBox="0 0 128 128" width="128" height="128">
-                {/* Background circle */}
+            <div className="relative w-36 h-36 md:w-40 md:h-40 flex items-center justify-center">
+              <svg 
+                className="transform -rotate-90 w-full h-full absolute inset-0" 
+                viewBox="0 0 128 128" 
+                preserveAspectRatio="xMidYMid meet"
+              >
+                {/* Background circle - Dark grey with transparency */}
                 <circle
                   cx="64"
                   cy="64"
                   r="56"
-                  stroke="rgba(0, 0, 0, 0.6)"
-                  strokeWidth="8"
-                  fill="rgba(0, 0, 0, 0.4)"
+                  stroke="rgba(75, 85, 99, 0.8)"
+                  strokeWidth="10"
+                  fill="rgba(31, 41, 55, 0.9)"
+                  className="transition-all duration-300"
                 />
-                {/* Progress circle - only show during betting */}
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="56"
-                  stroke={getTimerColor()}
-                  strokeWidth="8"
-                  fill="none"
-                  strokeDasharray={`${2 * Math.PI * 56}`}
-                  strokeDashoffset={`${2 * Math.PI * 56 * getTimerProgress()}`}
-                  className="transition-all duration-1000 ease-linear"
-                  strokeLinecap="round"
-                />
+                {/* Progress circle - Yellow arc, only show during betting */}
+                {gameState.phase === 'betting' && localTimer > 0 && (
+                  <circle
+                    cx="64"
+                    cy="64"
+                    r="56"
+                    stroke={getTimerColor()}
+                    strokeWidth="10"
+                    fill="none"
+                    strokeDasharray={`${2 * Math.PI * 56}`}
+                    strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}
+                    className="transition-all duration-1000 ease-linear"
+                    strokeLinecap="round"
+                    style={{ filter: 'drop-shadow(0 0 4px rgba(255, 209, 0, 0.5))' }}
+                  />
+                )}
               </svg>
-              {/* Timer text */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-white font-bold text-4xl md:text-5xl drop-shadow-2xl">
+              {/* Timer text and icon container */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+                {/* Icon above number - Screen/Monitor icon */}
+                <div className="mb-0.5 opacity-90">
+                  <svg 
+                    className="w-5 h-5 md:w-6 md:h-6 text-cyan-400" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    viewBox="0 0 24 24"
+                  >
+                    <rect x="2" y="4" width="20" height="14" rx="2" ry="2"/>
+                    <line x1="8" y1="21" x2="16" y2="21"/>
+                    <line x1="12" y1="17" x2="12" y2="21"/>
+                  </svg>
+                </div>
+                {/* Timer number */}
+                <div className="text-white font-bold text-5xl md:text-6xl tabular-nums drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-none">
                   {localTimer > 0 ? localTimer : '--'}
                 </div>
-                <div className="text-gold text-sm md:text-base font-medium mt-1">
-                  {getPhaseText()}
+                {/* Betting Time text */}
+                <div className="text-gold text-sm md:text-base font-semibold mt-1.5 tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                  Betting Time
                 </div>
               </div>
             </div>

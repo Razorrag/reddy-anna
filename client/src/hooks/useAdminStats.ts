@@ -46,24 +46,51 @@ export function useAdminStats() {
       ] = await Promise.all([
         apiClient.get('/admin/statistics', {
           headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(() => ({ success: false, data: null })),
+        }).catch((err) => {
+          console.error('❌ Failed to fetch user statistics:', err);
+          return { success: false, data: null };
+        }),
         
         apiClient.get('/admin/analytics?period=daily', {
           headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(() => ({ success: false, data: null })),
+        }).catch((err) => {
+          console.error('❌ Failed to fetch daily analytics:', err);
+          return { success: false, data: null };
+        }),
         
         apiClient.get('/admin/realtime-stats', {
           headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(() => ({ success: false, data: null })),
+        }).catch((err) => {
+          console.error('❌ Failed to fetch realtime stats:', err);
+          return { success: false, data: null };
+        }),
         
         apiClient.get('/admin/payment-requests/pending', {
           headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(() => ({ success: false, data: [] })),
+        }).catch((err) => {
+          console.error('❌ Failed to fetch payment requests:', err);
+          return { success: false, data: [] };
+        }),
         
         apiClient.get('/admin/users?limit=1000', {
           headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(() => ({ success: false, data: { users: [] } }))
+        }).catch((err) => {
+          console.error('❌ Failed to fetch users:', err);
+          return { success: false, data: { users: [] } };
+        })
       ]);
+
+      // Log which calls succeeded/failed
+      const failures: string[] = [];
+      if (!(usersResponse as any).success) failures.push('user statistics');
+      if (!(analyticsResponse as any).success) failures.push('daily analytics');
+      if (!(realtimeResponse as any).success) failures.push('realtime stats');
+      if (!(paymentsResponse as any).success) failures.push('payment requests');
+      if (!(allUsersResponse as any).success) failures.push('users list');
+
+      if (failures.length > 0) {
+        console.warn(`⚠️ Some admin stats failed to load: ${failures.join(', ')}`);
+      }
 
       const userStats = (usersResponse as any).success ? (usersResponse as any).data : null;
       const dailyAnalytics = (analyticsResponse as any).success ? (analyticsResponse as any).data : null;

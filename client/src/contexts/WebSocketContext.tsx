@@ -20,6 +20,7 @@ import {
   StreamStatusMessage,
   NotificationMessage,
   WebRTCSignalMessage,
+  PayoutReceivedMessage,
 } from '../../../shared/src/types/webSocket';
 import WebSocketManager, { ConnectionStatus } from '../lib/WebSocketManager';
 
@@ -528,15 +529,40 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       // Analytics dashboard: real-time aggregate updates
       case 'analytics_update': {
-        const analyticsEvent = new CustomEvent('realtime-analytics-update', {
+        const wsData = (data as any).data;
+        
+        // Check if this is a typed analytics update (daily/monthly/yearly)
+        if (wsData?.type && (wsData.type === 'daily' || wsData.type === 'monthly' || wsData.type === 'yearly')) {
+          // Preserve the type for typed updates (daily/monthly/yearly)
+          const analyticsEvent = new CustomEvent('analytics-update', {
+            detail: {
+              type: wsData.type,
+              data: wsData.data
+            }
+          });
+          window.dispatchEvent(analyticsEvent);
+        } else {
+          // For real-time stats updates (no inner type - has currentGame, todayStats, etc.)
+          const analyticsEvent = new CustomEvent('realtime-analytics-update', {
+            detail: wsData
+          });
+          window.dispatchEvent(analyticsEvent);
+          
+          // Also emit generic analytics-update for backward compatibility
+          const genericEvent = new CustomEvent('analytics-update', {
+            detail: { type: 'realtime', data: wsData }
+          });
+          window.dispatchEvent(genericEvent);
+        }
+        break;
+      }
+
+      // Game history update for admin dashboard
+      case 'game_history_update' as any: {
+        const event = new CustomEvent('game_history_update', {
           detail: (data as any).data
         });
-        window.dispatchEvent(analyticsEvent);
-        // Also emit a generic analytics-update in case specific handlers exist
-        const genericEvent = new CustomEvent('analytics-update', {
-          detail: { type: 'realtime', data: (data as any).data }
-        });
-        window.dispatchEvent(genericEvent);
+        window.dispatchEvent(event);
         break;
       }
 
@@ -573,15 +599,24 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       // Payout received after game completion
       case 'payout_received': {
-        const { amount, winner, round } = (data as any).data;
-        if (amount > 0) {
-          showNotification(`You won ₹${amount.toLocaleString('en-IN')}!`, 'success');
-          
-          // Refresh balance to get updated amount
-          const balanceEvent = new CustomEvent('refresh-balance', {
-            detail: { source: 'payout' }
+        const { amount, balance, winner, round } = (data as PayoutReceivedMessage).data;
+        
+        // Immediately update balance from the message (no API delay)
+        if (balance !== undefined && balance !== null) {
+          updatePlayerWallet(balance);
+          // Also dispatch event for other components that listen to balance updates
+          const balanceEvent = new CustomEvent('balance-websocket-update', {
+            detail: { balance, amount, type: amount > 0 ? 'win' : 'loss', timestamp: Date.now() }
           });
           window.dispatchEvent(balanceEvent);
+        }
+        
+        // Show notification based on payout amount
+        if (amount > 0) {
+          showNotification(`You won ₹${amount.toLocaleString('en-IN')}!`, 'success');
+        } else {
+          // Optionally show a message for losses (can be removed if not needed)
+          // showNotification('Better luck next time!', 'info');
         }
         break;
       }
