@@ -1304,18 +1304,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const { roomId } = (message as any).data;
             console.log(`[STREAM] Player ${client.userId} requesting stream for room ${roomId}`);
             
-            // Check if there's an active stream and notify player
             const activeStreams = webrtcSignaling.getActiveStreams();
             if (activeStreams.length > 0) {
-              // Notify player about active stream
-              ws.send(JSON.stringify({
-                type: 'webrtc:signal',
-                data: {
-                  type: 'stream-start',
-                  from: activeStreams[0].adminUserId,
-                  streamId: activeStreams[0].streamId
-                }
-              }));
+              const streamInfo = activeStreams[0];
+              
+              // Get stored offer if available
+              const storedOffer = webrtcSignaling.getStoredOffer(streamInfo.streamId);
+              
+              if (storedOffer) {
+                // Send offer directly so player can create answer immediately
+                ws.send(JSON.stringify({
+                  type: 'webrtc:signal',
+                  data: {
+                    type: 'offer',
+                    from: streamInfo.adminUserId,
+                    streamId: streamInfo.streamId,
+                    sdp: storedOffer
+                  }
+                }));
+                console.log(`[STREAM] ✅ Sent stored offer to player ${client.userId}`);
+              } else {
+                // Fallback: send stream-start notification
+                ws.send(JSON.stringify({
+                  type: 'webrtc:signal',
+                  data: {
+                    type: 'stream-start',
+                    from: streamInfo.adminUserId,
+                    streamId: streamInfo.streamId
+                  }
+                }));
+                console.log(`[STREAM] ⚠️ No stored offer available, sent stream-start to ${client.userId}`);
+              }
+            } else {
+              console.log(`[STREAM] No active streams for player ${client.userId}`);
             }
             break;
           }

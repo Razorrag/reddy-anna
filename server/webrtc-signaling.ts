@@ -20,6 +20,7 @@ interface SignalingMessage {
 class WebRTCSignalingServer {
   private clients: Map<string, WebRTCClient> = new Map();
   private activeStreams: Map<string, string> = new Map(); // streamId -> adminUserId
+  private lastOfferSDP: Map<string, RTCSessionDescriptionInit> = new Map(); // streamId -> offer SDP
 
   /**
    * Register a new WebRTC client
@@ -168,6 +169,8 @@ class WebRTCSignalingServer {
     if (!adminUserId) return;
 
     this.activeStreams.delete(streamId);
+    this.lastOfferSDP.delete(streamId); // ✅ Clean up stored offer
+    console.log(`[WebRTC] ✅ Cleaned up stored offer for stream ${streamId}`);
 
     const admin = this.clients.get(adminUserId);
     if (admin) {
@@ -196,6 +199,13 @@ class WebRTCSignalingServer {
     // Ensure streamId is set on the client
     if (message.streamId && !client.streamId) {
       client.streamId = message.streamId;
+    }
+
+    // Store the offer SDP for later use
+    const streamId = client.streamId || message.streamId || 'default';
+    if (message.sdp) {
+      this.lastOfferSDP.set(streamId, message.sdp);
+      console.log(`[WebRTC] ✅ Stored offer SDP for stream ${streamId}`);
     }
 
     if (!message.to) {
@@ -329,11 +339,27 @@ class WebRTCSignalingServer {
    */
   private notifyPlayerOfActiveStreams(playerId: string): void {
     this.activeStreams.forEach((adminUserId, streamId) => {
-      this.sendToClient(playerId, {
-        type: 'stream-start',
-        from: adminUserId,
-        streamId
-      });
+      // Get stored offer SDP if available
+      const storedOffer = this.lastOfferSDP.get(streamId);
+      
+      if (storedOffer) {
+        // Send offer directly so player can create answer immediately
+        this.sendToClient(playerId, {
+          type: 'offer',
+          from: adminUserId,
+          streamId,
+          sdp: storedOffer
+        });
+        console.log(`[WebRTC] ✅ Sent stored offer to player ${playerId} for stream ${streamId}`);
+      } else {
+        // Fallback: send stream-start notification
+        this.sendToClient(playerId, {
+          type: 'stream-start',
+          from: adminUserId,
+          streamId
+        });
+        console.log(`[WebRTC] ⚠️ No stored offer available, sent stream-start to ${playerId}`);
+      }
     });
   }
 
@@ -416,6 +442,13 @@ class WebRTCSignalingServer {
       streams.push({ streamId, adminUserId });
     });
     return streams;
+  }
+
+  /**
+   * Get stored offer SDP for a stream
+   */
+  getStoredOffer(streamId: string): RTCSessionDescriptionInit | undefined {
+    return this.lastOfferSDP.get(streamId);
   }
 
   /**

@@ -28,7 +28,7 @@ const ScreenShareCropper: React.FC<ScreenShareCropperProps> = ({
   
   const [cropArea, setCropArea] = useState<CropArea | null>(null);
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(true); // Auto-start streaming
   const [dragState, setDragState] = useState<{
     isDragging: boolean;
     handle: string | null;
@@ -89,8 +89,22 @@ const ScreenShareCropper: React.FC<ScreenShareCropperProps> = ({
     };
   }, [sourceStream]); // Only depend on sourceStream
 
+  // Auto-enable streaming when source stream and crop area are available
+  useEffect(() => {
+    if (sourceStream && cropArea && videoDimensions.width > 0 && !isStreaming) {
+      console.log('✅ Auto-enabling streaming with crop area:', cropArea);
+      setIsStreaming(true);
+    }
+  }, [sourceStream, cropArea, videoDimensions, isStreaming]);
+
   // Canvas streaming - only when isStreaming is true
   useEffect(() => {
+    // Auto-start when we have source stream and crop area
+    if (sourceStream && cropArea && videoDimensions.width > 0 && !isStreaming) {
+      console.log('✅ Auto-starting cropped stream...');
+      setIsStreaming(true);
+    }
+
     if (!isStreaming || !cropArea || !sourceVideoRef.current || !canvasRef.current) {
       // Stop streaming if turned off
       if (animationFrameRef.current) {
@@ -188,7 +202,7 @@ const ScreenShareCropper: React.FC<ScreenShareCropperProps> = ({
     return () => {
       active = false;
     };
-  }, [isStreaming, cropArea, onCroppedStream]);
+  }, [sourceStream, cropArea, videoDimensions, isStreaming, onCroppedStream]);
 
   // Notify parent of crop changes
   useEffect(() => {

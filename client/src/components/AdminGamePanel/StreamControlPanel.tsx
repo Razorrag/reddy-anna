@@ -26,6 +26,8 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
   const [showStream, setShowStream] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const [connectedPlayers, setConnectedPlayers] = useState(0);
 
   // Define handler functions first before they're used in useEffects
   const handleAnswerReceived = useCallback((answer: RTCSessionDescriptionInit, playerId: string) => {
@@ -149,10 +151,12 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
   const setupWebRTCConnection = useCallback((stream: MediaStream) => {
     try {
       console.log('🔌 Setting up WebRTC connection...');
+      setConnectionState('connecting');
       
       // CRITICAL: Verify stream before proceeding
       if (!stream || !stream.getTracks().length) {
         console.error('❌ Stream has no tracks');
+        setConnectionState('error');
         showNotification('Stream has no tracks. Cannot setup WebRTC connection.', 'error');
         return null;
       }
@@ -180,6 +184,7 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
       pc.onconnectionstatechange = () => {
         const state = pc.connectionState;
         console.log(`🔌 WebRTC Connection State: ${state}`);
+        setConnectionState(state as any);
         
         if (state === 'failed' || state === 'disconnected') {
           console.error('❌ WebRTC connection failed. This might be a network/firewall issue on VPS.');
@@ -219,11 +224,8 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
         console.log(`🧊 ICE Gathering State: ${pc.iceGatheringState}`);
       };
 
-      // Add error handler to prevent crashes
-      pc.onerror = (event) => {
-        console.error('❌ WebRTC PeerConnection Error:', event);
-        // Don't show notification for every error to avoid spam
-      };
+      // Note: RTCPeerConnection doesn't have onerror handler
+      // Errors are handled via connection state changes instead
 
       // Add all active tracks from stream with error handling
       let tracksAdded = 0;
@@ -360,127 +362,107 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
   const croppedStreamIdRef = useRef<string | null>(null);
   const webrtcSetupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Setup WebRTC connection when cropped stream is available (debounced and stable)
+  // Setup WebRTC connection immediately when screen is captured (don't wait for cropped stream)
   useEffect(() => {
-    // Ensure all prerequisites are met before attempting setup
-    if (!croppedStream || !isStreaming || streamMethod !== 'webrtc') {
-      // If prerequisites not met, cleanup
-      if (croppedStreamIdRef.current) {
-        croppedStreamIdRef.current = null;
-        webrtcSetupRef.current = false;
-        if (webrtcSetupTimeoutRef.current) {
-          clearTimeout(webrtcSetupTimeoutRef.current);
-          webrtcSetupTimeoutRef.current = null;
-        }
-      }
-      return;
-    }
-
-    // Create unique ID for current cropped stream using stream object reference and track IDs
-    const streamId = `${croppedStream.id}-${croppedStream.getTracks().map(t => t.id).join('-')}`;
-    
-    // Only setup if stream actually changed (different object or different tracks)
-    if (streamId !== croppedStreamIdRef.current) {
-      // Clear any existing setup timeout
-      if (webrtcSetupTimeoutRef.current) {
-        clearTimeout(webrtcSetupTimeoutRef.current);
+    // Phase 1: Setup WebRTC immediately with screen stream
+    if (screenStream && isStreaming && streamMethod === 'webrtc') {
+      // Check if we already have a connection
+      const existingPc = peerConnectionsRef.current.get('primary');
+      if (existingPc && existingPc.connectionState !== 'closed' && existingPc.connectionState !== 'failed') {
+        console.log('✅ WebRTC connection already exists');
+        return;
       }
 
-      webrtcSetupRef.current = false; // Reset setup flag
-      croppedStreamIdRef.current = streamId;
+      // Setup WebRTC with screen stream immediately
+      console.log('🔌 Setting up WebRTC immediately with screen stream...');
       
-      // Add a delay to ensure stream is fully ready and debounce rapid changes
-      webrtcSetupTimeoutRef.current = setTimeout(() => {
-        // Double-check all prerequisites are still met
-        if (!croppedStream || !croppedStream.getTracks().length || !isStreaming || streamMethod !== 'webrtc') {
-          console.log('⚠️ Prerequisites not met during setup delay, aborting');
-          webrtcSetupRef.current = false;
-          croppedStreamIdRef.current = null;
-          return;
-        }
-
-        // Double-check stream is still valid and hasn't changed
-        const currentStreamId = `${croppedStream.id}-${croppedStream.getTracks().map(t => t.id).join('-')}`;
-        if (currentStreamId !== croppedStreamIdRef.current) {
-          console.log('⚠️ Stream changed during setup delay, aborting');
-          webrtcSetupRef.current = false;
-          return;
-        }
-
-        // Close any existing connection
-        console.log('🔄 Setting up WebRTC connection with cropped stream');
-        peerConnectionsRef.current.forEach((pc, key) => {
-          try {
-            if (pc.connectionState !== 'closed') {
-              pc.close();
-              console.log(`🛑 Closed existing peer connection: ${key}`);
-            }
-          } catch (error) {
-            console.error(`Error closing peer connection ${key}:`, error);
-          }
-        });
-        peerConnectionsRef.current.clear();
-
-        // Verify cropped stream has tracks
-        if (!croppedStream || !croppedStream.getTracks().length) {
-          console.error('❌ Cropped stream has no tracks');
-          showNotification('Cropped stream not ready. Please wait...', 'warning');
-          return;
-        }
-
-        // Check if tracks are live
-        const activeTracks = croppedStream.getTracks().filter(t => t.readyState === 'live');
-        if (!activeTracks.length) {
-          console.error('❌ Cropped stream has no active tracks');
-          showNotification('Cropped stream tracks not active yet. Please wait...', 'warning');
-          return;
-        }
-
-        // Setup new connection with cropped stream
+      // Clear any existing failed connections first
+      peerConnectionsRef.current.forEach((pc, key) => {
         try {
-          const pc = setupWebRTCConnection(croppedStream);
-          if (pc) {
-            peerConnectionsRef.current.set('primary', pc);
-            webrtcSetupRef.current = true;
-            console.log('✅ WebRTC connection set up with cropped stream');
-          } else {
-            console.error('❌ Failed to setup WebRTC connection');
-            showNotification('Failed to setup WebRTC connection. Stream may not be ready yet.', 'error');
+          if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+            pc.close();
+            console.log(`🧹 Cleaned up old connection: ${key}`);
           }
         } catch (error) {
-          console.error('❌ Error setting up WebRTC connection:', error);
-          showNotification('Failed to setup WebRTC connection. Please try again.', 'error');
+          console.error(`Error cleaning up peer connection ${key}:`, error);
         }
-      }, 1500); // Increased delay to 1.5 seconds to debounce rapid changes
+      });
+      
+      // Remove closed/failed connections
+      Array.from(peerConnectionsRef.current.entries()).forEach(([key, pc]) => {
+        if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+          peerConnectionsRef.current.delete(key);
+        }
+      });
 
-      return () => {
-        if (webrtcSetupTimeoutRef.current) {
-          clearTimeout(webrtcSetupTimeoutRef.current);
-          webrtcSetupTimeoutRef.current = null;
-        }
-      };
-    } else if (!croppedStream && isStreaming && streamMethod === 'webrtc') {
-      // If cropped stream is removed, clean up connections
-      console.log('⚠️ Cropped stream removed, cleaning up connections');
-      webrtcSetupRef.current = false;
-      croppedStreamIdRef.current = null;
-      if (webrtcSetupTimeoutRef.current) {
-        clearTimeout(webrtcSetupTimeoutRef.current);
-        webrtcSetupTimeoutRef.current = null;
+      // Setup connection with screen stream
+      const pc = setupWebRTCConnection(screenStream);
+      if (pc) {
+        peerConnectionsRef.current.set('primary', pc);
+        webrtcSetupRef.current = true;
+        console.log('✅ WebRTC connection set up with screen stream');
+        
+        // Send stream-start signal AFTER WebRTC is set up and offer is sent
+        // Delay to ensure offer is created and stored on server
+        setTimeout(() => {
+          sendWebSocketMessage({
+            type: 'webrtc:signal',
+            data: {
+              type: 'stream-start',
+              streamId: `stream-${Date.now()}`
+            }
+          });
+          console.log('📡 Stream-start signal sent after WebRTC setup');
+        }, 500);
       }
+    }
+
+    // Phase 2: When cropped stream becomes available, replace track in existing connection
+    if (croppedStream && isStreaming && streamMethod === 'webrtc') {
+      const pc = peerConnectionsRef.current.get('primary');
+      if (pc && pc.connectionState !== 'closed' && pc.connectionState !== 'failed') {
+        console.log('🔄 Replacing track with cropped stream...');
+        
+        // Get existing senders
+        const senders = pc.getSenders();
+        const croppedVideoTrack = croppedStream.getVideoTracks()[0];
+        
+        if (croppedVideoTrack && senders.length > 0) {
+          // Find video sender and replace track
+          const videoSender = senders.find(sender => 
+            sender.track && sender.track.kind === 'video'
+          );
+          
+          if (videoSender && croppedVideoTrack) {
+            videoSender.replaceTrack(croppedVideoTrack)
+              .then(() => {
+                console.log('✅ Successfully replaced video track with cropped stream');
+                showNotification('✅ Now streaming cropped area to players', 'success');
+              })
+              .catch(error => {
+                console.error('❌ Error replacing track:', error);
+                showNotification('⚠️ Could not switch to cropped stream. Using full screen.', 'warning');
+              });
+          }
+        }
+      }
+    }
+
+    // Cleanup when streaming stops
+    if (!isStreaming || streamMethod !== 'webrtc' || !screenStream) {
       peerConnectionsRef.current.forEach((pc, key) => {
         try {
           if (pc.connectionState !== 'closed') {
             pc.close();
-            console.log(`🛑 Closed peer connection due to missing cropped stream: ${key}`);
           }
         } catch (error) {
           console.error(`Error closing peer connection ${key}:`, error);
         }
       });
       peerConnectionsRef.current.clear();
+      webrtcSetupRef.current = false;
     }
-  }, [croppedStream, isStreaming, streamMethod, setupWebRTCConnection, showNotification]);
+  }, [screenStream, croppedStream, isStreaming, streamMethod, setupWebRTCConnection, sendWebSocketMessage, showNotification]);
 
   // Final cleanup on component unmount
   useEffect(() => {
@@ -562,8 +544,8 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
           video: {
             width: { ideal: 1920, max: 1920 },
             height: { ideal: 1080, max: 1080 },
-            frameRate: { ideal: 30, max: 30 },
-            cursor: 'never' // Hide cursor in screen share
+            frameRate: { ideal: 30, max: 30 }
+            // Note: cursor property is not standard but may work in some browsers
           },
           audio: false
         });
@@ -654,29 +636,8 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
         }
       }
 
-      // Send stream-start signal to notify players
-      const streamId = `stream-${Date.now()}`;
-      try {
-        sendWebSocketMessage({
-          type: 'webrtc:signal',
-          data: {
-            type: 'stream-start',
-            streamId: streamId
-          }
-        });
-
-        // Also send stream status for UI updates
-        sendWebSocketMessage({
-          type: 'stream_status',
-          data: {
-            status: 'connecting',
-            method: 'webrtc',
-          }
-        });
-      } catch (error) {
-        console.error('❌ Error sending stream start messages:', error);
-        // Continue anyway - stream is still active
-      }
+      // Note: stream-start signal will be sent AFTER WebRTC setup (in useEffect)
+      // This ensures offer is created and stored on server before notifying players
 
       // Handle track ending (user stops sharing from browser UI)
       // Use a single handler to avoid conflicts
@@ -1092,6 +1053,31 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
           </div>
         </div>
       </div>
+
+      {/* Connection Status Display */}
+      {streamMethod === 'webrtc' && (
+        <div className="mt-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${
+                connectionState === 'connected' ? 'bg-green-400' :
+                connectionState === 'connecting' ? 'bg-yellow-400 animate-pulse' :
+                connectionState === 'error' ? 'bg-red-400' :
+                'bg-gray-400'
+              }`}></span>
+              <span className="text-sm text-gray-300">
+                {connectionState === 'connected' ? 'Connected to players' :
+                 connectionState === 'connecting' ? 'Connecting...' :
+                 connectionState === 'error' ? 'Connection error' :
+                 'Disconnected'}
+              </span>
+            </div>
+            <span className="text-xs text-gray-400">
+              {connectedPlayers > 0 ? `${connectedPlayers} viewer(s)` : 'No viewers'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Instructions */}
       <div className="mt-4 p-4 bg-blue-900/20 border border-blue-700/30 rounded-lg">

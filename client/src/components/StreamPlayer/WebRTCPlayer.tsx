@@ -9,6 +9,8 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
   const { sendWebSocketMessage } = useWebSocket();
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
+  const isRemoteDescriptionSetRef = useRef(false);
   const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [isReconnecting, setIsReconnecting] = useState(false);
 
@@ -137,10 +139,34 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
     }
 
     try {
+      isRemoteDescriptionSetRef.current = false; // Reset flag
+      iceCandidateQueueRef.current = []; // Clear old queue
+      
+      console.log('🎥 Setting remote description from offer...');
       await peerConnectionRef.current.setRemoteDescription(
         new RTCSessionDescription(data.sdp)
       );
       
+      isRemoteDescriptionSetRef.current = true; // Mark as set
+      console.log('✅ Remote description set successfully');
+      
+      // Process queued ICE candidates
+      if (iceCandidateQueueRef.current.length > 0) {
+        console.log(`🧊 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
+        for (const candidate of iceCandidateQueueRef.current) {
+          try {
+            await peerConnectionRef.current.addIceCandidate(
+              new RTCIceCandidate(candidate)
+            );
+            console.log('✅ Added queued ICE candidate');
+          } catch (error) {
+            console.error('❌ Error adding queued ICE candidate:', error);
+          }
+        }
+        iceCandidateQueueRef.current = []; // Clear queue
+      }
+      
+      console.log('🎥 Creating answer...');
       const answer = await peerConnectionRef.current.createAnswer();
       await peerConnectionRef.current.setLocalDescription(answer);
 
@@ -152,10 +178,11 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
         }
       });
 
-      console.log('🎥 Sent WebRTC answer');
+      console.log('✅ WebRTC answer sent');
     } catch (error) {
-      console.error('Error handling WebRTC offer:', error);
+      console.error('❌ Error handling WebRTC offer:', error);
       setConnectionState('error');
+      isRemoteDescriptionSetRef.current = false; // Reset on error
     }
   }, [roomId, sendWebSocketMessage]);
 
@@ -176,15 +203,29 @@ const WebRTCPlayer: React.FC<WebRTCPlayerProps> = ({ roomId }) => {
 
   // Handle ICE candidate signal
   const handleIceCandidateSignal = useCallback(async (data: any) => {
-    if (!peerConnectionRef.current) return;
+    if (!peerConnectionRef.current) {
+      console.log('🧊 ICE candidate received but no peer connection yet, queuing...');
+      iceCandidateQueueRef.current.push(data.candidate);
+      return;
+    }
 
     try {
+      // If remote description not set yet, queue the candidate
+      if (!isRemoteDescriptionSetRef.current) {
+        console.log('🧊 Queuing ICE candidate (remote description not set yet)');
+        iceCandidateQueueRef.current.push(data.candidate);
+        return;
+      }
+      
+      // Remote description is set, add candidate immediately
       await peerConnectionRef.current.addIceCandidate(
         new RTCIceCandidate(data.candidate)
       );
-      console.log('🎥 ICE candidate added');
+      console.log('✅ ICE candidate added successfully');
     } catch (error) {
-      console.error('Error adding ICE candidate:', error);
+      console.error('❌ Error adding ICE candidate:', error);
+      // On error, try queuing it
+      iceCandidateQueueRef.current.push(data.candidate);
     }
   }, []);
 
