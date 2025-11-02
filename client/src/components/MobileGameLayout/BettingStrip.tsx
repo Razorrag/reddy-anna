@@ -146,29 +146,31 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                 <div className="text-white font-bold text-lg">ANDAR</div>
               </div>
               
-              {/* Show ONLY player's individual bets (not cumulative) - Round 1 and Round 2 separately */}
+              {/* Show ONLY player's total bets per round (not other players' bets) */}
               <div className="space-y-0.5">
                 {(() => {
+                  // Calculate total bet amount for Round 1 Andar
                   const r1Andar = Array.isArray(gameState.playerRound1Bets.andar) 
                     ? gameState.playerRound1Bets.andar 
                     : [];
+                  const r1AndarTotal = r1Andar.reduce((sum, bet) => sum + bet, 0);
+                  
+                  // Calculate total bet amount for Round 2 Andar
                   const r2Andar = Array.isArray(gameState.playerRound2Bets.andar) 
                     ? gameState.playerRound2Bets.andar 
                     : [];
+                  const r2AndarTotal = r2Andar.reduce((sum, bet) => sum + bet, 0);
+                  
                   return (
                     <>
-                      {r1Andar.length > 0 && (
+                      {r1AndarTotal > 0 && (
                         <div className="text-yellow-200 text-xs font-medium">
-                          Round 1: {r1Andar.map((bet, i) => (
-                            <span key={i}>₹{bet.toLocaleString('en-IN')}{i < r1Andar.length - 1 ? ', ' : ''}</span>
-                          ))}
+                          Round 1: ₹{r1AndarTotal.toLocaleString('en-IN')}
                         </div>
                       )}
-                      {gameState.currentRound >= 2 && r2Andar.length > 0 && (
+                      {gameState.currentRound >= 2 && r2AndarTotal > 0 && (
                         <div className="text-yellow-300 text-xs font-medium">
-                          Round 2: {r2Andar.map((bet, i) => (
-                            <span key={i}>₹{bet.toLocaleString('en-IN')}{i < r2Andar.length - 1 ? ', ' : ''}</span>
-                          ))}
+                          Round 2: ₹{r2AndarTotal.toLocaleString('en-IN')}
                         </div>
                       )}
                     </>
@@ -282,29 +284,31 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                 <div className="text-white font-bold text-lg">BAHAR</div>
               </div>
               
-              {/* Show ONLY player's individual bets (not cumulative) - Round 1 and Round 2 separately */}
+              {/* Show ONLY player's total bets per round (not other players' bets) */}
               <div className="space-y-0.5">
                 {(() => {
+                  // Calculate total bet amount for Round 1 Bahar
                   const r1Bahar = Array.isArray(gameState.playerRound1Bets.bahar) 
                     ? gameState.playerRound1Bets.bahar 
                     : [];
+                  const r1BaharTotal = r1Bahar.reduce((sum, bet) => sum + bet, 0);
+                  
+                  // Calculate total bet amount for Round 2 Bahar
                   const r2Bahar = Array.isArray(gameState.playerRound2Bets.bahar) 
                     ? gameState.playerRound2Bets.bahar 
                     : [];
+                  const r2BaharTotal = r2Bahar.reduce((sum, bet) => sum + bet, 0);
+                  
                   return (
                     <>
-                      {r1Bahar.length > 0 && (
+                      {r1BaharTotal > 0 && (
                         <div className="text-yellow-200 text-xs font-medium">
-                          Round 1: {r1Bahar.map((bet, i) => (
-                            <span key={i}>₹{bet.toLocaleString('en-IN')}{i < r1Bahar.length - 1 ? ', ' : ''}</span>
-                          ))}
+                          Round 1: ₹{r1BaharTotal.toLocaleString('en-IN')}
                         </div>
                       )}
-                      {gameState.currentRound >= 2 && r2Bahar.length > 0 && (
+                      {gameState.currentRound >= 2 && r2BaharTotal > 0 && (
                         <div className="text-yellow-300 text-xs font-medium">
-                          Round 2: {r2Bahar.map((bet, i) => (
-                            <span key={i}>₹{bet.toLocaleString('en-IN')}{i < r2Bahar.length - 1 ? ', ' : ''}</span>
-                          ))}
+                          Round 2: ₹{r2BaharTotal.toLocaleString('en-IN')}
                         </div>
                       )}
                     </>

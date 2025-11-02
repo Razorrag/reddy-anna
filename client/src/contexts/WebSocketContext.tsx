@@ -215,11 +215,21 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           }
           andarCards?.forEach((c: any) => addAndarCard(typeof c === 'string' ? parseDisplayCard(c) : c));
           baharCards?.forEach((c: any) => addBaharCard(typeof c === 'string' ? parseDisplayCard(c) : c));
-          if (round1Bets) updateTotalBets(round1Bets);
-          if (round2Bets) updateTotalBets(round2Bets);
+          // CRITICAL: round1Bets/round2Bets are total bets from all players (admin only)
+          // Do NOT update player bets with total bets - only use playerRound1Bets/playerRound2Bets
+          // REMOVED: if (round1Bets) updateTotalBets(round1Bets); - total bets should not be sent to players
+          // REMOVED: if (round2Bets) updateTotalBets(round2Bets); - total bets should not be sent to players
           if (userBets) {
-            updatePlayerRoundBets(1, userBets.round1);
-            updatePlayerRoundBets(2, userBets.round2);
+            const r1Bets = {
+              andar: Array.isArray(userBets.round1?.andar) ? userBets.round1.andar : [],
+              bahar: Array.isArray(userBets.round1?.bahar) ? userBets.round1.bahar : []
+            };
+            const r2Bets = {
+              andar: Array.isArray(userBets.round2?.andar) ? userBets.round2.andar : [],
+              bahar: Array.isArray(userBets.round2?.bahar) ? userBets.round2.bahar : []
+            };
+            updatePlayerRoundBets(1, r1Bets);
+            updatePlayerRoundBets(2, r2Bets);
           }
           if (playerRound1Bets) updatePlayerRoundBets(1, playerRound1Bets);
           if (playerRound2Bets) updatePlayerRoundBets(2, playerRound2Bets);
@@ -450,9 +460,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           andarCards?.forEach((c: any) => addAndarCard(typeof c === 'string' ? parseDisplayCard(c) : c));
           baharCards?.forEach((c: any) => addBaharCard(typeof c === 'string' ? parseDisplayCard(c) : c));
         }
+        // CRITICAL: round1Bets/round2Bets are total bets from all players (admin only)
+        // Do NOT use them for player bets - only use playerRound1Bets/playerRound2Bets
+        // Total bets are only for admin displays, not for player buttons
         if (totalBets) updateTotalBets(totalBets);
-        if (round1Bets) updateTotalBets(round1Bets);
-        if (round2Bets) updateTotalBets(round2Bets);
+        // REMOVED: if (round1Bets) updateTotalBets(round1Bets); - total bets should not be sent to players
+        // REMOVED: if (round2Bets) updateTotalBets(round2Bets); - total bets should not be sent to players
         // Ensure arrays are properly formatted when initializing from userBets
         if (userBets) {
           const r1Bets = {

@@ -649,7 +649,37 @@ export async function handleGameSubscribe(client: WSClient, data: any) {
         data: gameState
       }));
     } else {
-      // Fallback with basic info
+      // Fallback with basic info - CRITICAL: Get user-specific bets, NOT total bets
+      // Get user's bets from database
+      let playerRound1Bets = { andar: [] as number[], bahar: [] as number[] };
+      let playerRound2Bets = { andar: [] as number[], bahar: [] as number[] };
+      
+      try {
+        const { storage } = await import('../storage-supabase');
+        const gameId = (global as any).currentGameState?.gameId;
+        if (gameId && gameId !== 'default-game') {
+          const userBets = await storage.getBetsForUser(userId, gameId);
+          userBets.forEach((bet: any) => {
+            const amount = parseFloat(bet.amount);
+            if (bet.round === '1' || bet.round === 1) {
+              if (bet.side === 'andar') {
+                playerRound1Bets.andar.push(amount);
+              } else if (bet.side === 'bahar') {
+                playerRound1Bets.bahar.push(amount);
+              }
+            } else if (bet.round === '2' || bet.round === 2) {
+              if (bet.side === 'andar') {
+                playerRound2Bets.andar.push(amount);
+              } else if (bet.side === 'bahar') {
+                playerRound2Bets.bahar.push(amount);
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching user bets in fallback:', error);
+      }
+      
       const currentState = {
         phase: (global as any).currentGameState?.phase || 'idle',
         currentRound: (global as any).currentGameState?.currentRound || 1,
@@ -657,8 +687,9 @@ export async function handleGameSubscribe(client: WSClient, data: any) {
         openingCard: (global as any).currentGameState?.openingCard || null,
         andarCards: (global as any).currentGameState?.andarCards || [],
         baharCards: (global as any).currentGameState?.baharCards || [],
-        round1Bets: (global as any).currentGameState?.round1Bets || { andar: 0, bahar: 0 },
-        round2Bets: (global as any).currentGameState?.round2Bets || { andar: 0, bahar: 0 }
+        // DO NOT send total bets - only send user's own bets
+        playerRound1Bets: playerRound1Bets, // User's own bets only
+        playerRound2Bets: playerRound2Bets  // User's own bets only
       };
 
       ws.send(JSON.stringify({

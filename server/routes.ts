@@ -528,6 +528,7 @@ const getCurrentGameStateForUser = async (userId: string) => {
     });
 
     // Enhanced game state with proper synchronization
+    // CRITICAL: Only include user-specific bets, NOT total bets from all players
     const gameStateForUser = {
       gameId: currentGameState.gameId,
       phase: currentGameState.phase,
@@ -539,16 +540,17 @@ const getCurrentGameStateForUser = async (userId: string) => {
       baharCards: currentGameState.baharCards,
       winner: currentGameState.winner,
       winningCard: currentGameState.winningCard,
-      round1Bets: currentGameState.round1Bets,
-      round2Bets: currentGameState.round2Bets,
-      // User-specific data
+      // DO NOT send round1Bets/round2Bets (total bets) to players - only admins see total bets
+      // round1Bets: currentGameState.round1Bets, // REMOVED - total bets from all players
+      // round2Bets: currentGameState.round2Bets, // REMOVED - total bets from all players
+      // User-specific data only
       userBalance: userBalance,
       userBets: {
         round1: round1Bets,
         round2: round2Bets
       },
-      playerRound1Bets: round1Bets, // For direct compatibility
-      playerRound2Bets: round2Bets, // For direct compatibility
+      playerRound1Bets: round1Bets, // User's own bets only
+      playerRound2Bets: round2Bets, // User's own bets only
       // Game flow information
       canJoin: true, // Users can always join to watch
       canBet: currentGameState.phase === 'betting' && !currentGameState.bettingLocked,
