@@ -1371,22 +1371,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
             switch (signalData.type) {
               case 'stream-start':
                 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                console.log('🎬 [SERVER] Stream start signal from admin');
-                console.log(`🎬 [SERVER] Admin ID: ${webrtcClientId}`);
-                console.log(`🎬 [SERVER] StreamId: ${signalData.streamId || 'auto-generated'}`);
-                console.log(`🎬 [SERVER] Full signalData:`, JSON.stringify(signalData, null, 2));
-                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log('🎬 [SERVER] CHECKPOINT 4: Stream start signal received');
                 
+                // ✅ VALIDATION 4.1: Ensure admin is sending
+                if (client?.role !== 'admin') {
+                  console.error('❌ [SERVER] CHECKPOINT 4.1 FAILED: Only admin can start stream');
+                  console.error('❌ [SERVER] Client role:', client?.role);
+                  break; // ⛔ Don't process non-admin stream-start
+                }
+                console.log('✅ [SERVER] CHECKPOINT 4.1 PASSED: Admin verified');
+                
+                // ✅ VALIDATION 4.2: Ensure streamId exists
                 const streamId = signalData.streamId || `stream-${Date.now()}`;
-                console.log(`🎬 [SERVER] Processing stream-start with streamId: ${streamId}`);
+                if (!streamId) {
+                  console.error('❌ [SERVER] CHECKPOINT 4.2 FAILED: No streamId provided');
+                  break; // ⛔ Don't process without streamId
+                }
+                console.log(`✅ [SERVER] CHECKPOINT 4.2 PASSED: streamId = ${streamId}`);
                 
+                console.log(`🎬 [SERVER] Processing stream-start with streamId: ${streamId}`);
+                console.log(`🎬 [SERVER] Admin ID: ${webrtcClientId}`);
+                
+                // ✅ VALIDATION 4.3: Broadcast to players
                 webrtcSignaling.handleMessage(webrtcClientId, {
                   type: 'stream-start',
                   from: webrtcClientId,
                   streamId: streamId
                 });
                 
-                console.log(`✅ [SERVER] Stream-start handled and broadcasted to all players`);
+                console.log(`✅ [SERVER] CHECKPOINT 4 PASSED: Stream-start handled and broadcasted`);
                 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                 break;
                 
@@ -1479,21 +1492,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 });
                 break;
               
-              // ✅ FIX: Add viewer-join handler
+              // ✅ CHECKPOINT 4: Viewer-join validation
               case 'viewer-join':
                 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                console.log('👤 [SERVER] Viewer join request from player');
-                console.log(`👤 [SERVER] Player ID: ${webrtcClientId}`);
-                console.log(`👤 [SERVER] StreamId: ${signalData.streamId || 'default-stream'}`);
-                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                if (client.role === 'player') {
-                  webrtcSignaling.handleMessage(webrtcClientId, {
-                    type: 'viewer-join',
-                    from: webrtcClientId,
-                    streamId: signalData.streamId || 'default-stream'
-                  });
-                  console.log(`✅ [SERVER] Viewer-join processed, will notify admin if stream active`);
+                console.log('👤 [SERVER] CHECKPOINT 4: Viewer join request received');
+                
+                // ✅ VALIDATION 4.4: Ensure player is sending
+                if (client?.role !== 'player') {
+                  console.error('❌ [SERVER] CHECKPOINT 4.4 FAILED: Only players can send viewer-join');
+                  console.error('❌ [SERVER] Client role:', client?.role);
+                  break; // ⛔ Don't process non-player viewer-join
                 }
+                console.log(`✅ [SERVER] CHECKPOINT 4.4 PASSED: Player verified (ID: ${webrtcClientId})`);
+                
+                const viewerStreamId = signalData.streamId || 'default-stream';
+                console.log(`👤 [SERVER] StreamId: ${viewerStreamId}`);
+                
+                webrtcSignaling.handleMessage(webrtcClientId, {
+                  type: 'viewer-join',
+                  from: webrtcClientId,
+                  streamId: viewerStreamId
+                });
+                
+                console.log(`✅ [SERVER] CHECKPOINT 4 PASSED: Viewer-join processed, will notify admin`);
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                 break;
                 
               default:

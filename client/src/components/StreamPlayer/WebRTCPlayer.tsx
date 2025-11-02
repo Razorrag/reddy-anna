@@ -41,10 +41,10 @@ export default function WebRTCPlayer({ roomId: _roomId }: WebRTCPlayerProps) {
     
     peerConnectionRef.current = pc;
 
-    // ✅ SIMPLIFIED: Direct ontrack - attach and play immediately
+    // ✅ CHECKPOINT 8: Track received and validation - CRITICAL for preventing black screen
     pc.ontrack = (event) => {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('🎬 [PLAYER] SIMPLIFIED: Track received!');
+      console.log('🎬 [PLAYER] CHECKPOINT 8: Track received!');
       
       const track = event.track;
       const trackDetails = {
@@ -55,23 +55,13 @@ export default function WebRTCPlayer({ roomId: _roomId }: WebRTCPlayerProps) {
         trackMuted: track.muted,
         streams: event.streams.length
       };
-      console.log('🎬 Track:', trackDetails);
+      console.log('🎬 [PLAYER] Track details:', trackDetails);
       
-      // ✅ CRITICAL: Verify track is live
-      if (track.readyState !== 'live') {
-        console.warn('⚠️ [PLAYER] Track not live yet, state:', track.readyState);
-      }
-      
-      if (!track.enabled) {
-        console.warn('⚠️ [PLAYER] Track disabled, enabling...');
-        track.enabled = true;
-      }
-      
-      // ✅ CRITICAL FIX #5: Check if track is muted - this is the PRIMARY ISSUE
+      // ✅ VALIDATION 8.1: CRITICAL - Check if track is muted (PRIMARY ISSUE)
       if (track.muted) {
         console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.error('❌ [PLAYER] CRITICAL: Track is MUTED on receipt! This will prevent frames.');
-        console.error('❌ [PLAYER] Track muted state:', track.muted);
+        console.error('❌ [PLAYER] CHECKPOINT 8.1 FAILED: Track is MUTED on receipt!');
+        console.error('❌ [PLAYER] This will prevent frames and cause black screen.');
         console.error('❌ [PLAYER] Note: Tracks CANNOT be unmuted from receiver side.');
         console.error('❌ [PLAYER] This is the ROOT CAUSE of black screen.');
         console.error('❌ [PLAYER] Admin must restart screen share with unmuted track.');
@@ -130,31 +120,42 @@ export default function WebRTCPlayer({ roomId: _roomId }: WebRTCPlayerProps) {
           track.removeEventListener('unmute', monitorUnmute);
         }, 30000);
       } else {
-        console.log('✅ [PLAYER] Track is NOT muted - ready to receive frames.');
+        console.log('✅ [PLAYER] CHECKPOINT 8.1 PASSED: Track is NOT muted - ready to receive frames.');
         
-        // ✅ NEW: Remove any existing error message if track is not muted
+        // ✅ Remove any existing error message if track is not muted
         const errorMsg = document.getElementById('webrtc-muted-error');
         if (errorMsg && errorMsg.parentElement) {
           errorMsg.parentElement.removeChild(errorMsg);
         }
       }
       
-      console.log('🎬 [PLAYER] Track initial state:', {
+      // ✅ VALIDATION 8.2: Ensure track is enabled
+      if (!track.enabled) {
+        console.warn('⚠️ [PLAYER] CHECKPOINT 8.2: Track disabled, enabling...');
+        track.enabled = true;
+      }
+      console.log('✅ [PLAYER] CHECKPOINT 8.2 PASSED: Track is enabled');
+      
+      // ✅ VALIDATION 8.3: Ensure track is live
+      if (track.readyState !== 'live') {
+        console.warn('⚠️ [PLAYER] CHECKPOINT 8.3: Track not live yet:', track.readyState);
+      } else {
+        console.log('✅ [PLAYER] CHECKPOINT 8.3 PASSED: Track is live');
+      }
+      
+      console.log('🎬 [PLAYER] Track validation complete:', {
         readyState: track.readyState,
         enabled: track.enabled,
         muted: track.muted,
         kind: track.kind
       });
       
-      // ✅ CRITICAL: Note that tracks can't be unmuted from receiver side
-      // If track is muted, it means the sender (admin) sent a muted track
-      // However, sometimes muted tracks still send frames (depending on browser/OS)
-      
+      // ✅ VALIDATION 8.4: Attach stream to video
       if (event.streams[0] && videoRef.current) {
         const stream = event.streams[0];
         const video = videoRef.current;
         
-        console.log('🎬 [PLAYER] SIMPLIFIED: Attaching stream to video element');
+        console.log('✅ [PLAYER] CHECKPOINT 8.4: Attaching stream to video element');
         
         // ✅ CRITICAL: Clear any existing stream first
         if (video.srcObject) {
@@ -167,17 +168,24 @@ export default function WebRTCPlayer({ roomId: _roomId }: WebRTCPlayerProps) {
         
         // Attach new stream
         video.srcObject = stream;
+        console.log('✅ [PLAYER] CHECKPOINT 8.4 PASSED: Stream attached to video');
         
-        // ✅ CRITICAL: Wait for video element to be ready, then play
+        // ✅ VALIDATION 8.5: Wait for video element to be ready, then play
         const attemptPlay = () => {
-          // Check if video element is in DOM and has dimensions
+          // ✅ Check if video element is in DOM
           if (!document.contains(video)) {
-            console.warn('⚠️ [PLAYER] Video element not in DOM, retrying...');
-            setTimeout(attemptPlay, 100);
+            console.warn('⚠️ [PLAYER] CHECKPOINT 8.5: Video element not in DOM, retrying...');
+            const retryCount = (attemptPlay as any).retryCount || 0;
+            (attemptPlay as any).retryCount = retryCount + 1;
+            if (retryCount < 60) {
+              setTimeout(attemptPlay, 500);
+            } else {
+              console.error('❌ [PLAYER] CHECKPOINT 8.5 FAILED: Video element never appeared in DOM');
+            }
             return;
           }
           
-          // ✅ CRITICAL FIX #3: Enhanced video element readiness checks with better retry logic
+          // ✅ VALIDATION 8.5: Enhanced video element readiness checks
           const rect = video.getBoundingClientRect();
           const computedStyle = window.getComputedStyle(video);
           const parentElement = video.parentElement;
@@ -204,29 +212,30 @@ export default function WebRTCPlayer({ roomId: _roomId }: WebRTCPlayerProps) {
               parentHeight: parentRect?.height,
               inDOM: document.contains(video)
             });
-            // ✅ CRITICAL FIX #3: Enhanced retry logic - longer timeout, more retries
-            // Increased max retries to 120 = 60 seconds total (120 * 500ms)
-            const retryCount = (attemptPlay as any).retryCount || 0;
-            (attemptPlay as any).retryCount = retryCount + 1;
-            if (retryCount < 120) {
-              // Log progress every 10 retries (every 5 seconds)
-              if (retryCount % 10 === 0) {
-                console.log(`⏳ [PLAYER] Retrying video element readiness (${retryCount}/120)...`);
-              }
-              setTimeout(attemptPlay, 500);
-            } else {
-              console.error('❌ [PLAYER] Video element still not ready after 60 seconds!');
-              console.error('❌ [PLAYER] Final state:', {
-                width: rect.width,
-                height: rect.height,
-                visible: isVisible,
-                display: computedStyle.display,
-                visibility: computedStyle.visibility,
-                inDOM: document.contains(video)
-              });
+          // ✅ Enhanced retry logic - longer timeout, more retries
+          const retryCount = (attemptPlay as any).retryCount || 0;
+          (attemptPlay as any).retryCount = retryCount + 1;
+          if (retryCount < 120) {
+            // Log progress every 10 retries (every 5 seconds)
+            if (retryCount % 10 === 0) {
+              console.log(`⏳ [PLAYER] CHECKPOINT 8.5: Retrying video element readiness (${retryCount}/120)...`);
             }
-            return;
+            setTimeout(attemptPlay, 500);
+          } else {
+            console.error('❌ [PLAYER] CHECKPOINT 8.5 FAILED: Video element still not ready after 60 seconds!');
+            console.error('❌ [PLAYER] Final state:', {
+              width: rect.width,
+              height: rect.height,
+              visible: isVisible,
+              display: computedStyle.display,
+              visibility: computedStyle.visibility,
+              inDOM: document.contains(video)
+            });
           }
+          return;
+        }
+        
+        console.log('✅ [PLAYER] CHECKPOINT 8.5 PASSED: Video element is ready');
           
           // Check visibility - video might be hidden by CSS
           if (computedStyle.display === 'none') {
@@ -282,13 +291,13 @@ export default function WebRTCPlayer({ roomId: _roomId }: WebRTCPlayerProps) {
             }
           }
           
-          // Try to play
+          // ✅ VALIDATION 8.6: Play video
           const playPromise = video.play();
           
           if (playPromise !== undefined) {
             playPromise
               .then(() => {
-                console.log('✅ [PLAYER] SIMPLIFIED: Video playing!');
+                console.log('✅ [PLAYER] CHECKPOINT 8.6 PASSED: Video playing!');
                 console.log('✅ [PLAYER] Video state:', {
                   videoWidth: video.videoWidth,
                   videoHeight: video.videoHeight,
@@ -296,6 +305,19 @@ export default function WebRTCPlayer({ roomId: _roomId }: WebRTCPlayerProps) {
                   paused: video.paused,
                   currentTime: video.currentTime
                 });
+                
+                // ✅ VALIDATION 8.7: Verify frames are arriving
+                setTimeout(() => {
+                  if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    console.error('❌ [PLAYER] CHECKPOINT 8.7 FAILED: No frames received after 2 seconds!');
+                    console.error('❌ [PLAYER] This indicates black screen issue.');
+                  } else {
+                    console.log('✅ [PLAYER] CHECKPOINT 8.7 PASSED: Frames arriving:', {
+                      width: video.videoWidth,
+                      height: video.videoHeight
+                    });
+                  }
+                }, 2000);
               })
               .catch((err: any) => {
                 console.error('❌ [PLAYER] SIMPLIFIED: Play failed:', err);

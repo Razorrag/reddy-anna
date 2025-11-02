@@ -682,67 +682,51 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           switch (signalData.data.type) {
             case 'stream-start':
               console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-              console.log('✅ [WEBSOCKET] Stream start received');
-              console.log('✅ [WEBSOCKET] Message details:', {
-                from: signalData.data.from,
-                streamId: signalData.data.streamId,
-                hasFrom: !!signalData.data.from,
-                hasStreamId: !!signalData.data.streamId
-              });
-              console.log('✅ [WEBSOCKET] Updating game state immediately');
+              console.log('✅ [WEBSOCKET] CHECKPOINT 5: Stream start received');
               
-              // ✅ FIX: Set global state to TRUE immediately
-              console.log('✅ [WEBSOCKET] Calling setScreenSharing(true)...');
-              setScreenSharing(true);
-              console.log('✅ [WEBSOCKET] setScreenSharing(true) called');
-              
-              // ✅ NOTE: State update is async, so we log but don't expect immediate change
-              // The state will update in the next render cycle
-              console.log('✅ [WEBSOCKET] State update queued (React state is async)');
-              
-              console.log('✅ [WEBSOCKET] Screen sharing started - UI should update');
-              
-              // ✅ CRITICAL: Store the received streamId for later use
-              const receivedStreamId = signalData.data.streamId;
-              if (receivedStreamId) {
-                // Store in sessionStorage for persistence across component remounts
-                sessionStorage.setItem('webrtc_streamId', receivedStreamId);
-                console.log('💾 Stored streamId:', receivedStreamId);
-                
-                // ✅ CRITICAL FIX #7: Dispatch event for WebRTCPlayer to send viewer-join
-                window.dispatchEvent(new CustomEvent('webrtc_stream_start', {
-                  detail: { streamId: receivedStreamId }
-                }));
-              } else {
-                console.warn('⚠️ No streamId in stream-start message');
+              // ✅ VALIDATION 5.1: Ensure message has required fields
+              const receivedStreamId = signalData.data?.streamId;
+              if (!receivedStreamId) {
+                console.error('❌ [WEBSOCKET] CHECKPOINT 5.1 FAILED: No streamId in stream-start message');
+                console.error('❌ [WEBSOCKET] Message details:', signalData.data);
+                break; // ⛔ Don't proceed without streamId
               }
+              console.log('✅ [WEBSOCKET] CHECKPOINT 5.1 PASSED: streamId exists:', receivedStreamId);
               
-              // ✅ CRITICAL FIX: Immediately send viewer-join for non-admin users
-              // This ensures admin knows we want to receive the stream
+              // ✅ VALIDATION 5.2: Update state IMMEDIATELY (don't wait for React)
+              console.log('✅ [WEBSOCKET] CHECKPOINT 5.2: Updating state IMMEDIATELY');
+              setScreenSharing(true);
+              console.log('✅ [WEBSOCKET] CHECKPOINT 5.2 PASSED: setScreenSharing(true) called');
+              
+              // ✅ VALIDATION 5.3: Store streamId in sessionStorage
+              sessionStorage.setItem('webrtc_streamId', receivedStreamId);
+              console.log('✅ [WEBSOCKET] CHECKPOINT 5.3 PASSED: streamId stored:', receivedStreamId);
+              
+              // ✅ VALIDATION 5.4: Dispatch event for IMMEDIATE component update
+              window.dispatchEvent(new CustomEvent('webrtc_stream_start', {
+                detail: { streamId: receivedStreamId, from: signalData.data?.from }
+              }));
+              console.log('✅ [WEBSOCKET] CHECKPOINT 5.4 PASSED: webrtc_stream_start event dispatched');
+              
+              // ✅ VALIDATION 5.5: Send viewer-join IMMEDIATELY (don't wait)
               if (authState.user?.role !== 'admin' && authState.user?.role !== 'super_admin') {
-                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                console.log('🔔 [WEBSOCKET] Stream started - sending viewer-join signal to admin');
-                console.log('🔔 [WEBSOCKET] StreamId:', receivedStreamId || 'default-stream');
-                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                
+                console.log('✅ [WEBSOCKET] CHECKPOINT 5.5: Sending viewer-join IMMEDIATELY');
                 const sendMessage = sendWebSocketMessageRef.current;
                 if (sendMessage) {
                   sendMessage({
                     type: 'webrtc:signal',
                     data: {
                       type: 'viewer-join',
-                      streamId: receivedStreamId || 'default-stream'
+                      streamId: receivedStreamId
                     }
                   });
-                  console.log('✅ [WEBSOCKET] viewer-join sent successfully');
+                  console.log('✅ [WEBSOCKET] CHECKPOINT 5.5 PASSED: viewer-join sent successfully');
                 } else {
-                  console.warn('⚠️ sendWebSocketMessage not available yet, viewer-join will be sent by WebRTCPlayer');
+                  console.warn('⚠️ [WEBSOCKET] CHECKPOINT 5.5: sendWebSocketMessage not available, WebRTCPlayer will send');
                 }
               }
               
-              // ✅ FIX: Dispatch webrtc_stream_start event for WebRTCPlayer to resume retrying
-              window.dispatchEvent(new CustomEvent('webrtc_stream_start', { detail: signalData.data }));
-              console.log('✅ [WEBSOCKET] webrtc_stream_start event dispatched');
+              console.log('✅ [WEBSOCKET] CHECKPOINT 5 PASSED: All validations completed');
               console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
               break;
             case 'stream-stop':

@@ -360,36 +360,92 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
           
           const canvasStream = canvas.captureStream(targetFPS);
           
-          // ✅ Verify stream has tracks
-          const tracks = canvasStream.getVideoTracks();
-          if (tracks.length === 0) {
+          // ✅ CHECKPOINT 2: Validate canvas stream
+          // ✅ VALIDATION 2.1: Verify stream has tracks
+          const canvasTracks = canvasStream.getVideoTracks();
+          if (canvasTracks.length === 0) {
+            console.error('❌ [ADMIN] CHECKPOINT 2.1 FAILED: Canvas stream has no tracks!');
             console.warn('⚠️ Canvas stream has no tracks, retrying...');
             if (active) {
               setTimeout(createStreamAfterFirstFrame, 50);
             }
             return;
           }
+          console.log('✅ [ADMIN] CHECKPOINT 2.1 PASSED: Canvas stream has tracks');
           
-          // ✅ Wait for track to be ready
-          const track = tracks[0];
-          if (track.readyState === 'ended') {
-            console.warn('⚠️ Track ended immediately, retrying...');
+          // ✅ VALIDATION 2.2: Check canvas track is NOT muted
+          const canvasTrack = canvasTracks[0];
+          if ((canvasTrack as any).muted === true) {
+            console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.error('❌ [ADMIN] CHECKPOINT 2.2 FAILED: Canvas track is MUTED!');
+            console.error('❌ [ADMIN] This will cause black screen for players.');
+            console.error('❌ [ADMIN] Falling back to original stream.');
+            console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            // ⛔ Don't use cropped stream - fall back to original
+            streamRef.current = originalStreamRef.current;
+            setScreenStream(originalStreamRef.current);
+            streamCreated = false; // Prevent further attempts
+            return;
+          }
+          console.log('✅ [ADMIN] CHECKPOINT 2.2 PASSED: Canvas track is NOT muted');
+          
+          // ✅ VALIDATION 2.3: Ensure canvas track is enabled
+          if (!canvasTrack.enabled) {
+            console.warn('⚠️ Canvas track disabled, enabling...');
+            canvasTrack.enabled = true;
+          }
+          
+          // ✅ VALIDATION 2.4: Wait for track to be ready
+          if (canvasTrack.readyState === 'ended') {
+            console.warn('⚠️ [ADMIN] Canvas track ended immediately, retrying...');
             if (active) {
               setTimeout(createStreamAfterFirstFrame, 50);
             }
             return;
           }
           
-          croppedStreamRef.current = canvasStream;
-          setCroppedStream(canvasStream);
-          streamRef.current = canvasStream; // Use cropped stream
-          setScreenStream(canvasStream);
-          streamCreated = true;
-          console.log('✅ Canvas cropped stream created with active track:', {
-            trackId: track.id,
-            trackState: track.readyState,
-            canvasSize: { width: canvas.width, height: canvas.height }
-          });
+          if (canvasTrack.readyState !== 'live') {
+            console.warn('⚠️ [ADMIN] Canvas track not live yet, waiting...');
+            // Wait for track to become live
+            let attempts = 0;
+            const checkLive = () => {
+              attempts++;
+              if (canvasTrack.readyState === 'live') {
+                console.log('✅ [ADMIN] CHECKPOINT 2.4 PASSED: Canvas track is now live');
+                // Continue with stream creation
+                finalizeCanvasStream();
+              } else if (attempts <= 10 && active) {
+                setTimeout(checkLive, 500);
+              } else if (!active) {
+                return; // Component unmounted
+              } else {
+                console.error('❌ [ADMIN] CHECKPOINT 2.4 FAILED: Canvas track never became live');
+                // Fall back to original stream
+                streamRef.current = originalStreamRef.current;
+                setScreenStream(originalStreamRef.current);
+              }
+            };
+            setTimeout(checkLive, 100);
+            return;
+          }
+          
+          // ✅ VALIDATION 2.5: Finalize canvas stream creation
+          const finalizeCanvasStream = () => {
+            croppedStreamRef.current = canvasStream;
+            setCroppedStream(canvasStream);
+            streamRef.current = canvasStream; // Use cropped stream
+            setScreenStream(canvasStream);
+            streamCreated = true;
+            console.log('✅ [ADMIN] CHECKPOINT 2 PASSED: Canvas cropped stream created successfully:', {
+              trackId: canvasTrack.id,
+              trackState: canvasTrack.readyState,
+              trackMuted: (canvasTrack as any).muted,
+              trackEnabled: canvasTrack.enabled,
+              canvasSize: { width: canvas.width, height: canvas.height }
+            });
+          };
+          
+          finalizeCanvasStream();
         } catch (err) {
           console.error('❌ Failed to create canvas stream:', err);
           if (active) {
@@ -637,13 +693,40 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
     };
     
-    // Add stream tracks to the peer connection
+    // ✅ CRITICAL: Check track state BEFORE creating peer connection
     const tracks = streamRef.current.getTracks();
-    console.log(`📹 Adding ${tracks.length} tracks to peer connection for ${clientId}:`, {
+    console.log(`📹 Checking ${tracks.length} tracks before creating peer connection for ${clientId}:`, {
       videoTracks: tracks.filter(t => t.kind === 'video').length,
       audioTracks: tracks.filter(t => t.kind === 'audio').length,
-      trackStates: tracks.map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState }))
+      trackStates: tracks.map(t => ({ 
+        kind: t.kind, 
+        enabled: t.enabled, 
+        readyState: t.readyState,
+        muted: (t as any).muted 
+      }))
     });
+    
+    // ✅ VALIDATION: Check if any track is muted BEFORE creating peer connection
+    const mutedTracks = tracks.filter(t => (t as any).muted === true);
+    if (mutedTracks.length > 0) {
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error(`❌ [ADMIN] CRITICAL: ${mutedTracks.length} track(s) are MUTED before creating peer connection!`);
+      console.error(`❌ [ADMIN] This will cause black screen for ${clientId}.`);
+      console.error(`❌ [ADMIN] Muted tracks:`, mutedTracks.map(t => ({ kind: t.kind, id: t.id })));
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
+      // Close peer connection immediately
+      pc.close();
+      peerConnectionsRef.current.delete(clientId);
+      
+      // Stop broadcasting if any track is muted
+      setIsBroadcasting(false);
+      setError(`❌ CRITICAL: Track(s) are muted. Cannot create connection for ${clientId}. Please restart screen share.`);
+      showNotification('Screen share error: Track is muted. Please restart.', 'error');
+      
+      // Don't proceed
+      return;
+    }
     
     try {
       // ✅ CRITICAL: Add tracks to the peer connection and verify they're producing frames
@@ -655,6 +738,7 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
         
         // ✅ CRITICAL FIX #4: STRICT validation - don't add muted tracks - they won't send frames
+        // Double-check right before adding (track state can change)
         if ((track as any).muted === true) {
           console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           console.error(`❌ [ADMIN] CRITICAL: Track ${track.kind} is MUTED! Cannot add to peer connection.`);
@@ -665,7 +749,7 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
             readyState: track.readyState,
             trackId: track.id
           });
-          console.error(`❌ [ADMIN] CLOSING peer connection for ${clientId} - muted track detected.`);
+          console.error(`❌ [ADMIN] CLOSING peer connection for ${clientId} - muted track detected during add.`);
           console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           // ✅ CRITICAL: Don't add muted tracks - close connection and show error
           setError(`❌ CRITICAL: Track ${track.kind} is muted. Connection to ${clientId} blocked. Please restart screen share.`);
@@ -673,6 +757,8 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
           peerConnectionsRef.current.delete(clientId);
           // ✅ CRITICAL: Stop broadcasting if any track is muted
           setIsBroadcasting(false);
+          setIsCropReady(false);
+          showNotification('Screen share error: Track became muted. Please restart.', 'error');
           throw new Error(`Cannot add muted ${track.kind} track to peer connection - connection blocked`);
         } else {
           console.log(`✅ [ADMIN] Track ${track.kind} is NOT muted - ready to add to peer connection`);
@@ -970,56 +1056,69 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
       return;
     }
 
-    // ✅ FIX: Enhanced stream readiness check
+    // ✅ CHECKPOINT 3: Pre-broadcast final validation - LAST CHANCE to catch issues
+    // ✅ VALIDATION 3.1: Get active stream
     const activeStream = cropSettingsRef.current?.enabled ? croppedStreamRef.current : streamRef.current;
     if (!activeStream) {
-      setError('Stream not available. Please wait...');
-      return;
+      console.error('❌ [ADMIN] CHECKPOINT 3.1 FAILED: No active stream available');
+      setError('Stream not available. Please restart screen share.');
+      setIsBroadcasting(false);
+      return; // ⛔ BLOCK
     }
-
-    const videoTracks = activeStream.getVideoTracks();
-    if (videoTracks.length === 0) {
-      setError('Stream has no video tracks. Please wait...');
-      return;
-    }
-
-    const videoTrack = videoTracks[0];
+    console.log('✅ [ADMIN] CHECKPOINT 3.1 PASSED: Active stream available');
     
-    // ✅ CRITICAL FIX #3: STRICT validation - block muted tracks before broadcasting
-    if ((videoTrack as any).muted === true) {
+    const finalVideoTracks = activeStream.getVideoTracks();
+    if (finalVideoTracks.length === 0) {
+      console.error('❌ [ADMIN] CHECKPOINT 3.1 FAILED: Stream has no video tracks');
+      setError('Stream has no video tracks. Please restart screen share.');
+      setIsBroadcasting(false);
+      return; // ⛔ BLOCK
+    }
+    console.log('✅ [ADMIN] CHECKPOINT 3.1 PASSED: Stream has video tracks');
+    
+    const finalVideoTrack = finalVideoTracks[0];
+    
+    // ✅ VALIDATION 3.2: FINAL CHECK - Track MUST NOT be muted (CRITICAL)
+    if ((finalVideoTrack as any).muted === true) {
       console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.error('❌ [ADMIN] CRITICAL: Video track is MUTED! BLOCKING broadcast.');
+      console.error('❌ [ADMIN] CHECKPOINT 3.2 FAILED: Track is MUTED RIGHT BEFORE broadcast!');
       console.error('❌ [ADMIN] This will cause black screen on ALL players.');
-      console.error('❌ [ADMIN] Tracks CANNOT be unmuted - must restart screen share.');
+      console.error('❌ [ADMIN] BLOCKING broadcast to prevent black screen.');
       console.error('❌ [ADMIN] Track state:', {
-        enabled: videoTrack.enabled,
-        readyState: videoTrack.readyState,
-        muted: (videoTrack as any).muted,
-        trackId: videoTrack.id
+        enabled: finalVideoTrack.enabled,
+        readyState: finalVideoTrack.readyState,
+        muted: (finalVideoTrack as any).muted,
+        trackId: finalVideoTrack.id
       });
       console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       setIsBroadcasting(false);
       setError('❌ BROADCAST BLOCKED: Video track is muted. This will cause black screen for all players. Please restart screen share or select a different screen/tab.');
-      return; // ✅ CRITICAL: Don't broadcast muted track
+      return; // ⛔ BLOCK - Don't broadcast muted track
     }
+    console.log('✅ [ADMIN] CHECKPOINT 3.2 PASSED: Track is NOT muted');
     
-    // ✅ CRITICAL: Double-check track is enabled and live
-    if (!videoTrack.enabled) {
-      console.warn('⚠️ [ADMIN] Video track is disabled, enabling...');
-      videoTrack.enabled = true;
-      // Re-check after enabling
-      if ((videoTrack as any).muted === true) {
-        console.error('❌ [ADMIN] Track still muted after enabling. BLOCKING broadcast.');
+    // ✅ VALIDATION 3.3: Track MUST be enabled
+    if (!finalVideoTrack.enabled) {
+      console.warn('⚠️ [ADMIN] Track disabled, enabling...');
+      finalVideoTrack.enabled = true;
+      // Re-check muted state after enabling
+      if ((finalVideoTrack as any).muted === true) {
+        console.error('❌ [ADMIN] CHECKPOINT 3.3 FAILED: Track still muted after enabling');
         setIsBroadcasting(false);
         setError('Video track is muted. Please restart screen share.');
-        return;
+        return; // ⛔ BLOCK
       }
     }
+    console.log('✅ [ADMIN] CHECKPOINT 3.3 PASSED: Track is enabled');
     
-    if (videoTrack.readyState !== 'live') {
+    // ✅ VALIDATION 3.4: Track MUST be live
+    if (finalVideoTrack.readyState !== 'live') {
+      console.error('❌ [ADMIN] CHECKPOINT 3.4 FAILED: Track not live yet');
       setError('Stream track is not live yet. Please wait...');
-      return;
+      setIsBroadcasting(false);
+      return; // ⛔ BLOCK
     }
+    console.log('✅ [ADMIN] CHECKPOINT 3.4 PASSED: Track is live');
 
     if (cropSettingsRef.current?.enabled) {
       if (!croppedStreamRef.current || croppedStreamRef.current.getVideoTracks().length === 0 || croppedStreamRef.current.getVideoTracks()[0].readyState !== 'live') {
@@ -1030,9 +1129,9 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     console.log('✅ Stream readiness verified:', {
       hasStream: !!activeStream,
-      videoTracks: videoTracks.length,
-      trackState: videoTrack.readyState,
-      trackEnabled: videoTrack.enabled,
+      videoTracks: finalVideoTracks.length,
+      trackState: finalVideoTrack.readyState,
+      trackEnabled: finalVideoTrack.enabled,
       streamId: streamIdRef.current
     });
 
@@ -1066,49 +1165,39 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
     console.log('[LOG] sendWebSocketMessage function:', typeof sendWebSocketMessage);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
-    // ✅ CRITICAL FIX #3: FINAL validation RIGHT BEFORE sending stream-start
-    // This is the LAST chance to catch muted tracks before broadcasting starts
-    const finalVideoTrack = activeStream.getVideoTracks()[0];
-    if (!finalVideoTrack) {
-      console.error('❌ [ADMIN] CRITICAL: No video track found right before broadcast!');
+    // ✅ VALIDATION 3.5: Final validation RIGHT BEFORE sending stream-start
+    // Double-check everything one more time (track state can change)
+    const absoluteFinalTrack = activeStream.getVideoTracks()[0];
+    if (!absoluteFinalTrack) {
+      console.error('❌ [ADMIN] CHECKPOINT 3.5 FAILED: No track found at final check');
       setError('No video track available. Please restart screen share.');
       setIsBroadcasting(false);
-      return;
+      return; // ⛔ BLOCK
     }
     
-    if ((finalVideoTrack as any).muted === true) {
+    if ((absoluteFinalTrack as any).muted === true) {
       console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.error('❌ [ADMIN] CRITICAL: Track is MUTED RIGHT BEFORE broadcast! BLOCKING.');
+      console.error('❌ [ADMIN] CHECKPOINT 3.5 FAILED: Track became MUTED at final check!');
       console.error('❌ [ADMIN] Track was muted between validation and broadcast start.');
-      console.error('❌ [ADMIN] Track state:', {
-        enabled: finalVideoTrack.enabled,
-        readyState: finalVideoTrack.readyState,
-        muted: (finalVideoTrack as any).muted,
-        trackId: finalVideoTrack.id
-      });
+      console.error('❌ [ADMIN] BLOCKING broadcast to prevent black screen.');
       console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       setIsBroadcasting(false);
       setError('❌ BROADCAST BLOCKED: Video track became muted. Please restart screen share.');
-      return;
+      return; // ⛔ BLOCK
     }
     
-    if (!finalVideoTrack.enabled || finalVideoTrack.readyState !== 'live') {
-      console.error('❌ [ADMIN] CRITICAL: Track not ready right before broadcast!');
-      console.error('❌ [ADMIN] Track state:', {
-        enabled: finalVideoTrack.enabled,
-        readyState: finalVideoTrack.readyState,
-        muted: (finalVideoTrack as any).muted
-      });
-      setIsBroadcasting(false);
+    if (!absoluteFinalTrack.enabled || absoluteFinalTrack.readyState !== 'live') {
+      console.error('❌ [ADMIN] CHECKPOINT 3.5 FAILED: Track not ready at final check');
       setError('Video track not ready. Please restart screen share.');
-      return;
+      setIsBroadcasting(false);
+      return; // ⛔ BLOCK
     }
     
-    console.log('✅ [ADMIN] FINAL validation passed - track is ready and unmuted:', {
-      enabled: finalVideoTrack.enabled,
-      readyState: finalVideoTrack.readyState,
-      muted: (finalVideoTrack as any).muted,
-      trackId: finalVideoTrack.id
+    console.log('✅ [ADMIN] CHECKPOINT 3 PASSED: All pre-broadcast validations passed:', {
+      enabled: absoluteFinalTrack.enabled,
+      readyState: absoluteFinalTrack.readyState,
+      muted: (absoluteFinalTrack as any).muted,
+      trackId: absoluteFinalTrack.id
     });
     
     try {
@@ -1143,6 +1232,23 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
     if (!isStreaming || !originalStreamRef.current) {
       setError('Please start screen share first');
       return;
+    }
+    
+    // ✅ CRITICAL: Quick check - ensure track is NOT muted before proceeding
+    const quickTracks = originalStreamRef.current.getVideoTracks();
+    if (quickTracks.length > 0) {
+      const quickTrack = quickTracks[0];
+      if ((quickTrack as any).muted === true) {
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.error('❌ [ADMIN] CRITICAL: Track is MUTED when trying to skip crop and start!');
+        console.error('❌ [ADMIN] This likely happened due to tab/window losing focus.');
+        console.error('❌ [ADMIN] BLOCKING broadcast to prevent black screen.');
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        setIsBroadcasting(false);
+        setError('❌ Track is muted. This usually happens when the browser tab loses focus. Please restart screen share and keep the tab active.');
+        showNotification('Track is muted. Please restart screen share.', 'error');
+        return; // ⛔ BLOCK
+      }
     }
 
     setCropSettings(null);
@@ -1258,12 +1364,16 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
       const tracks = stream.getTracks();
       console.log('📹 [ADMIN] Stream tracks captured:', tracks.length);
       
-      // ✅ CRITICAL FIX: Check for muted tracks BEFORE setting stream
+      // ✅ CHECKPOINT 1: Validate tracks at capture - CRITICAL for preventing black screen
       let hasMutedTrack = false;
       const mutedTracks: MediaStreamTrack[] = [];
+      let hasNonLiveTrack = false;
       
-      tracks.forEach((track, idx) => {
-        console.log(`📹 [ADMIN] Track ${idx} initial state:`, {
+      // ✅ VALIDATION 1.1, 1.2, 1.3: Check all tracks
+      for (let idx = 0; idx < tracks.length; idx++) {
+        const track = tracks[idx];
+        
+        console.log(`📹 [ADMIN] Track ${idx} validation:`, {
           kind: track.kind,
           enabled: track.enabled,
           readyState: track.readyState,
@@ -1271,57 +1381,174 @@ export const AdminStreamProvider: React.FC<{ children: ReactNode }> = ({ childre
           trackId: track.id
         });
         
-        // ✅ CRITICAL: Enable track if disabled
+        // ✅ VALIDATION 1.2: Ensure track is enabled
         if (!track.enabled) {
           console.warn(`⚠️ [ADMIN] Track ${idx} (${track.kind}) is disabled, enabling...`);
           track.enabled = true;
         }
         
-        // ✅ CRITICAL FIX #2: BLOCK muted tracks - this is the ROOT CAUSE of black screen
+        // ✅ VALIDATION 1.1: CRITICAL - BLOCK muted tracks (ROOT CAUSE of black screen)
         if ((track as any).muted === true) {
-          console.error(`❌ [ADMIN] CRITICAL: Track ${idx} (${track.kind}) is MUTED at source!`);
+          console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.error(`❌ [ADMIN] CHECKPOINT 1.1 FAILED: Track ${idx} (${track.kind}) is MUTED at capture!`);
           console.error(`❌ [ADMIN] This will cause black screen on player side.`);
           console.error(`❌ [ADMIN] BLOCKING: Cannot proceed with muted track.`);
+          console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           hasMutedTrack = true;
           mutedTracks.push(track);
+          continue;
         } else {
-          console.log(`✅ [ADMIN] Track ${idx} (${track.kind}) is NOT muted - ready to send frames.`);
+          console.log(`✅ [ADMIN] CHECKPOINT 1.1 PASSED: Track ${idx} (${track.kind}) is NOT muted`);
         }
         
-        // ✅ CRITICAL: Monitor track state changes
+        // ✅ VALIDATION 1.3: Wait for track to be live (if video track)
+        if (track.kind === 'video') {
+          if (track.readyState !== 'live') {
+            console.warn(`⚠️ [ADMIN] Track ${idx} (${track.kind}) not live yet: ${track.readyState}, waiting...`);
+            hasNonLiveTrack = true;
+            
+            // Wait up to 5 seconds for track to become live
+            let attempts = 0;
+            const checkLive = () => {
+              attempts++;
+              if (track.readyState === 'live') {
+                console.log(`✅ [ADMIN] CHECKPOINT 1.3 PASSED: Track ${idx} is now live`);
+                hasNonLiveTrack = false;
+              } else if (attempts <= 10) {
+                // Check every 500ms, up to 10 times (5 seconds)
+                setTimeout(checkLive, 500);
+              } else {
+                console.error(`❌ [ADMIN] CHECKPOINT 1.3 FAILED: Track ${idx} never became live after 5 seconds`);
+                hasNonLiveTrack = true;
+              }
+            };
+            
+            // Start checking after a short delay
+            setTimeout(checkLive, 100);
+          } else {
+            console.log(`✅ [ADMIN] CHECKPOINT 1.3 PASSED: Track ${idx} is live`);
+          }
+        }
+        
+        // ✅ CRITICAL: Monitor track state changes (for all tracks)
         track.addEventListener('mute', () => {
+          console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           console.error(`❌ [ADMIN] CRITICAL: Track ${idx} (${track.kind}) was MUTED after capture!`);
-          console.error(`❌ [ADMIN] This will cause black screen. Stop screen share immediately.`);
+          console.error(`❌ [ADMIN] This will cause black screen for ALL players.`);
+          console.error(`❌ [ADMIN] Track was muted by browser/OS (common when tab loses focus).`);
+          console.error(`❌ [ADMIN] Stopping screen share to prevent black screen.`);
+          console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          
           // ✅ CRITICAL: If track gets muted after capture, stop streaming and show error
+          setIsInitializing(false);
           setIsStreaming(false);
-          setError('Video track was muted. Please restart screen share.');
+          setIsBroadcasting(false);
+          setIsCropReady(false);
+          
           // Stop all tracks
-          stream.getTracks().forEach(t => t.stop());
+          stream.getTracks().forEach(t => {
+            try {
+              t.stop();
+            } catch (e) {
+              console.warn('Error stopping track:', e);
+            }
+          });
+          
+          // Clean up refs
           originalStreamRef.current = null;
           streamRef.current = null;
+          croppedStreamRef.current = null;
           setOriginalStream(null);
           setScreenStream(null);
+          setCroppedStream(null);
+          
+          // Clear peer connections
+          peerConnectionsRef.current.forEach((pc, clientId) => {
+            try {
+              pc.close();
+            } catch (e) {
+              console.warn('Error closing peer connection:', e);
+            }
+          });
+          peerConnectionsRef.current.clear();
+          
+          setError('❌ Screen share stopped: Video track was muted by browser/OS. This usually happens when the tab loses focus or screen share permissions change. Please restart screen share and keep the tab focused.');
+          showNotification('Screen share stopped: Track was muted. Please restart.', 'error');
         });
         
         track.addEventListener('unmute', () => {
           console.log(`✅ [ADMIN] Track ${idx} (${track.kind}) was unmuted.`);
+          // If track was unmuted after being muted, user might want to resume
+          // But we've already stopped streaming, so they need to restart
+          console.log(`ℹ️ [ADMIN] Track unmuted. You may restart screen share if needed.`);
         });
-      });
+        
+        // ✅ CRITICAL: Also monitor tab visibility to warn user before mute happens
+        const handleVisibilityChange = () => {
+          if (document.hidden && isStreaming) {
+            console.warn('⚠️ [ADMIN] Tab became hidden! Screen share may be muted by browser.');
+            console.warn('⚠️ [ADMIN] Please keep the tab focused to prevent track muting.');
+            showNotification('Warning: Tab is hidden. Screen share may stop.', 'warning');
+          } else if (!document.hidden && isStreaming) {
+            // Tab became visible again - check if track is still good
+            if ((track as any).muted === true) {
+              console.error('❌ [ADMIN] Track is muted after tab became visible again!');
+              // The mute event handler will handle cleanup
+            } else {
+              console.log('✅ [ADMIN] Tab visible, track still active');
+            }
+          }
+        };
+        
+        // Listen for visibility changes
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        // Store handler for cleanup
+        (track as any)._visibilityHandler = handleVisibilityChange;
+      }
       
-      // ✅ CRITICAL FIX: STOP if any track is muted - don't proceed with muted tracks
+      // ✅ FAILURE ACTION: STOP if any track is muted - don't proceed with muted tracks
       if (hasMutedTrack) {
-        console.error('❌ [ADMIN] CRITICAL: BLOCKING screen share - muted tracks detected!');
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.error('❌ [ADMIN] CHECKPOINT 1 FAILED: BLOCKING screen share - muted tracks detected!');
         console.error('❌ [ADMIN] Muted tracks:', mutedTracks.map(t => ({ kind: t.kind, id: t.id })));
+        console.error('❌ [ADMIN] Screen share cannot proceed. Please restart and try a different screen/tab.');
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
-        setError('Screen share blocked: Video track is muted. Please restart screen share or select a different screen/tab. This is usually caused by browser or OS settings that prevent screen sharing.');
+        setIsInitializing(false);
+        setError('❌ Screen share blocked: Video track is muted at capture. This will cause black screen for players. Please restart screen share or select a different screen/tab. This is usually caused by browser or OS settings that prevent screen sharing.');
         setIsStreaming(false);
         setOriginalStream(null);
         setScreenStream(null);
         originalStreamRef.current = null;
         streamRef.current = null;
-        return; // ✅ CRITICAL: Don't proceed with muted track
+        showNotification('Screen share blocked: Track is muted. Please try again.', 'error');
+        return; // ⛔ BLOCK - Don't proceed with muted track
       }
+      
+      // ✅ FAILURE ACTION: STOP if track never becomes live
+      if (hasNonLiveTrack) {
+        // Wait a bit more, then check again
+        setTimeout(() => {
+          const stillNotLive = stream.getTracks().some(t => t.kind === 'video' && t.readyState !== 'live');
+          if (stillNotLive) {
+            console.error('❌ [ADMIN] CHECKPOINT 1.3 FAILED: Track never became live');
+            stream.getTracks().forEach(track => track.stop());
+            setIsInitializing(false);
+            setError('Screen share failed: Track never became ready. Please restart.');
+            setIsStreaming(false);
+            setOriginalStream(null);
+            setScreenStream(null);
+            originalStreamRef.current = null;
+            streamRef.current = null;
+            showNotification('Screen share failed: Track not ready. Please try again.', 'error');
+          }
+        }, 6000); // Check after 6 seconds total
+      }
+      
+      console.log('✅ [ADMIN] CHECKPOINT 1 PASSED: All tracks validated successfully');
       
       originalStreamRef.current = stream;
       setOriginalStream(stream);
