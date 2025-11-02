@@ -5,19 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Gift,
   Users,
-  TrendingUp,
   Settings,
   Search,
-  Filter,
   CheckCircle,
   XCircle,
-  Calendar,
-  DollarSign,
-  Award,
   RefreshCw,
   Download,
   Clock,
@@ -60,10 +54,39 @@ interface BonusSettings {
   adminWhatsappNumber: string;
 }
 
+interface PlayerBonusAnalytics {
+  userId: string;
+  username: string;
+  phone: string;
+  fullName: string | null;
+  currentDepositBonus: number;
+  currentReferralBonus: number;
+  currentTotalPending: number;
+  totalDepositBonusReceived: number;
+  totalReferralBonusReceived: number;
+  totalBonusApplied: number;
+  totalBonusEarned: number;
+  depositBonusCount: number;
+  referralBonusCount: number;
+  totalBonusTransactions: number;
+  firstBonusDate: string | null;
+  lastBonusDate: string | null;
+  userCreatedAt: string;
+  recentTransactions: Array<{
+    id: string;
+    amount: number;
+    type: 'deposit_bonus' | 'referral_bonus' | 'bonus_applied';
+    description: string;
+    timestamp: string;
+    status: 'pending' | 'applied';
+  }>;
+}
+
 export default function AdminBonus() {
   const { showNotification } = useNotification();
   const [bonusTransactions, setBonusTransactions] = useState<BonusTransaction[]>([]);
   const [referralData, setReferralData] = useState<ReferralData[]>([]);
+  const [playerAnalytics, setPlayerAnalytics] = useState<PlayerBonusAnalytics[]>([]);
   const [bonusSettings, setBonusSettings] = useState<BonusSettings>({
     depositBonusPercent: 5,
     referralBonusPercent: 1,
@@ -72,11 +95,13 @@ export default function AdminBonus() {
     adminWhatsappNumber: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [playerSearchTerm, setPlayerSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerBonusAnalytics | null>(null);
 
   // Fetch bonus transactions
   const fetchBonusTransactions = async () => {
@@ -133,6 +158,24 @@ export default function AdminBonus() {
     }
   };
 
+  // Fetch player bonus analytics
+  const fetchPlayerAnalytics = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.get<{ success: boolean; data: PlayerBonusAnalytics[] }>(
+        '/admin/player-bonus-analytics'
+      );
+      if (response.success && response.data) {
+        setPlayerAnalytics(response.data);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch player analytics:', error);
+      showNotification(error.message || 'Failed to fetch player analytics', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Load all data on mount
   useEffect(() => {
     const loadData = async () => {
@@ -140,12 +183,21 @@ export default function AdminBonus() {
       await Promise.all([
         fetchBonusTransactions(),
         fetchReferralData(),
-        fetchBonusSettings()
+        fetchBonusSettings(),
+        fetchPlayerAnalytics()
       ]);
       setIsLoaded(true);
     };
     loadData();
   }, []);
+
+  // Refresh player analytics when tab changes
+  useEffect(() => {
+    if (activeTab === 'players' && isLoaded) {
+      fetchPlayerAnalytics();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Refresh data when filters change
   useEffect(() => {
@@ -242,7 +294,8 @@ export default function AdminBonus() {
     await Promise.all([
       fetchBonusTransactions(),
       fetchReferralData(),
-      fetchBonusSettings()
+      fetchBonusSettings(),
+      fetchPlayerAnalytics()
     ]);
     setIsLoaded(true);
     showNotification('Data refreshed successfully', 'success');
@@ -277,7 +330,7 @@ export default function AdminBonus() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="max-w-7xl mx-auto">
-          <TabsList className="grid w-full grid-cols-3 bg-black/50 border-purple-400/30">
+          <TabsList className="grid w-full grid-cols-4 bg-black/50 border-purple-400/30">
             <TabsTrigger value="overview" className="text-white hover:text-purple-200 data-[state=active]:text-purple-200 data-[state=active]:bg-purple-400/10">
               Overview
             </TabsTrigger>
@@ -286,6 +339,9 @@ export default function AdminBonus() {
             </TabsTrigger>
             <TabsTrigger value="referrals" className="text-white hover:text-purple-200 data-[state=active]:text-purple-200 data-[state=active]:bg-purple-400/10">
               Referrals
+            </TabsTrigger>
+            <TabsTrigger value="players" className="text-white hover:text-purple-200 data-[state=active]:text-purple-200 data-[state=active]:bg-purple-400/10">
+              Player Analytics
             </TabsTrigger>
           </TabsList>
 
@@ -659,6 +715,232 @@ export default function AdminBonus() {
                     <Users className="w-16 h-16 text-purple-300/30 mx-auto mb-4" />
                     <p className="text-purple-300">No referral relationships found.</p>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Player Analytics Tab */}
+          <TabsContent value="players" className="space-y-6 mt-6">
+            {/* Search and Filters */}
+            <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
+              <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row gap-4 items-center">
+                  <div className="relative flex-1 w-full">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-200 w-4 h-4" />
+                    <Input
+                      placeholder="Search by username, phone, or name..."
+                      value={playerSearchTerm}
+                      onChange={(e) => setPlayerSearchTerm(e.target.value)}
+                      className="pl-10 bg-purple-950/30 border-purple-400/30 text-white placeholder:text-purple-300/50 focus:border-purple-400"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Player Analytics List */}
+            <Card className="bg-black/50 border-purple-400/30 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="text-purple-200">Player Bonus Analytics</CardTitle>
+                <CardDescription className="text-purple-300">
+                  Comprehensive bonus analytics for each player - see how much bonus was given, when it was added, and complete transaction history
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="text-center py-12">
+                    <RefreshCw className="w-16 h-16 text-purple-300/30 mx-auto mb-4 animate-spin" />
+                    <p className="text-purple-300">Loading player analytics...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      {playerAnalytics
+                        .filter((player) => {
+                          const searchLower = playerSearchTerm.toLowerCase();
+                          return (
+                            player.username.toLowerCase().includes(searchLower) ||
+                            player.phone.includes(searchLower) ||
+                            (player.fullName && player.fullName.toLowerCase().includes(searchLower))
+                          );
+                        })
+                        .map((player) => (
+                          <div
+                            key={player.userId}
+                            className="p-6 bg-black/30 rounded-lg border border-purple-400/20 hover:border-purple-400/40 transition-colors"
+                          >
+                            {/* Player Header */}
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+                                  <Users className="w-8 h-8 text-purple-300" />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="text-xl font-semibold text-white">{player.username}</h3>
+                                    {player.fullName && (
+                                      <span className="text-purple-300 text-sm">({player.fullName})</span>
+                                    )}
+                                  </div>
+                                  <p className="text-purple-400 text-sm">{player.phone}</p>
+                                  <p className="text-purple-500 text-xs">
+                                    Player since {new Date(player.userCreatedAt).toLocaleDateString('en-IN')}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm text-purple-300 mb-1">Total Bonus Earned</div>
+                                <div className="text-3xl font-bold text-green-400">
+                                  {formatCurrency(player.totalBonusEarned)}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Bonus Statistics Grid */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                              <div className="p-4 bg-purple-950/30 rounded-lg border border-purple-400/20">
+                                <div className="text-xs text-purple-300 mb-1">Current Deposit Bonus</div>
+                                <div className="text-lg font-bold text-blue-400">
+                                  {formatCurrency(player.currentDepositBonus)}
+                                </div>
+                              </div>
+                              <div className="p-4 bg-purple-950/30 rounded-lg border border-purple-400/20">
+                                <div className="text-xs text-purple-300 mb-1">Current Referral Bonus</div>
+                                <div className="text-lg font-bold text-purple-400">
+                                  {formatCurrency(player.currentReferralBonus)}
+                                </div>
+                              </div>
+                              <div className="p-4 bg-purple-950/30 rounded-lg border border-purple-400/20">
+                                <div className="text-xs text-purple-300 mb-1">Total Deposit Bonuses</div>
+                                <div className="text-lg font-bold text-blue-300">
+                                  {formatCurrency(player.totalDepositBonusReceived)}
+                                </div>
+                                <div className="text-xs text-purple-400 mt-1">
+                                  {player.depositBonusCount} transaction{player.depositBonusCount !== 1 ? 's' : ''}
+                                </div>
+                              </div>
+                              <div className="p-4 bg-purple-950/30 rounded-lg border border-purple-400/20">
+                                <div className="text-xs text-purple-300 mb-1">Total Referral Bonuses</div>
+                                <div className="text-lg font-bold text-purple-300">
+                                  {formatCurrency(player.totalReferralBonusReceived)}
+                                </div>
+                                <div className="text-xs text-purple-400 mt-1">
+                                  {player.referralBonusCount} transaction{player.referralBonusCount !== 1 ? 's' : ''}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Bonus Timeline */}
+                            <div className="mb-4 p-4 bg-purple-950/20 rounded-lg border border-purple-400/10">
+                              <div className="flex items-center gap-4 text-sm">
+                                {player.firstBonusDate && (
+                                  <div>
+                                    <span className="text-purple-300">First Bonus: </span>
+                                    <span className="text-white font-semibold">
+                                      {new Date(player.firstBonusDate).toLocaleString('en-IN', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </span>
+                                  </div>
+                                )}
+                                {player.lastBonusDate && (
+                                  <div>
+                                    <span className="text-purple-300">Last Bonus: </span>
+                                    <span className="text-white font-semibold">
+                                      {new Date(player.lastBonusDate).toLocaleString('en-IN', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="ml-auto">
+                                  <span className="text-purple-300">Total Transactions: </span>
+                                  <span className="text-white font-semibold">{player.totalBonusTransactions}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Recent Transactions */}
+                            {player.recentTransactions.length > 0 && (
+                              <div>
+                                <h4 className="text-purple-200 font-semibold mb-3 flex items-center gap-2">
+                                  <Clock className="w-4 h-4" />
+                                  Recent Bonus Transactions
+                                </h4>
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                  {player.recentTransactions.map((txn) => (
+                                    <div
+                                      key={txn.id}
+                                      className="p-3 bg-purple-950/20 rounded-lg border border-purple-400/10 flex items-center justify-between"
+                                    >
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          {getTypeBadge(txn.type)}
+                                          {getStatusBadge(txn.status)}
+                                        </div>
+                                        <p className="text-purple-300 text-sm">{txn.description}</p>
+                                        <p className="text-purple-400 text-xs">
+                                          {new Date(txn.timestamp).toLocaleString('en-IN', {
+                                            year: 'numeric',
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            second: '2-digit'
+                                          })}
+                                        </p>
+                                      </div>
+                                      <div className="text-right ml-4">
+                                        <div className="text-lg font-bold text-green-400">
+                                          +{formatCurrency(txn.amount)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* View Full History Button */}
+                            <div className="flex justify-end gap-2 pt-4 border-t border-purple-400/20 mt-4">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-purple-400/30 text-purple-300 hover:bg-purple-400/10"
+                                onClick={() => setSelectedPlayer(selectedPlayer === player ? null : player)}
+                              >
+                                {selectedPlayer === player ? 'Hide' : 'View'} Full History
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+
+                    {playerAnalytics.filter((player) => {
+                      const searchLower = playerSearchTerm.toLowerCase();
+                      return (
+                        player.username.toLowerCase().includes(searchLower) ||
+                        player.phone.includes(searchLower) ||
+                        (player.fullName && player.fullName.toLowerCase().includes(searchLower))
+                      );
+                    }).length === 0 && (
+                      <div className="text-center py-12">
+                        <Users className="w-16 h-16 text-purple-300/30 mx-auto mb-4" />
+                        <p className="text-purple-300">
+                          {playerSearchTerm ? 'No players found matching your search.' : 'No player bonus analytics found.'}
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>

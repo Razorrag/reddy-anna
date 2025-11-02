@@ -111,7 +111,11 @@ export interface GameSettings {
 export interface GameAnalytics {
   id: string;
   gameId: string;
-  winner?: 'andar' | 'bahar'; // Added winner property
+  openingCard?: string;
+  winner?: 'andar' | 'bahar';
+  winningCard?: string;
+  round?: number;
+  totalCards?: number;
   totalPlayers: number;
   totalBets: number;
   totalWinnings: number;

@@ -243,6 +243,7 @@ export interface IStorage {
   getReferralAnalytics(period: string): Promise<any>;
   getAllBonusTransactions(filters?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<any[]>;
   getAllReferralData(filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
+  getPlayerBonusAnalytics(filters?: { userId?: string; limit?: number; offset?: number }): Promise<any[]>;
 }
 
 export class SupabaseStorage implements IStorage {
@@ -1424,7 +1425,9 @@ export class SupabaseStorage implements IStorage {
         winner: history.winner,
         winning_card: history.winningCard,
         total_cards: history.totalCards,
-        round: (history as any).round,
+        winning_round: (history as any).round || 1,
+        total_bets: (history as any).totalBets || 0,
+        total_payouts: (history as any).totalPayouts || 0,
         created_at: new Date()
       })
       .select()
@@ -1484,13 +1487,13 @@ export class SupabaseStorage implements IStorage {
         winner: history.winner,
         winningCard: history.winning_card,
         totalCards: history.total_cards,
-        round: history.round || 1, // Default to 1 if not present
+        round: history.winning_round || 1, // Use winning_round from database
         createdAt: history.created_at,
         // Statistics data (with defaults if not available)
-        totalBets: stats ? parseFloat(stats.total_bets || '0') : 0,
+        totalBets: stats ? parseFloat(stats.total_bets || '0') : (parseFloat(history.total_bets || '0') || 0),
         andarTotalBet: stats ? parseFloat(stats.andar_total_bet || '0') : 0,
         baharTotalBet: stats ? parseFloat(stats.bahar_total_bet || '0') : 0,
-        totalWinnings: stats ? parseFloat(stats.total_winnings || '0') : 0,
+        totalWinnings: stats ? parseFloat(stats.total_winnings || '0') : (parseFloat(history.total_payouts || '0') || 0),
         andarBetsCount: stats ? (stats.andar_bets_count || 0) : 0,
         baharBetsCount: stats ? (stats.bahar_bets_count || 0) : 0,
         totalPlayers: stats ? (stats.total_players || 0) : 0,
@@ -2095,11 +2098,14 @@ export class SupabaseStorage implements IStorage {
     }
 
     const bonusField = bonusType === 'deposit_bonus' ? 'deposit_bonus_available' : 'referral_bonus_available';
+    const currentBonusField = parseFloat(user[bonusField as keyof typeof user] as string) || 0;
+    const currentTotalBonusEarned = parseFloat(user.total_bonus_earned || '0') || 0;
     
     const { error } = await supabaseServer
       .from('users')
       .update({
-        [bonusField]: (parseFloat(user[bonusField as keyof typeof user] as string) || 0) + bonusAmount,
+        [bonusField]: currentBonusField + bonusAmount,
+        total_bonus_earned: (currentTotalBonusEarned + bonusAmount).toFixed(2),
         updated_at: new Date().toISOString()
       })
       .eq('id', userId);
@@ -2691,6 +2697,138 @@ export class SupabaseStorage implements IStorage {
       return referralData;
     } catch (error) {
       console.error('Error in getAllReferralData:', error);
+      return [];
+    }
+  }
+
+  async getPlayerBonusAnalytics(filters: { userId?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
+    try {
+      const { userId, limit = 1000, offset = 0 } = filters;
+      
+      // Get all users who have received bonuses
+      let usersQuery = supabaseServer
+        .from('users')
+        .select('id, phone, full_name, username, deposit_bonus_available, referral_bonus_available, total_bonus_earned, created_at');
+      
+      if (userId) {
+        usersQuery = usersQuery.eq('id', userId);
+      }
+      
+      const { data: usersData, error: usersError } = await usersQuery;
+      
+      if (usersError) {
+        console.error('Error getting users for bonus analytics:', usersError);
+        return [];
+      }
+      
+      if (!usersData || usersData.length === 0) {
+        return [];
+      }
+      
+      // Get all bonus transactions grouped by user
+      const { data: transactionsData, error: transactionsError } = await supabaseServer
+        .from('user_transactions')
+        .select('*')
+        .in('transaction_type', ['bonus', 'bonus_applied'])
+        .order('created_at', { ascending: false });
+      
+      if (transactionsError) {
+        console.error('Error getting bonus transactions:', transactionsError);
+        return [];
+      }
+      
+      // Process per-player analytics
+      const playerAnalytics: any[] = [];
+      
+      for (const user of usersData) {
+        // Filter transactions for this user
+        const userTransactions = (transactionsData || []).filter(
+          (txn: any) => txn.user_id === user.id
+        );
+        
+        // Only include users who have received bonuses
+        const depositBonus = parseFloat(user.deposit_bonus_available || '0');
+        const referralBonus = parseFloat(user.referral_bonus_available || '0');
+        const totalBonusEarned = parseFloat(user.total_bonus_earned || '0');
+        
+        if (userTransactions.length === 0 && totalBonusEarned === 0 && depositBonus === 0 && referralBonus === 0) {
+          continue; // Skip users with no bonuses
+        }
+        
+        // Calculate totals from transactions
+        const depositBonusTransactions = userTransactions.filter(
+          (txn: any) => txn.description?.includes('Deposit bonus')
+        );
+        const referralBonusTransactions = userTransactions.filter(
+          (txn: any) => txn.description?.includes('Referral bonus')
+        );
+        const appliedBonusTransactions = userTransactions.filter(
+          (txn: any) => txn.transaction_type === 'bonus_applied'
+        );
+        
+        const totalDepositBonus = depositBonusTransactions.reduce(
+          (sum, txn) => sum + parseFloat(txn.amount || '0'), 0
+        );
+        const totalReferralBonus = referralBonusTransactions.reduce(
+          (sum, txn) => sum + parseFloat(txn.amount || '0'), 0
+        );
+        const totalAppliedBonus = appliedBonusTransactions.reduce(
+          (sum, txn) => sum + parseFloat(txn.amount || '0'), 0
+        );
+        const totalPendingBonus = depositBonus + referralBonus;
+        
+        // Get first and last bonus dates
+        const bonusDates = userTransactions
+          .map((txn: any) => new Date(txn.created_at))
+          .filter((date: Date) => !isNaN(date.getTime()))
+          .sort((a: Date, b: Date) => a.getTime() - b.getTime());
+        
+        const firstBonusDate = bonusDates.length > 0 ? bonusDates[0] : null;
+        const lastBonusDate = bonusDates.length > 0 ? bonusDates[bonusDates.length - 1] : null;
+        
+        playerAnalytics.push({
+          userId: user.id,
+          username: user.username || user.full_name || user.phone || 'Unknown',
+          phone: user.phone,
+          fullName: user.full_name,
+          // Current available bonuses
+          currentDepositBonus: depositBonus,
+          currentReferralBonus: referralBonus,
+          currentTotalPending: totalPendingBonus,
+          // Total bonuses from transactions
+          totalDepositBonusReceived: totalDepositBonus,
+          totalReferralBonusReceived: totalReferralBonus,
+          totalBonusApplied: totalAppliedBonus,
+          totalBonusEarned: totalBonusEarned || (totalDepositBonus + totalReferralBonus),
+          // Counts
+          depositBonusCount: depositBonusTransactions.length,
+          referralBonusCount: referralBonusTransactions.length,
+          totalBonusTransactions: userTransactions.length,
+          // Dates
+          firstBonusDate: firstBonusDate?.toISOString() || null,
+          lastBonusDate: lastBonusDate?.toISOString() || null,
+          // User creation date
+          userCreatedAt: user.created_at,
+          // Transaction history
+          recentTransactions: userTransactions.slice(0, 10).map((txn: any) => ({
+            id: txn.id,
+            amount: parseFloat(txn.amount || '0'),
+            type: txn.description?.includes('Deposit bonus') ? 'deposit_bonus' :
+                  txn.description?.includes('Referral bonus') ? 'referral_bonus' : 'bonus_applied',
+            description: txn.description || '',
+            timestamp: txn.created_at,
+            status: txn.transaction_type === 'bonus_applied' ? 'applied' : 'pending'
+          }))
+        });
+      }
+      
+      // Sort by total bonus earned (descending)
+      playerAnalytics.sort((a, b) => (b.totalBonusEarned || 0) - (a.totalBonusEarned || 0));
+      
+      // Apply limit and offset
+      return playerAnalytics.slice(offset, offset + limit);
+    } catch (error) {
+      console.error('Error in getPlayerBonusAnalytics:', error);
       return [];
     }
   }

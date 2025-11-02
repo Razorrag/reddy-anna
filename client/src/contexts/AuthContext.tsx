@@ -195,6 +195,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('userRole');
     
     dispatch({ type: 'LOGOUT' });
+    
+    // Redirect to landing page after logout
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 100);
   };
 
   // Clear error

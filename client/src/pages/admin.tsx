@@ -10,15 +10,14 @@ import {
   Settings,
   GamepadIcon,
   TrendingUp,
-  Activity,
   MessageSquare,
   Video,
   RefreshCw,
-  TrendingDown,
-  DollarSign
+  TrendingDown
 } from "lucide-react";
 import AdminLayout from "@/components/AdminLayout";
 import BetMonitoringDashboard from "@/components/BetMonitoringDashboard";
+import AnalyticsDashboard from "@/components/AnalyticsDashboard";
 import { useAdminStats } from "@/hooks/useAdminStats";
 
 export default function Admin() {
@@ -59,124 +58,18 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Quick Stats */}
+        {/* Error Display */}
         <div className="max-w-7xl mx-auto mb-8">
           {error && (
             <div className="mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400">
               {error}
             </div>
           )}
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gold">Total Users</CardTitle>
-                <Users className="h-4 w-4 text-gold" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-white">
-                  {loading ? '...' : (stats?.totalUsers || 0).toLocaleString('en-IN')}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  {loading ? 'Loading...' : `${stats?.activeUsers || 0} active`}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gold">Today's Games</CardTitle>
-                <Activity className="h-4 w-4 text-gold" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-white">
-                  {loading ? '...' : stats?.totalGamesToday || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  {loading ? 'Loading...' : `${stats?.activeGames || 0} live now`}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gold">Total Bets</CardTitle>
-                <DollarSign className="h-4 w-4 text-gold" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-white">
-                  {loading ? '...' : formatCurrency(stats?.todayBets || 0)}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Today's bets</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-gold/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gold">Today's P/L</CardTitle>
-                {(stats?.todayProfitLoss || 0) >= 0 ? (
-                  <TrendingUp className="h-4 w-4 text-green-400" />
-                ) : (
-                  <TrendingDown className="h-4 w-4 text-red-400" />
-                )}
-              </CardHeader>
-              <CardContent>
-                <div className={`text-3xl font-bold ${
-                  (stats?.todayProfitLoss || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {loading ? '...' : formatCurrency(stats?.todayProfitLoss || 0)}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Profit/Loss</p>
-              </CardContent>
-            </Card>
-          </div>
-          
-          {/* User Status Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-            <Card className="bg-black/40 border-green-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-green-400">Active Users</CardTitle>
-                <Users className="h-4 w-4 text-green-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-green-400">
-                  {loading ? '...' : stats?.activeUsers || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Currently active</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-yellow-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-yellow-400">Suspended</CardTitle>
-                <Activity className="h-4 w-4 text-yellow-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-yellow-400">
-                  {loading ? '...' : stats?.suspendedUsers || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Temporarily suspended</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-red-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-red-400">Banned</CardTitle>
-                <Users className="h-4 w-4 text-red-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-red-400">
-                  {loading ? '...' : stats?.bannedUsers || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Permanently banned</p>
-              </CardContent>
-            </Card>
-          </div>
         </div>
 
-        {/* Bet Monitoring (moved from Game Control) */}
+        {/* Live Bet Monitoring */}
         <div className="max-w-7xl mx-auto mb-8">
-          <h2 className="text-2xl font-bold text-gold mb-4">🧭 Bet Monitor</h2>
+          <h2 className="text-2xl font-bold text-gold mb-4">🧭 Live Bet Monitoring</h2>
           <div className="bg-black/40 border-gold/30 backdrop-blur-sm rounded-lg p-4">
             <BetMonitoringDashboard />
           </div>
@@ -229,86 +122,12 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Additional Stats Row */}
+        {/* Financial Analytics */}
         <div className="max-w-7xl mx-auto mb-8">
           <h2 className="text-2xl font-bold text-gold mb-4">📈 Financial Analytics</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="bg-black/40 border-blue-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-blue-300">Pending Deposits</CardTitle>
-                <TrendingUp className="h-4 w-4 text-blue-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-blue-400">
-                  {loading ? '...' : stats?.pendingDeposits || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Awaiting approval</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-red-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-red-300">Pending Withdrawals</CardTitle>
-                <TrendingDown className="h-4 w-4 text-red-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-red-400">
-                  {loading ? '...' : stats?.pendingWithdrawals || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Awaiting approval</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-green-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-green-300">Today's Payouts</CardTitle>
-                <DollarSign className="h-4 w-4 text-green-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-green-400">
-                  {loading ? '...' : formatCurrency(stats?.todayPayouts || 0)}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Paid to winners</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/40 border-purple-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-purple-300">Active Players</CardTitle>
-                <Users className="h-4 w-4 text-purple-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-purple-400">
-                  {loading ? '...' : stats?.activePlayers || 0}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Online now</p>
-              </CardContent>
-            </Card>
+          <div className="bg-black/40 border-gold/30 backdrop-blur-sm rounded-lg p-4">
+            <AnalyticsDashboard />
           </div>
-        </div>
-
-        {/* Analytics Dashboard Link */}
-        <div className="max-w-7xl mx-auto mb-8">
-          <Link href="/admin/analytics">
-            <Card className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 border-purple-400/30 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-gold text-2xl mb-2">📊 View Detailed Analytics</CardTitle>
-                    <CardDescription className="text-gray-300">
-                      See comprehensive analytics including revenue, unique players, peak betting hours, and more
-                    </CardDescription>
-                  </div>
-                  <BarChart3 className="h-12 w-12 text-gold" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-gray-400">
-                  Click here to view real-time analytics dashboard with all metrics from the database
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
         </div>
 
         {/* Management Cards */}

@@ -27,7 +27,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 
 const Profile: React.FC = () => {
   const [location] = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const {
     state: profileState,
     fetchTransactions,
@@ -272,9 +272,7 @@ const Profile: React.FC = () => {
               <CardContent className="space-y-4">
                 <Button
                   onClick={() => {
-                    // Clear auth and redirect to home
-                    localStorage.removeItem('auth_token');
-                    window.location.href = '/';
+                    logout(); // This will clear auth and redirect to landing page
                   }}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 >

@@ -1082,62 +1082,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             break;
           }
-          
-          // LEGACY: WebRTC Signaling for Screen Share Streaming - Using webrtcSignaling module
-          // NOTE: These are kept for backward compatibility but 'webrtc:signal' is preferred
-          case 'webrtc_offer':
-            if (client?.role === 'admin') {
-              console.log('📡 WebRTC offer from admin:', client?.userId);
-              const offerData = (message as any).data;
-              
-              // Use webrtcSignaling module to handle offer
-              if (webrtcClientId) {
-                webrtcSignaling.handleMessage(webrtcClientId, {
-                  type: 'offer',
-                  from: webrtcClientId,
-                  sdp: offerData.offer
-                });
-              }
-            } else {
-              console.log('⚠️ WebRTC client not registered for:', client?.userId);
-            }
-            break;
-
-          case 'webrtc_answer':
-            if (client?.role === 'player') {
-              console.log('📡 WebRTC answer from player:', client?.userId);
-              const answerData = (message as any).data;
-              
-              // Use webrtcSignaling module to handle answer
-              if (webrtcClientId) {
-                webrtcSignaling.handleMessage(webrtcClientId, {
-                  type: 'answer',
-                  from: webrtcClientId,
-                  to: 'admin', // Send to admin
-                  sdp: answerData.answer
-                });
-              }
-            } else {
-              console.log('⚠️ WebRTC client not registered for:', client?.userId);
-            }
-            break;
-
-          case 'webrtc_ice_candidate':
-            const candidateData = (message as any).data;
-            console.log('🧊 WebRTC ICE candidate from:', client?.role, client?.userId);
-            
-            // Use webrtcSignaling module to handle ICE candidates
-            if (webrtcClientId) {
-              webrtcSignaling.handleMessage(webrtcClientId, {
-                type: 'ice-candidate',
-                from: webrtcClientId,
-                to: client?.role === 'admin' ? undefined : 'admin', // Send to admin if from player
-                candidate: candidateData.candidate
-              });
-            } else {
-              console.log('⚠️ WebRTC client not registered for:', client?.userId);
-            }
-            break;
 
           case 'stream_status':
             if (client?.role === 'admin') {
@@ -3302,6 +3246,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get Player Bonus Analytics Endpoint - Per-player bonus analytics
+  app.get("/api/admin/player-bonus-analytics", generalLimiter, async (req, res) => {
+    try {
+      const { userId, limit = 1000, offset = 0 } = req.query;
+      
+      // Get player bonus analytics from storage
+      const playerAnalytics = await storage.getPlayerBonusAnalytics({
+        userId: userId as string,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      });
+
+      res.json({
+        success: true,
+        data: playerAnalytics,
+        total: playerAnalytics.length
+      });
+    } catch (error) {
+      console.error('Get player bonus analytics error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve player bonus analytics'
+      });
+    }
+  });
+
   // Game Settings Endpoints
   app.get("/api/admin/game-settings", generalLimiter, async (req, res) => {
     try {
@@ -3430,8 +3400,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Sort by created_at descending (most recent first)
         filteredBets.sort((a, b) => {
-          const aTime = new Date(a.createdAt).getTime();
-          const bTime = new Date(b.createdAt).getTime();
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
           return bTime - aTime;
         });
         
@@ -3999,8 +3969,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const startDate = dateFrom ? new Date(dateFrom as string) : new Date(0);
       const endDate = dateTo ? new Date(dateTo as string) : new Date();
       
-      // Get game statistics with filters
-      let gameStats = await storage.getGameStatisticsByDateRange(startDate, endDate);
+      // Import supabaseServer
+      const { supabaseServer } = await import('./lib/supabaseServer');
+      
+      // Get game history with card information (from game_history table)
+      const { data: historyData, error: historyError } = await supabaseServer
+        .from('game_history')
+        .select('*')
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString())
+        .order('created_at', { ascending: false });
+      
+      if (historyError) {
+        console.error('Error getting game history:', historyError);
+        return res.status(500).json({ success: false, error: 'Failed to retrieve game history' });
+      }
+      
+      if (!historyData || historyData.length === 0) {
+        return res.json({
+          success: true,
+          data: {
+            games: [],
+            pagination: {
+              page: parseInt(page as string),
+              limit: parseInt(limit as string),
+              total: 0,
+              pages: 0
+            }
+          }
+        });
+      }
+      
+      // Get game statistics for each game to combine the data
+      const gameIds = historyData.map((h: any) => h.game_id);
+      const { data: statsData, error: statsError } = await supabaseServer
+        .from('game_statistics')
+        .select('*')
+        .in('game_id', gameIds);
+      
+      if (statsError) {
+        console.error('Error getting game statistics:', statsError);
+      }
+      
+      // Create a map of game_id to statistics
+      const statsMap = new Map();
+      if (statsData) {
+        statsData.forEach((stat: any) => {
+          statsMap.set(stat.game_id, stat);
+        });
+      }
+      
+      // Combine history with statistics - similar to getGameHistory()
+      let gameStats = historyData.map((history: any) => {
+        const stats = statsMap.get(history.game_id);
+        return {
+          id: history.id,
+          gameId: history.game_id,
+          openingCard: history.opening_card,
+          winner: history.winner,
+          winningCard: history.winning_card,
+          round: history.winning_round || 1,
+          totalCards: history.total_cards || 0,
+          createdAt: history.created_at,
+          // Statistics data (with defaults if not available)
+          totalPlayers: stats ? (stats.total_players || 0) : 0,
+          totalBets: stats ? parseFloat(stats.total_bets || '0') : (parseFloat(history.total_bets || '0') || 0),
+          andarBetsCount: stats ? (stats.andar_bets_count || 0) : 0,
+          baharBetsCount: stats ? (stats.bahar_bets_count || 0) : 0,
+          andarTotalBet: stats ? parseFloat(stats.andar_total_bet || '0') : 0,
+          baharTotalBet: stats ? parseFloat(stats.bahar_total_bet || '0') : 0,
+          totalWinnings: stats ? parseFloat(stats.total_winnings || '0') : (parseFloat(history.total_payouts || '0') || 0),
+          houseEarnings: stats ? parseFloat(stats.house_earnings || '0') : 0,
+          profitLoss: stats ? parseFloat(stats.profit_loss || '0') : 0,
+          profitLossPercentage: stats ? parseFloat(stats.profit_loss_percentage || '0') : 0,
+          housePayout: stats ? parseFloat(stats.house_payout || '0') : (parseFloat(history.total_payouts || '0') || 0),
+          gameDuration: stats ? (stats.game_duration || 0) : 0,
+          uniquePlayers: stats ? (stats.unique_players || 0) : 0,
+        };
+      });
       
       // Apply profit filters if specified
       if (minProfit !== undefined) {
@@ -4014,8 +4060,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sortField = sortBy as string;
       const ascending = sortOrder === 'asc';
       gameStats.sort((a, b) => {
-        const aValue = (a as any)[sortField];
-        const bValue = (b as any)[sortField];
+        let aValue: any = (a as any)[sortField];
+        let bValue: any = (b as any)[sortField];
+        
+        // Handle date sorting
+        if (sortField === 'created_at' || sortField === 'createdAt') {
+          aValue = new Date(aValue).getTime();
+          bValue = new Date(bValue).getTime();
+        }
+        
+        // Handle snake_case to camelCase conversion for sorting
+        if (sortField === 'profit_loss') aValue = a.profitLoss;
+        if (sortField === 'profit_loss') bValue = b.profitLoss;
+        if (sortField === 'total_bets') aValue = a.totalBets;
+        if (sortField === 'total_bets') bValue = b.totalBets;
+        if (sortField === 'total_players') aValue = a.totalPlayers;
+        if (sortField === 'total_players') bValue = b.totalPlayers;
         
         if (ascending) {
           return aValue > bValue ? 1 : -1;
@@ -4403,8 +4463,11 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         openingCard: currentGameState.openingCard!,
         winner,
         winningCard,
-        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length
-      });
+        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
+        ...(currentGameState.currentRound && { round: currentGameState.currentRound } as any),
+        ...(totalBetsAmount && { totalBets: totalBetsAmount } as any),
+        ...(totalPayoutsAmount && { totalPayouts: totalPayoutsAmount } as any)
+      } as any);
     } catch (error) {
       console.error('⚠️ Error saving game history:', error);
     }

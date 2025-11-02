@@ -109,7 +109,8 @@ const GameHistoryPage: React.FC = () => {
 
   const exportToCSV = () => {
     const headers = [
-      'Game ID', 'Date', 'Winner', 'Andar Bets', 'Bahar Bets', 
+      'Game ID', 'Date', 'Opening Card', 'Winner', 'Winning Card',
+      'Andar Bets', 'Bahar Bets', 
       'Total Bets', 'Payout', 'Profit/Loss', '%'
     ];
     
@@ -118,7 +119,9 @@ const GameHistoryPage: React.FC = () => {
       ...history.map(game => [
         game.gameId.slice(0, 8) + '...',
         formatDate(game.createdAt.toString()),
+        game.openingCard || 'N/A',
         game.winner?.toUpperCase() || 'N/A',
+        game.winningCard || 'N/A',
         formatCurrency(game.andarTotalBet),
         formatCurrency(game.baharTotalBet),
         formatCurrency(game.totalBets),
@@ -359,7 +362,9 @@ const GameHistoryPage: React.FC = () => {
                   <tr className="border-b border-purple-400/30">
                     <th className="text-left p-3 text-purple-200 font-medium">Game ID</th>
                     <th className="text-left p-3 text-purple-200 font-medium">Date</th>
+                    <th className="text-left p-3 text-purple-200 font-medium">Opening Card</th>
                     <th className="text-left p-3 text-purple-200 font-medium">Winner</th>
+                    <th className="text-left p-3 text-purple-200 font-medium">Winning Card</th>
                     <th className="text-right p-3 text-purple-200 font-medium">Andar Bets</th>
                     <th className="text-right p-3 text-purple-200 font-medium">Bahar Bets</th>
                     <th className="text-right p-3 text-purple-200 font-medium">Total Bets</th>
@@ -382,10 +387,20 @@ const GameHistoryPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="p-3">
+                        <span className="text-xl font-bold text-white">
+                          {game.openingCard || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="p-3">
                         <span className={`font-semibold ${
                           game.winner === 'andar' ? 'text-red-400' : 'text-blue-400'
                         }`}>
                           {game.winner?.toUpperCase() || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className="text-xl font-bold text-white">
+                          {game.winningCard || 'N/A'}
                         </span>
                       </td>
                       <td className="p-3 text-right">
