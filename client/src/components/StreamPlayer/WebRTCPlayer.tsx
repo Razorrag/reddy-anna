@@ -115,34 +115,18 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
 
       peerConnectionRef.current = peerConnection;
 
-      // Enhanced connection state logging with auto-recovery
+      // Simplified connection state logging without auto-recovery
       peerConnection.onconnectionstatechange = () => {
         const state = peerConnection.connectionState;
         console.log(`🔌 WebRTC Player Connection State: ${state}`);
         setConnectionState(state as any);
         
-        if (state === 'failed') {
-          console.error('❌ WebRTC connection failed. Attempting recovery...');
-          // Attempt to reinitialize after a delay
-          setTimeout(() => {
-            if (isMountedRef.current && peerConnectionRef.current?.connectionState === 'failed') {
-              console.log('🔄 Attempting to reinitialize WebRTC connection...');
-              cleanup();
-              initializeWebRTC();
-            }
-          }, 3000);
-        } else if (state === 'disconnected') {
-          console.warn('⚠️ WebRTC connection disconnected. Attempting to reconnect...');
-          // Auto-reconnect after a short delay
-          setTimeout(() => {
-            if (isMountedRef.current && peerConnectionRef.current?.connectionState === 'disconnected') {
-              console.log('🔄 Attempting to reconnect WebRTC...');
-              cleanup();
-              initializeWebRTC();
-            }
-          }, 2000);
-        } else if (state === 'connected') {
+        if (state === 'connected') {
           console.log('✅ WebRTC connection established!');
+        } else if (state === 'failed') {
+          console.error('❌ WebRTC connection failed. Manual retry required.');
+        } else if (state === 'disconnected') {
+          console.warn('⚠️ WebRTC connection disconnected.');
         }
       };
 
@@ -210,15 +194,11 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
       
       console.log('🔌 WebRTC Player waiting for admin to start screen share');
       
-      // Notify that we're ready to receive stream (if backend supports it)
-      try {
-        sendWebSocketMessage({
-          type: 'stream_viewer_join' as any,
-          data: { roomId }
-        });
-      } catch (err) {
-        console.log('Note: Stream viewer notifications not yet enabled');
-      }
+      // Notify that we're ready to receive stream
+      sendWebSocketMessage({
+        type: 'stream_viewer_join',
+        data: { roomId }
+      });
 
       console.log('✅ WebRTC Player initialized successfully');
     } catch (error) {
@@ -230,15 +210,11 @@ export default function WebRTCPlayer({ roomId }: WebRTCPlayerProps) {
   const cleanup = () => {
     console.log('🧹 Cleaning up WebRTC Player');
     
-    // Notify we're leaving (if backend supports it)
-    try {
-      sendWebSocketMessage({
-        type: 'stream_viewer_leave' as any,
-        data: { roomId }
-      });
-    } catch (err) {
-      console.log('Note: Stream viewer notifications not yet enabled');
-    }
+    // Notify we're leaving
+    sendWebSocketMessage({
+      type: 'stream_viewer_leave',
+      data: { roomId }
+    });
 
     // Close peer connection
     if (peerConnectionRef.current) {

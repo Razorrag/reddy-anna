@@ -151,11 +151,6 @@ const BettingStrip: React.FC<BettingStripProps> = ({
             <div className="flex-1 text-left pr-2">
               <div className="flex items-center gap-2 mb-1">
                 <div className="text-white font-bold text-lg">ANDAR</div>
-                {hasLessAndar && (
-                  <span className="px-2 py-0.5 bg-yellow-500/80 text-black text-[10px] font-bold rounded animate-pulse">
-                    LESS
-                  </span>
-                )}
               </div>
               
               {/* Show ONLY player's individual bets - NO ADMIN DATA */}

@@ -107,6 +107,36 @@ class WebRTCSignalingServer {
   }
 
   /**
+   * Handle stream viewer join request
+   */
+  handleStreamViewerJoin(userId: string, roomId: string): void {
+    const client = this.clients.get(userId);
+    if (!client) {
+      console.error(`[WebRTC] Unknown client: ${userId}`);
+      return;
+    }
+
+    console.log(`[WebRTC] Player ${userId} joined room ${roomId}`);
+
+    // If there are active streams, notify the player
+    this.notifyPlayerOfActiveStreams(userId);
+  }
+
+  /**
+   * Handle stream viewer leave request
+   */
+  handleStreamViewerLeave(userId: string, roomId: string): void {
+    const client = this.clients.get(userId);
+    if (!client) {
+      console.error(`[WebRTC] Unknown client: ${userId}`);
+      return;
+    }
+
+    console.log(`[WebRTC] Player ${userId} left room ${roomId}`);
+    // No specific action needed, just log for now
+  }
+
+  /**
    * Admin starts streaming
    */
   private handleStreamStart(client: WebRTCClient, message: SignalingMessage): void {
@@ -230,15 +260,7 @@ class WebRTCSignalingServer {
     }
 
     if (!targetAdminId) {
-      console.warn(`[WebRTC] No admin found to send answer to from ${client.userId}`);
-      // Fallback: send to all admins
-      this.sendToAdmins({
-        type: 'answer',
-        from: client.userId,
-        sdp: message.sdp,
-        streamId: message.streamId
-      });
-      console.log(`[WebRTC] Answer sent from ${client.userId} to all admins (fallback)`);
+      console.error(`[WebRTC] No admin found to send answer to from ${client.userId}. Stream may not be active.`);
       return;
     }
 
@@ -295,14 +317,8 @@ class WebRTCSignalingServer {
           });
           console.log(`[WebRTC] ICE candidate sent from ${client.userId} to admin ${targetAdminId}`);
         } else {
-          // Fallback: send to all admins
-          this.sendToAdmins({
-            type: 'ice-candidate',
-            from: client.userId,
-            candidate: message.candidate,
-            streamId: message.streamId
-          });
-          console.log(`[WebRTC] ICE candidate sent from ${client.userId} to all admins (fallback)`);
+          console.error(`[WebRTC] No admin found to send ICE candidate to from ${client.userId}. Stream may not be active.`);
+          return;
         }
       }
     } else {

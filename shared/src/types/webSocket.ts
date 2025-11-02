@@ -309,6 +309,88 @@ export type WebRTCSignalMessage = WebSocketMessageBase<'webrtc:signal', {
   candidate?: RTCIceCandidateInit;
 }>;
 
+export type StreamViewerJoinMessage = WebSocketMessageBase<'stream_viewer_join', {
+  roomId: string;
+}>;
+
+export type StreamViewerLeaveMessage = WebSocketMessageBase<'stream_viewer_leave', {
+  roomId: string;
+}>;
+
+export type StreamJoinResponseMessage = WebSocketMessageBase<'stream_join_response', {
+  success: boolean;
+  streamId?: string;
+  adminId?: string;
+  message?: string;
+}>;
+
+export type AdminPaymentNotificationMessage = WebSocketMessageBase<'admin_payment_notification', {
+  message: string;
+  reason: string;
+  timestamp: string;
+}>;
+
+export type StatusUpdateMessage = WebSocketMessageBase<'status_update', {
+  userId: string;
+  status: string;
+  reason: string;
+  timestamp: string;
+}>;
+
+export type AdminBetUpdateMessage = WebSocketMessageBase<'admin_bet_update', {
+  userId: string;
+  side: string;
+  amount: number;
+  round: number;
+  timestamp: string;
+}>;
+
+export type AnalyticsUpdateMessage = WebSocketMessageBase<'analytics_update', {
+  type: string;
+  data: any;
+}>;
+
+export type AdminNotificationMessage = WebSocketMessageBase<'admin_notification', {
+  type: string;
+  data: any;
+}>;
+
+export type BonusUpdateMessage = WebSocketMessageBase<'bonus_update', {
+  type: string;
+  amount: number;
+  userId: string;
+}>;
+
+export type ConditionalBonusAppliedMessage = WebSocketMessageBase<'conditional_bonus_applied', {
+  message: string;
+}>;
+
+export type PayoutReceivedMessage = WebSocketMessageBase<'payout_received', {
+  amount: number;
+  winner: string;
+  round: number;
+}>;
+
+export type GameStartedMessage = WebSocketMessageBase<'game_started', {
+  gameId: string;
+}>;
+
+export type GameStateMessage = WebSocketMessageBase<'game_state', {
+  gameId: string;
+  phase: string;
+  currentRound: number;
+  timer: number;
+}>;
+
+export type GameColonStateMessage = WebSocketMessageBase<'game:state', {
+  gameId: string;
+  phase: string;
+  currentRound: number;
+  timer: number;
+}>;
+
+export type GameSubscribeMessageOld = WebSocketMessageBase<'game_subscribe', {}>;
+
 // ---------------------------------------------------------------------------------
 // General and Error Messages
 // ---------------------------------------------------------------------------------
@@ -335,6 +417,10 @@ export type WebSocketMessage =
   | GameStartMessage
   | GameCompleteMessage
   | GameResetMessage
+  | GameStateMessage
+  | GameStartedMessage
+  | GameColonStateMessage
+  | GameSubscribeMessageOld
   // Card and Betting
   | OpeningCardConfirmedMessage
   | CardDealtMessage
@@ -372,6 +458,18 @@ export type WebSocketMessage =
   | WebRTCAnswerMessage
   | WebRTCIceCandidateMessage
   | WebRTCSignalMessage
+  | StreamViewerJoinMessage
+  | StreamViewerLeaveMessage
+  | StreamJoinResponseMessage
+  // Admin and System Messages
+  | AdminPaymentNotificationMessage
+  | StatusUpdateMessage
+  | AdminBetUpdateMessage
+  | AnalyticsUpdateMessage
+  | AdminNotificationMessage
+  | BonusUpdateMessage
+  | ConditionalBonusAppliedMessage
+  | PayoutReceivedMessage
   // General
   | ErrorMessage
   | NotificationMessage;

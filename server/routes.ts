@@ -1276,6 +1276,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             break;
           }
+
+          // Handle stream viewer join
+          case 'stream_viewer_join': {
+            if (!client || !isAuthenticated) {
+              sendError(ws, 'Authentication required to join stream');
+              return;
+            }
+
+            const { roomId } = (message as any).data;
+            console.log(`[STREAM] Player ${client.userId} joining room ${roomId}`);
+            
+            // Handle through WebRTC signaling server
+            if (webrtcClientId) {
+              webrtcSignaling.handleStreamViewerJoin(webrtcClientId, roomId);
+            }
+            break;
+          }
+
+          // Handle stream viewer leave
+          case 'stream_viewer_leave': {
+            if (!client || !isAuthenticated) {
+              return; // No error needed for leave
+            }
+
+            const { roomId } = (message as any).data;
+            console.log(`[STREAM] Player ${client.userId} leaving room ${roomId}`);
+            
+            // Handle through WebRTC signaling server
+            if (webrtcClientId) {
+              webrtcSignaling.handleStreamViewerLeave(webrtcClientId, roomId);
+            }
+            break;
+          }
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
