@@ -14,12 +14,15 @@ const OpeningCardSelector: React.FC = () => {
   const [timerDuration, setTimerDuration] = useState(30);
   const [isStarting, setIsStarting] = useState(false);
 
-  // Sync local state with game state (important for reset functionality)
+  // Sync local state with game state (important for reset functionality and initial load)
   useEffect(() => {
     if (gameState.selectedOpeningCard === null && selectedCard !== null) {
       // Game was reset, clear local selection
       setSelectedCard(null);
       setShowConfirmModal(false);
+    } else if (gameState.selectedOpeningCard !== null && selectedCard?.id !== gameState.selectedOpeningCard.id) {
+      // Opening card was set in game state (e.g., from server sync), update local state
+      setSelectedCard(gameState.selectedOpeningCard);
     }
   }, [gameState.selectedOpeningCard, selectedCard]);
 

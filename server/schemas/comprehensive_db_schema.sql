@@ -191,7 +191,9 @@ CREATE TABLE IF NOT EXISTS game_history (
   winner bet_side NOT NULL, -- andar or bahar
   winning_card TEXT NOT NULL,
   total_cards INTEGER NOT NULL,
-  round INTEGER DEFAULT 1,
+  winning_round INTEGER DEFAULT 1,
+  total_bets DECIMAL(15, 2) DEFAULT '0.00',
+  total_payouts DECIMAL(15, 2) DEFAULT '0.00',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

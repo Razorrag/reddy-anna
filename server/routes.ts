@@ -505,16 +505,25 @@ const getCurrentGameStateForUser = async (userId: string) => {
     // CRITICAL FIX: Use getBetsForUser instead of getBetsForGame to only get current user's bets
     const userBets = user.role === 'admin' ? [] : await storage.getBetsForUser(userId, currentGameState.gameId);
     
-    // Calculate user's round bets
-    const round1Bets = { andar: 0, bahar: 0 };
-    const round2Bets = { andar: 0, bahar: 0 };
+    // Store individual bets as arrays (not cumulative totals)
+    const round1Bets = { andar: [] as number[], bahar: [] as number[] };
+    const round2Bets = { andar: [] as number[], bahar: [] as number[] };
     
+    // Group individual bets by round and side
     userBets.forEach((bet: any) => {
       const amount = parseFloat(bet.amount);
       if (bet.round === '1' || bet.round === 1) {
-        round1Bets[bet.side as 'andar' | 'bahar'] += amount;
+        if (bet.side === 'andar') {
+          round1Bets.andar.push(amount);
+        } else if (bet.side === 'bahar') {
+          round1Bets.bahar.push(amount);
+        }
       } else if (bet.round === '2' || bet.round === 2) {
-        round2Bets[bet.side as 'andar' | 'bahar'] += amount;
+        if (bet.side === 'andar') {
+          round2Bets.andar.push(amount);
+        } else if (bet.side === 'bahar') {
+          round2Bets.bahar.push(amount);
+        }
       }
     });
 
@@ -653,7 +662,8 @@ function shouldBufferEvent(eventType: string): boolean {
     'card_dealt',
     'round_start',
     'timer_update',
-    'bet_confirmed',
+    // 'bet_confirmed' - DO NOT BUFFER - user-specific event, should not be replayed to other users
+    // 'user_bets_update' - DO NOT BUFFER - user-specific event, should not be replayed to other users
     'payout_received',
     'game_complete',
     'game_reset',
@@ -4195,6 +4205,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Error getting game statistics:', statsError);
       }
       
+      // Get dealt cards for all games (CRITICAL: Include all cards dealt in each game)
+      const { data: cardsData, error: cardsError } = await supabaseServer
+        .from('dealt_cards')
+        .select('*')
+        .in('game_id', gameIds)
+        .order('position', { ascending: true });
+      
+      if (cardsError) {
+        console.error('Error getting dealt cards for admin history:', cardsError);
+      }
+      
       // Create a map of game_id to statistics
       const statsMap = new Map();
       if (statsData) {
@@ -4203,18 +4224,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Combine history with statistics - similar to getGameHistory()
+      // Create cards map by game_id
+      const cardsMap = new Map();
+      if (cardsData) {
+        cardsData.forEach((card: any) => {
+          if (!cardsMap.has(card.game_id)) {
+            cardsMap.set(card.game_id, []);
+          }
+          cardsMap.get(card.game_id).push(card);
+        });
+      }
+      
+      // Combine history with statistics and cards - similar to getGameHistory()
       let gameStats = historyData.map((history: any) => {
         const stats = statsMap.get(history.game_id);
+        const cards = cardsMap.get(history.game_id) || [];
+        
         return {
           id: history.id,
           gameId: history.game_id,
           openingCard: history.opening_card,
           winner: history.winner,
           winningCard: history.winning_card,
-          round: history.winning_round || 1,
-          totalCards: history.total_cards || 0,
+          round: history.winning_round || history.round || 1,
+          totalCards: history.total_cards || cards.length || 0,
           createdAt: history.created_at,
+          // Include dealt cards - ALL CARDS DEALT IN THIS GAME
+          dealtCards: cards.map((c: any) => ({
+            id: c.id,
+            card: c.card,
+            side: c.side,
+            position: c.position,
+            isWinningCard: c.is_winning_card,
+            createdAt: c.created_at
+          })),
           // Statistics data (with defaults if not available)
           totalPlayers: stats ? (stats.total_players || 0) : 0,
           totalBets: stats ? parseFloat(stats.total_bets || '0') : (parseFloat(history.total_bets || '0') || 0),

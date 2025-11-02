@@ -11,14 +11,26 @@ export interface Card {
   display: string;
 }
 
+// RoundBets can be either cumulative totals (for admin) or individual bet arrays (for players)
 export interface RoundBets {
-  andar: number;
-  bahar: number;
+  andar: number | number[];
+  bahar: number | number[];
+}
+
+// Individual bets structure for players
+export interface IndividualRoundBets {
+  andar: number[];
+  bahar: number[];
 }
 
 export interface UserBets {
   round1: RoundBets;
   round2: RoundBets;
+}
+
+export interface IndividualUserBets {
+  round1: IndividualRoundBets;
+  round2: IndividualRoundBets;
 }
 
 export interface DealtCard {

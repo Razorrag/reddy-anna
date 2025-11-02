@@ -38,6 +38,17 @@ const AdminGamePanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'game' | 'stream'>('game');
   const [, setLocation] = useLocation();
   
+  // Sync game state when admin navigates to this page
+  useEffect(() => {
+    // Request current game state when component mounts
+    // This ensures the opening card is displayed immediately if it exists
+    sendWebSocketMessage({
+      type: 'game_subscribe',
+      data: {}
+    });
+    console.log('🔄 Admin panel mounted - requesting game state sync');
+  }, [sendWebSocketMessage]);
+  
   // Listen for game complete celebration events (optional for admin)
   useEffect(() => {
     const handleGameComplete = (event: Event) => {

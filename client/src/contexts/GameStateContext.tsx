@@ -63,7 +63,7 @@ interface GameState {
   userRole: 'player' | 'admin';
   playerWallet: number;
   
-  // Player's individual bets per round
+  // Player's individual bets per round (stored as arrays of individual bet amounts)
   playerRound1Bets: RoundBets;
   playerRound2Bets: RoundBets;
   isScreenSharingActive: boolean;
@@ -120,8 +120,8 @@ const initialState: GameState = {
   username: null,
   userRole: 'player',
   playerWallet: 0,
-  playerRound1Bets: { andar: 0, bahar: 0 },
-  playerRound2Bets: { andar: 0, bahar: 0 },
+  playerRound1Bets: { andar: [], bahar: [] },
+  playerRound2Bets: { andar: [], bahar: [] },
   isScreenSharingActive: false
 };
 
@@ -525,8 +525,8 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'UPDATE_TOTAL_BETS', payload: { andar: 0, bahar: 0 } });
     dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round: 1, bets: { andar: 0, bahar: 0 } } });
     dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round: 2, bets: { andar: 0, bahar: 0 } } });
-    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 1, bets: { andar: 0, bahar: 0 } } });
-    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 2, bets: { andar: 0, bahar: 0 } } });
+    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 1, bets: { andar: [], bahar: [] } } });
+    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 2, bets: { andar: [], bahar: [] } } });
   };
 
   const placeBet = async (side: BetSide, amount: number) => {
@@ -548,15 +548,21 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     // The actual bet placement is handled by WebSocket messages
     // Balance will be updated via WebSocket bet_confirmed message (prevents race conditions)
     if (gameState.currentRound === 1) {
+      const currentSideBets = Array.isArray(gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets])
+        ? (gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets] as number[])
+        : [];
       const newBets: RoundBets = {
         ...gameState.playerRound1Bets,
-        [side]: gameState.playerRound1Bets[side] + amount
+        [side]: [...currentSideBets, amount]
       };
       updatePlayerRoundBets(1, newBets);
     } else if (gameState.currentRound === 2) {
+      const currentSideBets = Array.isArray(gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets])
+        ? (gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets] as number[])
+        : [];
       const newBets: RoundBets = {
         ...gameState.playerRound2Bets,
-        [side]: gameState.playerRound2Bets[side] + amount
+        [side]: [...currentSideBets, amount]
       };
       updatePlayerRoundBets(2, newBets);
     }

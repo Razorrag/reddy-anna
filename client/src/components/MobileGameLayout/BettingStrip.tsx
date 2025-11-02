@@ -146,16 +146,34 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                 <div className="text-white font-bold text-lg">ANDAR</div>
               </div>
               
-              {/* Show ONLY player's individual bets - NO ADMIN DATA - Round 1 and Round 2 separately */}
+              {/* Show ONLY player's individual bets (not cumulative) - Round 1 and Round 2 separately */}
               <div className="space-y-0.5">
-                <div className="text-yellow-200 text-xs font-medium">
-                  Round 1: ₹{gameState.playerRound1Bets.andar.toLocaleString('en-IN')}
-                </div>
-                {gameState.currentRound >= 2 && (
-                  <div className="text-yellow-300 text-xs font-medium">
-                    Round 2: ₹{gameState.playerRound2Bets.andar.toLocaleString('en-IN')}
-                  </div>
-                )}
+                {(() => {
+                  const r1Andar = Array.isArray(gameState.playerRound1Bets.andar) 
+                    ? gameState.playerRound1Bets.andar 
+                    : [];
+                  const r2Andar = Array.isArray(gameState.playerRound2Bets.andar) 
+                    ? gameState.playerRound2Bets.andar 
+                    : [];
+                  return (
+                    <>
+                      {r1Andar.length > 0 && (
+                        <div className="text-yellow-200 text-xs font-medium">
+                          Round 1: {r1Andar.map((bet, i) => (
+                            <span key={i}>₹{bet.toLocaleString('en-IN')}{i < r1Andar.length - 1 ? ', ' : ''}</span>
+                          ))}
+                        </div>
+                      )}
+                      {gameState.currentRound >= 2 && r2Andar.length > 0 && (
+                        <div className="text-yellow-300 text-xs font-medium">
+                          Round 2: {r2Andar.map((bet, i) => (
+                            <span key={i}>₹{bet.toLocaleString('en-IN')}{i < r2Andar.length - 1 ? ', ' : ''}</span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -264,16 +282,34 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                 <div className="text-white font-bold text-lg">BAHAR</div>
               </div>
               
-              {/* Show ONLY player's individual bets - NO ADMIN DATA - Round 1 and Round 2 separately */}
+              {/* Show ONLY player's individual bets (not cumulative) - Round 1 and Round 2 separately */}
               <div className="space-y-0.5">
-                <div className="text-yellow-200 text-xs font-medium">
-                  Round 1: ₹{gameState.playerRound1Bets.bahar.toLocaleString('en-IN')}
-                </div>
-                {gameState.currentRound >= 2 && (
-                  <div className="text-yellow-300 text-xs font-medium">
-                    Round 2: ₹{gameState.playerRound2Bets.bahar.toLocaleString('en-IN')}
-                  </div>
-                )}
+                {(() => {
+                  const r1Bahar = Array.isArray(gameState.playerRound1Bets.bahar) 
+                    ? gameState.playerRound1Bets.bahar 
+                    : [];
+                  const r2Bahar = Array.isArray(gameState.playerRound2Bets.bahar) 
+                    ? gameState.playerRound2Bets.bahar 
+                    : [];
+                  return (
+                    <>
+                      {r1Bahar.length > 0 && (
+                        <div className="text-yellow-200 text-xs font-medium">
+                          Round 1: {r1Bahar.map((bet, i) => (
+                            <span key={i}>₹{bet.toLocaleString('en-IN')}{i < r1Bahar.length - 1 ? ', ' : ''}</span>
+                          ))}
+                        </div>
+                      )}
+                      {gameState.currentRound >= 2 && r2Bahar.length > 0 && (
+                        <div className="text-yellow-300 text-xs font-medium">
+                          Round 2: {r2Bahar.map((bet, i) => (
+                            <span key={i}>₹{bet.toLocaleString('en-IN')}{i < r2Bahar.length - 1 ? ', ' : ''}</span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

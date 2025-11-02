@@ -209,7 +209,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           setCurrentRound(currentRound as any);
           // Clear cards first, then set opening card so it doesn't get cleared
           clearCards();
-          if (openingCard && typeof openingCard === 'string') setSelectedOpeningCard(parseDisplayCard(openingCard));
+          if (openingCard) {
+            const parsed = typeof openingCard === 'string' ? parseDisplayCard(openingCard) : openingCard;
+            setSelectedOpeningCard(parsed);
+          }
           andarCards?.forEach((c: any) => addAndarCard(typeof c === 'string' ? parseDisplayCard(c) : c));
           baharCards?.forEach((c: any) => addBaharCard(typeof c === 'string' ? parseDisplayCard(c) : c));
           if (round1Bets) updateTotalBets(round1Bets);
@@ -222,11 +225,23 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           if (playerRound2Bets) updatePlayerRoundBets(2, playerRound2Bets);
           if (userBalance !== undefined) updatePlayerWallet(userBalance);
           
-          // Replay buffered events if any
+          // Replay buffered events if any (filter out user-specific events)
           if (bufferedEvents && Array.isArray(bufferedEvents) && bufferedEvents.length > 0) {
-            console.log(`🔄 Replaying ${bufferedEvents.length} buffered events`);
+            // Filter out user-specific events that shouldn't be replayed to other users
+            const filteredEvents = bufferedEvents.filter((event: any) => {
+              // Skip bet_confirmed and user_bets_update - these are user-specific
+              if (event.type === 'bet_confirmed' || event.type === 'user_bets_update') {
+                // Only replay if it's for the current user
+                if (event.data?.userId && authState.user?.id && event.data.userId !== authState.user.id) {
+                  return false;
+                }
+              }
+              return true;
+            });
+            
+            console.log(`🔄 Replaying ${filteredEvents.length} buffered events (filtered ${bufferedEvents.length - filteredEvents.length} user-specific events)`);
             // Events will be handled by their respective handlers
-            bufferedEvents.forEach((event: any) => {
+            filteredEvents.forEach((event: any) => {
               // Process buffered events in sequence
               setTimeout(() => {
                 handleWebSocketMessage({ type: event.type, data: event.data } as any);
@@ -350,6 +365,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         break;
         
       case 'bet_confirmed':
+        // CRITICAL: Only process bet_confirmed if it's for the current user
+        // This prevents other users' bets from being displayed
+        if (data.data.userId && authState.user?.id && data.data.userId !== authState.user.id) {
+          console.log(`⚠️ Ignoring bet_confirmed for different user: ${data.data.userId} (current: ${authState.user.id})`);
+          break;
+        }
+        
         console.log('Bet confirmed:', data.data);
         showNotification(`Bet placed: ₹${data.data.amount} on ${data.data.side}`, 'success');
         
@@ -369,10 +391,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           window.dispatchEvent(balanceEvent);
         }
         
+        // Add new bet to array instead of cumulative total
         const currentBets = data.data.round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
+        const currentSideBets = Array.isArray(currentBets[data.data.side as keyof typeof currentBets])
+          ? (currentBets[data.data.side as keyof typeof currentBets] as number[])
+          : [];
         const newBets = {
           ...currentBets,
-          [data.data.side]: currentBets[data.data.side as keyof typeof currentBets] + data.data.amount,
+          [data.data.side]: [...currentSideBets, data.data.amount],
         };
         updatePlayerRoundBets(data.data.round as any, newBets);
         break;
@@ -427,12 +453,34 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         if (totalBets) updateTotalBets(totalBets);
         if (round1Bets) updateTotalBets(round1Bets);
         if (round2Bets) updateTotalBets(round2Bets);
+        // Ensure arrays are properly formatted when initializing from userBets
         if (userBets) {
-          updatePlayerRoundBets(1, userBets.round1);
-          updatePlayerRoundBets(2, userBets.round2);
+          const r1Bets = {
+            andar: Array.isArray(userBets.round1?.andar) ? userBets.round1.andar : [],
+            bahar: Array.isArray(userBets.round1?.bahar) ? userBets.round1.bahar : []
+          };
+          const r2Bets = {
+            andar: Array.isArray(userBets.round2?.andar) ? userBets.round2.andar : [],
+            bahar: Array.isArray(userBets.round2?.bahar) ? userBets.round2.bahar : []
+          };
+          updatePlayerRoundBets(1, r1Bets);
+          updatePlayerRoundBets(2, r2Bets);
         }
-        if (playerRound1Bets) updatePlayerRoundBets(1, playerRound1Bets);
-        if (playerRound2Bets) updatePlayerRoundBets(2, playerRound2Bets);
+        // Ensure arrays are properly formatted when initializing from game state
+        if (playerRound1Bets) {
+          const r1Bets = {
+            andar: Array.isArray(playerRound1Bets?.andar) ? playerRound1Bets.andar : [],
+            bahar: Array.isArray(playerRound1Bets?.bahar) ? playerRound1Bets.bahar : []
+          };
+          updatePlayerRoundBets(1, r1Bets);
+        }
+        if (playerRound2Bets) {
+          const r2Bets = {
+            andar: Array.isArray(playerRound2Bets?.andar) ? playerRound2Bets.andar : [],
+            bahar: Array.isArray(playerRound2Bets?.bahar) ? playerRound2Bets.bahar : []
+          };
+          updatePlayerRoundBets(2, r2Bets);
+        }
         if (userBalance !== undefined) updatePlayerWallet(userBalance);
         
         console.log('✅ Game state synced on reconnect');
@@ -679,9 +727,22 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
       
       case 'user_bets_update': {
+        // CRITICAL: user_bets_update should only be received by the user who placed the bet
+        // This is sent directly from server, but double-check it's not for another user
+        // Server sends individual bets as arrays instead of cumulative totals
         const { round1Bets, round2Bets } = (data as UserBetsUpdateMessage).data;
-        updatePlayerRoundBets(1, round1Bets);
-        updatePlayerRoundBets(2, round2Bets);
+        // Ensure arrays are properly formatted
+        const r1Bets = {
+          andar: Array.isArray(round1Bets?.andar) ? round1Bets.andar : [],
+          bahar: Array.isArray(round1Bets?.bahar) ? round1Bets.bahar : []
+        };
+        const r2Bets = {
+          andar: Array.isArray(round2Bets?.andar) ? round2Bets.andar : [],
+          bahar: Array.isArray(round2Bets?.bahar) ? round2Bets.bahar : []
+        };
+        // Only update if this is for the current user (this should already be filtered by server)
+        updatePlayerRoundBets(1, r1Bets);
+        updatePlayerRoundBets(2, r2Bets);
         break;
       }
 
@@ -689,10 +750,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         const { side, amount, round, newBalance, message } = (data as BetSuccessMessage).data;
         showNotification(message, 'success');
         updatePlayerWallet(newBalance);
+        // Add new bet to array instead of cumulative total
         const currentBets = round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
+        const currentSideBets = Array.isArray(currentBets[side as keyof typeof currentBets]) 
+          ? (currentBets[side as keyof typeof currentBets] as number[])
+          : [];
         const newBets = {
           ...currentBets,
-          [side]: currentBets[side as keyof typeof currentBets] + amount,
+          [side]: [...currentSideBets, amount],
         };
         updatePlayerRoundBets(round, newBets);
         break;

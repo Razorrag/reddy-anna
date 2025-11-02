@@ -172,7 +172,41 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       }
     }
 
-    // Send bet confirmation back to the user
+    // Get user's specific bets (not total bets from all players)
+    // Send individual bets array instead of cumulative totals
+    let userRound1Bets = { andar: [] as number[], bahar: [] as number[] };
+    let userRound2Bets = { andar: [] as number[], bahar: [] as number[] };
+    
+    // Get individual bets from database for this user and game
+    try {
+      const { storage } = await import('../storage-supabase');
+      const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
+      if (gameIdToUse && gameIdToUse !== 'default-game') {
+        const allUserBets = await storage.getBetsForUser(userId, gameIdToUse);
+        
+        // Group bets by round and side
+        allUserBets.forEach((bet: any) => {
+          const betAmount = parseFloat(bet.amount);
+          if (bet.round === '1' || bet.round === 1) {
+            if (bet.side === 'andar') {
+              userRound1Bets.andar.push(betAmount);
+            } else if (bet.side === 'bahar') {
+              userRound1Bets.bahar.push(betAmount);
+            }
+          } else if (bet.round === '2' || bet.round === 2) {
+            if (bet.side === 'andar') {
+              userRound2Bets.andar.push(betAmount);
+            } else if (bet.side === 'bahar') {
+              userRound2Bets.bahar.push(betAmount);
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching user bets:', error);
+    }
+
+    // Send bet confirmation back to the user with their own bets only
     ws.send(JSON.stringify({
       type: 'bet_confirmed',
       data: {
@@ -186,23 +220,24 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       }
     }));
 
-    // Broadcast bet update to admin panel
+    // Send user-specific bet update ONLY to the user who placed the bet
+    // Send individual bets array instead of cumulative totals
+    ws.send(JSON.stringify({
+      type: 'user_bets_update',
+      data: {
+        round1Bets: userRound1Bets,
+        round2Bets: userRound2Bets
+      }
+    }));
+
+    // Broadcast bet update to admin panel (admin sees all bets)
     if (typeof (global as any).broadcast !== 'undefined') {
       const round1Bets = (global as any).currentGameState?.round1Bets || { andar: 0, bahar: 0 };
       const round2Bets = (global as any).currentGameState?.round2Bets || { andar: 0, bahar: 0 };
       const totalAndar = round1Bets.andar + round2Bets.andar;
       const totalBahar = round1Bets.bahar + round2Bets.bahar;
-
-      // Broadcast user bets update
-      (global as any).broadcast({
-        type: 'user_bets_update',
-        data: {
-          round1Bets: round1Bets,
-          round2Bets: round2Bets
-        }
-      });
       
-      // Broadcast to Admin-specific listeners
+      // Broadcast to Admin-specific listeners (admins see all players' bets)
       (global as any).broadcast({
         type: 'admin_bet_update',
         data: {
@@ -213,7 +248,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         },
       });
       
-      // Broadcast complete betting stats with round-specific totals
+      // Broadcast complete betting stats with round-specific totals (for admin dashboard)
       (global as any).broadcast({
         type: 'betting_stats',
         data: {

@@ -126,6 +126,9 @@ export const gameHistory = pgTable("game_history", {
   winner: text("winner").notNull(), // andar or bahar
   winningCard: text("winning_card").notNull(),
   totalCards: integer("total_cards").notNull(),
+  winningRound: integer("winning_round").default(1),
+  totalBets: decimal("total_bets", { precision: 15, scale: 2 }).default("0.00"),
+  totalPayouts: decimal("total_payouts", { precision: 15, scale: 2 }).default("0.00"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
