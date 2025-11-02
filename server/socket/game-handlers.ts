@@ -96,6 +96,29 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       return;
     }
 
+    // ✅ Track wagering for bonus unlock
+    try {
+      await storage.trackWagering(userId, amount);
+      
+      // Check if wagering requirement met and unlock bonus
+      const bonusUnlocked = await storage.checkAndUnlockBonus(userId);
+      
+      if (bonusUnlocked && bonusUnlocked.unlocked) {
+        // Notify user that bonus is now unlocked!
+        ws.send(JSON.stringify({
+          type: 'bonus_unlocked',
+          data: {
+            message: `🎉 Bonus unlocked! ₹${bonusUnlocked.amount.toLocaleString()} added to your balance.`,
+            amount: bonusUnlocked.amount,
+            timestamp: Date.now()
+          }
+        }));
+      }
+    } catch (wageringError) {
+      // Don't fail bet if wagering tracking fails
+      console.error('⚠️ Error tracking wagering:', wageringError);
+    }
+
     // Add bet to current game state (only after successful balance deduction)
     const roundNum = parseInt(round);
     if (roundNum === 1) {
@@ -393,6 +416,25 @@ export async function handleDealCard(client: WSClient, data: any) {
     }
 
     console.log(`♠️ Dealt ${data.card} on ${data.side}: total andar=${(global as any).currentGameState.andarCards.length}, bahar=${(global as any).currentGameState.baharCards.length}`);
+
+    // Save card to database
+    const gameId = (global as any).currentGameState.gameId;
+    if (gameId && gameId !== 'default-game') {
+      try {
+        const { storage } = await import('../storage-supabase');
+        await storage.dealCard({
+          gameId: gameId,
+          card: data.card,
+          side: data.side,
+          position: data.position,
+          isWinningCard: isWinningCard
+        });
+        console.log(`✅ Card saved to database: ${data.card} on ${data.side}`);
+      } catch (error) {
+        console.error('⚠️ Error saving card to database:', error);
+        // Don't fail the card dealing if DB save fails
+      }
+    }
 
     // Broadcast the dealt card to all clients
     if (typeof (global as any).broadcast !== 'undefined') {

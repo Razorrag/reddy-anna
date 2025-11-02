@@ -213,6 +213,18 @@ export interface IStorage {
   getUserReferrals(userId: string): Promise<UserReferral[]>;
   checkAndApplyReferralBonus(userId: string, depositAmount: number): Promise<void>;
   applyConditionalBonus(userId: string): Promise<boolean>;
+  
+  // Wagering requirement methods
+  setUserWageringRequirement(userId: string, amount: number): Promise<void>;
+  trackWagering(userId: string, betAmount: number): Promise<void>;
+  checkAndUnlockBonus(userId: string): Promise<{ unlocked: boolean; amount: number } | null>;
+  getWageringProgress(userId: string): Promise<{
+    requirement: number;
+    completed: number;
+    remaining: number;
+    percentage: number;
+    bonusLocked: number;
+  } | null>;
   addTransaction(transaction: {
     userId: string;
     transactionType: string;
@@ -1458,8 +1470,10 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
 
-    // Get game statistics for each game
+    // Get game IDs
     const gameIds = historyData.map((h: any) => h.game_id);
+
+    // Get game statistics for each game
     const { data: statsData, error: statsError } = await supabaseServer
       .from('game_statistics')
       .select('*')
@@ -1469,7 +1483,18 @@ export class SupabaseStorage implements IStorage {
       console.error('Error getting game statistics:', statsError);
     }
 
-    // Create a map of game_id to statistics
+    // Get dealt cards for all games
+    const { data: cardsData, error: cardsError } = await supabaseServer
+      .from('dealt_cards')
+      .select('*')
+      .in('game_id', gameIds)
+      .order('position', { ascending: true });
+
+    if (cardsError) {
+      console.error('Error getting dealt cards:', cardsError);
+    }
+
+    // Create maps for efficient lookup
     const statsMap = new Map();
     if (statsData) {
       statsData.forEach((stat: any) => {
@@ -1477,9 +1502,22 @@ export class SupabaseStorage implements IStorage {
       });
     }
 
-    // Combine history with statistics
+    // Create cards map by game_id
+    const cardsMap = new Map();
+    if (cardsData) {
+      cardsData.forEach((card: any) => {
+        if (!cardsMap.has(card.game_id)) {
+          cardsMap.set(card.game_id, []);
+        }
+        cardsMap.get(card.game_id).push(card);
+      });
+    }
+
+    // Combine history with statistics and cards
     const enhancedHistory = historyData.map((history: any) => {
       const stats = statsMap.get(history.game_id);
+      const cards = cardsMap.get(history.game_id) || [];
+      
       return {
         id: history.id,
         gameId: history.game_id,
@@ -1489,6 +1527,15 @@ export class SupabaseStorage implements IStorage {
         totalCards: history.total_cards,
         round: history.winning_round || 1, // Use winning_round from database
         createdAt: history.created_at,
+        // Include dealt cards
+        dealtCards: cards.map((c: any) => ({
+          id: c.id,
+          card: c.card,
+          side: c.side,
+          position: c.position,
+          isWinningCard: c.is_winning_card,
+          createdAt: c.created_at
+        })),
         // Statistics data (with defaults if not available)
         totalBets: stats ? parseFloat(stats.total_bets || '0') : (parseFloat(history.total_bets || '0') || 0),
         andarTotalBet: stats ? parseFloat(stats.andar_total_bet || '0') : 0,
@@ -1520,7 +1567,7 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getUserGameHistory(userId: string): Promise<any[]> {
-    // Get user's bets and join with game history to get results
+    // Get user's bets and join with game sessions to get results
     const { data, error } = await supabaseServer
       .from('player_bets')
       .select(`
@@ -1530,7 +1577,8 @@ export class SupabaseStorage implements IStorage {
           winner,
           winning_card,
           current_round,
-          status
+          status,
+          created_at
         )
       `)
       .eq('user_id', userId)
@@ -1541,23 +1589,119 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
 
-    // Transform the data to include game results
-    return (data || []).map((bet: any) => ({
-      id: bet.id,
-      gameId: bet.game_id,
-      openingCard: bet.game_sessions?.opening_card,
-      winner: bet.game_sessions?.winner,
-      yourBet: {
-        side: bet.side,
-        amount: bet.amount,
-        round: bet.round
-      },
-      result: bet.game_sessions?.winner === bet.side ? 'win' : 'loss',
-      payout: bet.game_sessions?.winner === bet.side ? bet.amount * 2 : 0,
-      totalCards: 0, // Placeholder
-      round: bet.game_sessions?.current_round || 1,
-      createdAt: bet.created_at
-    }));
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    // Group bets by game_id to get all bets per game
+    const gameBetsMap = new Map();
+    data.forEach((bet: any) => {
+      if (!gameBetsMap.has(bet.game_id)) {
+        gameBetsMap.set(bet.game_id, {
+          gameSession: bet.game_sessions,
+          bets: [],
+          totalBet: 0,
+          totalPayout: 0
+        });
+      }
+      const gameData = gameBetsMap.get(bet.game_id);
+      gameData.bets.push(bet);
+      gameData.totalBet += parseFloat(bet.amount || '0');
+      // Add actual payout from database (already calculated correctly)
+      if (bet.actual_payout) {
+        gameData.totalPayout += parseFloat(bet.actual_payout);
+      }
+    });
+
+    // Get dealt cards for all games
+    const gameIds = Array.from(gameBetsMap.keys());
+    const { data: cardsData, error: cardsError } = await supabaseServer
+      .from('dealt_cards')
+      .select('*')
+      .in('game_id', gameIds)
+      .order('position', { ascending: true });
+
+    if (cardsError) {
+      console.error('Error getting dealt cards for user history:', cardsError);
+    }
+
+    // Create cards map by game_id
+    const cardsMap = new Map();
+    if (cardsData) {
+      cardsData.forEach((card: any) => {
+        if (!cardsMap.has(card.game_id)) {
+          cardsMap.set(card.game_id, []);
+        }
+        cardsMap.get(card.game_id).push(card);
+      });
+    }
+
+    // Get game history for winning round info and total cards
+    const { data: historyData, error: historyError } = await supabaseServer
+      .from('game_history')
+      .select('*')
+      .in('game_id', gameIds);
+
+    if (historyError) {
+      console.error('Error getting game history for user:', historyError);
+    }
+
+    const historyMap = new Map();
+    if (historyData) {
+      historyData.forEach((h: any) => historyMap.set(h.game_id, h));
+    }
+
+    // Transform data to include all user bets per game with cards
+    return Array.from(gameBetsMap.entries()).map(([gameId, gameData]) => {
+      const gameSession = gameData.gameSession;
+      const history = historyMap.get(gameId);
+      const cards = cardsMap.get(gameId) || [];
+      
+      // Determine result based on actual payouts
+      const won = gameData.totalPayout > 0;
+      const winner = gameSession?.winner;
+
+      return {
+        id: history?.id || gameData.bets[0]?.id || gameId,
+        gameId: gameId,
+        openingCard: gameSession?.opening_card,
+        winner: winner,
+        winningCard: gameSession?.winning_card,
+        winningRound: history?.winning_round || gameSession?.current_round || 1,
+        totalCards: history?.total_cards || cards.length,
+        // Include dealt cards
+        dealtCards: cards.map((c: any) => ({
+          id: c.id,
+          card: c.card,
+          side: c.side,
+          position: c.position,
+          isWinningCard: c.is_winning_card,
+          createdAt: c.created_at
+        })),
+        // User's all bets with details
+        yourBets: gameData.bets.map((bet: any) => ({
+          id: bet.id,
+          side: bet.side,
+          amount: parseFloat(bet.amount || '0'),
+          round: bet.round,
+          payout: parseFloat(bet.actual_payout || '0'),
+          status: bet.status
+        })),
+        // Summary for backward compatibility
+        yourBet: gameData.bets.length === 1 ? {
+          side: gameData.bets[0].side,
+          amount: gameData.bets[0].amount,
+          round: gameData.bets[0].round
+        } : null,
+        yourTotalBet: gameData.totalBet,
+        yourTotalPayout: gameData.totalPayout,
+        yourNetProfit: gameData.totalPayout - gameData.totalBet,
+        result: won ? 'win' : (winner ? 'loss' : 'no_bet'),
+        payout: gameData.totalPayout, // Use actual payout from database
+        round: history?.winning_round || gameSession?.current_round || 1,
+        createdAt: gameSession?.created_at || gameData.bets[0]?.created_at
+      };
+    });
   }
   
   // Settings operations
@@ -2372,6 +2516,136 @@ export class SupabaseStorage implements IStorage {
       console.error('Error in applyConditionalBonus:', error);
       return false;
     }
+  }
+
+  // Wagering requirement methods
+  async setUserWageringRequirement(userId: string, amount: number): Promise<void> {
+    const { error } = await supabaseServer
+      .from('users')
+      .update({
+        wagering_requirement: amount.toString(),
+        wagering_completed: '0.00',
+        bonus_locked: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+      
+    if (error) {
+      console.error('Error setting wagering requirement:', error);
+      throw new Error('Failed to set wagering requirement');
+    }
+  }
+
+  async trackWagering(userId: string, betAmount: number): Promise<void> {
+    // Get current wagering data
+    const user = await this.getUserById(userId);
+    if (!user || !user.bonus_locked) {
+      return; // No locked bonus to track
+    }
+    
+    const currentCompleted = parseFloat(user.wagering_completed || '0');
+    const newCompleted = currentCompleted + betAmount;
+    
+    const { error } = await supabaseServer
+      .from('users')
+      .update({
+        wagering_completed: newCompleted.toString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+      
+    if (error) {
+      console.error('Error tracking wagering:', error);
+      throw new Error('Failed to track wagering');
+    }
+  }
+
+  async checkAndUnlockBonus(userId: string): Promise<{ unlocked: boolean; amount: number } | null> {
+    const user = await this.getUserById(userId);
+    if (!user || !user.bonus_locked) {
+      return null; // No locked bonus
+    }
+    
+    const requirement = parseFloat(user.wagering_requirement || '0');
+    const completed = parseFloat(user.wagering_completed || '0');
+    
+    // Check if requirement met
+    if (completed >= requirement && requirement > 0) {
+      // Get total locked bonus
+      const depositBonus = parseFloat(user.deposit_bonus_available || '0');
+      const referralBonus = parseFloat(user.referral_bonus_available || '0');
+      const totalBonus = depositBonus + referralBonus;
+      
+      if (totalBonus > 0) {
+        // Add bonus to main balance
+        const currentBalance = parseFloat(user.balance);
+        const newBalance = currentBalance + totalBonus;
+        
+        // Update user - unlock bonus
+        const { error } = await supabaseServer
+          .from('users')
+          .update({
+            balance: newBalance.toString(),
+            deposit_bonus_available: '0.00',
+            referral_bonus_available: '0.00',
+            bonus_locked: false,
+            wagering_requirement: '0.00',
+            wagering_completed: '0.00',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+        
+        if (error) {
+          console.error('Error unlocking bonus:', error);
+          throw new Error('Failed to unlock bonus');
+        }
+        
+        // Log the unlock transaction
+        await this.addTransaction({
+          userId,
+          transactionType: 'bonus_applied',
+          amount: totalBonus,
+          balanceBefore: currentBalance,
+          balanceAfter: newBalance,
+          referenceId: `bonus_unlocked_${Date.now()}`,
+          description: `Bonus unlocked! Wagering requirement met (₹${completed.toFixed(2)} / ₹${requirement.toFixed(2)}). ₹${totalBonus.toFixed(2)} added to balance.`
+        });
+        
+        console.log(`✅ Bonus unlocked! ₹${totalBonus} added to user ${userId} balance`);
+        
+        return { unlocked: true, amount: totalBonus };
+      }
+    }
+    
+    return null;
+  }
+
+  async getWageringProgress(userId: string): Promise<{
+    requirement: number;
+    completed: number;
+    remaining: number;
+    percentage: number;
+    bonusLocked: number;
+  } | null> {
+    const user = await this.getUserById(userId);
+    if (!user || !user.bonus_locked) {
+      return null; // No locked bonus
+    }
+    
+    const requirement = parseFloat(user.wagering_requirement || '0');
+    const completed = parseFloat(user.wagering_completed || '0');
+    const remaining = Math.max(0, requirement - completed);
+    const percentage = requirement > 0 ? (completed / requirement) * 100 : 0;
+    const bonusLocked = parseFloat(user.deposit_bonus_available || '0') + 
+                       parseFloat(user.referral_bonus_available || '0');
+    
+    return {
+      requirement,
+      completed,
+      remaining,
+      percentage: Math.min(100, percentage),
+      bonusLocked
+    };
   }
 
   async addTransaction(transaction: {

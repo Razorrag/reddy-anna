@@ -397,15 +397,26 @@ const currentGameState = new GameState();
 // Helper function to get current game state for new connections
 const getCurrentGameStateForUser = async (userId: string) => {
   try {
-    // Get user information
-    const user = await storage.getUser(userId);
+    // Get user information - handle both players and admins
+    let user = await storage.getUser(userId);
+    let userBalance = 0;
+    
     if (!user) {
-      console.error('User not found for game state synchronization:', userId);
-      return null;
+      // Check if this is an admin user (admins don't exist in users table)
+      console.log('User not found in users table, checking if admin:', userId);
+      // For admins, create a minimal user object
+      user = {
+        id: userId,
+        balance: 0,
+        role: 'admin'
+      } as any;
+      userBalance = 0;
+    } else {
+      userBalance = parseFloat(user.balance) || 0;
     }
 
-    // Get user's current bets from database
-    const userBets = await storage.getBetsForGame(currentGameState.gameId);
+    // Get user's current bets from database (only for non-admin users)
+    const userBets = user.role === 'admin' ? [] : await storage.getBetsForGame(currentGameState.gameId);
     
     // Calculate user's round bets
     const round1Bets = { andar: 0, bahar: 0 };
@@ -435,7 +446,7 @@ const getCurrentGameStateForUser = async (userId: string) => {
       round1Bets: currentGameState.round1Bets,
       round2Bets: currentGameState.round2Bets,
       // User-specific data
-      userBalance: parseFloat(user.balance) || 0,
+      userBalance: userBalance,
       userBets: {
         round1: round1Bets,
         round2: round2Bets
@@ -4264,47 +4275,11 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         // CRITICAL FIX: Update user game statistics (total_winnings, total_losses, games_played, games_won)
         await storage.updateUserGameStats(userId, userWon, userTotalBet, payout);
         
-        // Check conditional bonus threshold (auto-apply if ±30% from original deposit)
-        try {
-          const bonusApplied = await storage.applyConditionalBonus(userId);
-          if (bonusApplied) {
-            console.log(`✅ Conditional bonus auto-applied for user ${userId} after game completion`);
-            // Notify user about bonus
-            clients.forEach(c => {
-              if (c.userId === userId && c.ws.readyState === WebSocket.OPEN) {
-                c.ws.send(JSON.stringify({
-                  type: 'conditional_bonus_applied',
-                  data: {
-                    message: 'Bonus automatically added to your balance!',
-                    timestamp: Date.now()
-                  }
-                }));
-              }
-            });
-          }
-          
-          // Also check bonus claim threshold (auto-credit when bonus amount reaches threshold)
-          const { checkAndAutoCreditBonus } = await import('./payment');
-          const autoCredited = await checkAndAutoCreditBonus(userId);
-          if (autoCredited) {
-            console.log(`✅ Bonus auto-credited for user ${userId} after game completion (threshold reached)`);
-            // Notify user about auto-credit
-            clients.forEach(c => {
-              if (c.userId === userId && c.ws.readyState === WebSocket.OPEN) {
-                c.ws.send(JSON.stringify({
-                  type: 'bonus_update',
-                  data: {
-                    message: 'Bonus automatically credited to your balance!',
-                    timestamp: Date.now()
-                  }
-                }));
-              }
-            });
-          }
-        } catch (bonusError) {
-          console.error(`⚠️ Error checking conditional bonus for user ${userId}:`, bonusError);
-          // Don't fail payout if bonus check fails
-        }
+        // ✅ REMOVED: Wrong conditional bonus logic (±30% balance change)
+        // ✅ REMOVED: Wrong auto-credit threshold logic (₹500 threshold)
+        // ✅ Wagering is now tracked on each bet placement in game-handlers.ts
+        // ✅ Bonus unlock check happens automatically in handlePlayerBet after each bet
+        // ✅ User must meet wagering requirement (30% of deposit) by placing bets to unlock bonus
       } catch (error) {
         console.error(`⚠️ Error updating bet status for user ${userId}:`, error);
       }
@@ -4546,7 +4521,7 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   // Only save to database if not in test mode
   if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
     try {
-      await storage.saveGameHistory({
+      const historyData = {
         gameId: currentGameState.gameId,
         openingCard: currentGameState.openingCard!,
         winner,
@@ -4555,10 +4530,30 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         ...(currentGameState.currentRound && { round: currentGameState.currentRound } as any),
         ...(totalBetsAmount && { totalBets: totalBetsAmount } as any),
         ...(totalPayoutsAmount && { totalPayouts: totalPayoutsAmount } as any)
-      } as any);
+      };
+      
+      console.log(`💾 Saving game history for gameId: ${currentGameState.gameId}`, {
+        winner,
+        winningCard,
+        totalCards: historyData.totalCards,
+        round: currentGameState.currentRound,
+        totalBets: totalBetsAmount,
+        totalPayouts: totalPayoutsAmount
+      });
+      
+      await storage.saveGameHistory(historyData as any);
+      console.log(`✅ Game history saved successfully for gameId: ${currentGameState.gameId}`);
     } catch (error) {
-      console.error('⚠️ Error saving game history:', error);
+      console.error('❌ ERROR saving game history:', error);
+      console.error('Game details:', {
+        gameId: currentGameState.gameId,
+        winner,
+        winningCard,
+        round: currentGameState.currentRound
+      });
     }
+  } else {
+    console.warn(`⚠️ SKIPPING game history save - invalid gameId: ${currentGameState.gameId || 'null/undefined'}`);
   }
   
   // Auto-restart: Reset to idle after 5 seconds

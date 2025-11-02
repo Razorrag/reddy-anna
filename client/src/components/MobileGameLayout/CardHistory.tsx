@@ -25,41 +25,65 @@ const CardHistory: React.FC<CardHistoryProps> = ({
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const response = await apiClient.get<{
-          success: boolean;
-          data?: { games?: any[] };
-          games?: any[]; // Fallback format
-        }>('/api/user/game-history?limit=10');
+        console.log('[CardHistory] Fetching game history...');
+        // Use /api/game/history endpoint which returns an array directly
+        const response = await apiClient.get<any[]>('/api/game/history?limit=10');
+        console.log('[CardHistory] API response:', response);
+        console.log('[CardHistory] Response type:', typeof response);
+        console.log('[CardHistory] Is array:', Array.isArray(response));
         
-        // Handle different response formats
+        // Handle response - can be array directly or wrapped
         let games: any[] = [];
-        if (response.success) {
-          if (response.data?.games) {
-            games = response.data.games;
-          } else if (Array.isArray(response.data)) {
-            games = response.data;
+        if (Array.isArray(response)) {
+          // Direct array response from /api/game/history
+          games = response;
+          console.log('[CardHistory] Parsed as direct array, count:', games.length);
+        } else if (response && typeof response === 'object') {
+          // Handle wrapped responses (fallback)
+          console.log('[CardHistory] Response is object, checking nested properties...');
+          if (Array.isArray((response as any).data)) {
+            games = (response as any).data;
+            console.log('[CardHistory] Found games in response.data, count:', games.length);
           } else if (Array.isArray((response as any).games)) {
             games = (response as any).games;
+            console.log('[CardHistory] Found games in response.games, count:', games.length);
+          } else if ((response as any).success && (response as any).data?.games) {
+            games = (response as any).data.games;
+            console.log('[CardHistory] Found games in response.data.games, count:', games.length);
+          } else {
+            console.warn('[CardHistory] Unknown response format:', response);
           }
         }
+        
+        console.log('[CardHistory] Final games array length:', games.length);
         
         if (games.length > 0) {
           // Transform API data to match component format
           const formattedResults = games
-            .filter(game => game.winner) // Only show games with winners
+            .filter(game => {
+              const hasWinner = !!game.winner;
+              if (!hasWinner) {
+                console.log('[CardHistory] Filtering out game without winner:', game);
+              }
+              return hasWinner;
+            }) // Only show games with winners
             .map(game => ({
               winner: (game.winner || '').toLowerCase(),
-              round: game.round || game.current_round || 1,
-              gameId: game.gameId || game.game_id || `game-${Date.now()}-${Math.random()}`
+              round: game.round || game.current_round || game.winning_round || 1,
+              gameId: game.gameId || game.game_id || game.id || `game-${Date.now()}-${Math.random()}`
             }))
             .slice(0, 10); // Limit to 10 most recent
           
+          console.log('[CardHistory] Formatted results count:', formattedResults.length);
+          console.log('[CardHistory] Formatted results:', formattedResults);
           setRecentResults(formattedResults);
         } else {
+          console.log('[CardHistory] No games found or empty array');
           setRecentResults([]);
         }
       } catch (error: any) {
-        console.error('Failed to load card history:', error);
+        console.error('[CardHistory] Failed to load card history:', error);
+        console.error('[CardHistory] Error details:', error.message, error.stack);
         // Set empty array on error to avoid showing mock data
         setRecentResults([]);
       } finally {
@@ -73,6 +97,12 @@ const CardHistory: React.FC<CardHistoryProps> = ({
     const interval = setInterval(fetchHistory, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Debug logging for rendering
+  useEffect(() => {
+    console.log('[CardHistory] Rendering with results count:', recentResults.length);
+    console.log('[CardHistory] Loading state:', loading);
+  }, [recentResults.length, loading]);
 
   return (
     <div className={`flex items-center justify-between ${className}`}>

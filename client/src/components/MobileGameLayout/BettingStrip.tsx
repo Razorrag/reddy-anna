@@ -60,15 +60,8 @@ const BettingStrip: React.FC<BettingStripProps> = ({
     fetchSettings();
   }, []);
 
-  // Get current round bets
-  const currentRoundBets = gameState.currentRound === 1 ? gameState.round1Bets : gameState.round2Bets;
-  const currentPlayerBets = gameState.currentRound === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
-  
-  // Determine which side has less bets (for highlighting)
-  const andarTotal = gameState.round1Bets.andar + gameState.round2Bets.andar;
-  const baharTotal = gameState.round1Bets.bahar + gameState.round2Bets.bahar;
-  const hasLessAndar = andarTotal < baharTotal;
-  const hasLessBahar = baharTotal < andarTotal;
+  // Note: Only use player-specific bet data, never access total bets (gameState.round1Bets/round2Bets)
+  // which contain admin data (all players' total bets)
 
   // Calculate asymmetric payout multipliers based on round and potential winner
   const getPayoutMultiplier = (side: BetSide): string => {
@@ -268,11 +261,6 @@ const BettingStrip: React.FC<BettingStripProps> = ({
             {/* Right side - Text and bet info */}
             <div className="flex-1 text-right pl-2">
               <div className="flex items-center justify-end gap-2 mb-1">
-                {hasLessBahar && (
-                  <span className="px-2 py-0.5 bg-yellow-500/80 text-black text-[10px] font-bold rounded animate-pulse">
-                    LESS
-                  </span>
-                )}
                 <div className="text-white font-bold text-lg">BAHAR</div>
               </div>
               

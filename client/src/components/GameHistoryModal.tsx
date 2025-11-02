@@ -3,6 +3,16 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/contexts/AuthContext";
+
+interface DealtCard {
+  id: string;
+  card: string;
+  side: 'andar' | 'bahar';
+  position: number;
+  isWinningCard: boolean;
+  createdAt?: string | Date;
+}
 
 interface EnhancedGameHistoryEntry {
   id: string;
@@ -20,6 +30,7 @@ interface EnhancedGameHistoryEntry {
   andarBetsCount: number;
   baharBetsCount: number;
   totalPlayers: number;
+  dealtCards?: DealtCard[];
 }
 
 interface GameHistoryModalProps {
@@ -32,6 +43,10 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
   const [history, setHistory] = useState<EnhancedGameHistoryEntry[]>(propHistory || []);
   const [loading, setLoading] = useState(false);
   const [selectedRound, setSelectedRound] = useState<EnhancedGameHistoryEntry | null>(null);
+  const { user } = useAuth();
+  
+  // Determine if user is admin - show admin data only to admins
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   useEffect(() => {
     if (isOpen) {
@@ -41,6 +56,15 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
       } else {
         fetchHistory();
       }
+      
+      // Auto-refresh every 10 seconds when modal is open
+      const interval = setInterval(() => {
+        if (!propHistory || propHistory.length === 0) {
+          fetchHistory();
+        }
+      }, 10000);
+      
+      return () => clearInterval(interval);
     }
   }, [isOpen, propHistory]);
 
@@ -48,13 +72,18 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
     setLoading(true);
     try {
       const response = await apiClient.get<EnhancedGameHistoryEntry[]>('/api/game/history?limit=50');
+      console.log('Game history API response:', response);
+      
+      let games: EnhancedGameHistoryEntry[] = [];
       if (Array.isArray(response)) {
-        setHistory(response);
-        setSelectedRound(null); // Reset to default view (last game)
+        games = response;
       } else if (response && typeof response === 'object' && 'data' in response) {
-        setHistory((response as any).data || []);
-        setSelectedRound(null);
+        games = (response as any).data || [];
       }
+      
+      console.log('Parsed game history count:', games.length);
+      setHistory(games);
+      setSelectedRound(null); // Reset to default view (last game)
     } catch (error) {
       console.error('Failed to fetch game history:', error);
       setHistory([]);
@@ -187,41 +216,87 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="bg-gray-800/50 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-1">Total Bets</div>
-                  <div className="text-lg font-bold text-white">{formatCurrency(displayGame.totalBets)}</div>
-                </div>
-                
-                <div className="bg-gray-800/50 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-1">Andar Total Bets</div>
-                  <div className="text-lg font-bold text-[#A52A2A]">{formatCurrency(displayGame.andarTotalBet)}</div>
-                </div>
-                
-                <div className="bg-gray-800/50 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-1">Bahar Total Bets</div>
-                  <div className="text-lg font-bold text-[#01073b]">{formatCurrency(displayGame.baharTotalBet)}</div>
-                </div>
-                
-                <div className="bg-gray-800/50 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-1">Total Won by Winners</div>
-                  <div className="text-lg font-bold text-green-400">{formatCurrency(displayGame.totalWinnings)}</div>
-                </div>
-                
-                <div className="bg-gray-800/50 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-1">Players Bet on {displayGame.winner === 'andar' ? 'Andar' : 'Bahar'}</div>
-                  <div className="text-lg font-bold text-white">
-                    {displayGame.winner === 'andar' ? displayGame.andarBetsCount : displayGame.baharBetsCount}
+              {/* Show admin data only to admins, hide from players */}
+              {isAdmin ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Total Bets</div>
+                    <div className="text-lg font-bold text-white">{formatCurrency(displayGame.totalBets || 0)}</div>
+                  </div>
+                  
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Andar Total Bets</div>
+                    <div className="text-lg font-bold text-[#A52A2A]">{formatCurrency(displayGame.andarTotalBet || 0)}</div>
+                  </div>
+                  
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Bahar Total Bets</div>
+                    <div className="text-lg font-bold text-[#01073b]">{formatCurrency(displayGame.baharTotalBet || 0)}</div>
+                  </div>
+                  
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Total Won by Winners</div>
+                    <div className="text-lg font-bold text-green-400">{formatCurrency(displayGame.totalWinnings || 0)}</div>
+                  </div>
+                  
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Players Bet on {displayGame.winner === 'andar' ? 'Andar' : 'Bahar'}</div>
+                    <div className="text-lg font-bold text-white">
+                      {displayGame.winner === 'andar' ? (displayGame.andarBetsCount || 0) : (displayGame.baharBetsCount || 0)}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Players Bet on {displayGame.winner === 'andar' ? 'Bahar' : 'Andar'}</div>
+                    <div className="text-lg font-bold text-white">
+                      {displayGame.winner === 'andar' ? (displayGame.baharBetsCount || 0) : (displayGame.andarBetsCount || 0)}
+                    </div>
                   </div>
                 </div>
-                
+              ) : (
+                // Players only see basic game info - no admin data
                 <div className="bg-gray-800/50 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-1">Players Bet on {displayGame.winner === 'andar' ? 'Bahar' : 'Andar'}</div>
-                  <div className="text-lg font-bold text-white">
-                    {displayGame.winner === 'andar' ? displayGame.baharBetsCount : displayGame.andarBetsCount}
+                  <div className="text-xs text-gray-400 mb-1">Total Cards Dealt</div>
+                  <div className="text-lg font-bold text-white">{displayGame.totalCards || 0}</div>
+                </div>
+              )}
+
+              {/* Dealt Cards Section */}
+              {displayGame.dealtCards && displayGame.dealtCards.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-md font-semibold text-gold mb-3">Cards Dealt Sequence</h4>
+                  <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+                    {displayGame.dealtCards.map((dealtCard: DealtCard, index: number) => (
+                      <div
+                        key={dealtCard.id || index}
+                        className={`p-3 rounded-lg border-2 transition-all cursor-pointer hover:scale-105 ${
+                          dealtCard.isWinningCard
+                            ? 'border-gold bg-gold/20 scale-105 shadow-lg shadow-gold/50'
+                            : dealtCard.side === 'andar'
+                            ? 'border-[#A52A2A] bg-[#A52A2A]/20 hover:bg-[#A52A2A]/30'
+                            : 'border-[#01073b] bg-[#01073b]/20 hover:bg-[#01073b]/30'
+                        }`}
+                        title={`${dealtCard.side === 'andar' ? 'Andar' : 'Bahar'} card #${dealtCard.position}${dealtCard.isWinningCard ? ' - WINNER' : ''}`}
+                      >
+                        <div className="text-xs text-gray-400 mb-1 text-center">
+                          {dealtCard.side === 'andar' ? 'A' : 'B'} #{dealtCard.position}
+                        </div>
+                        <div className={`text-xl font-bold text-center ${
+                          dealtCard.isWinningCard ? 'text-gold' : 'text-white'
+                        }`}>
+                          {dealtCard.card}
+                        </div>
+                        {dealtCard.isWinningCard && (
+                          <div className="text-xs text-gold mt-1 text-center font-semibold">⭐ Winner</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 text-xs text-gray-400 text-center">
+                    Total Cards: {displayGame.dealtCards.length} | Click cards for details
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </>
         ) : (

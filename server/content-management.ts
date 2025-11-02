@@ -387,6 +387,7 @@ export interface GameSettings {
   default_deposit_bonus_percent?: number;
   referral_bonus_percent?: number;
   conditional_bonus_threshold?: number;
+  wagering_multiplier?: number; // Wagering requirement multiplier (0.3 = 30%, 1.0 = 100%, 2.0 = 200%)
 }
 
 export const getGameSettings = async (): Promise<ContentResponse> => {
@@ -401,6 +402,7 @@ export const getGameSettings = async (): Promise<ContentResponse> => {
     const defaultDepositBonusPercent = await storage.getGameSetting('default_deposit_bonus_percent');
     const referralBonusPercent = await storage.getGameSetting('referral_bonus_percent');
     const conditionalBonusThreshold = await storage.getGameSetting('conditional_bonus_threshold');
+    const wageringMultiplier = await storage.getGameSetting('wagering_multiplier');
 
     return {
       success: true,
@@ -414,7 +416,8 @@ export const getGameSettings = async (): Promise<ContentResponse> => {
         adminWhatsAppNumber: adminWhatsApp || '918686886632',
         default_deposit_bonus_percent: parseFloat(defaultDepositBonusPercent || '5'),
         referral_bonus_percent: parseFloat(referralBonusPercent || '1'),
-        conditional_bonus_threshold: parseFloat(conditionalBonusThreshold || '30')
+        conditional_bonus_threshold: parseFloat(conditionalBonusThreshold || '30'),
+        wagering_multiplier: parseFloat(wageringMultiplier || '0.3')
       }
     };
   } catch (error) {
@@ -490,6 +493,13 @@ export const updateGameSettings = async (settings: GameSettings, adminId: string
         return { success: false, error: 'Conditional bonus threshold must be greater than 0' };
       }
       await storage.updateGameSetting('conditional_bonus_threshold', settings.conditional_bonus_threshold.toString());
+    }
+
+    if (settings.wagering_multiplier !== undefined) {
+      if (settings.wagering_multiplier < 0 || settings.wagering_multiplier > 10) {
+        return { success: false, error: 'Wagering multiplier must be between 0 and 10' };
+      }
+      await storage.updateGameSetting('wagering_multiplier', settings.wagering_multiplier.toString());
     }
 
     return { success: true, content: settings };

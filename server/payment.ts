@@ -297,7 +297,7 @@ export const addBonus = async (userId: string, bonusAmount: number, reason: stri
 // New bonus-related functions
 export const applyDepositBonus = async (userId: string, depositAmount: number): Promise<boolean> => {
   try {
-    // Get deposit bonus percentage from settings
+    // Get deposit bonus percentage from settings (default 5%)
     const depositBonusPercent = await storage.getGameSetting('default_deposit_bonus_percent') || '5';
     const bonusPercentage = parseFloat(depositBonusPercent);
     
@@ -308,8 +308,16 @@ export const applyDepositBonus = async (userId: string, depositAmount: number): 
       return false;
     }
     
-    // Add bonus to user's bonus field (not main balance yet)
+    // Get wagering multiplier from settings (default 0.3 = 30% of deposit)
+    // This is configurable: 0.3 = 30%, 1.0 = 100%, 2.0 = 200%
+    const wageringMultiplier = parseFloat(await storage.getGameSetting('wagering_multiplier') || '0.3');
+    const wageringRequirement = depositAmount * wageringMultiplier;
+    
+    // Add LOCKED bonus to user's bonus field (not main balance yet)
     await storage.addUserBonus(userId, bonusAmount, 'deposit_bonus', depositAmount);
+    
+    // Set wagering requirement and lock bonus
+    await storage.setUserWageringRequirement(userId, wageringRequirement);
     
     // Add to user transactions
     const user = await storage.getUser(userId);
@@ -321,14 +329,14 @@ export const applyDepositBonus = async (userId: string, depositAmount: number): 
         balanceBefore: parseFloat(user.balance),
         balanceAfter: parseFloat(user.balance), // Bonus not added to main balance yet
         referenceId: `bonus_deposit_${Date.now()}`,
-        description: `Deposit bonus (${bonusPercentage}% of ₹${depositAmount})`
+        description: `Deposit bonus (${bonusPercentage}% of ₹${depositAmount}) - LOCKED until ₹${wageringRequirement.toFixed(2)} wagered (${(wageringMultiplier * 100).toFixed(0)}% of deposit)`
       });
     }
     
-    console.log(`Deposit bonus of ₹${bonusAmount} added for user ${userId}`);
+    console.log(`✅ Deposit bonus of ₹${bonusAmount} added as LOCKED for user ${userId}`);
+    console.log(`   Must wager ₹${wageringRequirement.toFixed(2)} to unlock (${(wageringMultiplier * 100).toFixed(0)}% of deposit)`);
     
-    // Check if bonus threshold reached and auto-credit if needed
-    await checkAndAutoCreditBonus(userId);
+    // User must meet wagering requirement first
     
     return true;
   } catch (error) {
@@ -339,7 +347,7 @@ export const applyDepositBonus = async (userId: string, depositAmount: number): 
 
 export const applyReferralBonus = async (referrerId: string, depositAmount: number): Promise<boolean> => {
   try {
-    // Get referral bonus percentage from settings
+    // Get referral bonus percentage from settings (default 1%)
     const referralBonusPercent = await storage.getGameSetting('referral_bonus_percent') || '1';
     const bonusPercentage = parseFloat(referralBonusPercent);
     
@@ -363,14 +371,13 @@ export const applyReferralBonus = async (referrerId: string, depositAmount: numb
         balanceBefore: parseFloat(referrer.balance),
         balanceAfter: parseFloat(referrer.balance), // Bonus not added to main balance yet
         referenceId: `referral_bonus_${Date.now()}`,
-        description: `Referral bonus for user deposit of ₹${depositAmount}`
+        description: `Referral bonus (${bonusPercentage}% of ₹${depositAmount})`
       });
     }
     
     console.log(`Referral bonus of ₹${bonusAmount} added for referrer ${referrerId}`);
     
-    // Check if bonus threshold reached and auto-credit if needed
-    await checkAndAutoCreditBonus(referrerId);
+    // Referral bonuses can be unlocked with the same wagering requirement as deposit bonuses
     
     return true;
   } catch (error) {
