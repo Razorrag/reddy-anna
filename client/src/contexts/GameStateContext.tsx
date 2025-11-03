@@ -11,7 +11,8 @@ import type {
   RoundBets,
   DealtCard,
   Bet,
-  GameHistoryEntry
+  GameHistoryEntry,
+  BetInfo
 } from '@/types/game';
 
 // Enhanced GameState interface using shared types
@@ -63,11 +64,33 @@ interface GameState {
   userRole: 'player' | 'admin';
   playerWallet: number;
   
-  // Player's individual bets per round (stored as arrays of individual bet amounts)
+  // Player's individual bets per round (stored as arrays of BetInfo objects)
   playerRound1Bets: RoundBets;
   playerRound2Bets: RoundBets;
   isScreenSharingActive: boolean;
 }
+
+// Helper functions to work with BetInfo arrays
+const toBetInfoArray = (bets: number[] | BetInfo[]): BetInfo[] => {
+  if (bets.length === 0) return [];
+  if (typeof bets[0] === 'number') {
+    // Convert number array to BetInfo array (for backward compatibility)
+    return (bets as number[]).map((amount, index) => ({
+      amount,
+      betId: `temp-${Date.now()}-${index}`,
+      timestamp: Date.now() - (bets.length - index) * 1000 // Approximate timestamps
+    }));
+  }
+  return bets as BetInfo[];
+};
+
+const getBetAmounts = (bets: number[] | BetInfo[]): number[] => {
+  if (bets.length === 0) return [];
+  if (typeof bets[0] === 'number') {
+    return bets as number[];
+  }
+  return (bets as BetInfo[]).map(bet => bet.amount);
+};
 
 type GameStateAction =
   | { type: 'SET_GAME_ID'; payload: string }
@@ -90,6 +113,7 @@ type GameStateAction =
   | { type: 'SET_WINNING_CARD'; payload: Card }
   | { type: 'SET_USER_DATA'; payload: { userId: string; username: string; wallet: number } }
   | { type: 'UPDATE_PLAYER_ROUND_BETS'; payload: { round: GameRound; bets: RoundBets } }
+  | { type: 'REMOVE_LAST_BET'; payload: { round: GameRound; side: BetSide } }
   | { type: 'SET_SCREEN_SHARING'; payload: boolean }
   | { type: 'CLEAR_CARDS' };
 
@@ -215,6 +239,35 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         return { ...state, playerRound2Bets: action.payload.bets };
       }
       return state;
+    case 'REMOVE_LAST_BET': {
+      const { round, side } = action.payload;
+      if (round === 1) {
+        const currentBets = state.playerRound1Bets[side];
+        const betArray = Array.isArray(currentBets) ? toBetInfoArray(currentBets) : [];
+        if (betArray.length === 0) return state;
+        const newBetArray = betArray.slice(0, -1); // Remove last bet
+        return {
+          ...state,
+          playerRound1Bets: {
+            ...state.playerRound1Bets,
+            [side]: newBetArray
+          }
+        };
+      } else if (round === 2) {
+        const currentBets = state.playerRound2Bets[side];
+        const betArray = Array.isArray(currentBets) ? toBetInfoArray(currentBets) : [];
+        if (betArray.length === 0) return state;
+        const newBetArray = betArray.slice(0, -1); // Remove last bet
+        return {
+          ...state,
+          playerRound2Bets: {
+            ...state.playerRound2Bets,
+            [side]: newBetArray
+          }
+        };
+      }
+      return state;
+    }
     case 'SET_SCREEN_SHARING':
       return { ...state, isScreenSharingActive: action.payload };
     case 'CLEAR_CARDS':
@@ -255,7 +308,8 @@ interface GameStateContextType {
   setUserData: (userData: { userId: string; username: string; wallet: number }) => void;
   updatePlayerRoundBets: (round: GameRound, bets: RoundBets) => void;
   clearCards: () => void;
-  placeBet: (side: BetSide, amount: number) => void;
+  placeBet: (side: BetSide, amount: number, betId?: string) => void;
+  removeLastBet: (round: GameRound, side: BetSide) => void;
   resetBettingData: () => void;
   setScreenSharing: (isSharing: boolean) => void;
   phase: GamePhase;
@@ -529,7 +583,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 2, bets: { andar: [], bahar: [] } } });
   };
 
-  const placeBet = async (side: BetSide, amount: number) => {
+  const placeBet = async (side: BetSide, amount: number, betId?: string) => {
     // Validate balance before placing bet
     const isValidBalance = await validateBalance();
     if (!isValidBalance) {
@@ -544,25 +598,32 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
+    // Create BetInfo object
+    const betInfo: BetInfo = {
+      amount,
+      betId: betId || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now()
+    };
+
     // This function now only updates local state optimistically
     // The actual bet placement is handled by WebSocket messages
     // Balance will be updated via WebSocket bet_confirmed message (prevents race conditions)
     if (gameState.currentRound === 1) {
       const currentSideBets = Array.isArray(gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets])
-        ? (gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets] as number[])
+        ? toBetInfoArray(gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets] as number[] | BetInfo[])
         : [];
       const newBets: RoundBets = {
         ...gameState.playerRound1Bets,
-        [side]: [...currentSideBets, amount]
+        [side]: [...currentSideBets, betInfo]
       };
       updatePlayerRoundBets(1, newBets);
     } else if (gameState.currentRound === 2) {
       const currentSideBets = Array.isArray(gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets])
-        ? (gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets] as number[])
+        ? toBetInfoArray(gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets] as number[] | BetInfo[])
         : [];
       const newBets: RoundBets = {
         ...gameState.playerRound2Bets,
-        [side]: [...currentSideBets, amount]
+        [side]: [...currentSideBets, betInfo]
       };
       updatePlayerRoundBets(2, newBets);
     }
@@ -574,6 +635,10 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     
     // Note: BalanceContext will be updated via WebSocket bet_confirmed message
     // This ensures server is source of truth and prevents race conditions
+  };
+
+  const removeLastBet = (round: GameRound, side: BetSide) => {
+    dispatch({ type: 'REMOVE_LAST_BET', payload: { round, side } });
   };
 
   const value: GameStateContextType = {
@@ -600,6 +665,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     updatePlayerRoundBets,
     clearCards,
     placeBet,
+    removeLastBet,
     resetBettingData,
     setScreenSharing,
     phase: gameState.phase,

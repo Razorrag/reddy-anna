@@ -101,6 +101,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     resetGame,
     updatePlayerWallet,
     setScreenSharing,
+    setWinningCard,
+    removeLastBet,
   } = useGameState();
   const { showNotification } = useNotification();
   const { state: authState, logout, refreshAccessToken } = useAuth();
@@ -401,16 +403,59 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           window.dispatchEvent(balanceEvent);
         }
         
-        // Add new bet to array instead of cumulative total
+        // Add new bet to array as BetInfo object
         const currentBets = data.data.round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
         const currentSideBets = Array.isArray(currentBets[data.data.side as keyof typeof currentBets])
-          ? (currentBets[data.data.side as keyof typeof currentBets] as number[])
+          ? (currentBets[data.data.side as keyof typeof currentBets] as any[])
           : [];
+        
+        // Create BetInfo object with actual bet ID from server
+        const betInfo = {
+          amount: data.data.amount,
+          betId: data.data.betId || `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: data.data.timestamp || Date.now()
+        };
+        
         const newBets = {
           ...currentBets,
-          [data.data.side]: [...currentSideBets, data.data.amount],
+          [data.data.side]: [...currentSideBets, betInfo],
         };
         updatePlayerRoundBets(data.data.round as any, newBets);
+        break;
+
+      case 'bet_cancelled':
+        // Only process bet_cancelled if it's for the current user
+        if (data.data.userId && authState.user?.id && data.data.userId !== authState.user.id) {
+          console.log(`⚠️ Ignoring bet_cancelled for different user: ${data.data.userId} (current: ${authState.user.id})`);
+          break;
+        }
+        
+        console.log('Bet cancelled:', data.data);
+        
+        // Update balance if provided
+        if (data.data.newBalance !== undefined && data.data.newBalance !== null) {
+          updatePlayerWallet(data.data.newBalance);
+          // Dispatch balance event for other contexts to update immediately
+          const balanceEvent = new CustomEvent('balance-websocket-update', {
+            detail: { 
+              balance: data.data.newBalance, 
+              amount: data.data.amount, // Positive for refund
+              type: 'bet_refund', 
+              timestamp: Date.now() 
+            }
+          });
+          window.dispatchEvent(balanceEvent);
+        }
+        
+        // Remove the cancelled bet from local state
+        const cancelledRound = parseInt(data.data.round || '1') as 1 | 2;
+        const cancelledSide = data.data.side as BetSide;
+        removeLastBet(cancelledRound, cancelledSide);
+        
+        showNotification(
+          `Bet of ₹${data.data.amount?.toLocaleString('en-IN') || 0} on ${data.data.side?.toUpperCase() || ''} has been cancelled`,
+          'info'
+        );
         break;
 
       case 'sync_game_state':
@@ -544,9 +589,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       case 'betting_stats': {
+        // ✅ FIX: betting_stats is now only sent to other users, not the bettor
+        // This prevents duplicate updates for the user who placed the bet
+        // The bettor already has bet_confirmed and user_bets_update
         const { andarTotal, baharTotal, round1Bets, round2Bets } = (data as BettingStatsMessage).data;
         updateTotalBets({ andar: andarTotal, bahar: baharTotal });
-        // Update round-specific bets
+        // Update round-specific bets (only for display, not user's own bets)
         if (round1Bets) {
           updateRoundBets(1, round1Bets);
         }
@@ -557,9 +605,18 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       case 'game_complete': {
-        const { winner, message } = (data as GameCompleteMessage).data;
+        const { winner, winningCard, message } = (data as GameCompleteMessage).data;
         setPhase('complete');
         setWinner(winner);
+        
+        // Extract and set winningCard - parse if it's a string, use as-is if it's already a Card object
+        if (winningCard) {
+          const card = typeof winningCard === 'string' 
+            ? parseDisplayCard(winningCard) 
+            : winningCard;
+          setWinningCard(card);
+        }
+        
         showNotification(message, 'success');
         // Compute local user's potential win for dynamic celebration
         const r1 = gameState.playerRound1Bets?.[winner as 'andar' | 'bahar'] || 0;
@@ -590,7 +647,17 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       case 'balance_update': {
+        // ✅ FIX: Only process balance_update if it's NOT from bet_confirmed
+        // bet_confirmed already handles balance updates, so this prevents duplicates
+        // Check if we recently received a bet_confirmed to avoid duplicate updates
         const { balance, amount, type } = (data as BalanceUpdateMessage).data;
+        
+        // Skip if this is a bet-related balance update (already handled by bet_confirmed)
+        if (type === 'bet') {
+          console.log('⚠️ Skipping duplicate balance_update from bet - already handled by bet_confirmed');
+          break;
+        }
+        
         const balanceEvent = new CustomEvent('balance-websocket-update', {
           detail: { balance, amount, type, timestamp: Date.now() }
         });
@@ -769,6 +836,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
       
       case 'user_bets_update': {
+        // ✅ FIX: user_bets_update is sent after DB fetch, but bet_confirmed already updated local state
+        // This is a refresh from DB to ensure consistency, but we should avoid duplicate notifications
         // CRITICAL: user_bets_update should only be received by the user who placed the bet
         // This is sent directly from server, but double-check it's not for another user
         // Server sends individual bets as arrays instead of cumulative totals
@@ -782,15 +851,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           andar: Array.isArray(round2Bets?.andar) ? round2Bets.andar : [],
           bahar: Array.isArray(round2Bets?.bahar) ? round2Bets.bahar : []
         };
-        // Only update if this is for the current user (this should already be filtered by server)
+        // ✅ FIX: Silently update bets without showing notification (bet_confirmed already showed it)
+        // This is just a refresh from DB to ensure consistency
         updatePlayerRoundBets(1, r1Bets);
         updatePlayerRoundBets(2, r2Bets);
         break;
       }
 
       case 'bet_success': {
+        // ✅ FIX: bet_success is a legacy/duplicate handler - bet_confirmed is the primary handler
+        // This should not be sent from server anymore, but handle it gracefully if it arrives
+        console.warn('⚠️ Received bet_success message - this is deprecated. Use bet_confirmed instead.');
         const { side, amount, round, newBalance, message } = (data as BetSuccessMessage).data;
-        showNotification(message, 'success');
+        // Don't show notification - bet_confirmed already showed it (if it was sent)
+        // Only update if bet_confirmed wasn't already processed
         updatePlayerWallet(newBalance);
         // Add new bet to array instead of cumulative total
         const currentBets = round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
@@ -895,7 +969,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       default:
         console.log('Unknown message type:', data.type);
     }
-  }, [addAndarCard, addBaharCard, clearCards, gameState.playerRound1Bets, gameState.playerRound2Bets, logout, resetGame, setCurrentRound, setCountdown, setPhase, setSelectedOpeningCard, setWinner, showNotification, updatePlayerRoundBets, updateTotalBets, updatePlayerWallet, authState.user?.id, authState.isAuthenticated, isWebSocketAuthenticated]);
+  }, [addAndarCard, addBaharCard, clearCards, gameState.playerRound1Bets, gameState.playerRound2Bets, logout, resetGame, setCurrentRound, setCountdown, setPhase, setSelectedOpeningCard, setWinner, setWinningCard, showNotification, updatePlayerRoundBets, updateTotalBets, updatePlayerWallet, authState.user?.id, authState.isAuthenticated, isWebSocketAuthenticated]);
 
   const initWebSocketManager = useCallback(() => {
     if (webSocketManagerRef.current) {

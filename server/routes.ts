@@ -420,8 +420,9 @@ async function persistGameState() {
       await storage.updateGameSession(currentGameState.gameId, updateData);
     } else if (currentGameState.phase !== 'idle') {
       // Create new session if game is active and session doesn't exist
+      // ✅ FIX: Use gameId (camelCase) to match InsertGameSession interface
       await storage.createGameSession({
-        game_id: currentGameState.gameId,
+        gameId: currentGameState.gameId, // ✅ FIX: Use gameId instead of game_id
         openingCard: currentGameState.openingCard || undefined,
         phase: currentGameState.phase,
         currentTimer: currentGameState.timer,
@@ -3838,7 +3839,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete/Cancel bet endpoint
+  // Player-facing undo last bet endpoint
+  app.delete("/api/user/undo-last-bet", generalLimiter, async (req, res) => {
+    try {
+      // Require authentication
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      const userId = req.user.id;
+      
+      // Get current game session
+      const currentGame = await storage.getCurrentGameSession();
+      if (!currentGame) {
+        return res.status(404).json({
+          success: false,
+          error: 'No active game session found'
+        });
+      }
+
+      // 🔒 SECURITY: Only allow bet cancellation during betting phase
+      if (currentGame.phase !== 'betting') {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot undo bets after betting phase. Current phase: ${currentGame.phase}`
+        });
+      }
+
+      // Get user's bets for current game
+      const userBets = await storage.getBetsForUser(userId, currentGame.game_id);
+      
+      // Filter active bets (not cancelled)
+      const activeBets = userBets.filter(bet => bet.status !== 'cancelled');
+      
+      if (activeBets.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'No active bets found to undo'
+        });
+      }
+
+      // Find the most recent bet (sort by created_at descending)
+      activeBets.sort((a, b) => {
+        const aTime = new Date(a.created_at || 0).getTime();
+        const bTime = new Date(b.created_at || 0).getTime();
+        return bTime - aTime;
+      });
+
+      const lastBet = activeBets[0];
+      const betId = lastBet.id;
+      const betAmount = parseFloat(lastBet.amount);
+
+      // Refund the bet amount to user's balance
+      const newBalance = await storage.addBalanceAtomic(userId, betAmount);
+
+      // Update bet status to cancelled in database
+      await storage.updateBetDetails(betId, {
+        status: 'cancelled'
+      });
+
+      // Update the current game state in memory
+      if (currentGameState.userBets.has(userId)) {
+        const userBetsState = currentGameState.userBets.get(userId)!;
+        const side = lastBet.side as 'andar' | 'bahar';
+        const round = parseInt(lastBet.round);
+        
+        if (round === 1) {
+          userBetsState.round1[side] -= betAmount;
+          currentGameState.round1Bets[side] -= betAmount;
+        } else {
+          userBetsState.round2[side] -= betAmount;
+          currentGameState.round2Bets[side] -= betAmount;
+        }
+      }
+
+      // Broadcast cancellation to all clients
+      broadcast({
+        type: 'bet_cancelled',
+        data: {
+          betId,
+          userId,
+          side: lastBet.side,
+          amount: betAmount,
+          round: lastBet.round,
+          cancelledBy: userId, // Player cancelled their own bet
+          newBalance: newBalance // Include new balance after refund
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'Bet undone successfully. Amount refunded to your balance.',
+        data: {
+          betId,
+          refundedAmount: betAmount,
+          newBalance,
+          side: lastBet.side,
+          round: lastBet.round
+        }
+      });
+    } catch (error) {
+      console.error('Undo bet error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to undo bet'
+      });
+    }
+  });
+
+  // Delete/Cancel bet endpoint (Admin only)
   app.delete("/api/admin/bets/:betId", generalLimiter, async (req, res) => {
     try {
       const { betId } = req.params;
@@ -4466,6 +4578,22 @@ async function transitionToRound3() {
 async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   console.log(`Game complete! Winner: ${winner}, Card: ${currentGameState.winningCard}, Round: ${currentGameState.currentRound}`);
   
+  // ✅ CRITICAL FIX: Ensure valid game ID FIRST, before any database operations
+  // This fixes the issue where gameId was 'default-game' or invalid, causing operations to be skipped
+  if (!currentGameState.gameId || 
+      typeof currentGameState.gameId !== 'string' || 
+      currentGameState.gameId.trim() === '' ||
+      currentGameState.gameId === 'default-game') {
+    currentGameState.gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.warn(`⚠️ Game ID was invalid or missing, generated new ID: ${currentGameState.gameId}`);
+  }
+  
+  // ✅ FIX: Ensure opening card exists, use fallback if missing
+  if (!currentGameState.openingCard) {
+    currentGameState.openingCard = 'UNKNOWN';
+    console.warn(`⚠️ Opening card was missing, using fallback: UNKNOWN`);
+  }
+  
   currentGameState.winner = winner;
   currentGameState.winningCard = winningCard;
   currentGameState.phase = 'complete';
@@ -4576,7 +4704,8 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   }
   
   // Step 2: Update database in parallel (background, don't block WebSocket)
-  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+  // ✅ FIX: Game ID is now validated at the start, so this check is redundant but kept for safety
+  if (currentGameState.gameId) {
     // Prepare batch updates for winners
     const balanceUpdates = payoutNotifications
       .filter(notif => notif.payout > 0)
@@ -4595,10 +4724,12 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         payoutNotifications.map(async ({ userId, payout, bets, userTotalBet, userWon }) => {
           try {
             if (payout > 0) {
-              await storage.updateBetStatusByGameUser(currentGameState.gameId!, userId, winner, 'won');
+              // ✅ FIX: Remove non-null assertion - gameId is already validated at function start
+              await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, winner, 'won');
             } else {
               const loserSide = winner === 'andar' ? 'bahar' : 'andar';
-              await storage.updateBetStatusByGameUser(currentGameState.gameId!, userId, loserSide, 'lost');
+              // ✅ FIX: Remove non-null assertion - gameId is already validated at function start
+              await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, loserSide, 'lost');
             }
             
             // Update user game statistics
@@ -4653,7 +4784,8 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   const profitLossPercentage = totalBetsAmount > 0 ? (companyProfitLoss / totalBetsAmount) * 100 : 0;
   
   // Store game statistics
-  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+  // ✅ FIX: Game ID is now validated at the start, so this check is redundant but kept for safety
+  if (currentGameState.gameId) {
     try {
       await storage.saveGameStatistics({
         gameId: currentGameState.gameId,
@@ -4868,20 +5000,13 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     }
   });
   
-  // Only save to database if not in test mode
-  // Safety net: Ensure we have a valid game ID
-  if (!currentGameState.gameId || typeof currentGameState.gameId !== 'string' || currentGameState.gameId.trim() === '') {
-    // Generate a new game ID since it was never properly set
-    currentGameState.gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    console.warn(`⚠️ Game ID was missing or invalid, generated new ID: ${currentGameState.gameId}`);
-  }
-
-  // Now save the game history if we have a valid game ID
+  // ✅ FIX: Game ID is already validated at the start of the function
+  // Now save the game history (game ID is guaranteed to be valid at this point)
   if (currentGameState.gameId) {
     try {
       const historyData = {
         gameId: currentGameState.gameId,
-        openingCard: currentGameState.openingCard!,
+        openingCard: currentGameState.openingCard || 'UNKNOWN', // ✅ FIX: Use fallback instead of !
         winner,
         winningCard,
         totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,

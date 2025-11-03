@@ -182,7 +182,9 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
           </div>
           {gameState.winningCard && (
             <div className="text-sm text-gray-300 mt-2">
-              {gameState.winningCard.display}
+              {typeof gameState.winningCard === 'string' 
+                ? gameState.winningCard 
+                : gameState.winningCard?.display || 'Unknown'}
             </div>
           )}
         </div>

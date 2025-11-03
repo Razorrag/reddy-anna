@@ -262,25 +262,34 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         },
       });
       
-      // Broadcast complete betting stats with round-specific totals (for admin dashboard)
-      (global as any).broadcast({
-        type: 'betting_stats',
-        data: {
-          andarTotal: totalAndar,
-          baharTotal: totalBahar,
-          round1Bets: round1Bets,
-          round2Bets: round2Bets
+      // ✅ FIX: Broadcast betting_stats to ALL users EXCEPT the one who placed the bet
+      // The bettor already received bet_confirmed and user_bets_update, so they don't need betting_stats
+      // This prevents duplicate notifications and redundant updates
+      const allClients = (global as any).clients || [];
+      allClients.forEach((client: any) => {
+        if (client.userId !== userId && client.ws.readyState === WebSocket.OPEN) {
+          client.ws.send(JSON.stringify({
+            type: 'betting_stats',
+            data: {
+              andarTotal: totalAndar,
+              baharTotal: totalBahar,
+              round1Bets: round1Bets,
+              round2Bets: round2Bets
+            }
+          }));
         }
       });
       
-      (global as any).broadcast({
+      // ✅ FIX: Broadcast analytics_update only to admins (not to players)
+      // Analytics updates are for admin dashboard, not for players
+      (global as any).broadcastToRole({
         type: 'analytics_update',
         data: {
           newBet: { userId, side, amount, round },
           andarTotal: totalAndar,
           baharTotal: totalBahar,
         }
-      });
+      }, 'admin');
     }
 
     console.log(`✅ BET CONFIRMED: ${userId} bet ₹${amount} on ${side}, new balance: ₹${newBalance}`);
@@ -328,13 +337,22 @@ export async function handleStartGame(client: WSClient, data: any) {
 
       // Store in database
       const { storage } = await import('../storage-supabase');
+      const gameIdBeforeCreate = (global as any).currentGameState.gameId;
       const gameSession = await storage.createGameSession({
-        gameId: (global as any).currentGameState.gameId,
+        gameId: gameIdBeforeCreate,
         openingCard: data.openingCard,
         phase: 'betting'
       });
 
-      console.log(`✅ Game session created: ${(global as any).currentGameState.gameId}`);
+      // ✅ Verify gameId matches after creation
+      if (gameSession.game_id !== gameIdBeforeCreate) {
+        console.error(`❌ CRITICAL: Game ID mismatch! Memory: ${gameIdBeforeCreate}, Database: ${gameSession.game_id}`);
+        // Update memory to match database (fallback)
+        (global as any).currentGameState.gameId = gameSession.game_id;
+        console.warn(`⚠️ Updated memory gameId to match database: ${gameSession.game_id}`);
+      } else {
+        console.log(`✅ Game session created with matching gameId: ${gameIdBeforeCreate}`);
+      }
       
       // Persist game state after creation
       if (typeof (global as any).persistGameState === 'function') {

@@ -153,22 +153,28 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                   const r1Andar = Array.isArray(gameState.playerRound1Bets.andar) 
                     ? gameState.playerRound1Bets.andar 
                     : [];
-                  const r1AndarTotal = r1Andar.reduce((sum, bet) => sum + bet, 0);
+                  const r1AndarTotal = r1Andar.reduce((sum: number, bet: any) => {
+                    const amount = typeof bet === 'number' ? bet : bet.amount;
+                    return sum + amount;
+                  }, 0);
                   
                   // Calculate total bet amount for Round 2 Andar
                   const r2Andar = Array.isArray(gameState.playerRound2Bets.andar) 
                     ? gameState.playerRound2Bets.andar 
                     : [];
-                  const r2AndarTotal = r2Andar.reduce((sum, bet) => sum + bet, 0);
+                  const r2AndarTotal = r2Andar.reduce((sum: number, bet: any) => {
+                    const amount = typeof bet === 'number' ? bet : bet.amount;
+                    return sum + amount;
+                  }, 0);
                   
                   return (
                     <>
-                      {r1AndarTotal > 0 && (
-                        <div className="text-yellow-200 text-xs font-medium">
-                          Round 1: ₹{r1AndarTotal.toLocaleString('en-IN')}
-                        </div>
-                      )}
-                      {gameState.currentRound >= 2 && r2AndarTotal > 0 && (
+                      {/* Always show Round 1 - user's own bets only */}
+                      <div className="text-yellow-200 text-xs font-medium">
+                        Round 1: ₹{r1AndarTotal.toLocaleString('en-IN')}
+                      </div>
+                      {/* Always show Round 2 when in round 2 or later - user's own bets only */}
+                      {gameState.currentRound >= 2 && (
                         <div className="text-yellow-300 text-xs font-medium">
                           Round 2: ₹{r2AndarTotal.toLocaleString('en-IN')}
                         </div>
@@ -291,22 +297,28 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                   const r1Bahar = Array.isArray(gameState.playerRound1Bets.bahar) 
                     ? gameState.playerRound1Bets.bahar 
                     : [];
-                  const r1BaharTotal = r1Bahar.reduce((sum, bet) => sum + bet, 0);
+                  const r1BaharTotal = r1Bahar.reduce((sum: number, bet: any) => {
+                    const amount = typeof bet === 'number' ? bet : bet.amount;
+                    return sum + amount;
+                  }, 0);
                   
                   // Calculate total bet amount for Round 2 Bahar
                   const r2Bahar = Array.isArray(gameState.playerRound2Bets.bahar) 
                     ? gameState.playerRound2Bets.bahar 
                     : [];
-                  const r2BaharTotal = r2Bahar.reduce((sum, bet) => sum + bet, 0);
+                  const r2BaharTotal = r2Bahar.reduce((sum: number, bet: any) => {
+                    const amount = typeof bet === 'number' ? bet : bet.amount;
+                    return sum + amount;
+                  }, 0);
                   
                   return (
                     <>
-                      {r1BaharTotal > 0 && (
-                        <div className="text-yellow-200 text-xs font-medium">
-                          Round 1: ₹{r1BaharTotal.toLocaleString('en-IN')}
-                        </div>
-                      )}
-                      {gameState.currentRound >= 2 && r2BaharTotal > 0 && (
+                      {/* Always show Round 1 - user's own bets only */}
+                      <div className="text-yellow-200 text-xs font-medium">
+                        Round 1: ₹{r1BaharTotal.toLocaleString('en-IN')}
+                      </div>
+                      {/* Always show Round 2 when in round 2 or later - user's own bets only */}
+                      {gameState.currentRound >= 2 && (
                         <div className="text-yellow-300 text-xs font-medium">
                           Round 2: ₹{r2BaharTotal.toLocaleString('en-IN')}
                         </div>

@@ -1047,7 +1047,17 @@ export class SupabaseStorage implements IStorage {
 
   // Game session operations
   async createGameSession(session: InsertGameSession): Promise<GameSession> {
-    const gameId = randomUUID();
+    // ✅ CRITICAL FIX: Use provided gameId if available, otherwise generate new one
+    // This ensures the gameId in memory matches the game_id in database
+    const providedGameId = (session as any).gameId || (session as any).game_id;
+    const gameId = providedGameId || randomUUID();
+    
+    if (providedGameId) {
+      console.log(`✅ Using provided gameId: ${gameId} (matches memory state)`);
+    } else {
+      console.log(`⚠️ No gameId provided, generated new UUID: ${gameId}`);
+    }
+    
     const now = new Date();
     // Use snake_case column names to match database schema exactly
     const gameSession = {

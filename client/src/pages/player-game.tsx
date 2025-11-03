@@ -30,7 +30,7 @@ interface WhatsAppResponse {
 
 const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
-  const { gameState, updatePlayerWallet } = useGameState();
+  const { gameState, updatePlayerWallet, removeLastBet } = useGameState();
   const { placeBet: placeBetWebSocket, connectionStatus } = useWebSocket();
   const { balance, updateBalance } = useBalance();
 
@@ -239,10 +239,76 @@ const PlayerGame: React.FC = () => {
   }, [showChipSelector]);
 
   // Handle undo bet
-  const handleUndoBet = useCallback(() => {
-    // Implementation for undoing last bet
-    showNotification('Last bet cancelled', 'info');
-  }, [showNotification]);
+  const handleUndoBet = useCallback(async () => {
+    // Check if betting is still open
+    if (gameState.phase !== 'betting') {
+      showNotification('Cannot undo bet - betting phase has ended', 'error');
+      return;
+    }
+
+    if (gameState.bettingLocked) {
+      showNotification('Cannot undo bet - betting is locked', 'error');
+      return;
+    }
+
+    // Check if user has any bets to undo
+    const hasRound1Bets = (
+      (Array.isArray(gameState.playerRound1Bets.andar) && gameState.playerRound1Bets.andar.length > 0) ||
+      (Array.isArray(gameState.playerRound1Bets.bahar) && gameState.playerRound1Bets.bahar.length > 0)
+    );
+    const hasRound2Bets = (
+      (Array.isArray(gameState.playerRound2Bets.andar) && gameState.playerRound2Bets.andar.length > 0) ||
+      (Array.isArray(gameState.playerRound2Bets.bahar) && gameState.playerRound2Bets.bahar.length > 0)
+    );
+
+    if (!hasRound1Bets && !hasRound2Bets) {
+      showNotification('No bets to undo', 'info');
+      return;
+    }
+
+    try {
+      // Call the undo endpoint
+      const response = await apiClient.delete<{
+        success: boolean;
+        message?: string;
+        data?: {
+          betId: string;
+          refundedAmount: number;
+          newBalance: number;
+          side: BetSide;
+          round: string;
+        };
+        error?: string;
+      }>('/user/undo-last-bet');
+
+      if (response.success && response.data) {
+        const { refundedAmount, newBalance, side, round } = response.data;
+        
+        // Update balance
+        updateBalance(newBalance, 'api');
+        
+        // Update local state to remove the last bet
+        const roundNum = parseInt(round) as 1 | 2;
+        removeLastBet(roundNum, side);
+        
+        showNotification(
+          `Last bet of ₹${refundedAmount.toLocaleString('en-IN')} on ${side.toUpperCase()} (Round ${round}) has been undone`,
+          'success'
+        );
+      } else {
+        showNotification(response.error || 'Failed to undo bet', 'error');
+      }
+    } catch (error: any) {
+      console.error('Failed to undo bet:', error);
+      let errorMessage = 'Failed to undo bet';
+      if (error.message?.includes('betting phase')) {
+        errorMessage = 'Cannot undo bet - betting phase has ended';
+      } else if (error.message?.includes('No active bets')) {
+        errorMessage = 'No active bets found to undo';
+      }
+      showNotification(errorMessage, 'error');
+    }
+  }, [gameState, showNotification, updateBalance, removeLastBet]);
 
   // Handle rebet
   const handleRebet = useCallback(() => {

@@ -11,16 +11,23 @@ export interface Card {
   display: string;
 }
 
+// Bet information structure for tracking individual bets
+export interface BetInfo {
+  amount: number;
+  betId: string;
+  timestamp: number;
+}
+
 // RoundBets can be either cumulative totals (for admin) or individual bet arrays (for players)
 export interface RoundBets {
-  andar: number | number[];
-  bahar: number | number[];
+  andar: number | number[] | BetInfo[];
+  bahar: number | number[] | BetInfo[];
 }
 
 // Individual bets structure for players
 export interface IndividualRoundBets {
-  andar: number[];
-  bahar: number[];
+  andar: number[] | BetInfo[];
+  bahar: number[] | BetInfo[];
 }
 
 export interface UserBets {
