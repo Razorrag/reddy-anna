@@ -121,8 +121,15 @@ CREATE TABLE IF NOT EXISTS dealt_cards (
   side bet_side NOT NULL, -- andar or bahar
   position INTEGER NOT NULL, -- 1, 2, 3...
   is_winning_card BOOLEAN DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Foreign key constraint
+  CONSTRAINT fk_dealt_cards_game FOREIGN KEY (game_id) REFERENCES game_sessions(game_id) ON DELETE CASCADE
 );
+
+-- Indexes for dealt_cards table
+CREATE INDEX IF NOT EXISTS idx_dealt_cards_game_id ON dealt_cards(game_id);
+CREATE INDEX IF NOT EXISTS idx_dealt_cards_position ON dealt_cards(position);
 
 -- Player bets table
 CREATE TABLE IF NOT EXISTS player_bets (
@@ -194,8 +201,15 @@ CREATE TABLE IF NOT EXISTS game_history (
   winning_round INTEGER DEFAULT 1,
   total_bets DECIMAL(15, 2) DEFAULT '0.00',
   total_payouts DECIMAL(15, 2) DEFAULT '0.00',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Foreign key constraint
+  CONSTRAINT fk_game_history_game FOREIGN KEY (game_id) REFERENCES game_sessions(game_id) ON DELETE CASCADE
 );
+
+-- Indexes for game_history table
+CREATE INDEX IF NOT EXISTS idx_game_history_created_at ON game_history(created_at);
+CREATE INDEX IF NOT EXISTS idx_game_history_game_id ON game_history(game_id);
 
 -- Blocked users table
 CREATE TABLE IF NOT EXISTS blocked_users (

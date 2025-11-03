@@ -98,10 +98,13 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>; // Get all users
   createUser(user: InsertUser): Promise<User>;
   updateUserBalance(userId: string, amountChange: number): Promise<void>;
+  getUserBalance(userId: string): Promise<number>; // Fast balance retrieval (optimized)
   updateUser(userId: string, updates: any): Promise<User>;
   deductBalanceAtomic(userId: string, amount: number): Promise<number>; // Atomic balance deduction
   addBalanceAtomic(userId: string, amount: number): Promise<number>; // Atomic balance addition
   updateUserGameStats(userId: string, won: boolean, betAmount: number, payoutAmount: number): Promise<void>;
+  approvePaymentRequestAtomic(requestId: string, userId: string, amount: number, adminId: string): Promise<{ balance: number; bonusAmount: number; wageringRequirement: number }>; // Atomic deposit approval
+  updateMultipleUserBalances(updates: Array<{ userId: string; amountChange: number }>): Promise<Array<{ userId: string; success: boolean; newBalance?: number; error?: string }>>; // Batch balance updates
   
   // Game session operations
   createGameSession(session: InsertGameSession): Promise<GameSession>;
@@ -763,6 +766,41 @@ export class SupabaseStorage implements IStorage {
     } catch (error: any) {
       console.error('Error in updateUserBalance:', error);
       throw error;
+    }
+  }
+
+  // OPTIMIZED: Get user balance quickly (single column select)
+  async getUserBalance(userId: string): Promise<number> {
+    if (userId === 'anonymous') {
+      return 0;
+    }
+    
+    try {
+      // Use RPC function if available for better performance
+      const { data: rpcData, error: rpcError } = await supabaseServer.rpc('get_user_balance', {
+        p_user_id: userId
+      });
+      
+      if (!rpcError && rpcData !== null && rpcData !== undefined) {
+        return parseFloat(String(rpcData)) || 0;
+      }
+      
+      // Fallback to direct query
+      const { data, error } = await supabaseServer
+        .from('users')
+        .select('balance')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        console.error(`Error getting balance for user ${userId}:`, error);
+        return 0;
+      }
+      
+      return parseFloat(data?.balance || '0');
+    } catch (error) {
+      console.error(`Error in getUserBalance for ${userId}:`, error);
+      return 0;
     }
   }
 
@@ -3482,6 +3520,124 @@ export class SupabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error approving payment request:', error);
       throw new Error('Failed to approve payment request');
+    }
+  }
+
+  // OPTIMIZED: Atomic deposit approval with bonus (single RPC call)
+  async approvePaymentRequestAtomic(
+    requestId: string,
+    userId: string,
+    amount: number,
+    adminId: string
+  ): Promise<{ balance: number; bonusAmount: number; wageringRequirement: number }> {
+    try {
+      // Import settings cache dynamically to avoid circular dependencies
+      const { settingsCache } = await import('./lib/settings-cache');
+      
+      // Get bonus settings (will be cached)
+      const bonusPercent = parseFloat(
+        await settingsCache.get(
+          'default_deposit_bonus_percent',
+          () => this.getGameSetting('default_deposit_bonus_percent')
+        ) || '5'
+      );
+      
+      const wageringMultiplier = parseFloat(
+        await settingsCache.get(
+          'wagering_multiplier',
+          () => this.getGameSetting('wagering_multiplier')
+        ) || '0.3'
+      );
+      
+      // Single atomic RPC call - all operations in one transaction
+      const { data, error } = await supabaseServer.rpc('approve_deposit_atomic', {
+        p_request_id: requestId,
+        p_user_id: userId,
+        p_amount: amount,
+        p_admin_id: adminId,
+        p_bonus_percent: bonusPercent,
+        p_wagering_multiplier: wageringMultiplier
+      });
+      
+      if (error) {
+        console.error('Error in approve_deposit_atomic RPC:', error);
+        throw error;
+      }
+      
+      if (!data || data.length === 0) {
+        throw new Error('No data returned from approve_deposit_atomic');
+      }
+      
+      return {
+        balance: parseFloat(String(data[0].new_balance)),
+        bonusAmount: parseFloat(String(data[0].bonus_amount)),
+        wageringRequirement: parseFloat(String(data[0].wagering_requirement))
+      };
+    } catch (error: any) {
+      console.error('Error in approvePaymentRequestAtomic:', error);
+      throw error;
+    }
+  }
+
+  // OPTIMIZED: Batch update multiple user balances in parallel
+  async updateMultipleUserBalances(
+    updates: Array<{ userId: string; amountChange: number }>
+  ): Promise<Array<{ userId: string; success: boolean; newBalance?: number; error?: string }>> {
+    if (updates.length === 0) {
+      return [];
+    }
+    
+    try {
+      // Convert to JSONB format for RPC call
+      const updatesJson = JSON.stringify(
+        updates.map(u => ({
+          userId: u.userId,
+          amountChange: u.amountChange
+        }))
+      );
+      
+      // Use batch RPC function if available
+      const { data, error } = await supabaseServer.rpc('update_multiple_user_balances', {
+        p_updates: updatesJson
+      });
+      
+      if (error) {
+        console.error('Error in update_multiple_user_balances RPC:', error);
+        // Fallback to individual updates in parallel
+        return Promise.all(
+          updates.map(async (update) => {
+            try {
+              await this.updateUserBalance(update.userId, update.amountChange);
+              const newBalance = await this.getUserBalance(update.userId);
+              return { userId: update.userId, success: true, newBalance };
+            } catch (err: any) {
+              return { userId: update.userId, success: false, error: err.message };
+            }
+          })
+        );
+      }
+      
+      // Map results from RPC function
+      return (data || []).map((result: any) => ({
+        userId: result.user_id,
+        success: result.success,
+        newBalance: result.success ? parseFloat(String(result.new_balance)) : undefined,
+        error: result.error_message || undefined
+      }));
+    } catch (error: any) {
+      console.error('Error in updateMultipleUserBalances:', error);
+      // Fallback to sequential updates
+      const results = [];
+      for (const update of updates) {
+        try {
+          await this.updateUserBalance(update.userId, update.amountChange);
+          const newBalance = await this.getUserBalance(update.userId);
+          results.push({ userId: update.userId, success: true, newBalance });
+        } catch (err: any) {
+          results.push({ userId: update.userId, success: false, error: err.message });
+        }
+      }
+      return results;
     }
   }
 }

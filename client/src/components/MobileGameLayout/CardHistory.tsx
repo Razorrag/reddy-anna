@@ -93,9 +93,59 @@ const CardHistory: React.FC<CardHistoryProps> = ({
 
     fetchHistory();
     
-    // Refresh every 30 seconds
+    // Refresh every 30 seconds as fallback (real-time updates handle most cases)
     const interval = setInterval(fetchHistory, 30000);
+    
     return () => clearInterval(interval);
+  }, []);
+
+  // Listen for real-time game history updates via WebSocket
+  useEffect(() => {
+    const handleGameHistoryUpdate = (event: CustomEvent) => {
+      console.log('[CardHistory] Real-time update received:', event.detail);
+      // Refresh history when new game completes
+      // We need to fetch again since we don't have access to fetchHistory here
+      // Trigger a re-render by calling the fetch in a separate effect
+      // Actually, let's just re-fetch directly
+      const fetchHistory = async () => {
+        try {
+          const response = await apiClient.get<any[]>('/api/game/history?limit=10');
+          let games: any[] = [];
+          if (Array.isArray(response)) {
+            games = response;
+          } else if (response && typeof response === 'object') {
+            if (Array.isArray((response as any).data)) {
+              games = (response as any).data;
+            } else if (Array.isArray((response as any).games)) {
+              games = (response as any).games;
+            } else if ((response as any).success && (response as any).data?.games) {
+              games = (response as any).data.games;
+            }
+          }
+          
+          if (games.length > 0) {
+            const formattedResults = games
+              .filter(game => !!game.winner)
+              .map(game => ({
+                winner: (game.winner || '').toLowerCase(),
+                round: game.round || game.current_round || game.winning_round || 1,
+                gameId: game.gameId || game.game_id || game.id || `game-${Date.now()}-${Math.random()}`
+              }))
+              .slice(0, 10);
+            setRecentResults(formattedResults);
+          }
+        } catch (error) {
+          console.error('[CardHistory] Failed to refresh on update:', error);
+        }
+      };
+      fetchHistory();
+    };
+
+    window.addEventListener('game_history_update', handleGameHistoryUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('game_history_update', handleGameHistoryUpdate as EventListener);
+    };
   }, []);
 
   // Debug logging for rendering

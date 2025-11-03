@@ -297,8 +297,14 @@ export const addBonus = async (userId: string, bonusAmount: number, reason: stri
 // New bonus-related functions
 export const applyDepositBonus = async (userId: string, depositAmount: number): Promise<boolean> => {
   try {
-    // Get deposit bonus percentage from settings (default 5%)
-    const depositBonusPercent = await storage.getGameSetting('default_deposit_bonus_percent') || '5';
+    // OPTIMIZED: Use cached settings (much faster)
+    const { settingsCache } = await import('./lib/settings-cache');
+    
+    // Get deposit bonus percentage from settings (default 5%) - cached
+    const depositBonusPercent = await settingsCache.get(
+      'default_deposit_bonus_percent',
+      () => storage.getGameSetting('default_deposit_bonus_percent')
+    ) || '5';
     const bonusPercentage = parseFloat(depositBonusPercent);
     
     // Calculate bonus amount
@@ -308,9 +314,13 @@ export const applyDepositBonus = async (userId: string, depositAmount: number): 
       return false;
     }
     
-    // Get wagering multiplier from settings (default 0.3 = 30% of deposit)
+    // OPTIMIZED: Use cached wagering multiplier (default 0.3 = 30% of deposit)
     // This is configurable: 0.3 = 30%, 1.0 = 100%, 2.0 = 200%
-    const wageringMultiplier = parseFloat(await storage.getGameSetting('wagering_multiplier') || '0.3');
+    const wageringMultiplierStr = await settingsCache.get(
+      'wagering_multiplier',
+      () => storage.getGameSetting('wagering_multiplier')
+    ) || '0.3';
+    const wageringMultiplier = parseFloat(wageringMultiplierStr);
     const wageringRequirement = depositAmount * wageringMultiplier;
     
     // Add LOCKED bonus to user's bonus field (not main balance yet)
@@ -347,8 +357,14 @@ export const applyDepositBonus = async (userId: string, depositAmount: number): 
 
 export const applyReferralBonus = async (referrerId: string, depositAmount: number): Promise<boolean> => {
   try {
-    // Get referral bonus percentage from settings (default 1%)
-    const referralBonusPercent = await storage.getGameSetting('referral_bonus_percent') || '1';
+    // OPTIMIZED: Use cached settings
+    const { settingsCache } = await import('./lib/settings-cache');
+    
+    // Get referral bonus percentage from settings (default 1%) - cached
+    const referralBonusPercent = await settingsCache.get(
+      'referral_bonus_percent',
+      () => storage.getGameSetting('referral_bonus_percent')
+    ) || '1';
     const bonusPercentage = parseFloat(referralBonusPercent);
     
     // Calculate bonus amount

@@ -57,16 +57,34 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
         fetchHistory();
       }
       
-      // Auto-refresh every 10 seconds when modal is open
+      // Auto-refresh every 30 seconds as fallback (real-time updates handle most cases)
       const interval = setInterval(() => {
         if (!propHistory || propHistory.length === 0) {
           fetchHistory();
         }
-      }, 10000);
+      }, 30000); // Changed from 10000 to 30000 since we have real-time updates
       
       return () => clearInterval(interval);
     }
   }, [isOpen, propHistory]);
+
+  // Listen for real-time game history updates via WebSocket
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleGameHistoryUpdate = (event: CustomEvent) => {
+      console.log('📊 Game history update received:', event.detail);
+      
+      // Refresh history when new game completes
+      fetchHistory();
+    };
+
+    window.addEventListener('game_history_update', handleGameHistoryUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('game_history_update', handleGameHistoryUpdate as EventListener);
+    };
+  }, [isOpen]);
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -254,10 +272,16 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
                   </div>
                 </div>
               ) : (
-                // Players only see basic game info - no admin data
-                <div className="bg-gray-800/50 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-1">Total Cards Dealt</div>
-                  <div className="text-lg font-bold text-white">{displayGame.totalCards || 0}</div>
+                // Players see: opening card, winner, and cumulative money won by players
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Total Cards Dealt</div>
+                    <div className="text-lg font-bold text-white">{displayGame.totalCards || 0}</div>
+                  </div>
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Total Won by Winners</div>
+                    <div className="text-lg font-bold text-green-400">{formatCurrency(displayGame.totalWinnings || 0)}</div>
+                  </div>
                 </div>
               )}
 

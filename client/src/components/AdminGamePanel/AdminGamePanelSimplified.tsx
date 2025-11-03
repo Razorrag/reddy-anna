@@ -9,14 +9,13 @@
  * without flashing black screens or transition animations during round changes.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useGameState } from '../../contexts/GameStateContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
-import WinnerCelebration from '../WinnerCelebration';
 import { Home } from 'lucide-react';
 
 const AdminGamePanelSimplified: React.FC = () => {
@@ -25,26 +24,7 @@ const AdminGamePanelSimplified: React.FC = () => {
   const { showNotification } = useNotification();
   
   const [isResetting, setIsResetting] = useState(false);
-  const [showWinnerCelebration, setShowWinnerCelebration] = useState(false);
-  const [celebrationData, setCelebrationData] = useState<any>(null);
   const [, setLocation] = useLocation();
-  
-  // Listen for game complete celebration events (optional for admin)
-  useEffect(() => {
-    const handleGameComplete = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      setCelebrationData(customEvent.detail);
-      setShowWinnerCelebration(true);
-    };
-
-    window.addEventListener('game-complete-celebration', handleGameComplete);
-    return () => window.removeEventListener('game-complete-celebration', handleGameComplete);
-  }, []);
-
-  const handleCelebrationComplete = () => {
-    setShowWinnerCelebration(false);
-    setCelebrationData(null);
-  };
   
   const handleResetGame = async () => {
     if (!window.confirm('🔄 Reset the entire game? This will clear all bets and restart.')) {
@@ -223,17 +203,6 @@ const AdminGamePanelSimplified: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Winner Celebration - Optional for admin to see final results */}
-      {showWinnerCelebration && celebrationData && (
-        <WinnerCelebration
-          winner={celebrationData.winner}
-          winningCard={celebrationData.winningCard}
-          round={celebrationData.round}
-          payoutMessage={celebrationData.payoutMessage || ''}
-          onComplete={handleCelebrationComplete}
-        />
-      )}
     </div>
   );
 };

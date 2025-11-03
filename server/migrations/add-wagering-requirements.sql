@@ -19,3 +19,5 @@ COMMENT ON COLUMN users.wagering_requirement IS 'Total amount user must wager to
 COMMENT ON COLUMN users.wagering_completed IS 'Amount already wagered towards requirement (cumulative bets)';
 COMMENT ON COLUMN users.bonus_locked IS 'Whether bonus is currently locked until wagering requirement is met';
 
+
+

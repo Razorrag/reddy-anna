@@ -120,9 +120,74 @@ export const getUserGameHistory = async (userId: string, filters: {
   type?: 'andar' | 'bahar';
   result?: 'win' | 'loss';
 } = {}): Promise<UserManagementResponse> => {
-  // For now, game history is stored in the game_history table which is accessed differently
-  // This function would need to access bet history and game results from player_bets and game_history tables
-  throw new Error('getUserGameHistory function not implemented in Supabase version');
+  try {
+    // Use the storage method which already implements this functionality
+    const gameHistory = await storage.getUserGameHistory(userId);
+    
+    if (!gameHistory || gameHistory.length === 0) {
+      return {
+        success: true,
+        users: [],
+        total: 0,
+        data: []
+      };
+    }
+    
+    // Apply filters
+    let filteredHistory = gameHistory;
+    
+    // Filter by date range
+    if (filters.fromDate) {
+      filteredHistory = filteredHistory.filter((game: any) => {
+        const gameDate = new Date(game.createdAt || game.created_at);
+        return gameDate >= filters.fromDate!;
+      });
+    }
+    if (filters.toDate) {
+      filteredHistory = filteredHistory.filter((game: any) => {
+        const gameDate = new Date(game.createdAt || game.created_at);
+        return gameDate <= filters.toDate!;
+      });
+    }
+    
+    // Filter by type (andar/bahar winner)
+    if (filters.type) {
+      filteredHistory = filteredHistory.filter((game: any) => 
+        game.winner === filters.type
+      );
+    }
+    
+    // Filter by result (win/loss) - check if user's bet side matches winner
+    if (filters.result) {
+      filteredHistory = filteredHistory.filter((game: any) => {
+        // Check if user won or lost based on their bets
+        const userWon = game.userBets && game.userBets.some((bet: any) => {
+          return bet.side === game.winner;
+        });
+        return filters.result === 'win' ? userWon : !userWon;
+      });
+    }
+    
+    // Apply pagination
+    const limit = filters.limit || 20;
+    const offset = filters.offset || 0;
+    const paginatedHistory = filteredHistory.slice(offset, offset + limit);
+    
+    return {
+      success: true,
+      users: [], // Not applicable for this endpoint
+      total: filteredHistory.length,
+      data: paginatedHistory
+    };
+  } catch (error) {
+    console.error('getUserGameHistory error:', error);
+    return {
+      success: false,
+      users: [],
+      total: 0,
+      error: 'Failed to retrieve user game history'
+    };
+  }
 };
 
 export const getAllUsers = async (filters: UserFilters = {}): Promise<UserManagementResponse> => {

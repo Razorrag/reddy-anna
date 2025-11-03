@@ -368,8 +368,14 @@ class GameState {
       console.log('🔄 Timer cleared during game reset');
     }
     
+    // Preserve gameId if it was set (don't reset to default)
+    // Only generate new ID if current one is 'default-game' or invalid
+    const existingGameId = this.state.gameId && this.state.gameId !== 'default-game' 
+      ? this.state.gameId 
+      : `game-${Date.now()}`;
+    
     this.state = {
-      gameId: `game-${Date.now()}`,
+      gameId: existingGameId, // Preserve existing ID or generate new one
       openingCard: null,
       phase: 'idle' as GamePhase,
       currentRound: 1 as 1 | 2 | 3,
@@ -2215,49 +2221,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Approve the payment request (atomic operation)
+      // OPTIMIZED: Use atomic RPC function for deposit approval
       if (!req.user) {
         return res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
       }
-      await storage.approvePaymentRequest(id, request.user_id, request.amount, req.user.id);
       
-      // If deposit approved, check if bonus threshold reached for auto-credit
-      if (request.request_type === 'deposit') {
-        try {
-          const { checkAndAutoCreditBonus } = await import('./payment');
-          const autoCredited = await checkAndAutoCreditBonus(request.user_id);
-          if (autoCredited) {
-            console.log(`✅ Bonus auto-credited for user ${request.user_id} after deposit approval (threshold reached)`);
-            // Notify user about auto-credit
-            clients.forEach(c => {
-              if (c.userId === request.user_id && c.ws.readyState === WebSocket.OPEN) {
-                c.ws.send(JSON.stringify({
-                  type: 'bonus_update',
-                  data: {
-                    message: 'Bonus automatically credited to your balance!',
-                    timestamp: Date.now()
-                  }
-                }));
-              }
-            });
+      let approvalResult;
+      try {
+        if (request.request_type === 'deposit') {
+          // Use atomic function for deposits (includes bonus in single transaction)
+          approvalResult = await storage.approvePaymentRequestAtomic(
+            id,
+            request.user_id,
+            request.amount,
+            req.user.id
+          );
+          
+          // Check if bonus threshold reached for auto-credit (if applicable)
+          try {
+            const { checkAndAutoCreditBonus } = await import('./payment');
+            const autoCredited = await checkAndAutoCreditBonus(request.user_id);
+            if (autoCredited) {
+              console.log(`✅ Bonus auto-credited for user ${request.user_id} after deposit approval (threshold reached)`);
+              // Notify user about auto-credit
+              clients.forEach(c => {
+                if (c.userId === request.user_id && c.ws.readyState === WebSocket.OPEN) {
+                  c.ws.send(JSON.stringify({
+                    type: 'bonus_update',
+                    data: {
+                      message: 'Bonus automatically credited to your balance!',
+                      timestamp: Date.now()
+                    }
+                  }));
+                }
+              });
+            }
+          } catch (bonusError) {
+            console.error(`⚠️ Error checking bonus threshold after deposit:`, bonusError);
+            // Don't fail approval if bonus check fails
           }
-        } catch (bonusError) {
-          console.error(`⚠️ Error checking bonus threshold after deposit:`, bonusError);
-          // Don't fail approval if bonus check fails
+        } else {
+          // For withdrawals, use regular approval (no bonus)
+          await storage.approvePaymentRequest(id, request.user_id, request.amount, req.user.id);
+          const updatedUser = await storage.getUser(request.user_id);
+          approvalResult = {
+            balance: updatedUser ? parseFloat(updatedUser.balance) : 0,
+            bonusAmount: 0,
+            wageringRequirement: 0
+          };
         }
+      } catch (approvalError: any) {
+        console.error('Payment request approval error:', approvalError);
+        throw approvalError;
       }
       
-      // Get updated user balance
-      const updatedUser = await storage.getUser(request.user_id);
-      const newBalance = updatedUser ? parseFloat(updatedUser.balance) : 0;
-      
-      // Send WebSocket notification to user about payment approval
+      // Send WebSocket notifications IMMEDIATELY (optimistic - already updated in DB via atomic function)
+      const newBalance = approvalResult.balance;
       try {
         clients.forEach(client => {
           if (client.userId === request.user_id && client.ws.readyState === WebSocket.OPEN) {
+            // Payment notification
             client.ws.send(JSON.stringify({
               type: 'admin_payment_notification',
               data: {
@@ -2270,7 +2296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }));
             
-            // Also send balance update
+            // Balance update (optimistic - already updated in DB)
             client.ws.send(JSON.stringify({
               type: 'balance_update',
               data: {
@@ -2299,7 +2325,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         success: true,
-        message: 'Payment request approved successfully'
+        message: 'Payment request approved successfully',
+        data: {
+          newBalance,
+          bonusAmount: approvalResult.bonusAmount,
+          wageringRequirement: approvalResult.wageringRequirement
+        }
       });
     } catch (error) {
       console.error('Payment request approval error:', error);
@@ -2727,27 +2758,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.id;
       const { limit = 20, offset = 0, result = 'all' } = req.query;
       
-      // Get user's game history with bet details
+      // Get user's game history with bet details (already grouped by game)
       const gameHistory = await storage.getUserGameHistory(userId);
-      const userBets = await storage.getUserBets(userId);
 
-      // Combine game history with user bets
+      // Transform to match expected format, using the already grouped data
       const enhancedGameHistory = gameHistory?.map(game => {
-        const userBet = userBets?.find(bet => bet.gameId === game.gameId);
         return {
           id: game.id,
           gameId: game.gameId,
           openingCard: game.openingCard,
           winner: game.winner,
-          yourBet: userBet ? {
-            side: userBet.side,
-            amount: userBet.amount,
-            round: userBet.round
-          } : null,
-          result: userBet ? (userBet.side === game.winner ? 'win' : 'loss') : 'no_bet',
-          payout: userBet && userBet.side === game.winner ? parseFloat(userBet.amount) * 2 : 0,
+          winningCard: game.winningCard,
+          // Use yourBet from getUserGameHistory (null if multiple bets, otherwise single bet)
+          yourBet: game.yourBet || (game.yourBets && game.yourBets.length > 0 ? {
+            side: game.yourBets[0].side,
+            amount: game.yourTotalBet || game.yourBets[0].amount,
+            round: game.yourBets[0].round
+          } : null),
+          // Include all bets for reference
+          yourBets: game.yourBets || [],
+          yourTotalBet: game.yourTotalBet || 0,
+          yourTotalPayout: game.yourTotalPayout || game.payout || 0,
+          yourNetProfit: game.yourNetProfit || 0,
+          result: game.result || 'no_bet',
+          payout: game.payout || game.yourTotalPayout || 0,
           totalCards: game.totalCards,
-          round: game.round,
+          round: game.round || game.winningRound || 1,
+          dealtCards: game.dealtCards || [],
           createdAt: game.createdAt
         };
       }) || [];
@@ -4436,75 +4473,157 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   
   uniquePlayers = currentGameState.userBets.size;
   
+  // OPTIMIZATION: Calculate all payouts and send optimistic WebSocket updates FIRST
+  const payoutNotifications: Array<{
+    userId: string;
+    payout: number;
+    calculatedBalance: number;
+    bets: { round1: { andar: number; bahar: number }, round2: { andar: number; bahar: number } };
+    userTotalBet: number;
+    userWon: boolean;
+  }> = [];
+  
+  // Step 1: Calculate payouts and send optimistic WebSocket updates IMMEDIATELY
   for (const [userId, bets] of Array.from(currentGameState.userBets.entries())) {
     const payout = calculatePayout(currentGameState.currentRound, winner, bets);
     payouts[userId] = payout;
     totalPayoutsAmount += payout;
     
-    // Calculate total bet amount for this user
     const userTotalBet = bets.round1.andar + bets.round1.bahar + bets.round2.andar + bets.round2.bahar;
-    const userWon = payout > userTotalBet; // User won if payout > their total bet
+    const userWon = payout > userTotalBet;
     
-    // Only update database if not in test mode
-    if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+    // Get current balance from memory/cache (fast - optimized)
+    let currentBalance = 0;
+    try {
+      currentBalance = await storage.getUserBalance(userId);
+    } catch (error) {
+      console.error(`Error getting balance for ${userId}:`, error);
+      // Fallback: try to get full user object
       try {
-        if (payout > 0) {
-          await storage.updateUserBalance(userId, payout);
-          await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, winner, 'won');
-        } else {
-          const loserSide = winner === 'andar' ? 'bahar' : 'andar';
-          await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, loserSide, 'lost');
-        }
-        
-        // CRITICAL FIX: Update user game statistics (total_winnings, total_losses, games_played, games_won)
-        await storage.updateUserGameStats(userId, userWon, userTotalBet, payout);
-        
-        // ✅ REMOVED: Wrong conditional bonus logic (±30% balance change)
-        // ✅ REMOVED: Wrong auto-credit threshold logic (₹500 threshold)
-        // ✅ Wagering is now tracked on each bet placement in game-handlers.ts
-        // ✅ Bonus unlock check happens automatically in handlePlayerBet after each bet
-        // ✅ User must meet wagering requirement (30% of deposit) by placing bets to unlock bonus
-      } catch (error) {
-        console.error(`⚠️ Error updating bet status for user ${userId}:`, error);
+        const user = await storage.getUser(userId);
+        currentBalance = user ? parseFloat(user.balance) : 0;
+      } catch (fallbackError) {
+        console.error(`Fallback error getting balance for ${userId}:`, fallbackError);
+        currentBalance = 0;
       }
     }
     
-    // Send WebSocket notifications for payout and balance update
-    try {
-      // Get updated user balance after payout
-      const updatedUser = await storage.getUser(userId);
-      const newBalance = updatedUser ? parseFloat(updatedUser.balance) : 0;
-      
-      clients.forEach(client => {
-        if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
-          // Send payout notification with balance included for immediate update
-          client.ws.send(JSON.stringify({
-            type: 'payout_received',
-            data: {
-              amount: payout,
-              balance: newBalance,
-              winner,
-              round: currentGameState.currentRound,
-              yourBets: bets
-            }
-          }));
-          
-          // Always send balance update notification (for both winners and losers)
-          // This ensures the UI gets the correct balance immediately without API delay
-          client.ws.send(JSON.stringify({
-            type: 'balance_update',
-            data: {
-              balance: newBalance,
-              amount: payout,
-              type: payout > 0 ? 'win' : 'loss',
-              timestamp: Date.now()
-            }
-          }));
-        }
-      });
-    } catch (error) {
-      console.error(`⚠️ Error sending payout notification to user ${userId}:`, error);
+    const calculatedBalance = currentBalance + payout;
+    
+    // Send WebSocket update IMMEDIATELY (optimistic update - before DB commit)
+    const client = clients.find(c => c.userId === userId && c.ws.readyState === WebSocket.OPEN);
+    if (client) {
+      try {
+        // Send payout notification with optimistic balance
+        client.ws.send(JSON.stringify({
+          type: 'payout_received',
+          data: {
+            amount: payout,
+            balance: calculatedBalance, // Optimistic balance
+            winner,
+            round: currentGameState.currentRound,
+            yourBets: bets,
+            timestamp: Date.now()
+          }
+        }));
+        
+        // Send balance update
+        client.ws.send(JSON.stringify({
+          type: 'balance_update',
+          data: {
+            balance: calculatedBalance, // Optimistic balance
+            amount: payout,
+            type: payout > 0 ? 'win' : 'loss',
+            timestamp: Date.now()
+          }
+        }));
+      } catch (wsError) {
+        console.error(`Error sending WebSocket update to ${userId}:`, wsError);
+      }
     }
+    
+    // Queue for database update (background)
+    payoutNotifications.push({
+      userId,
+      payout,
+      calculatedBalance,
+      bets,
+      userTotalBet,
+      userWon
+    });
+  }
+  
+  // Step 2: Update database in parallel (background, don't block WebSocket)
+  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+    // Prepare batch updates for winners
+    const balanceUpdates = payoutNotifications
+      .filter(notif => notif.payout > 0)
+      .map(notif => ({
+        userId: notif.userId,
+        amountChange: notif.payout
+      }));
+    
+    // Batch update all balances in parallel (single RPC call if available)
+    Promise.all([
+      // Update all balances at once
+      balanceUpdates.length > 0 ? storage.updateMultipleUserBalances(balanceUpdates) : Promise.resolve([]),
+      
+      // Process bet status updates in parallel
+      Promise.all(
+        payoutNotifications.map(async ({ userId, payout, bets, userTotalBet, userWon }) => {
+          try {
+            if (payout > 0) {
+              await storage.updateBetStatusByGameUser(currentGameState.gameId!, userId, winner, 'won');
+            } else {
+              const loserSide = winner === 'andar' ? 'bahar' : 'andar';
+              await storage.updateBetStatusByGameUser(currentGameState.gameId!, userId, loserSide, 'lost');
+            }
+            
+            // Update user game statistics
+            await storage.updateUserGameStats(userId, userWon, userTotalBet, payout);
+          } catch (error) {
+            console.error(`⚠️ Error updating bet status for user ${userId}:`, error);
+          }
+        })
+      )
+    ]).then(async ([balanceResults]) => {
+      // Step 3: Verify balances match and send corrections if needed
+      for (const result of balanceResults) {
+        if (result.success && result.newBalance !== undefined) {
+          const notification = payoutNotifications.find(n => n.userId === result.userId);
+          if (notification && Math.abs(result.newBalance - notification.calculatedBalance) > 0.01) {
+            // Balance mismatch - send correction
+            console.warn(`⚠️ Balance mismatch for ${result.userId}: expected ${notification.calculatedBalance}, got ${result.newBalance}`);
+            const client = clients.find(c => c.userId === result.userId && c.ws.readyState === WebSocket.OPEN);
+            if (client) {
+              client.ws.send(JSON.stringify({
+                type: 'balance_correction',
+                data: {
+                  balance: result.newBalance,
+                  reason: 'Balance correction after verification',
+                  timestamp: Date.now()
+                }
+              }));
+            }
+          }
+        } else if (!result.success) {
+          // Send error notification
+          console.error(`❌ Failed to update balance for ${result.userId}:`, result.error);
+          const client = clients.find(c => c.userId === result.userId && c.ws.readyState === WebSocket.OPEN);
+          if (client) {
+            client.ws.send(JSON.stringify({
+              type: 'payout_error',
+              data: {
+                message: 'Failed to update balance. Please refresh or contact support.',
+                timestamp: Date.now()
+              }
+            }));
+          }
+        }
+      }
+    }).catch(error => {
+      console.error('Error in background balance updates:', error);
+    });
   }
   
   // Calculate company profit/loss for this game
@@ -4639,7 +4758,20 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       }, 'admin');
     }
     
-    // Broadcast game history update
+    // Broadcast game history update to ALL users (for real-time updates)
+    broadcast({
+      type: 'game_history_update',
+      data: {
+        gameId: currentGameState.gameId,
+        winner,
+        winningCard,
+        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
+        round: currentGameState.currentRound,
+        createdAt: new Date().toISOString()
+      }
+    });
+
+    // Also broadcast detailed analytics to admins only (with financial data)
     broadcastToRole({
       type: 'game_history_update',
       data: {
@@ -4648,6 +4780,11 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         winningCard,
         totalBets: totalBetsAmount,
         totalPayouts: totalPayoutsAmount,
+        andarTotalBet: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+        baharTotalBet: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
+        totalPlayers: uniquePlayers,
+        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
+        round: currentGameState.currentRound,
         createdAt: new Date().toISOString()
       }
     }, 'admin');
@@ -4703,7 +4840,15 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   });
   
   // Only save to database if not in test mode
-  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+  // FIX: Generate game ID if it's still 'default-game' (shouldn't happen, but safety net)
+  if (currentGameState.gameId === 'default-game' || !currentGameState.gameId) {
+    // Generate a new game ID since it was never properly set
+    currentGameState.gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.warn(`⚠️ Game ID was still default or missing, generated new ID: ${currentGameState.gameId}`);
+  }
+
+  // Now save the game history if we have a valid game ID
+  if (currentGameState.gameId) {
     try {
       const historyData = {
         gameId: currentGameState.gameId,
@@ -4737,7 +4882,7 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       });
     }
   } else {
-    console.warn(`⚠️ SKIPPING game history save - invalid gameId: ${currentGameState.gameId || 'null/undefined'}`);
+    console.error(`❌ CRITICAL: Cannot save game history - gameId is null/undefined`);
   }
   
   // Auto-restart: Reset to idle after 5 seconds

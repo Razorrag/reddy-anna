@@ -154,81 +154,95 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       }
     }
 
-    // Store bet in database
-    const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
-    if (gameIdToUse && gameIdToUse !== 'default-game') {
-      try {
-        await storage.createBet({
-          userId: userId,
-          gameId: gameIdToUse,
-          side,
-          amount: amount,
-          round: round.toString(),
-          status: 'pending'
-        });
-        console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
-      } catch (error) {
-        console.error('Error storing bet:', error);
+    // OPTIMIZED: Send bet confirmation IMMEDIATELY after balance deduction (optimistic update)
+    const betId = `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const betConfirmedAt = Date.now();
+    
+    // Send confirmation IMMEDIATELY (optimistic update - UI updates instantly)
+    ws.send(JSON.stringify({
+      type: 'bet_confirmed',
+      data: {
+        betId,
+        userId,
+        round,
+        side,
+        amount,
+        newBalance, // Already calculated from atomic deduction
+        timestamp: betConfirmedAt
       }
-    }
+    }));
 
     // Get user's specific bets (not total bets from all players)
     // Send individual bets array instead of cumulative totals
     let userRound1Bets = { andar: [] as number[], bahar: [] as number[] };
     let userRound2Bets = { andar: [] as number[], bahar: [] as number[] };
     
-    // Get individual bets from database for this user and game
-    try {
-      const { storage } = await import('../storage-supabase');
-      const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
-      if (gameIdToUse && gameIdToUse !== 'default-game') {
-        const allUserBets = await storage.getBetsForUser(userId, gameIdToUse);
-        
-        // Group bets by round and side
-        allUserBets.forEach((bet: any) => {
-          const betAmount = parseFloat(bet.amount);
-          if (bet.round === '1' || bet.round === 1) {
-            if (bet.side === 'andar') {
-              userRound1Bets.andar.push(betAmount);
-            } else if (bet.side === 'bahar') {
-              userRound1Bets.bahar.push(betAmount);
-            }
-          } else if (bet.round === '2' || bet.round === 2) {
-            if (bet.side === 'andar') {
-              userRound2Bets.andar.push(betAmount);
-            } else if (bet.side === 'bahar') {
-              userRound2Bets.bahar.push(betAmount);
-            }
+    // Get individual bets from database for this user and game (background)
+    const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
+    Promise.all([
+      // Fetch user bets (for display update)
+      (async () => {
+        try {
+          if (gameIdToUse && gameIdToUse !== 'default-game') {
+            const allUserBets = await storage.getBetsForUser(userId, gameIdToUse);
+            
+            // Group bets by round and side
+            allUserBets.forEach((bet: any) => {
+              const betAmount = parseFloat(bet.amount);
+              if (bet.round === '1' || bet.round === 1) {
+                if (bet.side === 'andar') {
+                  userRound1Bets.andar.push(betAmount);
+                } else if (bet.side === 'bahar') {
+                  userRound1Bets.bahar.push(betAmount);
+                }
+              } else if (bet.round === '2' || bet.round === 2) {
+                if (bet.side === 'andar') {
+                  userRound2Bets.andar.push(betAmount);
+                } else if (bet.side === 'bahar') {
+                  userRound2Bets.bahar.push(betAmount);
+                }
+              }
+            });
+            
+            // Send user-specific bet update after fetching
+            ws.send(JSON.stringify({
+              type: 'user_bets_update',
+              data: {
+                round1Bets: userRound1Bets,
+                round2Bets: userRound2Bets
+              }
+            }));
           }
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching user bets:', error);
-    }
+        } catch (error) {
+          console.error('Error fetching user bets:', error);
+        }
+      })(),
+      
+      // Store bet in database (background, don't block WebSocket)
+      (async () => {
+        if (gameIdToUse && gameIdToUse !== 'default-game') {
+          try {
+            await storage.createBet({
+              userId: userId,
+              gameId: gameIdToUse,
+              side,
+              amount: amount,
+              round: round.toString(),
+              status: 'pending'
+            });
+            console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
+          } catch (error) {
+            console.error('Error storing bet:', error);
+            // Don't send error to client - bet is already confirmed optimistically
+            // If storage fails, we'll have inconsistency but UI remains responsive
+          }
+        }
+      })()
+    ]).catch(error => {
+      console.error('Error in background bet operations:', error);
+    });
 
-    // Send bet confirmation back to the user with their own bets only
-    ws.send(JSON.stringify({
-      type: 'bet_confirmed',
-      data: {
-        betId: `bet-${Date.now()}`,
-        userId,
-        round,
-        side,
-        amount,
-        newBalance,
-        timestamp: Date.now()
-      }
-    }));
-
-    // Send user-specific bet update ONLY to the user who placed the bet
-    // Send individual bets array instead of cumulative totals
-    ws.send(JSON.stringify({
-      type: 'user_bets_update',
-      data: {
-        round1Bets: userRound1Bets,
-        round2Bets: userRound2Bets
-      }
-    }));
+    // Note: user_bets_update is now sent after fetching from DB (see above Promise.all)
 
     // Broadcast bet update to admin panel (admin sees all bets)
     if (typeof (global as any).broadcast !== 'undefined') {

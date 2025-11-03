@@ -546,21 +546,21 @@ const Profile: React.FC = () => {
                                 Game #{game.gameId.slice(-6)} - {game.winner.toUpperCase()} Won
                               </div>
                               <div className="text-white/60 text-sm">
-                                Opening Card: {game.openingCard} | Your Bet: {game.yourBet.side.toUpperCase()} ₹{game.yourBet.amount}
+                                Opening Card: {game.openingCard} | Your Bet: {game.yourBet ? `${game.yourBet.side.toUpperCase()} ₹${game.yourBet.amount}` : game.yourTotalBet ? `Total: ₹${game.yourTotalBet}` : 'No bet'}
                               </div>
                               <div className="text-white/40 text-xs">{formatDate(game.createdAt)}</div>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className={`font-bold text-lg ${
+                              <div className={`font-bold text-lg ${
                               game.result === 'win' ? 'text-green-400' : 'text-red-400'
                             }`}>
                               {game.result === 'win' ? '+' : '-'}
-                              {formatCurrency(game.yourBet.amount)}
+                              {formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)}
                             </div>
                             {game.result === 'win' && (
                               <div className="text-green-400 text-sm">
-                                Payout: {formatCurrency(game.payout)}
+                                Payout: {formatCurrency(game.payout || game.yourTotalPayout || 0)}
                               </div>
                             )}
                           </div>

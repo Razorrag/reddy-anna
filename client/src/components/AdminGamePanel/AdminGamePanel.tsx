@@ -23,7 +23,6 @@ import { useNotification } from '@/contexts/NotificationContext';
 import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
 import PersistentSidePanel from '@/components/PersistentSidePanel';
-import WinnerCelebration from '@/components/WinnerCelebration';
 import StreamControlPanel from './StreamControlPanel';
 import { Home } from 'lucide-react';
 
@@ -33,8 +32,6 @@ const AdminGamePanel: React.FC = () => {
   const { showNotification } = useNotification();
   
   const [isResetting, setIsResetting] = useState(false);
-  const [showWinnerCelebration, setShowWinnerCelebration] = useState(false);
-  const [celebrationData, setCelebrationData] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'game' | 'stream'>('game');
   const [, setLocation] = useLocation();
   
@@ -48,24 +45,6 @@ const AdminGamePanel: React.FC = () => {
     });
     console.log('🔄 Admin panel mounted - requesting game state sync');
   }, [sendWebSocketMessage]);
-  
-  // Listen for game complete celebration events (optional for admin)
-  useEffect(() => {
-    const handleGameComplete = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      console.log('Admin: Game complete celebration:', customEvent.detail);
-      setCelebrationData(customEvent.detail);
-      setShowWinnerCelebration(true);
-    };
-
-    window.addEventListener('game-complete-celebration', handleGameComplete);
-    return () => window.removeEventListener('game-complete-celebration', handleGameComplete);
-  }, []);
-
-  const handleCelebrationComplete = () => {
-    setShowWinnerCelebration(false);
-    setCelebrationData(null);
-  };
   
   const handleResetGame = async () => {
     if (!window.confirm('🔄 Reset the entire game? This will clear all bets and restart.')) {
@@ -250,17 +229,6 @@ const AdminGamePanel: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Winner Celebration - Optional for admin to see final results */}
-      {showWinnerCelebration && celebrationData && (
-        <WinnerCelebration
-          winner={celebrationData.winner}
-          winningCard={celebrationData.winningCard}
-          payoutMessage={celebrationData.payoutMessage}
-          round={celebrationData.round}
-          onComplete={handleCelebrationComplete}
-        />
-      )}
     </div>
   );
 };

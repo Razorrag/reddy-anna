@@ -8,3 +8,5 @@ ON CONFLICT (setting_key) DO UPDATE SET
   setting_value = EXCLUDED.setting_value,
   description = EXCLUDED.description,
   updated_at = NOW();
+
+
