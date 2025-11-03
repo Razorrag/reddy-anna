@@ -20,9 +20,11 @@ import {
 import AdminLayout from "@/components/AdminLayout";
 import BetMonitoringDashboard from "@/components/BetMonitoringDashboard";
 import { useAdminStats } from "@/hooks/useAdminStats";
+import { useNotification } from "@/contexts/NotificationContext";
 
 export default function Admin() {
   const { stats, loading, error, refetch } = useAdminStats();
+  const { showNotification } = useNotification();
 
   // Listen for real-time updates from WebSocket
   useEffect(() => {
@@ -38,14 +40,33 @@ export default function Admin() {
       refetch();
     };
     
+    // Listen for payment request notifications
+    const handlePaymentRequestNotification = (event: CustomEvent) => {
+      const notification = event.detail;
+      // Handle payment request created notification
+      if (notification.type === 'admin_notification' && notification.event === 'payment_request_created') {
+        const { request } = notification.data;
+        const requestType = request.requestType || request.request_type || 'payment';
+        const requestTypeLabel = requestType === 'deposit' ? 'Deposit' : requestType === 'withdrawal' ? 'Withdrawal' : 'Payment';
+        showNotification(
+          `🔔 New ${requestTypeLabel} Request: ₹${request.amount.toLocaleString('en-IN')} from User ${request.userId}`,
+          'info'
+        );
+        // Refresh stats to show updated pending requests count
+        refetch();
+      }
+    };
+    
     window.addEventListener('game_history_update', handleGameHistoryUpdate as EventListener);
     window.addEventListener('analytics-update', handleAnalyticsUpdate as EventListener);
+    window.addEventListener('admin_notification', handlePaymentRequestNotification as EventListener);
     
     return () => {
       window.removeEventListener('game_history_update', handleGameHistoryUpdate as EventListener);
       window.removeEventListener('analytics-update', handleAnalyticsUpdate as EventListener);
+      window.removeEventListener('admin_notification', handlePaymentRequestNotification as EventListener);
     };
-  }, [refetch]);
+  }, [refetch, showNotification]);
 
   const formatCurrency = (amount: number) => {
     if (amount >= 10000000) {

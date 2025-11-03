@@ -320,7 +320,7 @@ export async function handleStartGame(client: WSClient, data: any) {
     if ((global as any).currentGameState) {
       // Set opening card and initialize game
       (global as any).currentGameState.reset();
-      (global as any).currentGameState.gameId = `game-${Date.now()}`;
+      // Note: currentGameState now generates its own unique ID in the reset() method
       (global as any).currentGameState.openingCard = data.openingCard;
       (global as any).currentGameState.phase = 'betting';
       (global as any).currentGameState.currentRound = 1;

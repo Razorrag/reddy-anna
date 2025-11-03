@@ -88,7 +88,7 @@ export default function AdminPayments() {
     const handleAdminNotification = (evt: Event) => {
       const msg: any = (evt as CustomEvent).detail;
       if (!msg || msg.type !== 'admin_notification') return;
-      if (msg.event === 'new_request' || msg.event === 'request_status_update' || msg.event === 'request_processed') {
+      if (msg.event === 'new_request' || msg.event === 'payment_request_created' || msg.event === 'request_status_update' || msg.event === 'request_processed') {
         fetchPaymentRequests();
       }
     };

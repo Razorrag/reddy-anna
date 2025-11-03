@@ -252,6 +252,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ className }) => 
         showToast({ title: 'New Request', description: `New ${message.data.request.request_type} request received` });
         refetchRequests();
         refetchStats();
+      } else if (message.event === 'payment_request_created') {
+        // New payment request notification from /api/payment-requests endpoint
+        const request = message.data.request;
+        const requestType = request.requestType || request.request_type || 'payment';
+        showToast({ 
+          title: 'New Payment Request', 
+          description: `New ${requestType} request for ₹${request.amount.toLocaleString('en-IN')} from user ${request.userId}` 
+        });
+        refetchRequests();
+        refetchStats();
       } else if (message.event === 'request_status_update') {
         showToast({ title: 'Status Updated', description: `Request ${message.data.request.id} status updated` });
         refetchRequests();

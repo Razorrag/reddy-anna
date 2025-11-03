@@ -219,7 +219,7 @@ interface UserBets {
 // Game state management with mutex for thread safety
 class GameState {
   private state = {
-    gameId: 'default-game',
+    gameId: `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Generate unique ID on initialization
     openingCard: null as string | null,
     phase: 'idle' as GamePhase,
     currentRound: 1 as 1 | 2 | 3,
@@ -368,14 +368,11 @@ class GameState {
       console.log('🔄 Timer cleared during game reset');
     }
     
-    // Preserve gameId if it was set (don't reset to default)
-    // Only generate new ID if current one is 'default-game' or invalid
-    const existingGameId = this.state.gameId && this.state.gameId !== 'default-game' 
-      ? this.state.gameId 
-      : `game-${Date.now()}`;
+    // Generate a new game ID for each reset
+    const newGameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     this.state = {
-      gameId: existingGameId, // Preserve existing ID or generate new one
+      gameId: newGameId,
       openingCard: null,
       phase: 'idle' as GamePhase,
       currentRound: 1 as 1 | 2 | 3,
@@ -2131,6 +2128,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentMethod: typeof paymentMethod === 'string' ? paymentMethod : JSON.stringify(paymentMethod),
         status: 'pending'
       });
+      
+      // Send WebSocket notification to admins for real-time alerts
+      try {
+        broadcastToRole({
+          type: 'admin_notification',
+          event: 'payment_request_created',
+          data: {
+            request: {
+              id: result.id,
+              userId: req.user.id,
+              requestType: requestType,
+              request_type: requestType, // Also include snake_case for compatibility
+              amount: numAmount,
+              status: 'pending',
+              paymentMethod: typeof paymentMethod === 'string' ? paymentMethod : JSON.stringify(paymentMethod),
+              createdAt: result.created_at || new Date().toISOString()
+            }
+          },
+          timestamp: new Date().toISOString()
+        }, 'admin');
+        console.log(`📢 Admin notification sent for new ${requestType} request: ₹${numAmount}`);
+      } catch (notificationError) {
+        console.error('Failed to send admin notification (non-critical):', notificationError);
+        // Don't fail the request if notification fails
+      }
       
       // WhatsApp notification handled by admin-requests-supabase API
       // Request is created via AdminRequestsSupabaseAPI which handles notifications
@@ -4763,10 +4785,16 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       type: 'game_history_update',
       data: {
         gameId: currentGameState.gameId,
+        openingCard: currentGameState.openingCard,
         winner,
         winningCard,
-        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
         round: currentGameState.currentRound,
+        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
+        totalBets: totalBetsAmount,
+        totalPayouts: totalPayoutsAmount,
+        andarTotalBet: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+        baharTotalBet: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
+        totalPlayers: uniquePlayers,
         createdAt: new Date().toISOString()
       }
     });
@@ -4776,6 +4804,7 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       type: 'game_history_update',
       data: {
         gameId: currentGameState.gameId,
+        openingCard: currentGameState.openingCard,
         winner,
         winningCard,
         totalBets: totalBetsAmount,
@@ -4840,11 +4869,11 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   });
   
   // Only save to database if not in test mode
-  // FIX: Generate game ID if it's still 'default-game' (shouldn't happen, but safety net)
-  if (currentGameState.gameId === 'default-game' || !currentGameState.gameId) {
+  // Safety net: Ensure we have a valid game ID
+  if (!currentGameState.gameId || typeof currentGameState.gameId !== 'string' || currentGameState.gameId.trim() === '') {
     // Generate a new game ID since it was never properly set
     currentGameState.gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    console.warn(`⚠️ Game ID was still default or missing, generated new ID: ${currentGameState.gameId}`);
+    console.warn(`⚠️ Game ID was missing or invalid, generated new ID: ${currentGameState.gameId}`);
   }
 
   // Now save the game history if we have a valid game ID
