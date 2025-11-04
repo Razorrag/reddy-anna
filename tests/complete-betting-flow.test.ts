@@ -34,7 +34,7 @@ class MockWebSocket {
     // This would normally come from the server
     // For testing, we'll simulate the server response
     const response = {
-      type: 'bet_success',
+      type: 'bet_confirmed',
       data: {
         side: data.data.side,
         amount: data.data.amount,
@@ -76,9 +76,9 @@ class MockBettingClient {
     this.ws.addEventListener('message', (event: any) => {
       const data = JSON.parse(event.data);
       
-      if (data.type === 'bet_success') {
+      if (data.type === 'bet_confirmed') {
         this.balance = data.data.newBalance;
-        console.log(`💰 Bet successful! New balance: ₹${this.balance}`);
+        console.log(`💰 Bet confirmed! New balance: ₹${this.balance}`);
       } else if (data.type === 'error') {
         console.log(`❌ Bet failed: ${data.data.message}`);
       } else if (data.type === 'round_update') {
@@ -200,7 +200,7 @@ class MockBettingServer {
 
   private sendSuccess(userId: string, data: any) {
     const response = {
-      type: 'bet_success',
+      type: 'bet_confirmed',
       data
     };
     this.sendToClient(userId, response);

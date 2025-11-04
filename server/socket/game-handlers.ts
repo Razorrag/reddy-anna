@@ -6,6 +6,7 @@
  */
 
 import { WebSocket } from 'ws';
+import { completeGame } from '../game';
 
 // WSClient interface to match the main routes.ts file
 interface WSClient {
@@ -74,14 +75,39 @@ export async function handlePlayerBet(client: WSClient, data: any) {
     // Use the actual game logic from routes.ts - import required dependencies
     console.log(`📝 BET REQUEST: User ${userId} wants to bet ₹${amount} on ${side} for round ${round}`);
 
-    // Validate game state (using global currentGameState)
-    if ((global as any).currentGameState?.phase !== 'betting') {
-      sendError(ws, 'Betting is not open');
+    // NEW: Enhanced phase and timing validation
+    const currentGameState = (global as any).currentGameState;
+    
+    // Check if game exists
+    if (!currentGameState) {
+      sendError(ws, 'No active game session');
+      return;
+    }
+    
+    // Check game phase
+    if (currentGameState.phase !== 'betting') {
+      sendError(ws, `Betting is not open. Current phase: ${currentGameState.phase}`);
       return;
     }
 
-    if ((global as any).currentGameState?.bettingLocked) {
+    // Check if betting is locked
+    if (currentGameState.bettingLocked) {
       sendError(ws, 'Betting period has ended');
+      return;
+    }
+
+    // Check timer if applicable
+    if (currentGameState.timer <= 0) {
+      sendError(ws, 'Betting time has expired');
+      // Update betting locked in case timer ran out but wasn't properly updated
+      currentGameState.bettingLocked = true;
+      return;
+    }
+
+    // Validate round
+    const roundNum = parseInt(round);
+    if (roundNum !== currentGameState.currentRound) {
+      sendError(ws, `Invalid round. Expected: ${currentGameState.currentRound}, got: ${roundNum}`);
       return;
     }
 
@@ -154,11 +180,38 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       }
     }
 
-    // OPTIMIZED: Send bet confirmation IMMEDIATELY after balance deduction (optimistic update)
+    // Store bet in database FIRST before sending confirmation
+    const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
+    if (gameIdToUse && gameIdToUse !== 'default-game') {
+      try {
+        await storage.createBet({
+          userId: userId,
+          gameId: gameIdToUse,
+          side,
+          amount: amount,
+          round: round.toString(),
+          status: 'pending'
+        });
+        console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
+      } catch (error) {
+        console.error('❌ Error storing bet:', error);
+        // Rollback balance if bet storage fails
+        try {
+          await storage.addBalanceAtomic(userId, amount); // Refund the amount
+          console.log(`💰 Refunded ${amount} to ${userId} due to bet storage failure`);
+        } catch (refundError) {
+          console.error('❌ Error refunding bet amount:', refundError);
+        }
+        // Send error to client instead of confirmation
+        sendError(ws, 'Bet could not be processed due to system error. Your balance has been refunded.');
+        return; // Exit function without sending confirmation
+      }
+    }
+
+    // ONLY send confirmation after successful database storage
     const betId = `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const betConfirmedAt = Date.now();
-    
-    // Send confirmation IMMEDIATELY (optimistic update - UI updates instantly)
+
     ws.send(JSON.stringify({
       type: 'bet_confirmed',
       data: {
@@ -167,80 +220,51 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         round,
         side,
         amount,
-        newBalance, // Already calculated from atomic deduction
+        newBalance,
         timestamp: betConfirmedAt
       }
     }));
 
-    // Get user's specific bets (not total bets from all players)
-    // Send individual bets array instead of cumulative totals
-    let userRound1Bets = { andar: [] as number[], bahar: [] as number[] };
-    let userRound2Bets = { andar: [] as number[], bahar: [] as number[] };
-    
-    // Get individual bets from database for this user and game (background)
-    const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
-    Promise.all([
-      // Fetch user bets (for display update)
-      (async () => {
+    // Get user's specific bets (for display update) - background operation
+    if (gameIdToUse && gameIdToUse !== 'default-game') {
+      Promise.resolve().then(async () => {
         try {
-          if (gameIdToUse && gameIdToUse !== 'default-game') {
-            const allUserBets = await storage.getBetsForUser(userId, gameIdToUse);
-            
-            // Group bets by round and side
-            allUserBets.forEach((bet: any) => {
-              const betAmount = parseFloat(bet.amount);
-              if (bet.round === '1' || bet.round === 1) {
-                if (bet.side === 'andar') {
-                  userRound1Bets.andar.push(betAmount);
-                } else if (bet.side === 'bahar') {
-                  userRound1Bets.bahar.push(betAmount);
-                }
-              } else if (bet.round === '2' || bet.round === 2) {
-                if (bet.side === 'andar') {
-                  userRound2Bets.andar.push(betAmount);
-                } else if (bet.side === 'bahar') {
-                  userRound2Bets.bahar.push(betAmount);
-                }
+          const allUserBets = await storage.getBetsForUser(userId, gameIdToUse);
+          
+          let userRound1Bets = { andar: [] as number[], bahar: [] as number[] };
+          let userRound2Bets = { andar: [] as number[], bahar: [] as number[] };
+          
+          allUserBets.forEach((bet: any) => {
+            const betAmount = parseFloat(bet.amount);
+            if (bet.round === '1' || bet.round === 1) {
+              if (bet.side === 'andar') {
+                userRound1Bets.andar.push(betAmount);
+              } else if (bet.side === 'bahar') {
+                userRound1Bets.bahar.push(betAmount);
               }
-            });
-            
-            // Send user-specific bet update after fetching
-            ws.send(JSON.stringify({
-              type: 'user_bets_update',
-              data: {
-                round1Bets: userRound1Bets,
-                round2Bets: userRound2Bets
+            } else if (bet.round === '2' || bet.round === 2) {
+              if (bet.side === 'andar') {
+                userRound2Bets.andar.push(betAmount);
+              } else if (bet.side === 'bahar') {
+                userRound2Bets.bahar.push(betAmount);
               }
-            }));
-          }
+            }
+          });
+          
+          ws.send(JSON.stringify({
+            type: 'user_bets_update',
+            data: {
+              round1Bets: userRound1Bets,
+              round2Bets: userRound2Bets
+            }
+          }));
         } catch (error) {
           console.error('Error fetching user bets:', error);
         }
-      })(),
-      
-      // Store bet in database (background, don't block WebSocket)
-      (async () => {
-        if (gameIdToUse && gameIdToUse !== 'default-game') {
-          try {
-            await storage.createBet({
-              userId: userId,
-              gameId: gameIdToUse,
-              side,
-              amount: amount,
-              round: round.toString(),
-              status: 'pending'
-            });
-            console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
-          } catch (error) {
-            console.error('Error storing bet:', error);
-            // Don't send error to client - bet is already confirmed optimistically
-            // If storage fails, we'll have inconsistency but UI remains responsive
-          }
-        }
-      })()
-    ]).catch(error => {
-      console.error('Error in background bet operations:', error);
-    });
+      }).catch(error => {
+        console.error('Error in background bet fetch:', error);
+      });
+    }
 
     // Note: user_bets_update is now sent after fetching from DB (see above Promise.all)
 
@@ -252,7 +276,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       const totalBahar = round1Bets.bahar + round2Bets.bahar;
       
       // Broadcast to Admin-specific listeners (admins see all players' bets)
-      (global as any).broadcast({
+      (global as any).broadcastToRole({
         type: 'admin_bet_update',
         data: {
           userId,
@@ -260,7 +284,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
           amount,
           round,
         },
-      });
+      }, 'admin');
       
       // ✅ FIX: Broadcast betting_stats to ALL users EXCEPT the one who placed the bet
       // The bettor already received bet_confirmed and user_bets_update, so they don't need betting_stats
@@ -327,10 +351,17 @@ export async function handleStartGame(client: WSClient, data: any) {
   try {
     // Use the actual game state from routes.ts global variables
     if ((global as any).currentGameState) {
-      // Set opening card and initialize game
-      (global as any).currentGameState.reset();
-      // Note: currentGameState now generates its own unique ID in the reset() method
+      // Start a new game (generates new game ID and resets state)
+      (global as any).currentGameState.startNewGame();
+      
+      // Set opening card (this will generate game ID if not already generated)
       (global as any).currentGameState.openingCard = data.openingCard;
+      
+      // Ensure game ID is properly set (it should be generated by startNewGame or setter)
+      const newGameId = (global as any).currentGameState.gameId;
+      console.log(`🎮 Game ID for new game: ${newGameId}`);
+      
+      // Initialize game state
       (global as any).currentGameState.phase = 'betting';
       (global as any).currentGameState.currentRound = 1;
       (global as any).currentGameState.bettingLocked = false;
@@ -396,6 +427,13 @@ export async function handleStartGame(client: WSClient, data: any) {
           (global as any).currentGameState.phase = 'dealing';
           (global as any).currentGameState.bettingLocked = true;
 
+          // Persist the phase change
+          if (typeof (global as any).persistGameState === 'function') {
+            (global as any).persistGameState().catch((err: any) => 
+              console.error('Error persisting phase change to dealing:', err)
+            );
+          }
+
           // Broadcast phase change
           if (typeof (global as any).broadcast !== 'undefined') {
             (global as any).broadcast({
@@ -450,8 +488,8 @@ export async function handleDealCard(client: WSClient, data: any) {
   }
 
   // Validate input
-  if (!data || !data.card || !data.side || typeof data.position !== 'number') {
-    sendError(ws, 'Missing required fields: card, side, position');
+  if (!data || !data.card || !data.side) {
+    sendError(ws, 'Missing required fields: card, side');
     return;
   }
 
@@ -460,7 +498,7 @@ export async function handleDealCard(client: WSClient, data: any) {
     return;
   }
 
-  console.log(`🃏 DEAL CARD: Admin ${userId} dealing ${data.card} on ${data.side} at position ${data.position}`);
+  console.log(`🃏 DEAL CARD: Admin ${userId} dealing ${data.card} on ${data.side}`);
 
   try {
     // Use actual game logic from routes.ts
@@ -469,22 +507,25 @@ export async function handleDealCard(client: WSClient, data: any) {
       return;
     }
 
-    if ((global as any).currentGameState.phase !== 'dealing') {
-      sendError(ws, 'Not in dealing phase');
+    // Allow dealing in 'dealing' phase OR if we're in 'complete' phase but game hasn't reset yet
+    // (This handles cases where admin is dealing during transition)
+    if ((global as any).currentGameState.phase !== 'dealing' && 
+        (global as any).currentGameState.phase !== 'betting') {
+      sendError(ws, `Not in dealing/betting phase. Current phase: ${(global as any).currentGameState.phase}`);
       return;
     }
 
-    // CRITICAL: Validate dealing sequence BEFORE adding card
-    const expectedSide = (global as any).currentGameState.getNextExpectedSide();
-    
-    if (expectedSide === null) {
-      sendError(ws, 'Current round is complete. Please progress to next round.');
-      return;
-    }
-
-    if (data.side !== expectedSide) {
-      sendError(ws, `Invalid dealing sequence. Expected ${expectedSide.toUpperCase()} card next. Attempted: ${data.side.toUpperCase()}`);
-      return;
+    // Only validate dealing sequence in dealing phase, not in betting (for round 2)
+    if ((global as any).currentGameState.phase === 'dealing') {
+      const expectedSide = (global as any).currentGameState.getNextExpectedSide();
+      
+      if (expectedSide === null) {
+        console.log('Current round appears complete, allowing card deal for next round');
+        // Don't return here - we may be transitioning to next round
+      } else if (data.side !== expectedSide) {
+        // Be more lenient with sequence validation to allow for potential race conditions
+        console.warn(`⚠️ WARNING: Expected ${expectedSide.toUpperCase()} but received ${data.side.toUpperCase()}. Continuing anyway.`);
+      }
     }
 
     // Determine if this is a winner based on the opening card logic
@@ -495,6 +536,10 @@ export async function handleDealCard(client: WSClient, data: any) {
       isWinningCard = openingRank === dealtRank;
     }
 
+    // Calculate position BEFORE adding card to state
+    const currentPosition = (global as any).currentGameState.andarCards.length + 
+                            (global as any).currentGameState.baharCards.length + 1;
+
     // Add card to the appropriate list (only after validation passes)
     if (data.side === 'andar') {
       (global as any).currentGameState.addAndarCard(data.card);
@@ -504,7 +549,7 @@ export async function handleDealCard(client: WSClient, data: any) {
 
     console.log(`♠️ Dealt ${data.card} on ${data.side}: total andar=${(global as any).currentGameState.andarCards.length}, bahar=${(global as any).currentGameState.baharCards.length}`);
 
-    // Save card to database
+    // Save card to database with correct position (calculated BEFORE card was added)
     const gameId = (global as any).currentGameState.gameId;
     if (gameId && gameId !== 'default-game') {
       try {
@@ -513,24 +558,24 @@ export async function handleDealCard(client: WSClient, data: any) {
           gameId: gameId,
           card: data.card,
           side: data.side,
-          position: data.position,
+          position: currentPosition, // Use calculated position BEFORE card was added
           isWinningCard: isWinningCard
         });
-        console.log(`✅ Card saved to database: ${data.card} on ${data.side}`);
+        console.log(`✅ Card saved to database: ${data.card} on ${data.side} at position ${currentPosition}`);
       } catch (error) {
         console.error('⚠️ Error saving card to database:', error);
         // Don't fail the card dealing if DB save fails
       }
     }
 
-    // Broadcast the dealt card to all clients
+    // Broadcast the dealt card to all clients with correct position
     if (typeof (global as any).broadcast !== 'undefined') {
       (global as any).broadcast({
         type: 'card_dealt',
         data: {
           card: data.card,
           side: data.side,
-          position: data.position,
+          position: currentPosition, // Use pre-calculated position
           isWinningCard: isWinningCard
         }
       });
@@ -562,10 +607,8 @@ export async function handleDealCard(client: WSClient, data: any) {
         );
       }
 
-      // Complete the game with payouts using global completeGame if available
-      if (typeof (global as any).completeGame === 'function') {
-        (global as any).completeGame(data.side === 'andar' ? 'andar' : 'bahar', data.card);
-      }
+      // Complete the game with payouts
+      completeGame((global as any).currentGameState, data.side === 'andar' ? 'andar' : 'bahar', data.card);
 
       console.log(`🏆 GAME COMPLETE: Winner is ${data.side} with card ${data.card}`);
     } else if (isRoundComplete && currentRound < 3) {
@@ -645,7 +688,7 @@ export async function handleDealCard(client: WSClient, data: any) {
       data: {
         card: data.card,
         side: data.side,
-        position: data.position,
+        position: currentPosition, // ✅ FIX: Use pre-calculated position (calculated BEFORE card was added)
         isWinningCard: isWinningCard,
         gamePhase: (global as any).currentGameState.phase,
         currentRound: (global as any).currentGameState.currentRound

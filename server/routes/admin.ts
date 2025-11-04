@@ -19,13 +19,15 @@ import {
 
 import {
 
-  getPendingPaymentRequests,
+    getPendingPaymentRequests,
 
-  approvePaymentRequest,
+    approvePaymentRequest,
 
-  rejectPaymentRequest,
+    rejectPaymentRequest,
 
-} from '../controllers/adminController';
+    getGameHistory,
+
+  } from '../controllers/adminController';
 
 import { validateAdminAccess } from '../security';
 
@@ -218,6 +220,8 @@ router.get('/payment-requests/pending', getPendingPaymentRequests);
 router.patch('/payment-requests/:requestId/approve', approvePaymentRequest);
 
 router.patch('/payment-requests/:requestId/reject', rejectPaymentRequest);
+
+router.get('/game-history', getGameHistory);
 
 
 

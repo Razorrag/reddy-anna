@@ -156,10 +156,11 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
     case 'SET_OPENING_CARD':
       // Add opening card to usedCards if not already there
       const isOpeningCardUsed = state.usedCards.some(c => c.id === action.payload.id);
+      const updatedUsedCards = isOpeningCardUsed ? state.usedCards : [...state.usedCards, action.payload];
       return { 
         ...state, 
         selectedOpeningCard: action.payload,
-        usedCards: isOpeningCardUsed ? state.usedCards : [...state.usedCards, action.payload]
+        usedCards: updatedUsedCards
       };
     case 'ADD_ANDAR_CARD':
       // Add to usedCards if not already there

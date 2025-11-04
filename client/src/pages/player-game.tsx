@@ -20,7 +20,7 @@ import { GameHistoryModal } from '../components/GameHistoryModal';
 import { WalletModal } from '../components/WalletModal';
 import RoundNotification from '../components/RoundNotification';
 import NoWinnerTransition from '../components/NoWinnerTransition';
-import WinnerCelebration from '../components/WinnerCelebration';
+// ❌ REMOVED: WinnerCelebration - Now shown in VideoArea overlay
 import type { BetSide } from '../types/game';
 
 interface WhatsAppResponse {
@@ -55,7 +55,7 @@ const PlayerGame: React.FC = () => {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showRoundNotification, setShowRoundNotification] = useState(false);
   const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
-  const [showWinnerCelebration, setShowWinnerCelebration] = useState(false);
+  // ❌ REMOVED: showWinnerCelebration - Now handled in VideoArea overlay
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
 
   // Available bet amounts - matching schema limits (1000-100000)
@@ -251,6 +251,11 @@ const PlayerGame: React.FC = () => {
       return;
     }
 
+    if (gameState.countdownTimer <= 0) {
+      showNotification('Cannot undo bet - betting time has expired', 'error');
+      return;
+    }
+
     // Check if user has any bets to undo
     const hasRound1Bets = (
       (Array.isArray(gameState.playerRound1Bets.andar) && gameState.playerRound1Bets.andar.length > 0) ||
@@ -311,10 +316,22 @@ const PlayerGame: React.FC = () => {
   }, [gameState, showNotification, updateBalance, removeLastBet]);
 
   // Handle rebet
-  const handleRebet = useCallback(() => {
-    // Implementation for rebetting previous round
-    showNotification('Rebet placed', 'success');
-  }, [showNotification]);
+  const handleRebet = useCallback(async () => {
+    try {
+      const response = await apiClient.get<{ success: boolean; bets: any[] }>('/api/user/last-game-bets');
+      if (response.success && response.bets.length > 0) {
+        for (const bet of response.bets) {
+          await handlePlaceBet(bet.side, bet.amount);
+        }
+        showNotification('Rebet placed successfully', 'success');
+      } else {
+        showNotification('No bets from last game to rebet', 'info');
+      }
+    } catch (error) {
+      console.error('Failed to rebet:', error);
+      showNotification('Failed to rebet', 'error');
+    }
+  }, [handlePlaceBet, showNotification]);
 
   // Handle wallet click
   const handleWalletClick = useCallback(() => {
@@ -372,20 +389,14 @@ const PlayerGame: React.FC = () => {
     return () => window.removeEventListener('round-change', handleRoundChange);
   }, []);
 
-  // Listen for game complete celebration events
+  // Listen for game complete celebration events - handled by VideoArea overlay now
   useEffect(() => {
     const handleGameComplete = (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log('Game complete celebration received:', customEvent.detail);
-      const winAmt = Number(customEvent.detail?.localWinAmount || 0);
-      if (customEvent.detail.winner) {
-        if (winAmt > 0) {
-          setShowWinnerCelebration(true);
-        } else {
-          // No bet placed: show non-blocking info toast only
-          showNotification(`${String(customEvent.detail.winner).toUpperCase()} won`, 'info');
-        }
-      }
+      
+      // ❌ REMOVED: setShowWinnerCelebration - Now handled in VideoArea overlay
+      // ❌ REMOVED: showNotification - Duplicate, shown in VideoArea overlay
       
       // Refresh balance after game completion to get updated payout
       setTimeout(() => {
@@ -395,7 +406,7 @@ const PlayerGame: React.FC = () => {
 
     window.addEventListener('game-complete-celebration', handleGameComplete);
     return () => window.removeEventListener('game-complete-celebration', handleGameComplete);
-  }, [showNotification, updateBalance]);
+  }, [updateBalance]);
 
   // Listen for payment notifications and balance refresh requests
   useEffect(() => {
@@ -493,16 +504,7 @@ const PlayerGame: React.FC = () => {
         onComplete={() => setShowNoWinnerTransition(false)}
       />
 
-      {/* Winner Celebration - Shows when user wins */}
-      {showWinnerCelebration && (
-        <WinnerCelebration
-          winner={null} // Will be set by event
-          winningCard=""
-          round={gameState.currentRound}
-          payoutMessage=""
-          onComplete={() => setShowWinnerCelebration(false)}
-        />
-      )}
+      {/* ❌ REMOVED: Winner Celebration modal - Now shown in VideoArea overlay */}
 
       {/* Round Notification - Non-blocking toast for round changes */}
       {!shouldShowAuthLoading && !shouldShowWsLoading && (

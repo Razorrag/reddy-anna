@@ -11,6 +11,8 @@ import fs from 'fs';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+
+
 // Validate all required environment variables
 const requiredEnvVars = [
   'JWT_SECRET',  // JWT is now required (removed sessions)

@@ -57,6 +57,49 @@ const parseDisplayCard = (display: string): Card => {
   } as Card;
 };
 
+// Helper: Calculate total bet amount from RoundBets (handles arrays or numbers)
+const getTotalBetAmount = (bets: number | number[] | any[] | undefined, side: 'andar' | 'bahar'): number => {
+  if (!bets) return 0;
+  if (typeof bets === 'number') return bets;
+  if (Array.isArray(bets)) {
+    return bets.reduce((sum: number, bet: any) => {
+      const amount = typeof bet === 'number' ? bet : (bet?.amount || 0);
+      return sum + amount;
+    }, 0);
+  }
+  return 0;
+};
+
+// Helper: Calculate payout using the same logic as server's calculatePayout function
+const calculatePayout = (
+  round: number,
+  winner: 'andar' | 'bahar',
+  playerBets: { round1: { andar: number; bahar: number }, round2: { andar: number; bahar: number } }
+): number => {
+  if (round === 1) {
+    // Round 1: Andar wins 1:1 (double), Bahar wins 1:0 (refund only)
+    if (winner === 'andar') {
+      return playerBets.round1.andar * 2; // 1:1 payout (stake + profit)
+    } else {
+      return playerBets.round1.bahar; // 1:0 payout (refund only)
+    }
+  } else if (round === 2) {
+    // Round 2: Andar wins 1:1 on all Andar bets, Bahar wins mixed (1:1 on R1, 1:0 on R2)
+    if (winner === 'andar') {
+      const totalAndar = playerBets.round1.andar + playerBets.round2.andar;
+      return totalAndar * 2; // 1:1 on all Andar bets
+    } else {
+      const round1Payout = playerBets.round1.bahar * 2; // 1:1 on Round 1 Bahar
+      const round2Refund = playerBets.round2.bahar; // 1:0 on Round 2 Bahar
+      return round1Payout + round2Refund;
+    }
+  } else {
+    // Round 3 (Continuous Draw): Both sides win 1:1 on total combined bets
+    const totalBet = playerBets.round1[winner] + playerBets.round2[winner];
+    return totalBet * 2; // 1:1 payout on total investment
+  }
+};
+
 declare global {
   interface Window {
     API_BASE_URL?: string;
@@ -202,13 +245,16 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             userBets,
             playerRound1Bets,
             playerRound2Bets,
-            userBalance
+            userBalance,
+            bettingLocked
           } = gameState;
           
           setPhase(phase as any);
           setCountdown(countdownTimer || timer || 0);
           setWinner(winner);
           setCurrentRound(currentRound as any);
+          // Handle betting locked state
+          if (bettingLocked !== undefined) setBettingLocked(bettingLocked);
           // Clear cards first, then set opening card so it doesn't get cleared
           clearCards();
           if (openingCard) {
@@ -485,7 +531,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           userBets,
           playerRound1Bets,
           playerRound2Bets,
-          userBalance
+          userBalance,
+          bettingLocked
         } = gameStateData;
         
         if (phase) setPhase(phase as any);
@@ -493,6 +540,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         if (countdownTimer !== undefined || timer !== undefined) setCountdown(countdownTimer || timer || 0);
         if (winner !== undefined) setWinner(winner);
         if (currentRound !== undefined) setCurrentRound(currentRound as any);
+        // Handle betting locked state
+        if (bettingLocked !== undefined) setBettingLocked(bettingLocked);
+        
         // Clear cards first, then set opening card so it doesn't get cleared
         if (andarCards || baharCards || openingCard) {
           clearCards();
@@ -541,7 +591,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
         if (userBalance !== undefined) updatePlayerWallet(userBalance);
         
-        console.log('✅ Game state synced on reconnect');
+        console.log('✅ Game state synced on reconnect', {
+          phase,
+          round: currentRound,
+          bettingLocked,
+          andarCardsCount: andarCards?.length || 0,
+          baharCardsCount: baharCards?.length || 0
+        });
         break;
       }
         
@@ -571,20 +627,28 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           addBaharCard(parsedCard);
         }
         if (isWinningCard) {
-          showNotification(`${side.toUpperCase()} wins with ${parsedCard.display}!`, 'success');
-          // Trigger celebration event
-          const celebrationEvent = new CustomEvent('game-complete-celebration', {
-            detail: { winner: side, winningCard: parsedCard, round: gameState.currentRound }
-          });
-          window.dispatchEvent(celebrationEvent);
+          // ❌ REMOVED: showNotification - Duplicate, shown in VideoArea overlay
+          // Trigger celebration event (will be handled by game_complete message)
+          // Note: game_complete message will be sent separately with full payout calculation
         }
         break;
       }
 
       case 'timer_update': {
-        const { seconds, phase } = (data as TimerUpdateMessage).data;
+        const { seconds, phase, round, bettingLocked } = (data as TimerUpdateMessage).data;
         setCountdown(seconds);
         setPhase(phase);
+        if (round) {
+          setCurrentRound(round);
+        }
+        
+        // NEW: Update betting locked state from timer update
+        if (bettingLocked !== undefined) {
+          setBettingLocked(bettingLocked);
+        } else {
+          // Calculate from seconds if not provided
+          setBettingLocked(seconds <= 0);
+        }
         break;
       }
 
@@ -617,13 +681,40 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           setWinningCard(card);
         }
         
-        showNotification(message, 'success');
-        // Compute local user's potential win for dynamic celebration
-        const r1 = gameState.playerRound1Bets?.[winner as 'andar' | 'bahar'] || 0;
-        const r2 = gameState.playerRound2Bets?.[winner as 'andar' | 'bahar'] || 0;
-        const localWinAmount = (r1 || 0) + (r2 || 0);
+        // ❌ REMOVED: showNotification(message, 'success'); - Duplicate, shown in VideoArea overlay
+        
+        // Calculate actual payout amount (not just bet amount) using server's payout logic
+        const round1Andar = getTotalBetAmount(gameState.playerRound1Bets?.andar, 'andar');
+        const round1Bahar = getTotalBetAmount(gameState.playerRound1Bets?.bahar, 'bahar');
+        const round2Andar = getTotalBetAmount(gameState.playerRound2Bets?.andar, 'andar');
+        const round2Bahar = getTotalBetAmount(gameState.playerRound2Bets?.bahar, 'bahar');
+        
+        const playerBets = {
+          round1: { andar: round1Andar, bahar: round1Bahar },
+          round2: { andar: round2Andar, bahar: round2Bahar }
+        };
+        
+        const totalBetAmount = round1Andar + round1Bahar + round2Andar + round2Bahar;
+        const localWinAmount = calculatePayout(gameState.currentRound, winner, playerBets);
+        
+        // Determine result: win (payout > bet), loss (payout < bet or 0), no_bet (no bets)
+        let result: 'win' | 'loss' | 'no_bet';
+        if (totalBetAmount === 0) {
+          result = 'no_bet';
+        } else if (localWinAmount > totalBetAmount) {
+          result = 'win'; // User won (payout exceeds bet)
+        } else {
+          result = 'loss'; // User lost or got refund only
+        }
+        
         const celebrationEvent = new CustomEvent('game-complete-celebration', {
-          detail: { ...data.data, localWinAmount }
+          detail: { 
+            ...data.data, 
+            localWinAmount,
+            totalBetAmount,
+            result,
+            round: gameState.currentRound
+          }
         });
         window.dispatchEvent(celebrationEvent);
         break;
@@ -636,10 +727,34 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         break;
       }
 
+      case 'game_return_to_opening': {
+        console.log('🔄 Returning to opening card panel');
+        const { gameState, message } = (data as any).data;
+        setPhase('idle');
+        setCurrentRound(1);
+        clearCards();
+        setSelectedOpeningCard(null);
+        setWinner(null);
+        setWinningCard(null);
+        showNotification(message || 'Game completed. Ready for new game!', 'info');
+        break;
+      }
+
       case 'phase_change': {
-        const { phase, round, message } = (data as PhaseChangeMessage).data;
+        const { phase, round, message, bettingLocked } = (data as PhaseChangeMessage).data;
         setPhase(phase);
         setCurrentRound(round);
+        
+        // NEW: Properly update betting locked state
+        if (bettingLocked !== undefined) {
+          setBettingLocked(bettingLocked);
+        } else {
+          // For backward compatibility, calculate betting status based on phase
+          const isBettingPhase = phase === 'betting';
+          const isBettingLocked = !isBettingPhase || gameState.countdownTimer <= 0;
+          setBettingLocked(isBettingLocked);
+        }
+        
         if (message) {
           showNotification(message, 'info');
         }
@@ -663,6 +778,43 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         });
         window.dispatchEvent(balanceEvent);
         updatePlayerWallet(balance);
+        break;
+      }
+
+      // ✅ FIX #4: Balance correction handler
+      case 'balance_correction': {
+        const wsData = (data as any).data;
+        console.log('💰 Balance correction received:', wsData);
+        
+        // Update balance from server correction (highest priority)
+        if (wsData.balance !== undefined && wsData.balance !== null) {
+          updatePlayerWallet(wsData.balance);
+          
+          // Dispatch balance event for other contexts to update immediately
+          const balanceEvent = new CustomEvent('balance-websocket-update', {
+            detail: { 
+              balance: wsData.balance, 
+              amount: 0, // Correction, not a transaction
+              type: 'correction', 
+              reason: wsData.reason || 'Balance correction',
+              timestamp: wsData.timestamp || Date.now() 
+            }
+          });
+          window.dispatchEvent(balanceEvent);
+          
+          // Show notification if reason is provided and it's not the default verification message
+          if (wsData.reason && wsData.reason !== 'Balance correction after verification') {
+            showNotification(`Balance corrected: ₹${wsData.balance.toLocaleString('en-IN')}`, 'info');
+          }
+        }
+        break;
+      }
+
+      // Payout error handler
+      case 'payout_error': {
+        const wsData = (data as any).data;
+        console.error('❌ Payout error:', wsData);
+        showNotification(wsData.message || 'Payout processing error. Please contact support.', 'error');
         break;
       }
 
@@ -742,12 +894,28 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         break;
       }
 
-      // Game history update for admin dashboard
+      // Game history update for ALL users (basic data)
       case 'game_history_update' as any: {
         const event = new CustomEvent('game_history_update', {
           detail: (data as any).data
         });
         window.dispatchEvent(event);
+        break;
+      }
+
+      // ✅ FIX #5: Admin-specific game history update (detailed analytics)
+      case 'game_history_update_admin' as any: {
+        // Admin-specific detailed game history update
+        const adminEvent = new CustomEvent('game_history_update_admin', {
+          detail: (data as any).data
+        });
+        window.dispatchEvent(adminEvent);
+        
+        // Also emit the regular game_history_update for backward compatibility
+        const regularEvent = new CustomEvent('game_history_update', {
+          detail: (data as any).data
+        });
+        window.dispatchEvent(regularEvent);
         break;
       }
 
@@ -796,13 +964,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           window.dispatchEvent(balanceEvent);
         }
         
-        // Show notification based on payout amount
-        if (amount > 0) {
-          showNotification(`You won ₹${amount.toLocaleString('en-IN')}!`, 'success');
-        } else {
-          // Optionally show a message for losses (can be removed if not needed)
-          // showNotification('Better luck next time!', 'info');
-        }
+        // ❌ REMOVED: showNotification - Duplicate, shown in VideoArea overlay
+        // Balance update is silent (no notification needed)
         break;
       }
 
@@ -1215,12 +1378,19 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.log('✅ WebSocket authenticated - subscribing to game state');
       
       // Subscribe to current game state after authentication
-      sendWebSocketMessage({
-        type: 'game_subscribe',
-        data: {}
-      });
+      const subscribeToGameState = () => {
+        sendWebSocketMessage({
+          type: 'game_subscribe',
+          data: {}
+        });
+        
+        console.log('📡 Game state subscription sent');
+      };
       
-      console.log('📡 Game state subscription sent');
+      // Delay the subscription slightly to ensure auth is fully processed
+      const subscriptionTimer = setTimeout(subscribeToGameState, 500);
+      
+      return () => clearTimeout(subscriptionTimer);
     } else if (connectionStatus === ConnectionStatus.DISCONNECTED) {
       console.log('⏸️ WebSocket disconnected');
       setIsWebSocketAuthenticated(false); // Reset auth state on disconnect

@@ -358,7 +358,8 @@ export interface PhaseChangeMessage extends WebSocketMessage {
   data: {
     phase: string;
     round: number;
-    message: string;
+    message?: string;
+    bettingLocked?: boolean;
   };
 }
 

@@ -111,6 +111,7 @@ export interface IStorage {
   getCurrentGameSession(): Promise<GameSession | undefined>;
   getGameSession(gameId: string): Promise<GameSession | undefined>;
   getActiveGameSession(): Promise<GameSession | null>;
+  getLastCompletedGame(): Promise<GameSession | undefined>;
   updateGameSession(gameId: string, updates: Partial<GameSession>): Promise<void>;
   completeGameSession(gameId: string, winner: string, winningCard: string): Promise<void>;
   
@@ -125,10 +126,13 @@ export interface IStorage {
   updateUserBetInGame(userId: string, gameId: string, round: string, oldSide: string, newSide: string, newAmount: number): Promise<void>;
   getActiveBetsForGame(gameId: string): Promise<PlayerBet[]>;
   getBetById(betId: string): Promise<PlayerBet | null>;
+  deleteBet(betId: string): Promise<void>;
   getBettingStats(gameId: string): Promise<{ andarTotal: number; baharTotal: number; andarCount: number; baharCount: number }>;
   getUserBets(userId: string, limit?: number, offset?: number): Promise<PlayerBet[]>;
+  getLastUserBet(userId: string, gameId: string): Promise<PlayerBet | undefined>;
   getUserGameHistory(userId: string): Promise<any[]>;
   updateBet(gameId: string, userId: string, updates: Partial<UpdateBet>): Promise<void>;
+  applyPayoutsAndupdateBets(payouts: { userId: string; amount: number }[], winningBets: string[], losingBets: string[]): Promise<void>;
   
   // Transaction operations
   getUserTransactions(
@@ -1256,6 +1260,26 @@ export class SupabaseStorage implements IStorage {
     return data || null;
   }
 
+  async getLastCompletedGame(): Promise<GameSession | undefined> {
+    const { data, error } = await supabaseServer
+      .from('game_sessions')
+      .select('*')
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return undefined; // No completed game found
+      }
+      console.error('Error getting last completed game:', error);
+      return undefined;
+    }
+
+    return data;
+  }
+
   async completeGameSession(gameId: string, winner: string, winningCard: string): Promise<void> {
     const { error } = await supabaseServer
       .from('game_sessions')
@@ -1356,6 +1380,27 @@ export class SupabaseStorage implements IStorage {
     }
 
     return data || [];
+  }
+
+  async getLastUserBet(userId: string, gameId: string): Promise<PlayerBet | undefined> {
+    const { data, error } = await supabaseServer
+      .from('player_bets')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('game_id', gameId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return undefined; // No bet found
+      }
+      console.error('Error getting last user bet:', error);
+      return undefined;
+    }
+
+    return data;
   }
 
   async updateBetStatus(betId: string, status: string): Promise<void> {
@@ -1483,6 +1528,18 @@ export class SupabaseStorage implements IStorage {
     }
 
     return data;
+  }
+
+  async deleteBet(betId: string): Promise<void> {
+    const { error } = await supabaseServer
+      .from('player_bets')
+      .delete()
+      .eq('id', betId);
+
+    if (error) {
+      console.error('Error deleting bet:', error);
+      throw new Error('Failed to delete bet');
+    }
   }
 
   async getBettingStats(gameId: string): Promise<{ andarTotal: number; baharTotal: number; andarCount: number; baharCount: number }> {
@@ -1996,6 +2053,19 @@ export class SupabaseStorage implements IStorage {
       throw error;
     } else {
       console.log(`✅ Successfully saved to database: ${key} = ${value}`);
+    }
+  }
+
+  async applyPayoutsAndupdateBets(payouts: { userId: string; amount: number }[], winningBets: string[], losingBets: string[]): Promise<void> {
+    const { error } = await supabaseServer.rpc('apply_payouts_and_update_bets', {
+      payouts: JSON.stringify(payouts),
+      winning_bets_ids: winningBets,
+      losing_bets_ids: losingBets,
+    });
+
+    if (error) {
+      console.error('Error applying payouts and updating bets:', error);
+      throw new Error('Failed to apply payouts');
     }
   }
 

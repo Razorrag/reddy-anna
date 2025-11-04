@@ -442,18 +442,18 @@ testRunner.describe('WebSocket Message Handling', () => {
     }
   });
 
-  testRunner.it('should send bet_success response', async () => {
+  testRunner.it('should send bet_confirmed response', async () => {
     const mockWebSocket: MockWebSocket = {
       send: () => {},
       onmessage: null,
       readyState: 1 // WebSocket.OPEN
     };
 
-    let successResponseSent = false;
+    let confirmedResponseSent = false;
     
     // Mock successful bet processing
-    const betSuccessResponse = {
-      type: 'bet_success',
+    const betConfirmedResponse = {
+      type: 'bet_confirmed',
       data: {
         side: 'andar',
         amount: 1000,
@@ -466,16 +466,16 @@ testRunner.describe('WebSocket Message Handling', () => {
     // Mock send function to capture response
     mockWebSocket.send = (data: string) => {
       const response = JSON.parse(data);
-      if (response.type === 'bet_success' && response.data.amount === 1000) {
-        successResponseSent = true;
+      if (response.type === 'bet_confirmed' && response.data.amount === 1000) {
+        confirmedResponseSent = true;
       }
     };
 
     // Simulate sending response
-    mockWebSocket.send(JSON.stringify(betSuccessResponse));
+    mockWebSocket.send(JSON.stringify(betConfirmedResponse));
 
-    if (!successResponseSent) {
-      throw new Error('bet_success response not sent correctly');
+    if (!confirmedResponseSent) {
+      throw new Error('bet_confirmed response not sent correctly');
     }
   });
 

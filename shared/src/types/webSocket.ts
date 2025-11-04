@@ -41,11 +41,14 @@ export type PhaseChangeMessage = WebSocketMessageBase<'phase_change', {
   phase: GamePhase;
   round: GameRound;
   message?: string;
+  bettingLocked?: boolean;
 }>;
 
 export type TimerUpdateMessage = WebSocketMessageBase<'timer_update', {
   seconds: number;
   phase: GamePhase;
+  round?: GameRound;
+  bettingLocked?: boolean;
 }>;
 
 export type GameStartMessage = WebSocketMessageBase<'game_start', {
@@ -65,6 +68,20 @@ export type GameCompleteMessage = WebSocketMessageBase<'game_complete', {
 
 export type GameResetMessage = WebSocketMessageBase<'game_reset', {
   message: string;
+}>;
+
+export type GameReturnToOpeningMessage = WebSocketMessageBase<'game_return_to_opening', {
+  message: string;
+  gameState?: {
+    phase: GamePhase;
+    currentRound: GameRound;
+    openingCard: Card | null;
+    andarCards: Card[];
+    baharCards: Card[];
+    winner: GameWinner | null;
+    winningCard: Card | null;
+    gameId: string;
+  };
 }>;
 
 // ---------------------------------------------------------------------------------
@@ -372,10 +389,26 @@ export type AnalyticsUpdateMessage = WebSocketMessageBase<'analytics_update', {
 
 export type GameHistoryUpdateMessage = WebSocketMessageBase<'game_history_update', {
   gameId: string;
+  openingCard: string;
+  winner: string;
+  winningCard: string;
+  round: number;
+  totalCards: number;
+  createdAt: string;
+}>;
+
+export type GameHistoryUpdateAdminMessage = WebSocketMessageBase<'game_history_update_admin', {
+  gameId: string;
+  openingCard: string;
   winner: string;
   winningCard: string;
   totalBets: number;
   totalPayouts: number;
+  andarTotalBet: number;
+  baharTotalBet: number;
+  totalPlayers: number;
+  totalCards: number;
+  round: number;
   createdAt: string;
 }>;
 
@@ -447,6 +480,7 @@ export type WebSocketMessage =
   | GameStartMessage
   | GameCompleteMessage
   | GameResetMessage
+  | GameReturnToOpeningMessage
   | GameStateMessage
   | GameStartedMessage
   | GameColonStateMessage
@@ -501,6 +535,7 @@ export type WebSocketMessage =
   | AdminBetUpdateMessage
   | AnalyticsUpdateMessage
   | GameHistoryUpdateMessage
+  | GameHistoryUpdateAdminMessage
   | AdminNotificationMessage
   | BonusUpdateMessage
   | ConditionalBonusAppliedMessage

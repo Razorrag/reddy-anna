@@ -13,10 +13,20 @@
 import React, { useEffect, useState } from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
 import StreamPlayer from '../StreamPlayer';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface VideoAreaProps {
   className?: string;
   isScreenSharing: boolean;
+}
+
+interface GameCompleteResult {
+  winner: 'andar' | 'bahar' | null;
+  winningCard: any;
+  payoutAmount: number;
+  totalBetAmount: number;
+  result: 'win' | 'loss' | 'no_bet';
+  round: number;
 }
 
 const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScreenSharing }) => {
@@ -25,6 +35,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
   // Use the gameState.timer directly
   const localTimer = gameState.countdownTimer;
   const [isPulsing, setIsPulsing] = useState(false);
+  const [gameResult, setGameResult] = useState<GameCompleteResult | null>(null);
+  const [showResult, setShowResult] = useState(false);
 
   // Log when screen sharing state changes
   useEffect(() => {
@@ -39,6 +51,44 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
       setIsPulsing(false);
     }
   }, [localTimer]);
+
+  // Listen for game complete celebration events
+  useEffect(() => {
+    const handleGameComplete = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const detail = customEvent.detail;
+      
+      if (detail?.winner && gameState.phase === 'complete') {
+        setGameResult({
+          winner: detail.winner,
+          winningCard: detail.winningCard || gameState.winningCard,
+          payoutAmount: detail.localWinAmount || 0,
+          totalBetAmount: detail.totalBetAmount || 0,
+          result: detail.result || 'no_bet',
+          round: detail.round || gameState.currentRound
+        });
+        setShowResult(true);
+        
+        // Auto-hide after appropriate duration
+        const duration = detail.result === 'no_bet' ? 2500 : 4000;
+        setTimeout(() => {
+          setShowResult(false);
+          setTimeout(() => setGameResult(null), 500);
+        }, duration);
+      }
+    };
+
+    window.addEventListener('game-complete-celebration', handleGameComplete as EventListener);
+    return () => window.removeEventListener('game-complete-celebration', handleGameComplete as EventListener);
+  }, [gameState.phase, gameState.winningCard, gameState.currentRound]);
+
+  // Hide result when phase changes away from complete
+  useEffect(() => {
+    if (gameState.phase !== 'complete') {
+      setShowResult(false);
+      setTimeout(() => setGameResult(null), 500);
+    }
+  }, [gameState.phase]);
 
   // Get timer color based on phase
   const getTimerColor = () => {
@@ -150,7 +200,152 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '', isScre
         </div>
       )}
 
-      {/* Clean video surface outside betting: no overlays */}
+      {/* Game Result Overlay - ONLY VISIBLE DURING COMPLETE PHASE */}
+      <AnimatePresence>
+        {gameState.phase === 'complete' && showResult && gameResult && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none"
+          >
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            
+            {/* Result Card */}
+            <motion.div
+              initial={{ scale: 0.8, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.8, y: 20 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="relative z-10 max-w-sm w-full mx-4"
+            >
+              {gameResult.result === 'win' ? (
+                // WIN - Celebration with payout
+                <div className="bg-gradient-to-br from-yellow-600/90 via-yellow-700/90 to-yellow-800/90 rounded-2xl p-6 border-4 border-yellow-400 shadow-2xl">
+                  {/* Trophy Icon */}
+                  <motion.div
+                    initial={{ scale: 0, rotate: -180 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ delay: 0.2, type: "spring" }}
+                    className="text-center mb-4"
+                  >
+                    <div className="text-6xl">🏆</div>
+                  </motion.div>
+                  
+                  {/* Winner Text */}
+                  <motion.div
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="text-center mb-4"
+                  >
+                    <div className="text-3xl font-black text-white mb-2">
+                      {gameResult.winner === 'andar' ? 'ANDAR WON!' : 'BAHAR WON!'}
+                    </div>
+                    <div className="text-xl font-bold text-yellow-200">
+                      {typeof gameResult.winningCard === 'string' 
+                        ? gameResult.winningCard 
+                        : gameResult.winningCard?.display || 'Winning Card'}
+                    </div>
+                  </motion.div>
+                  
+                  {/* Payout Amount */}
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.5, type: "spring" }}
+                    className="bg-black/50 rounded-xl p-4 mb-4 border-2 border-yellow-400"
+                  >
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-yellow-300 mb-1">You Won</div>
+                      <div className="text-4xl font-black text-white">
+                        ₹{gameResult.payoutAmount.toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </motion.div>
+                  
+                  {/* Confetti Effect */}
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl">
+                    {[...Array(20)].map((_, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{
+                          x: '50%',
+                          y: '50%',
+                          scale: 0,
+                          rotate: 0
+                        }}
+                        animate={{
+                          x: Math.random() * 100 + '%',
+                          y: Math.random() * 100 + '%',
+                          scale: [0, 1, 0],
+                          rotate: Math.random() * 360
+                        }}
+                        transition={{
+                          duration: 2 + Math.random(),
+                          delay: Math.random() * 0.5,
+                          repeat: Infinity
+                        }}
+                        className="absolute w-2 h-2 rounded-full"
+                        style={{
+                          backgroundColor: ['#ffd700', '#ff6b6b', '#4ecdc4'][Math.floor(Math.random() * 3)]
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : gameResult.result === 'loss' ? (
+                // LOSS - Better luck next time
+                <div className="bg-gradient-to-br from-gray-800/90 via-gray-700/90 to-gray-800/90 rounded-2xl p-6 border-4 border-gray-500 shadow-2xl">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring" }}
+                    className="text-center"
+                  >
+                    <div className="text-5xl mb-4">😔</div>
+                    <div className="text-2xl font-bold text-white mb-2">
+                      {gameResult.winner === 'andar' ? 'ANDAR WON' : 'BAHAR WON'}
+                    </div>
+                    <div className="text-xl font-semibold text-gray-300 mb-4">
+                      Better Luck Next Time!
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {typeof gameResult.winningCard === 'string' 
+                        ? gameResult.winningCard 
+                        : gameResult.winningCard?.display || 'Winning Card'}
+                    </div>
+                  </motion.div>
+                </div>
+              ) : (
+                // NO BET - Just show winner
+                <div className="bg-gradient-to-br from-purple-800/90 via-purple-700/90 to-purple-800/90 rounded-2xl p-6 border-4 border-purple-400 shadow-2xl">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                    transition={{ type: "spring" }}
+                    className="text-center"
+                  >
+                    <div className="text-4xl mb-3">🎴</div>
+                    <div className="text-3xl font-black text-white mb-2">
+                      {gameResult.winner === 'andar' ? 'ANDAR WON!' : 'BAHAR WON!'}
+                    </div>
+                    <div className="text-lg text-purple-200">
+                      {typeof gameResult.winningCard === 'string' 
+                        ? gameResult.winningCard 
+                        : gameResult.winningCard?.display || 'Winning Card'}
+                    </div>
+                  </motion.div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Clean video surface during dealing: no overlays */}
 
     </div>
   );

@@ -182,7 +182,7 @@ declare global {
 }
 
 // Initialize clients Set before using it
-const clients = new Set<WSClient>();
+export const clients = new Set<WSClient>();
 
 // Async error handler wrapper
 function asyncHandler(fn: Function) {
@@ -217,7 +217,7 @@ interface UserBets {
 }
 
 // Game state management with mutex for thread safety
-class GameState {
+export class GameState {
   private state = {
     gameId: `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Generate unique ID on initialization
     openingCard: null as string | null,
@@ -262,7 +262,23 @@ class GameState {
   set gameId(value: string) { this.state.gameId = value; }
   
   get openingCard() { return this.state.openingCard; }
-  set openingCard(value: string | null) { this.state.openingCard = value; }
+  set openingCard(value: string | null) {
+    // Generate new game ID when opening card is first set, but only if game ID is invalid/default
+    if (value && !this.state.openingCard) {
+      // Only generate new ID if current ID is invalid or default
+      if (!this.state.gameId || 
+          typeof this.state.gameId !== 'string' || 
+          this.state.gameId.trim() === '' ||
+          this.state.gameId === 'default-game' ||
+          this.state.gameId.startsWith('game-') === false) {
+        this.state.gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        console.log(`🎮 New game ID generated for opening card: ${this.state.gameId}`);
+      } else {
+        console.log(`🎮 Using existing game ID for opening card: ${this.state.gameId}`);
+      }
+    }
+    this.state.openingCard = value;
+  }
   
   get phase() { return this.state.phase; }
   set phase(value: GamePhase) { this.state.phase = value; }
@@ -368,11 +384,11 @@ class GameState {
       console.log('🔄 Timer cleared during game reset');
     }
     
-    // Generate a new game ID for each reset
-    const newGameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Preserve the current game ID for the current game session
+    const currentGameId = this.state.gameId;
     
     this.state = {
-      gameId: newGameId,
+      gameId: currentGameId, // Keep the same game ID for current session
       openingCard: null,
       phase: 'idle' as GamePhase,
       currentRound: 1 as 1 | 2 | 3,
@@ -392,6 +408,12 @@ class GameState {
         round2: { baharComplete: false, andarComplete: false }
       }
     };
+  }
+
+  // New game should generate a completely new game ID
+  startNewGame() {
+    this.state.gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    this.reset();
   }
 }
 
@@ -679,7 +701,7 @@ function shouldBufferEvent(eventType: string): boolean {
   return bufferableEvents.includes(eventType);
 }
 
-function broadcastToRole(message: any, role: 'player' | 'admin') {
+export function broadcastToRole(message: any, role: 'player' | 'admin') {
   const messageStr = JSON.stringify({...message, timestamp: Date.now()});
   clients.forEach(client => {
     if (client.role === role && client.ws.readyState === WebSocket.OPEN) {
@@ -695,7 +717,7 @@ function startTimer(duration: number, onComplete: () => void) {
   }
   
   currentGameState.timer = duration;
-  currentGameState.bettingLocked = false;
+  currentGameState.bettingLocked = false; // Betting open at timer start
   
   // Persist timer start
   persistGameState().catch(err => console.error('Error persisting timer start:', err));
@@ -705,7 +727,8 @@ function startTimer(duration: number, onComplete: () => void) {
     data: {
       seconds: currentGameState.timer,
       phase: currentGameState.phase,
-      round: currentGameState.currentRound
+      round: currentGameState.currentRound,
+      bettingLocked: false // Betting is open
     }
   });
   
@@ -713,12 +736,18 @@ function startTimer(duration: number, onComplete: () => void) {
   currentGameState.timerInterval = setInterval(() => {
     currentGameState.timer--;
     
+    // Update betting locked status based on timer
+    if (currentGameState.timer <= 0) {
+      currentGameState.bettingLocked = true;
+    }
+    
     broadcast({
       type: 'timer_update',
       data: {
         seconds: currentGameState.timer,
         phase: currentGameState.phase,
-        round: currentGameState.currentRound
+        round: currentGameState.currentRound,
+        bettingLocked: currentGameState.timer <= 0
       }
     });
     
@@ -736,9 +765,28 @@ function startTimer(duration: number, onComplete: () => void) {
       }
       
       currentGameState.bettingLocked = true;
+      
       // Persist final timer state
       persistGameState().catch(err => console.error('Error persisting timer end:', err));
-      onComplete();
+      
+      // Update phase to dealing
+      currentGameState.phase = 'dealing';
+      
+      // Broadcast phase change
+      broadcast({
+        type: 'phase_change',
+        data: {
+          phase: 'dealing',
+          round: currentGameState.currentRound,
+          bettingLocked: true,
+          message: 'Betting closed. Admin can now deal cards.'
+        }
+      });
+      
+      // Persist phase change
+      persistGameState().catch(err => console.error('Error persisting phase change:', err));
+      
+      onComplete(); // Execute the completion callback
     }
   }, 1000);
 }
@@ -4633,8 +4681,46 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     userWon: boolean;
   }> = [];
   
-  // Step 1: Calculate payouts and send optimistic WebSocket updates IMMEDIATELY
-  for (const [userId, bets] of Array.from(currentGameState.userBets.entries())) {
+  // ✅ FIX #2: Fetch bets from database FIRST to ensure accuracy (prevents race conditions)
+  let dbBets: any[] = [];
+  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+    try {
+      dbBets = await storage.getBetsForGame(currentGameState.gameId);
+      console.log(`📊 Fetched ${dbBets.length} bets from database for payout calculation`);
+    } catch (error) {
+      console.error('⚠️ Error fetching bets from DB, using in-memory state:', error);
+      // Fallback to in-memory state if DB fetch fails
+    }
+  }
+
+  // Step 1: Calculate payouts from DB bets (more accurate) or in-memory state (fallback)
+  // Use DB bets if available, otherwise fall back to in-memory state
+  const userBetsMap = new Map<string, { round1: { andar: number; bahar: number }, round2: { andar: number; bahar: number } }>();
+  
+  if (dbBets.length > 0) {
+    // Process DB bets - group by userId
+    for (const bet of dbBets) {
+      const userId = bet.user_id || bet.userId;
+      if (!userBetsMap.has(userId)) {
+        userBetsMap.set(userId, {
+          round1: { andar: 0, bahar: 0 },
+          round2: { andar: 0, bahar: 0 }
+        });
+      }
+      const userBets = userBetsMap.get(userId)!;
+      const round = bet.round === '1' || bet.round === 1 ? 'round1' : 'round2';
+      const side = bet.side === 'andar' ? 'andar' : 'bahar';
+      userBets[round][side] += parseFloat(bet.amount || '0');
+    }
+  } else {
+    // Fallback to in-memory state
+    for (const [userId, bets] of currentGameState.userBets.entries()) {
+      userBetsMap.set(userId, bets);
+    }
+  }
+
+  // Calculate payouts and send optimistic WebSocket updates IMMEDIATELY
+  for (const [userId, bets] of userBetsMap.entries()) {
     const payout = calculatePayout(currentGameState.currentRound, winner, bets);
     payouts[userId] = payout;
     totalPayoutsAmount += payout;
@@ -4703,80 +4789,110 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     });
   }
   
-  // Step 2: Update database in parallel (background, don't block WebSocket)
-  // ✅ FIX: Game ID is now validated at the start, so this check is redundant but kept for safety
-  if (currentGameState.gameId) {
-    // Prepare batch updates for winners
-    const balanceUpdates = payoutNotifications
-      .filter(notif => notif.payout > 0)
-      .map(notif => ({
-        userId: notif.userId,
-        amountChange: notif.payout
-      }));
-    
-    // Batch update all balances in parallel (single RPC call if available)
-    Promise.all([
-      // Update all balances at once
-      balanceUpdates.length > 0 ? storage.updateMultipleUserBalances(balanceUpdates) : Promise.resolve([]),
-      
-      // Process bet status updates in parallel
-      Promise.all(
-        payoutNotifications.map(async ({ userId, payout, bets, userTotalBet, userWon }) => {
+  // ✅ FIX #3: Use database transaction for payout updates (atomic operation)
+  // Step 2: Update database using transaction (atomic operation)
+  if (currentGameState.gameId && payoutNotifications.length > 0) {
+    // Store payout promise so we can wait for it before resetting
+    const payoutPromise = (async () => {
+      try {
+        // Prepare payout data for transaction
+        const payoutArray: Array<{ userId: string; amount: number }> = [];
+        const winningBets: string[] = [];
+        const losingBets: string[] = [];
+        
+        // Get all bets for this game to update their status
+        const allBets = dbBets.length > 0 ? dbBets : await storage.getBetsForGame(currentGameState.gameId);
+        
+        for (const notification of payoutNotifications) {
+          if (notification.payout > 0) {
+            payoutArray.push({ userId: notification.userId, amount: notification.payout });
+          }
+        }
+        
+        // Group bets by status (winning vs losing)
+        for (const bet of allBets) {
+          const userId = bet.user_id || bet.userId;
+          const notification = payoutNotifications.find(n => n.userId === userId);
+          const payout = notification?.payout || 0;
+          
+          if (bet.side === winner && payout > 0) {
+            winningBets.push(bet.id);
+          } else {
+            losingBets.push(bet.id);
+          }
+        }
+        
+        // Use atomic transaction function if available
+        if (payoutArray.length > 0 || winningBets.length > 0 || losingBets.length > 0) {
           try {
-            if (payout > 0) {
-              // ✅ FIX: Remove non-null assertion - gameId is already validated at function start
-              await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, winner, 'won');
-            } else {
-              const loserSide = winner === 'andar' ? 'bahar' : 'andar';
-              // ✅ FIX: Remove non-null assertion - gameId is already validated at function start
-              await storage.updateBetStatusByGameUser(currentGameState.gameId, userId, loserSide, 'lost');
-            }
-            
-            // Update user game statistics
-            await storage.updateUserGameStats(userId, userWon, userTotalBet, payout);
-          } catch (error) {
-            console.error(`⚠️ Error updating bet status for user ${userId}:`, error);
-          }
-        })
-      )
-    ]).then(async ([balanceResults]) => {
-      // Step 3: Verify balances match and send corrections if needed
-      for (const result of balanceResults) {
-        if (result.success && result.newBalance !== undefined) {
-          const notification = payoutNotifications.find(n => n.userId === result.userId);
-          if (notification && Math.abs(result.newBalance - notification.calculatedBalance) > 0.01) {
-            // Balance mismatch - send correction
-            console.warn(`⚠️ Balance mismatch for ${result.userId}: expected ${notification.calculatedBalance}, got ${result.newBalance}`);
-            const client = clients.find(c => c.userId === result.userId && c.ws.readyState === WebSocket.OPEN);
-            if (client) {
-              client.ws.send(JSON.stringify({
-                type: 'balance_correction',
-                data: {
-                  balance: result.newBalance,
-                  reason: 'Balance correction after verification',
-                  timestamp: Date.now()
+            await storage.applyPayoutsAndupdateBets(payoutArray, winningBets, losingBets);
+            console.log(`✅ Applied payouts for ${payoutArray.length} users via transaction`);
+          } catch (transactionError) {
+            console.error('⚠️ Transaction failed, falling back to individual updates:', transactionError);
+            // Fallback to individual updates
+            await Promise.all(
+              payoutNotifications.map(async ({ userId, payout, userTotalBet, userWon }) => {
+                try {
+                  if (payout > 0) {
+                    await storage.addBalanceAtomic(userId, payout);
+                    await storage.updateBetStatusByGameUser(currentGameState.gameId!, userId, winner, 'won');
+                  } else {
+                    const loserSide = winner === 'andar' ? 'bahar' : 'andar';
+                    await storage.updateBetStatusByGameUser(currentGameState.gameId!, userId, loserSide, 'lost');
+                  }
+                  await storage.updateUserGameStats(userId, userWon, userTotalBet, payout);
+                } catch (error) {
+                  console.error(`⚠️ Error updating payout for user ${userId}:`, error);
                 }
-              }));
+              })
+            );
+          }
+        }
+        
+        // Verify balances and send corrections if needed
+        for (const notification of payoutNotifications) {
+          if (notification.payout > 0) {
+            try {
+              const actualBalance = await storage.getUserBalance(notification.userId);
+              if (Math.abs(actualBalance - notification.calculatedBalance) > 0.01) {
+                console.warn(`⚠️ Balance mismatch for ${notification.userId}: expected ${notification.calculatedBalance}, got ${actualBalance}`);
+                const client = clients.find(c => c.userId === notification.userId && c.ws.readyState === WebSocket.OPEN);
+                if (client) {
+                  client.ws.send(JSON.stringify({
+                    type: 'balance_correction',
+                    data: {
+                      balance: actualBalance,
+                      reason: 'Balance correction after verification',
+                      timestamp: Date.now()
+                    }
+                  }));
+                }
+              }
+            } catch (error) {
+              console.error(`⚠️ Error verifying balance for ${notification.userId}:`, error);
             }
           }
-        } else if (!result.success) {
-          // Send error notification
-          console.error(`❌ Failed to update balance for ${result.userId}:`, result.error);
-          const client = clients.find(c => c.userId === result.userId && c.ws.readyState === WebSocket.OPEN);
+        }
+      } catch (error) {
+        console.error('❌ Error in payout processing:', error);
+        // Send error notifications to affected users
+        for (const notification of payoutNotifications) {
+          const client = clients.find(c => c.userId === notification.userId && c.ws.readyState === WebSocket.OPEN);
           if (client) {
             client.ws.send(JSON.stringify({
               type: 'payout_error',
               data: {
-                message: 'Failed to update balance. Please refresh or contact support.',
+                message: 'Failed to process payout. Please contact support.',
                 timestamp: Date.now()
               }
             }));
           }
         }
       }
-    }).catch(error => {
-      console.error('Error in background balance updates:', error);
-    });
+    })();
+    
+    // Store promise for waiting before reset
+    (global as any).lastPayoutPromise = payoutPromise;
   }
   
   // Calculate company profit/loss for this game
@@ -4912,7 +5028,7 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       }, 'admin');
     }
     
-    // Broadcast game history update to ALL users (for real-time updates)
+    // Broadcast game history update to ALL users (basic data only)
     broadcast({
       type: 'game_history_update',
       data: {
@@ -4922,18 +5038,13 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
         winningCard,
         round: currentGameState.currentRound,
         totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
-        totalBets: totalBetsAmount,
-        totalPayouts: totalPayoutsAmount,
-        andarTotalBet: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
-        baharTotalBet: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
-        totalPlayers: uniquePlayers,
         createdAt: new Date().toISOString()
       }
     });
 
-    // Also broadcast detailed analytics to admins only (with financial data)
+    // Broadcast detailed analytics to admins only (with financial data) - separate event type
     broadcastToRole({
-      type: 'game_history_update',
+      type: 'game_history_update_admin',
       data: {
         gameId: currentGameState.gameId,
         openingCard: currentGameState.openingCard,
@@ -5026,6 +5137,10 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       
       await storage.saveGameHistory(historyData as any);
       console.log(`✅ Game history saved successfully for gameId: ${currentGameState.gameId}`);
+      
+      // Mark game session as completed in database
+      await storage.completeGameSession(currentGameState.gameId, winner, winningCard);
+      console.log(`✅ Game session completed in database: ${currentGameState.gameId}`);
     } catch (error) {
       console.error('❌ ERROR saving game history:', error);
       console.error('Game details:', {
@@ -5039,15 +5154,46 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     console.error(`❌ CRITICAL: Cannot save game history - gameId is null/undefined`);
   }
   
-  // Auto-restart: Reset to idle after 5 seconds
-  console.log('⏰ Auto-restarting game in 5 seconds...');
-  setTimeout(() => {
-    console.log('🔄 Auto-restart: Resetting game to idle state');
+  // ✅ FIX #1: Wait for all operations to complete before resetting
+  // Auto-restart: Wait for all operations to complete before resetting
+  console.log('⏰ Auto-restarting game after DB operations complete...');
+  
+  // Wait for all payout updates to complete before resetting
+  const waitForPayouts = async () => {
+    try {
+      // Wait for payout promise if it exists
+      const payoutPromise = (global as any).lastPayoutPromise;
+      if (payoutPromise) {
+        await payoutPromise;
+        console.log('✅ Payout operations completed');
+      }
+      
+      // Give extra time for any remaining DB operations
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Verify game session completion was saved
+      if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
+        try {
+          await storage.completeGameSession(currentGameState.gameId, winner, winningCard);
+          console.log(`✅ Game session completed in database: ${currentGameState.gameId}`);
+        } catch (error) {
+          console.error('⚠️ Error completing game session:', error);
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('⚠️ Error waiting for payouts:', error);
+      return false;
+    }
+  };
+
+  // Execute reset after waiting for all operations
+  waitForPayouts().then(() => {
+    console.log('🔄 Auto-restart: Starting new game setup');
     
     // Reset game state
-    currentGameState.phase = 'idle';
-    currentGameState.currentRound = 1;
-    currentGameState.openingCard = null;
+    currentGameState.startNewGame();
     currentGameState.clearCards();
     currentGameState.winner = null;
     currentGameState.winningCard = null;
@@ -5059,7 +5205,28 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     currentGameState.bettingLocked = false;
     currentGameState.timer = 0;
     
-    // Broadcast reset to all clients
+    // Clear payout promise
+    (global as any).lastPayoutPromise = null;
+    
+    // Broadcast return to opening card panel
+    broadcast({
+      type: 'game_return_to_opening',
+      data: {
+        message: 'Game completed. Starting new game setup...',
+        gameState: {
+          phase: 'idle',
+          currentRound: 1,
+          openingCard: null,
+          andarCards: [],
+          baharCards: [],
+          winner: null,
+          winningCard: null,
+          gameId: currentGameState.gameId
+        }
+      }
+    });
+    
+    // Also broadcast reset message
     broadcast({
       type: 'game_reset',
       data: {
@@ -5079,7 +5246,12 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     });
     
     console.log('✅ Game auto-restarted successfully');
-  }, 5000);
+  }).catch(error => {
+    console.error('❌ Error during game reset:', error);
+    // Still reset game state even if there was an error
+    currentGameState.startNewGame();
+    currentGameState.clearCards();
+  });
 }
 
 // Make game state and functions globally available

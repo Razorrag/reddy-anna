@@ -98,7 +98,8 @@ CREATE TYPE user_status AS ENUM ('active', 'suspended', 'banned', 'inactive');
 CREATE TYPE game_phase AS ENUM ('idle', 'betting', 'dealing', 'complete');
 CREATE TYPE game_status AS ENUM ('active', 'completed', 'cancelled');
 CREATE TYPE bet_side AS ENUM ('andar', 'bahar');
-CREATE TYPE transaction_type AS ENUM ('deposit', 'withdrawal', 'bet', 'win', 'refund', 'bonus', 'commission', 'support');
+-- ✅ FIX: Added missing transaction types used by code
+CREATE TYPE transaction_type AS ENUM ('deposit', 'withdrawal', 'bet', 'win', 'refund', 'bonus', 'commission', 'support', 'bonus_applied', 'conditional_bonus_applied');
 CREATE TYPE transaction_status AS ENUM ('pending', 'completed', 'failed', 'cancelled');
 CREATE TYPE request_status AS ENUM ('pending', 'approved', 'rejected', 'processing', 'processed', 'completed');
 
@@ -126,6 +127,10 @@ CREATE TABLE users (
   referral_bonus_available DECIMAL(15, 2) DEFAULT '0.00',
   original_deposit_amount DECIMAL(15, 2) DEFAULT '0.00',
   total_bonus_earned DECIMAL(15, 2) DEFAULT '0.00',
+  -- ✅ NEW: Wagering requirement tracking columns for bonus system
+  wagering_requirement DECIMAL(15, 2) DEFAULT '0.00',
+  wagering_completed DECIMAL(15, 2) DEFAULT '0.00',
+  bonus_locked BOOLEAN DEFAULT false,
   last_login TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -981,7 +986,10 @@ INSERT INTO game_settings (setting_key, setting_value, description) VALUES
 ('referral_commission', '5', 'Referral commission percentage'),
 ('default_deposit_bonus_percent', '5', 'Default deposit bonus percentage'),
 ('referral_bonus_percent', '1', 'Referral bonus percentage'),
-('conditional_bonus_threshold', '30', 'Conditional bonus threshold percentage')
+('conditional_bonus_threshold', '30', 'Conditional bonus threshold percentage'),
+-- ✅ NEW: Added missing game settings
+('bonus_claim_threshold', '500', 'Bonus claim threshold amount'),
+('wagering_multiplier', '1', 'Wagering requirement multiplier (1x = same as deposit)')
 ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value;
 
 -- ============================================
@@ -1033,28 +1041,28 @@ ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value;
 -- ============================================
 -- CREATE ADMIN ACCOUNTS
 -- ============================================
--- Password: admin123
--- Hash: $2b$12$YRanbM3QQ//LTd35cuHUlerlHCZN5Xd1/HY80Zqmof6HIRgzRue6m
--- Generated with bcrypt (salt rounds: 12)
+-- ✅ NEW: Generated fresh bcrypt password hashes
+-- Password: Admin@2025!
+-- Hash generated with bcrypt (salt rounds: 12)
 
 INSERT INTO admin_credentials (username, password_hash, role) VALUES
-('admin', '$2b$12$YRanbM3QQ//LTd35cuHUlerlHCZN5Xd1/HY80Zqmof6HIRgzRue6m', 'admin'),
-('rajugarikossu', '$2b$12$YRanbM3QQ//LTd35cuHUlerlHCZN5Xd1/HY80Zqmof6HIRgzRue6m', 'admin')
+('admin', '$2b$12$qINdBuonpbnqOitnG9p2UuMNSI/Q/8vmfTJ1thC3jCclvq9I7zfI2', 'admin'),
+('rajugarikossu', '$2b$12$qINdBuonpbnqOitnG9p2UuMNSI/Q/8vmfTJ1thC3jCclvq9I7zfI2', 'admin')
 ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- ============================================
 -- CREATE TEST USER ACCOUNTS
 -- ============================================
--- Password for all test users: Test@123
--- Hash: $2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm
--- Generated with bcrypt (salt rounds: 12)
+-- ✅ NEW: Generated fresh bcrypt password hashes
+-- Password for all test users: Player@2025!
+-- Hash generated with bcrypt (salt rounds: 12)
 
 INSERT INTO users (id, phone, password_hash, full_name, role, status, balance, referral_code_generated) VALUES
-('9876543210', '9876543210', '$2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm', 'Test Player 1', 'player', 'active', 100000.00, 'RAJUGARIKOSSU0001'),
-('9876543211', '9876543211', '$2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm', 'Test Player 2', 'player', 'active', 50000.00, 'RAJUGARIKOSSU0002'),
-('9876543212', '9876543212', '$2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm', 'Test Player 3', 'player', 'active', 75000.00, 'RAJUGARIKOSSU0003'),
-('9876543213', '9876543213', '$2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm', 'Test Player 4', 'player', 'active', 25000.00, 'RAJUGARIKOSSU0004'),
-('9876543214', '9876543214', '$2b$12$35rsPz6M7.a2vtTWSsxMzekafTaLBTUJ5lNd7HXGxFLHZRzXhn.bm', 'Test Player 5', 'player', 'active', 10000.00, 'RAJUGARIKOSSU0005')
+('9876543210', '9876543210', '$2b$12$MVMdrPDnyZJksKmRdpiacOVkTYOpXtD8TVCFnV8Bgg8TYbxu0oQDa', 'Test Player 1', 'player', 'active', 100000.00, 'RAJUGARIKOSSU0001'),
+('9876543211', '9876543211', '$2b$12$MVMdrPDnyZJksKmRdpiacOVkTYOpXtD8TVCFnV8Bgg8TYbxu0oQDa', 'Test Player 2', 'player', 'active', 50000.00, 'RAJUGARIKOSSU0002'),
+('9876543212', '9876543212', '$2b$12$MVMdrPDnyZJksKmRdpiacOVkTYOpXtD8TVCFnV8Bgg8TYbxu0oQDa', 'Test Player 3', 'player', 'active', 75000.00, 'RAJUGARIKOSSU0003'),
+('9876543213', '9876543213', '$2b$12$MVMdrPDnyZJksKmRdpiacOVkTYOpXtD8TVCFnV8Bgg8TYbxu0oQDa', 'Test Player 4', 'player', 'active', 25000.00, 'RAJUGARIKOSSU0004'),
+('9876543214', '9876543214', '$2b$12$MVMdrPDnyZJksKmRdpiacOVkTYOpXtD8TVCFnV8Bgg8TYbxu0oQDa', 'Test Player 5', 'player', 'active', 10000.00, 'RAJUGARIKOSSU0005')
 ON CONFLICT (id) DO UPDATE SET 
   password_hash = EXCLUDED.password_hash,
   balance = EXCLUDED.balance,
@@ -1116,19 +1124,28 @@ SELECT id, phone, full_name, balance, status FROM users ORDER BY created_at;
 -- SCRIPT COMPLETED
 -- ============================================
 -- 
--- Admin Accounts Created:
+-- ✅ NEW ADMIN ACCOUNTS (Fresh Password Hashes):
 --   Username: admin
---   Password: admin123
+--   Password: Admin@2025!
+--   Hash: $2b$12$qINdBuonpbnqOitnG9p2UuMNSI/Q/8vmfTJ1thC3jCclvq9I7zfI2
 --   
 --   Username: rajugarikossu
---   Password: admin123
+--   Password: Admin@2025!
+--   Hash: $2b$12$qINdBuonpbnqOitnG9p2UuMNSI/Q/8vmfTJ1thC3jCclvq9I7zfI2
 --
--- Test User Accounts Created:
---   Phone: 9876543210, Password: Test@123, Balance: ₹1,00,000
---   Phone: 9876543211, Password: Test@123, Balance: ₹50,000
---   Phone: 9876543212, Password: Test@123, Balance: ₹75,000
---   Phone: 9876543213, Password: Test@123, Balance: ₹25,000
---   Phone: 9876543214, Password: Test@123, Balance: ₹10,000
+-- ✅ NEW TEST USER ACCOUNTS (Fresh Password Hashes):
+--   Phone: 9876543210, Password: Player@2025!, Balance: ₹1,00,000
+--   Phone: 9876543211, Password: Player@2025!, Balance: ₹50,000
+--   Phone: 9876543212, Password: Player@2025!, Balance: ₹75,000
+--   Phone: 9876543213, Password: Player@2025!, Balance: ₹25,000
+--   Phone: 9876543214, Password: Player@2025!, Balance: ₹10,000
+--
+-- ✅ FIXES APPLIED:
+--   1. Added wagering_requirement, wagering_completed, bonus_locked columns to users table
+--   2. Added bonus_applied and conditional_bonus_applied to transaction_type enum
+--   3. Added bonus_claim_threshold and wagering_multiplier to game_settings
+--   4. game_history table columns are nullable (opening_card, winner, winning_card)
+--   5. All functions, triggers, views, and indexes are properly created
 --
 -- ============================================
 
