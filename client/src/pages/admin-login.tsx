@@ -98,13 +98,32 @@ export default function AdminLogin() {
       console.log('🔐 Calling login with admin data and tokens');
       login(adminData, token, refreshToken);
       
-      // Wait a bit for localStorage to settle before redirecting
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for state to update and localStorage to settle before redirecting
+      // Use multiple small delays to ensure React state has propagated
+      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 50));
       
-      console.log('✅ Admin login successful, redirecting to /admin');
+      // Verify token was stored before redirecting
+      const storedToken = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      
+      if (!storedToken || !storedUser || !isLoggedIn) {
+        console.error('❌ Auth data not stored properly:', {
+          hasToken: !!storedToken,
+          hasUser: !!storedUser,
+          isLoggedIn
+        });
+        setError('⚠️ Authentication Error: Failed to store authentication data. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log('✅ Admin login successful, auth data verified, redirecting to /admin');
 
       // Redirect to admin panel after successful login
-      setLocation('/admin');
+      // Use window.location for a clean redirect to ensure state is reset
+      window.location.href = '/admin';
     } catch (err: any) {
       console.error('Admin login error:', err);
       

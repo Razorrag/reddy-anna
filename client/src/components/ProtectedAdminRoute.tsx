@@ -18,13 +18,40 @@ const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
   const [minWaitComplete, setMinWaitComplete] = React.useState(false);
   
   // Check if user has admin role (allow only admins and super_admins)
-  const isAdmin = authState.isAuthenticated && 
-    authState.user && 
-    (authState.user.role === 'admin' || authState.user.role === 'super_admin');
+  // Also check localStorage directly as a fallback
+  const storedUser = React.useMemo(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        return JSON.parse(userStr);
+      }
+    } catch (e) {
+      console.error('Error parsing stored user:', e);
+    }
+    return null;
+  }, [authState.user]); // Re-check when authState changes
+
+  const isAdmin = React.useMemo(() => {
+    // Check both authState and localStorage for admin role
+    const user = authState.user || storedUser;
+    if (!user) return false;
+    
+    const role = (user.role || '').toLowerCase();
+    return role === 'admin' || role === 'super_admin';
+  }, [authState.user, storedUser]);
+
+  const isAuthenticated = React.useMemo(() => {
+    // Check both authState and localStorage
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    const hasToken = !!localStorage.getItem('token');
+    const hasUser = !!storedUser || !!authState.user;
+    
+    return (authState.isAuthenticated || (isLoggedIn && hasToken && hasUser));
+  }, [authState.isAuthenticated, storedUser, authState.user]);
 
   // Minimum wait to prevent flash of loading/login page
   React.useEffect(() => {
-    const timer = setTimeout(() => setMinWaitComplete(true), 150);
+    const timer = setTimeout(() => setMinWaitComplete(true), 200);
     return () => clearTimeout(timer);
   }, []);
 
@@ -41,8 +68,15 @@ const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
     }
 
     // If user is not authenticated, redirect to admin login
-    if (!authState.isAuthenticated) {
+    if (!isAuthenticated) {
       console.log('ProtectedAdminRoute: User not authenticated, redirecting to admin login');
+      console.log('Auth state:', { 
+        authChecked: authState.authChecked, 
+        isAuthenticated: authState.isAuthenticated,
+        hasStoredUser: !!storedUser,
+        hasToken: !!localStorage.getItem('token'),
+        isLoggedIn: localStorage.getItem('isLoggedIn')
+      });
       setLocation('/admin-login');
       return;
     }
@@ -50,9 +84,10 @@ const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
     // If user is authenticated but not admin, redirect to unauthorized
     if (!isAdmin) {
       console.log('ProtectedAdminRoute: User not admin, redirecting to unauthorized');
+      console.log('User role:', storedUser?.role || authState.user?.role);
       setLocation('/unauthorized');
     }
-  }, [requireAuth, isAdmin, authState.authChecked, authState.isAuthenticated, minWaitComplete, setLocation]);
+  }, [requireAuth, isAdmin, isAuthenticated, authState.authChecked, minWaitComplete, setLocation, storedUser]);
 
   // Show loading while checking authentication status or minimum wait
   if (!authState.authChecked || !minWaitComplete) {
@@ -64,7 +99,7 @@ const ProtectedAdminRoute: React.FC<ProtectedAdminRouteProps> = ({
   }
 
   // If authentication is required but user is not authenticated or not admin, block rendering
-  if (requireAuth && (!authState.isAuthenticated || !isAdmin)) {
+  if (requireAuth && (!isAuthenticated || !isAdmin)) {
     return null;
   }
   

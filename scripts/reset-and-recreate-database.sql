@@ -1042,27 +1042,27 @@ ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value;
 -- CREATE ADMIN ACCOUNTS
 -- ============================================
 -- ✅ NEW: Generated fresh bcrypt password hashes
--- Password: Admin@2025!
+-- Password: admin123
 -- Hash generated with bcrypt (salt rounds: 12)
 
 INSERT INTO admin_credentials (username, password_hash, role) VALUES
-('admin', '$2b$12$qINdBuonpbnqOitnG9p2UuMNSI/Q/8vmfTJ1thC3jCclvq9I7zfI2', 'admin'),
-('rajugarikossu', '$2b$12$qINdBuonpbnqOitnG9p2UuMNSI/Q/8vmfTJ1thC3jCclvq9I7zfI2', 'admin')
+('admin', '$2b$12$kboT2aS9EqAQjfbcAGL3GOYSBtrJsgq2eLPxonASwnnUjeNfNZ9ZW', 'admin'),
+('rajugarikossu', '$2b$12$kboT2aS9EqAQjfbcAGL3GOYSBtrJsgq2eLPxonASwnnUjeNfNZ9ZW', 'admin')
 ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- ============================================
 -- CREATE TEST USER ACCOUNTS
 -- ============================================
 -- ✅ NEW: Generated fresh bcrypt password hashes
--- Password for all test users: Player@2025!
+-- Password for all test users: Test@123
 -- Hash generated with bcrypt (salt rounds: 12)
 
 INSERT INTO users (id, phone, password_hash, full_name, role, status, balance, referral_code_generated) VALUES
-('9876543210', '9876543210', '$2b$12$MVMdrPDnyZJksKmRdpiacOVkTYOpXtD8TVCFnV8Bgg8TYbxu0oQDa', 'Test Player 1', 'player', 'active', 100000.00, 'RAJUGARIKOSSU0001'),
-('9876543211', '9876543211', '$2b$12$MVMdrPDnyZJksKmRdpiacOVkTYOpXtD8TVCFnV8Bgg8TYbxu0oQDa', 'Test Player 2', 'player', 'active', 50000.00, 'RAJUGARIKOSSU0002'),
-('9876543212', '9876543212', '$2b$12$MVMdrPDnyZJksKmRdpiacOVkTYOpXtD8TVCFnV8Bgg8TYbxu0oQDa', 'Test Player 3', 'player', 'active', 75000.00, 'RAJUGARIKOSSU0003'),
-('9876543213', '9876543213', '$2b$12$MVMdrPDnyZJksKmRdpiacOVkTYOpXtD8TVCFnV8Bgg8TYbxu0oQDa', 'Test Player 4', 'player', 'active', 25000.00, 'RAJUGARIKOSSU0004'),
-('9876543214', '9876543214', '$2b$12$MVMdrPDnyZJksKmRdpiacOVkTYOpXtD8TVCFnV8Bgg8TYbxu0oQDa', 'Test Player 5', 'player', 'active', 10000.00, 'RAJUGARIKOSSU0005')
+('9876543210', '9876543210', '$2b$12$tRhJv.A9JJ2rKdJp2rCmcePr.QDZTtAxLZTbILHFsuLYUhxshkaKu', 'Test Player 1', 'player', 'active', 100000.00, 'RAJUGARIKOSSU0001'),
+('9876543211', '9876543211', '$2b$12$tRhJv.A9JJ2rKdJp2rCmcePr.QDZTtAxLZTbILHFsuLYUhxshkaKu', 'Test Player 2', 'player', 'active', 50000.00, 'RAJUGARIKOSSU0002'),
+('9876543212', '9876543212', '$2b$12$tRhJv.A9JJ2rKdJp2rCmcePr.QDZTtAxLZTbILHFsuLYUhxshkaKu', 'Test Player 3', 'player', 'active', 75000.00, 'RAJUGARIKOSSU0003'),
+('9876543213', '9876543213', '$2b$12$tRhJv.A9JJ2rKdJp2rCmcePr.QDZTtAxLZTbILHFsuLYUhxshkaKu', 'Test Player 4', 'player', 'active', 25000.00, 'RAJUGARIKOSSU0004'),
+('9876543214', '9876543214', '$2b$12$tRhJv.A9JJ2rKdJp2rCmcePr.QDZTtAxLZTbILHFsuLYUhxshkaKu', 'Test Player 5', 'player', 'active', 10000.00, 'RAJUGARIKOSSU0005')
 ON CONFLICT (id) DO UPDATE SET 
   password_hash = EXCLUDED.password_hash,
   balance = EXCLUDED.balance,
@@ -1126,19 +1126,19 @@ SELECT id, phone, full_name, balance, status FROM users ORDER BY created_at;
 -- 
 -- ✅ NEW ADMIN ACCOUNTS (Fresh Password Hashes):
 --   Username: admin
---   Password: Admin@2025!
---   Hash: $2b$12$qINdBuonpbnqOitnG9p2UuMNSI/Q/8vmfTJ1thC3jCclvq9I7zfI2
+--   Password: admin123
+--   Hash: $2b$12$kboT2aS9EqAQjfbcAGL3GOYSBtrJsgq2eLPxonASwnnUjeNfNZ9ZW
 --   
 --   Username: rajugarikossu
---   Password: Admin@2025!
---   Hash: $2b$12$qINdBuonpbnqOitnG9p2UuMNSI/Q/8vmfTJ1thC3jCclvq9I7zfI2
+--   Password: admin123
+--   Hash: $2b$12$kboT2aS9EqAQjfbcAGL3GOYSBtrJsgq2eLPxonASwnnUjeNfNZ9ZW
 --
 -- ✅ NEW TEST USER ACCOUNTS (Fresh Password Hashes):
---   Phone: 9876543210, Password: Player@2025!, Balance: ₹1,00,000
---   Phone: 9876543211, Password: Player@2025!, Balance: ₹50,000
---   Phone: 9876543212, Password: Player@2025!, Balance: ₹75,000
---   Phone: 9876543213, Password: Player@2025!, Balance: ₹25,000
---   Phone: 9876543214, Password: Player@2025!, Balance: ₹10,000
+--   Phone: 9876543210, Password: Test@123, Balance: ₹1,00,000
+--   Phone: 9876543211, Password: Test@123, Balance: ₹50,000
+--   Phone: 9876543212, Password: Test@123, Balance: ₹75,000
+--   Phone: 9876543213, Password: Test@123, Balance: ₹25,000
+--   Phone: 9876543214, Password: Test@123, Balance: ₹10,000
 --
 -- ✅ FIXES APPLIED:
 --   1. Added wagering_requirement, wagering_completed, bonus_locked columns to users table
