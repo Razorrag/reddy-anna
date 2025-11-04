@@ -159,7 +159,6 @@ export async function handlePlayerBet(client: WSClient, data: any) {
     }
 
     // Add bet to current game state (only after successful balance deduction)
-    const roundNum = parseInt(round);
     if (roundNum === 1) {
       if ((global as any).currentGameState?.userBets?.get) {
         if (!(global as any).currentGameState.userBets.has(userId)) {

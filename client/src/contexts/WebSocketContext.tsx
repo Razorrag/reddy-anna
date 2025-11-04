@@ -968,35 +968,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         // Balance update is silent (no notification needed)
         break;
       }
-
-      // Balance correction (sent when server detects mismatch)
-      case 'balance_correction': {
-        const { balance, reason } = (data as any).data;
-        
-        // Update balance with correction
-        if (balance !== undefined && balance !== null) {
-          updatePlayerWallet(balance);
-          const balanceEvent = new CustomEvent('balance-websocket-update', {
-            detail: { balance, timestamp: Date.now(), correction: true }
-          });
-          window.dispatchEvent(balanceEvent);
-          
-          // Show notification if reason provided
-          if (reason) {
-            console.warn(`Balance corrected: ${reason}`);
-          }
-        }
-        break;
-      }
-
-      // Payout error (sent when balance update fails)
-      case 'payout_error': {
-        const { message } = (data as any).data;
-        showNotification(message || 'An error occurred processing your payout', 'error');
-        // Trigger balance refresh to get accurate balance
-        window.dispatchEvent(new CustomEvent('refresh-balance'));
-        break;
-      }
       
       case 'user_bets_update': {
         // ✅ FIX: user_bets_update is sent after DB fetch, but bet_confirmed already updated local state
