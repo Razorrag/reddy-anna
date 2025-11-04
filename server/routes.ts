@@ -4652,7 +4652,8 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     currentGameState.timerInterval = null;
   }
   
-  // Persist game completion
+  // ✅ CRITICAL FIX: Save game state FIRST before any other operations
+  // This ensures the game is marked as complete in the database
   await persistGameState();
   
   // Calculate payouts and analytics
@@ -5111,44 +5112,58 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     }
   });
   
-  // ✅ FIX: Game ID is already validated at the start of the function
-  // Now save the game history (game ID is guaranteed to be valid at this point)
-  if (currentGameState.gameId) {
+  // ✅ CRITICAL FIX: Save game history and complete game session BEFORE auto-restart
+  // This ensures the game is properly saved even if auto-restart happens
+  // Store game data in variables BEFORE reset to avoid losing data
+  const completedGameId = currentGameState.gameId;
+  const completedOpeningCard = currentGameState.openingCard || 'UNKNOWN';
+  const completedWinner = winner;
+  const completedWinningCard = winningCard;
+  const completedRound = currentGameState.currentRound;
+  const completedTotalCards = currentGameState.andarCards.length + currentGameState.baharCards.length;
+  
+  if (completedGameId) {
     try {
       const historyData = {
-        gameId: currentGameState.gameId,
-        openingCard: currentGameState.openingCard || 'UNKNOWN', // ✅ FIX: Use fallback instead of !
-        winner,
-        winningCard,
-        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
-        ...(currentGameState.currentRound && { round: currentGameState.currentRound } as any),
+        gameId: completedGameId,
+        openingCard: completedOpeningCard,
+        winner: completedWinner,
+        winningCard: completedWinningCard,
+        totalCards: completedTotalCards,
+        ...(completedRound && { round: completedRound } as any),
         ...(totalBetsAmount && { totalBets: totalBetsAmount } as any),
         ...(totalPayoutsAmount && { totalPayouts: totalPayoutsAmount } as any)
       };
       
-      console.log(`💾 Saving game history for gameId: ${currentGameState.gameId}`, {
-        winner,
-        winningCard,
+      console.log(`💾 Saving game history for gameId: ${completedGameId}`, {
+        winner: completedWinner,
+        winningCard: completedWinningCard,
         totalCards: historyData.totalCards,
-        round: currentGameState.currentRound,
+        round: completedRound,
         totalBets: totalBetsAmount,
         totalPayouts: totalPayoutsAmount
       });
       
+      // ✅ CRITICAL: Save game history FIRST - this is the most important save
       await storage.saveGameHistory(historyData as any);
-      console.log(`✅ Game history saved successfully for gameId: ${currentGameState.gameId}`);
+      console.log(`✅ Game history saved successfully for gameId: ${completedGameId}`);
       
-      // Mark game session as completed in database
-      await storage.completeGameSession(currentGameState.gameId, winner, winningCard);
-      console.log(`✅ Game session completed in database: ${currentGameState.gameId}`);
+      // ✅ CRITICAL: Mark game session as completed - ensure status is saved
+      await storage.completeGameSession(completedGameId, completedWinner, completedWinningCard);
+      console.log(`✅ Game session completed in database: ${completedGameId}`);
+      
+      // ✅ CRITICAL: Final persist to ensure all data is saved
+      await persistGameState();
+      console.log(`✅ Final game state persisted for gameId: ${completedGameId}`);
     } catch (error) {
       console.error('❌ ERROR saving game history:', error);
       console.error('Game details:', {
-        gameId: currentGameState.gameId,
-        winner,
-        winningCard,
-        round: currentGameState.currentRound
+        gameId: completedGameId,
+        winner: completedWinner,
+        winningCard: completedWinningCard,
+        round: completedRound
       });
+      // Don't throw - continue with game completion even if save fails
     }
   } else {
     console.error(`❌ CRITICAL: Cannot save game history - gameId is null/undefined`);
@@ -5169,17 +5184,10 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       }
       
       // Give extra time for any remaining DB operations
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Verify game session completion was saved
-      if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
-        try {
-          await storage.completeGameSession(currentGameState.gameId, winner, winningCard);
-          console.log(`✅ Game session completed in database: ${currentGameState.gameId}`);
-        } catch (error) {
-          console.error('⚠️ Error completing game session:', error);
-        }
-      }
+      // ✅ REMOVED: Game session completion is already saved above before waitForPayouts
+      // No need to verify again here as it's already completed
       
       return true;
     } catch (error) {

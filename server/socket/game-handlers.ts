@@ -350,8 +350,35 @@ export async function handleStartGame(client: WSClient, data: any) {
   try {
     // Use the actual game state from routes.ts global variables
     if ((global as any).currentGameState) {
+      // ✅ CRITICAL FIX: Check if previous game was completed and ensure it's properly reset
+      const currentPhase = (global as any).currentGameState.phase;
+      if (currentPhase === 'complete') {
+        console.log('🔄 Previous game was completed, ensuring full reset before starting new game...');
+        // Clear any pending operations
+        if ((global as any).lastPayoutPromise) {
+          try {
+            await (global as any).lastPayoutPromise;
+          } catch (error) {
+            console.warn('⚠️ Error waiting for previous payout operation:', error);
+          }
+          (global as any).lastPayoutPromise = null;
+        }
+      }
+      
       // Start a new game (generates new game ID and resets state)
+      // This will generate a new gameId and reset all state
       (global as any).currentGameState.startNewGame();
+      
+      // ✅ CRITICAL: Ensure all game state is properly reset
+      (global as any).currentGameState.winner = null;
+      (global as any).currentGameState.winningCard = null;
+      (global as any).currentGameState.andarCards = [];
+      (global as any).currentGameState.baharCards = [];
+      (global as any).currentGameState.round1Bets = { andar: 0, bahar: 0 };
+      (global as any).currentGameState.round2Bets = { andar: 0, bahar: 0 };
+      if ((global as any).currentGameState.userBets) {
+        (global as any).currentGameState.userBets.clear();
+      }
       
       // Set opening card (this will generate game ID if not already generated)
       (global as any).currentGameState.openingCard = data.openingCard;
@@ -364,6 +391,7 @@ export async function handleStartGame(client: WSClient, data: any) {
       (global as any).currentGameState.phase = 'betting';
       (global as any).currentGameState.currentRound = 1;
       (global as any).currentGameState.bettingLocked = false;
+      (global as any).currentGameState.timer = 0;
 
       // Store in database
       const { storage } = await import('../storage-supabase');
@@ -606,8 +634,15 @@ export async function handleDealCard(client: WSClient, data: any) {
         );
       }
 
-      // Complete the game with payouts
-      completeGame((global as any).currentGameState, data.side === 'andar' ? 'andar' : 'bahar', data.card);
+      // Complete the game with payouts and transition to new game
+      // Use the global completeGame function which includes transition logic
+      const globalCompleteGame = (global as any).completeGame;
+      if (globalCompleteGame && typeof globalCompleteGame === 'function') {
+        globalCompleteGame(data.side === 'andar' ? 'andar' : 'bahar', data.card);
+      } else {
+        console.error('❌ Global completeGame function not available, falling back to local function');
+        completeGame((global as any).currentGameState, data.side === 'andar' ? 'andar' : 'bahar', data.card);
+      }
 
       console.log(`🏆 GAME COMPLETE: Winner is ${data.side} with card ${data.card}`);
     } else if (isRoundComplete && currentRound < 3) {

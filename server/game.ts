@@ -142,6 +142,12 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   }
   
   // STEP 1: Update database with bet statuses and payouts ATOMICALLY
+  // ✅ CRITICAL FIX: Decouple payout processing from game history saving
+  // Game history MUST be saved even if payouts fail
+  let payoutSuccess = false;
+  let fallbackUsed = false;
+  let payoutError: any = null;
+  
   try {
     await storage.applyPayoutsAndupdateBets(
       payoutArray.map(p => ({ userId: p.userId, amount: p.amount })),
@@ -149,18 +155,68 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       losingBetIds
     );
     console.log(`✅ Database updated: ${payoutArray.length} payout records, ${winningBetIds.length} winning bets, ${losingBetIds.length} losing bets`);
+    payoutSuccess = true;
   } catch (error) {
+    payoutError = error;
     console.error('❌ CRITICAL ERROR updating database with payouts:', error);
+    console.error('⚠️ Attempting fallback to individual updates...');
+    fallbackUsed = true;
+    
+    // ✅ FIX: Fallback to individual updates if RPC fails
+    try {
+      console.log('🔄 Fallback: Processing payouts individually...');
+      
+      // ✅ OPTIMIZATION: Fetch all bets once instead of per user
+      const allBetsForGame = await storage.getBetsForGame(gameState.gameId);
+      
+      for (const notification of payoutNotifications) {
+        try {
+          if (notification.payout > 0) {
+            // Add balance atomically
+            await storage.addBalanceAtomic(notification.userId, notification.payout);
+            console.log(`✅ Fallback: Added balance for user ${notification.userId}: ₹${notification.payout}`);
+          }
+          
+          // Update bet statuses for this user (using pre-fetched bets)
+          for (const bet of allBetsForGame) {
+            const betUserId = bet.user_id || bet.userId;
+            if (betUserId === notification.userId) {
+              if (bet.side === winningSide && notification.payout > 0) {
+                await storage.updateBetStatus(bet.id, 'won');
+              } else {
+                await storage.updateBetStatus(bet.id, 'lost');
+              }
+            }
+          }
+          
+          console.log(`✅ Fallback: Processed payout for user ${notification.userId}: ₹${notification.payout}`);
+        } catch (userError) {
+          console.error(`⚠️ Error processing payout for user ${notification.userId}:`, userError);
+          // Continue with other users even if one fails
+        }
+      }
+      payoutSuccess = true;
+      console.log('✅ Fallback: Individual payout processing completed');
+    } catch (fallbackError) {
+      console.error('❌ CRITICAL: Fallback payout processing also failed:', fallbackError);
+      // Still continue to save game history even if all payouts fail
+    }
+    
     // Broadcast error to admins only
     broadcastToRole({
       type: 'error',
       data: { 
-        message: 'CRITICAL ERROR: Game completed but database update failed. Contact admin immediately.',
+        message: payoutSuccess 
+          ? 'WARNING: Payout processing required fallback method. Game history will be saved.'
+          : 'CRITICAL ERROR: Payout processing failed. Game history will still be saved.',
         code: 'PAYOUT_DB_ERROR',
-        error: error instanceof Error ? error.message : String(error)
+        error: payoutError instanceof Error ? payoutError.message : String(payoutError),
+        fallbackUsed: fallbackUsed
       }
     }, 'admin');
-    return; // Don't continue if database update failed
+    
+    // ✅ CRITICAL: DO NOT RETURN - continue to save game history even if payouts fail
+    // The return statement was preventing game history from being saved
   }
   
   // STEP 2: Send WebSocket updates with more detailed information
@@ -214,6 +270,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   });
   
   // STEP 4: Save game history to database with comprehensive analytics
+  // ✅ CRITICAL: This MUST run even if payouts failed - game history is more important
   if (gameState.gameId && gameState.gameId !== 'default-game') {
     try {
       // Calculate total cards dealt
@@ -238,17 +295,43 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       // Mark game session as completed in database
       await storage.completeGameSession(gameState.gameId, winningSide, winningCard);
       console.log(`✅ Game session completed in database: ${gameState.gameId}`);
+      
+      // ✅ ADDITIONAL FIX: Persist game state one more time to ensure completion status is saved
+      if (typeof (global as any).persistGameState === 'function') {
+        await (global as any).persistGameState();
+        console.log(`✅ Final game state persisted for gameId: ${gameState.gameId}`);
+      }
     } catch (error) {
-      console.error('❌ ERROR saving game history:', error);
+      console.error('❌ CRITICAL ERROR saving game history:', error);
       console.error('Game details:', {
         gameId: gameState.gameId,
         winner: winningSide,
         winningCard: winningCard,
         round: gameState.currentRound
       });
+      
+      // ✅ CRITICAL: Even if save fails, broadcast error but don't return
+      broadcastToRole({
+        type: 'error',
+        data: { 
+          message: 'CRITICAL: Game history save failed. Game data may be lost.',
+          code: 'HISTORY_SAVE_ERROR',
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }, 'admin');
     }
   } else {
     console.error(`❌ CRITICAL: Cannot save game history - gameId is null/undefined`);
+    
+    // ✅ CRITICAL: Broadcast error even if gameId is invalid
+    broadcastToRole({
+      type: 'error',
+      data: { 
+        message: 'CRITICAL: Cannot save game history - invalid gameId',
+        code: 'INVALID_GAME_ID',
+        gameId: gameState.gameId
+      }
+    }, 'admin');
   }
   
   // STEP 5: Broadcast analytics updates to admin clients
