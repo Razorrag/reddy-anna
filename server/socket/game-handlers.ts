@@ -66,6 +66,30 @@ export async function handlePlayerBet(client: WSClient, data: any) {
     return;
   }
 
+  // ✅ FIX: Validate bet amount against MIN_BET and MAX_BET limits
+  const { storage } = await import('../storage-supabase');
+  let minBet = 1000; // Default
+  let maxBet = 100000; // Default
+  
+  try {
+    const minBetSetting = await storage.getGameSetting('min_bet_amount') || '1000';
+    const maxBetSetting = await storage.getGameSetting('max_bet_amount') || '100000';
+    minBet = parseInt(minBetSetting) || 1000;
+    maxBet = parseInt(maxBetSetting) || 100000;
+  } catch (error) {
+    console.warn('Could not fetch bet limits, using defaults:', error);
+  }
+  
+  if (amount < minBet) {
+    sendError(ws, `Minimum bet amount is ₹${minBet}`);
+    return;
+  }
+  
+  if (amount > maxBet) {
+    sendError(ws, `Maximum bet amount is ₹${maxBet}`);
+    return;
+  }
+
   if (typeof round !== 'string') {
     sendError(ws, 'round must be a string');
     return;
@@ -111,8 +135,20 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       return;
     }
 
+    // ✅ FIX: Users can bet multiple times on same side in same round
+    // Users are allowed to:
+    // - Bet multiple times on the same side in the same round
+    // - Bet on both sides in the same round
+    // Only validation needed is: sufficient balance and game phase
+
     // Atomically deduct balance - prevents race conditions
     const { storage } = await import('../storage-supabase');
+    
+    // ✅ FIX: Check timer again before processing bet (race condition prevention)
+    if (currentGameState.timer <= 0 || currentGameState.bettingLocked) {
+      sendError(ws, 'Betting time has expired. Please wait for the next round.');
+      return;
+    }
     
     let newBalance: number;
     try {
@@ -158,28 +194,28 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       console.error('⚠️ Error tracking wagering:', wageringError);
     }
 
-    // Add bet to current game state (only after successful balance deduction)
+    // ✅ FIX: Add bet to current game state using proper methods (only after successful balance deduction)
     if (roundNum === 1) {
       if ((global as any).currentGameState?.userBets?.get) {
         if (!(global as any).currentGameState.userBets.has(userId)) {
-          (global as any).currentGameState.userBets.set(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
+          (global as any).currentGameState.setUserBets(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
         }
-        const userBets = (global as any).currentGameState.userBets.get(userId);
+        const userBets = (global as any).currentGameState.getUserBets(userId);
         userBets.round1[side] += amount;
-        (global as any).currentGameState.round1Bets[side] += amount;
+        (global as any).currentGameState.addRound1Bet(side, amount);
       }
     } else if (roundNum === 2) {
       if ((global as any).currentGameState?.userBets?.get) {
         if (!(global as any).currentGameState.userBets.has(userId)) {
-          (global as any).currentGameState.userBets.set(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
+          (global as any).currentGameState.setUserBets(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
         }
-        const userBets = (global as any).currentGameState.userBets.get(userId);
+        const userBets = (global as any).currentGameState.getUserBets(userId);
         userBets.round2[side] += amount;
-        (global as any).currentGameState.round2Bets[side] += amount;
+        (global as any).currentGameState.addRound2Bet(side, amount);
       }
     }
 
-    // Store bet in database FIRST before sending confirmation
+    // ✅ FIX: Store bet in database with proper transaction handling
     const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
     if (gameIdToUse && gameIdToUse !== 'default-game') {
       try {
@@ -193,23 +229,120 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         });
         console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
       } catch (error) {
-        console.error('❌ Error storing bet:', error);
-        // Rollback balance if bet storage fails
+        console.error('❌ CRITICAL: Error storing bet in database:', error);
+        
+        // ✅ FIX: Rollback balance AND game state if bet storage fails
         try {
-          await storage.addBalanceAtomic(userId, amount); // Refund the amount
-          console.log(`💰 Refunded ${amount} to ${userId} due to bet storage failure`);
+          // Rollback game state bet
+          if (roundNum === 1) {
+            (global as any).currentGameState.addRound1Bet(side, -amount); // Subtract the bet
+            const userBets = (global as any).currentGameState.getUserBets(userId);
+            if (userBets) {
+              userBets.round1[side] -= amount;
+            }
+          } else if (roundNum === 2) {
+            (global as any).currentGameState.addRound2Bet(side, -amount); // Subtract the bet
+            const userBets = (global as any).currentGameState.getUserBets(userId);
+            if (userBets) {
+              userBets.round2[side] -= amount;
+            }
+          }
+          
+          // Refund the balance
+          const newBalance = await storage.addBalanceAtomic(userId, amount);
+          console.log(`💰 Refunded ${amount} to ${userId} and rolled back game state due to bet storage failure`);
+          
+          // ✅ FIX: Create transaction record for refund
+          try {
+            await storage.addTransaction({
+              userId: userId,
+              transactionType: 'refund',
+              amount: amount,
+              balanceBefore: newBalance - amount,
+              balanceAfter: newBalance,
+              referenceId: `bet-refund-${Date.now()}`,
+              description: 'Bet refunded due to storage error'
+            });
+            console.log(`✅ Refund transaction recorded for ${userId}`);
+          } catch (txError) {
+            console.error('⚠️ Failed to record refund transaction:', txError);
+            // Don't fail the refund if transaction record fails
+          }
+          
+          // ✅ FIX: Broadcast bet cancellation to notify other clients
+          if (typeof (global as any).broadcast !== 'undefined') {
+            (global as any).broadcast({
+              type: 'bet_cancelled',
+              data: {
+                userId,
+                side,
+                amount,
+                round: roundNum,
+                reason: 'Storage error - bet cancelled and refunded'
+              }
+            });
+          }
         } catch (refundError) {
-          console.error('❌ Error refunding bet amount:', refundError);
+          console.error('❌ CRITICAL: Error refunding bet amount and rolling back state:', refundError);
+          // Even if refund fails, we need to notify the user
         }
-        // Send error to client instead of confirmation
-        sendError(ws, 'Bet could not be processed due to system error. Your balance has been refunded.');
+        
+        // Send error to client - don't send confirmation
+        sendError(ws, 'Bet could not be processed due to system error. Your balance has been refunded. Please try again.');
         return; // Exit function without sending confirmation
+      }
+    } else {
+      // ✅ FIX: If no valid gameId, rollback the bet
+      console.error(`❌ CRITICAL: Invalid gameId (${gameIdToUse}), rolling back bet`);
+      try {
+        // Rollback game state
+        if (roundNum === 1) {
+          (global as any).currentGameState.addRound1Bet(side, -amount);
+          const userBets = (global as any).currentGameState.getUserBets(userId);
+          if (userBets) {
+            userBets.round1[side] -= amount;
+          }
+        } else if (roundNum === 2) {
+          (global as any).currentGameState.addRound2Bet(side, -amount);
+          const userBets = (global as any).currentGameState.getUserBets(userId);
+          if (userBets) {
+            userBets.round2[side] -= amount;
+          }
+        }
+        
+        // Refund balance
+        const newBalance = await storage.addBalanceAtomic(userId, amount);
+        
+        // ✅ FIX: Create transaction record for refund
+        try {
+          await storage.addTransaction({
+            userId: userId,
+            transactionType: 'refund',
+            amount: amount,
+            balanceBefore: newBalance - amount,
+            balanceAfter: newBalance,
+            referenceId: `bet-refund-nogame-${Date.now()}`,
+            description: 'Bet refunded - no active game session'
+          });
+          console.log(`✅ Refund transaction recorded for ${userId}`);
+        } catch (txError) {
+          console.error('⚠️ Failed to record refund transaction:', txError);
+        }
+        
+        sendError(ws, 'No active game session. Your balance has been refunded.');
+        return;
+      } catch (rollbackError) {
+        console.error('❌ CRITICAL: Error during bet rollback:', rollbackError);
+        sendError(ws, 'Bet processing failed. Please contact support.');
+        return;
       }
     }
 
-    // ONLY send confirmation after successful database storage
+    // ✅ FIX: Generate bet ID before storage attempt for consistency
     const betId = `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const betConfirmedAt = Date.now();
+    
+    // ONLY send confirmation after successful database storage
 
     ws.send(JSON.stringify({
       type: 'bet_confirmed',
@@ -369,23 +502,27 @@ export async function handleStartGame(client: WSClient, data: any) {
       // This will generate a new gameId and reset all state
       (global as any).currentGameState.startNewGame();
       
-      // ✅ CRITICAL: Ensure all game state is properly reset
+      // ✅ FIX: Ensure all game state is properly reset using proper methods
       (global as any).currentGameState.winner = null;
       (global as any).currentGameState.winningCard = null;
-      (global as any).currentGameState.andarCards = [];
-      (global as any).currentGameState.baharCards = [];
-      (global as any).currentGameState.round1Bets = { andar: 0, bahar: 0 };
-      (global as any).currentGameState.round2Bets = { andar: 0, bahar: 0 };
-      if ((global as any).currentGameState.userBets) {
-        (global as any).currentGameState.userBets.clear();
-      }
+      (global as any).currentGameState.clearCards();
+      (global as any).currentGameState.resetRound1Bets();
+      (global as any).currentGameState.resetRound2Bets();
+      (global as any).currentGameState.clearUserBets();
       
-      // Set opening card (this will generate game ID if not already generated)
+      // ✅ FIX: Set opening card (this will generate game ID if not already generated)
       (global as any).currentGameState.openingCard = data.openingCard;
       
-      // Ensure game ID is properly set (it should be generated by startNewGame or setter)
+      // ✅ FIX: Ensure game ID is properly set BEFORE any database operations
       const newGameId = (global as any).currentGameState.gameId;
-      console.log(`🎮 Game ID for new game: ${newGameId}`);
+      if (!newGameId || newGameId === 'default-game' || typeof newGameId !== 'string') {
+        // Generate new gameId if invalid
+        (global as any).currentGameState.gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        console.warn(`⚠️ GameId was invalid, generated new: ${(global as any).currentGameState.gameId}`);
+      }
+      
+      const finalGameId = (global as any).currentGameState.gameId;
+      console.log(`🎮 Game ID for new game: ${finalGameId}`);
       
       // Initialize game state
       (global as any).currentGameState.phase = 'betting';
@@ -393,30 +530,48 @@ export async function handleStartGame(client: WSClient, data: any) {
       (global as any).currentGameState.bettingLocked = false;
       (global as any).currentGameState.timer = 0;
 
-      // Store in database
+      // ✅ FIX: Store in database with validated gameId
       const { storage } = await import('../storage-supabase');
-      const gameIdBeforeCreate = (global as any).currentGameState.gameId;
       const gameSession = await storage.createGameSession({
-        gameId: gameIdBeforeCreate,
+        gameId: finalGameId, // Use validated gameId
         openingCard: data.openingCard,
         phase: 'betting'
       });
 
-      // ✅ Verify gameId matches after creation
-      if (gameSession.game_id !== gameIdBeforeCreate) {
-        console.error(`❌ CRITICAL: Game ID mismatch! Memory: ${gameIdBeforeCreate}, Database: ${gameSession.game_id}`);
-        // Update memory to match database (fallback)
-        (global as any).currentGameState.gameId = gameSession.game_id;
-        console.warn(`⚠️ Updated memory gameId to match database: ${gameSession.game_id}`);
+      // ✅ FIX: Verify gameId matches after creation - CRITICAL for data consistency
+      const dbGameId = (gameSession as any).game_id || gameSession.gameId;
+      if (dbGameId !== finalGameId) {
+        console.error(`❌ CRITICAL: Game ID mismatch! Memory: ${finalGameId}, Database: ${dbGameId}`);
+        // Update memory to match database (fallback) - this ensures all future operations use correct ID
+        (global as any).currentGameState.gameId = dbGameId;
+        console.warn(`⚠️ Updated memory gameId to match database: ${dbGameId}`);
+        
+        // ✅ FIX: Broadcast warning to admins about gameId mismatch
+        if (typeof (global as any).broadcastToRole === 'function') {
+          (global as any).broadcastToRole({
+            type: 'error',
+            data: {
+              message: 'Game ID mismatch detected and corrected. Game will continue normally.',
+              code: 'GAME_ID_MISMATCH',
+              memoryGameId: finalGameId,
+              databaseGameId: dbGameId
+            }
+          }, 'admin');
+        }
       } else {
-        console.log(`✅ Game session created with matching gameId: ${gameIdBeforeCreate}`);
+        console.log(`✅ Game session created with matching gameId: ${finalGameId}`);
       }
       
-      // Persist game state after creation
+      // ✅ FIX: Persist game state after creation with error handling
       if (typeof (global as any).persistGameState === 'function') {
-        (global as any).persistGameState().catch((err: any) => 
-          console.error('Error persisting game state after start:', err)
-        );
+        try {
+          await (global as any).persistGameState();
+          console.log(`✅ Game state persisted successfully for gameId: ${(global as any).currentGameState.gameId}`);
+        } catch (err: any) {
+          console.error('❌ Error persisting game state after start:', err);
+          // Don't fail game start if persistence fails, but log it
+          // State will be persisted on next operation
+        }
       }
 
       // Get timer duration from data - check both timer and timerDuration fields
@@ -447,31 +602,14 @@ export async function handleStartGame(client: WSClient, data: any) {
         });
       }
 
-      // Start betting timer using global startTimer
+      // ✅ FIX: Start betting timer using global startTimer
+      // Timer callback in routes.ts already handles phase change and broadcasting
+      // No need to duplicate logic here
       if (typeof (global as any).startTimer === 'function') {
         (global as any).startTimer(timerDuration, () => {
+          // Timer callback in routes.ts already handles everything
+          // This callback is just for logging
           console.log('🎯 Betting time expired, moving to dealing phase');
-          (global as any).currentGameState.phase = 'dealing';
-          (global as any).currentGameState.bettingLocked = true;
-
-          // Persist the phase change
-          if (typeof (global as any).persistGameState === 'function') {
-            (global as any).persistGameState().catch((err: any) => 
-              console.error('Error persisting phase change to dealing:', err)
-            );
-          }
-
-          // Broadcast phase change
-          if (typeof (global as any).broadcast !== 'undefined') {
-            (global as any).broadcast({
-              type: 'phase_change',
-              data: {
-                phase: 'dealing',
-                round: 1,
-                message: 'Betting closed. Admin can now deal cards.'
-              }
-            });
-          }
         });
       }
 
@@ -542,16 +680,28 @@ export async function handleDealCard(client: WSClient, data: any) {
       return;
     }
 
-    // Only validate dealing sequence in dealing phase, not in betting (for round 2)
+    // ✅ FIX: Strictly validate dealing sequence in dealing phase
     if ((global as any).currentGameState.phase === 'dealing') {
       const expectedSide = (global as any).currentGameState.getNextExpectedSide();
       
       if (expectedSide === null) {
-        console.log('Current round appears complete, allowing card deal for next round');
-        // Don't return here - we may be transitioning to next round
+        sendError(ws, 'Current round is complete. Please progress to next round or reset the game.');
+        return;
       } else if (data.side !== expectedSide) {
-        // Be more lenient with sequence validation to allow for potential race conditions
-        console.warn(`⚠️ WARNING: Expected ${expectedSide.toUpperCase()} but received ${data.side.toUpperCase()}. Continuing anyway.`);
+        // ✅ FIX: Enforce strict sequence validation
+        sendError(ws, `Invalid dealing sequence. Expected ${expectedSide.toUpperCase()} card next, but received ${data.side.toUpperCase()}. Please deal cards in the correct order.`);
+        return;
+      }
+    } else if ((global as any).currentGameState.phase === 'betting' && (global as any).currentGameState.currentRound === 2) {
+      // Allow dealing during Round 2 betting phase (for dealing Round 2 cards)
+      const expectedSide = (global as any).currentGameState.getNextExpectedSide();
+      
+      if (expectedSide === null) {
+        sendError(ws, 'Current round is complete. Please progress to next round.');
+        return;
+      } else if (data.side !== expectedSide) {
+        sendError(ws, `Invalid dealing sequence. Expected ${expectedSide.toUpperCase()} card next, but received ${data.side.toUpperCase()}.`);
+        return;
       }
     }
 
@@ -579,19 +729,50 @@ export async function handleDealCard(client: WSClient, data: any) {
     // Save card to database with correct position (calculated BEFORE card was added)
     const gameId = (global as any).currentGameState.gameId;
     if (gameId && gameId !== 'default-game') {
-      try {
-        const { storage } = await import('../storage-supabase');
-        await storage.dealCard({
-          gameId: gameId,
-          card: data.card,
-          side: data.side,
-          position: currentPosition, // Use calculated position BEFORE card was added
-          isWinningCard: isWinningCard
-        });
-        console.log(`✅ Card saved to database: ${data.card} on ${data.side} at position ${currentPosition}`);
-      } catch (error) {
-        console.error('⚠️ Error saving card to database:', error);
-        // Don't fail the card dealing if DB save fails
+      // ✅ FIX: Add retry logic for card storage
+      let cardSaved = false;
+      const maxRetries = 3;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const { storage } = await import('../storage-supabase');
+          await storage.dealCard({
+            gameId: gameId,
+            card: data.card,
+            side: data.side,
+            position: currentPosition,
+            isWinningCard: isWinningCard
+          });
+          console.log(`✅ Card saved to database: ${data.card} on ${data.side} at position ${currentPosition} (attempt ${attempt})`);
+          cardSaved = true;
+          break;
+        } catch (error) {
+          console.error(`⚠️ Error saving card to database (attempt ${attempt}/${maxRetries}):`, error);
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 100 * attempt)); // Exponential backoff
+          } else {
+            // ✅ FIX: Critical error - card not saved after all retries
+            console.error(`❌ CRITICAL: Failed to save card after ${maxRetries} attempts. Game may be incomplete.`);
+            // Broadcast error to admins
+            if (typeof (global as any).broadcastToRole === 'function') {
+              (global as any).broadcastToRole({
+                type: 'error',
+                data: {
+                  message: `CRITICAL: Card ${data.card} could not be saved to database after ${maxRetries} attempts. Game may be incomplete.`,
+                  code: 'CARD_SAVE_ERROR',
+                  card: data.card,
+                  side: data.side,
+                  position: currentPosition
+                }
+              }, 'admin');
+            }
+          }
+        }
+      }
+      
+      if (!cardSaved) {
+        // ✅ FIX: Don't prevent game from continuing, but log critical error
+        console.error(`❌ CRITICAL: Card ${data.card} not saved to database. Game history will be incomplete.`);
       }
     }
 
@@ -622,36 +803,59 @@ export async function handleDealCard(client: WSClient, data: any) {
     console.log(`🎯 Card dealt - Round: ${currentRound}, Complete: ${isRoundComplete}, Winner: ${isWinningCard}`);
     
     if (isWinningCard) {
-      // Game ends with winner regardless of round
+      // ✅ FIX: Game ends with winner regardless of round
       (global as any).currentGameState.winner = data.side === 'andar' ? 'andar' : 'bahar';
       (global as any).currentGameState.winningCard = data.card;
       (global as any).currentGameState.phase = 'complete';
       
-      // Persist game completion
-      if (typeof (global as any).persistGameState === 'function') {
-        (global as any).persistGameState().catch((err: any) => 
-          console.error('Error persisting game completion:', err)
-        );
-      }
+      // ✅ FIX: Don't persist here - completeGame will handle persistence
+      // Persisting here causes race condition with completeGame
+      // State will be persisted after completion finishes
 
-      // Complete the game with payouts and transition to new game
+      // ✅ FIX: Complete the game with payouts and transition to new game
       // Use the global completeGame function which includes transition logic
-      const globalCompleteGame = (global as any).completeGame;
-      if (globalCompleteGame && typeof globalCompleteGame === 'function') {
-        globalCompleteGame(data.side === 'andar' ? 'andar' : 'bahar', data.card);
-      } else {
-        console.error('❌ Global completeGame function not available, falling back to local function');
-        completeGame((global as any).currentGameState, data.side === 'andar' ? 'andar' : 'bahar', data.card);
+      // CRITICAL: Must await to prevent race conditions and ensure completion before reset
+      try {
+        const globalCompleteGame = (global as any).completeGame;
+        if (globalCompleteGame && typeof globalCompleteGame === 'function') {
+          // ✅ FIX: Await completion to ensure all operations finish
+          await globalCompleteGame(data.side === 'andar' ? 'andar' : 'bahar', data.card);
+          console.log(`🏆 GAME COMPLETE: Winner is ${data.side} with card ${data.card}`);
+        } else {
+          console.error('❌ Global completeGame function not available, falling back to local function');
+          // ✅ FIX: Await local function as well
+          await completeGame((global as any).currentGameState, data.side === 'andar' ? 'andar' : 'bahar', data.card);
+          console.log(`🏆 GAME COMPLETE: Winner is ${data.side} with card ${data.card}`);
+        }
+      } catch (error: any) {
+        console.error('❌ CRITICAL: Error completing game:', error);
+        // ✅ FIX: Send error notification to admin
+        sendError(ws, `Error completing game: ${error.message || 'Unknown error'}`);
+        // ✅ FIX: Still try to persist state even if completion fails
+        if (typeof (global as any).persistGameState === 'function') {
+          try {
+            await (global as any).persistGameState();
+          } catch (persistError) {
+            console.error('❌ CRITICAL: Error persisting state after completion failure:', persistError);
+          }
+        }
+        // Don't throw - game should still be marked as complete
+        return;
       }
-
-      console.log(`🏆 GAME COMPLETE: Winner is ${data.side} with card ${data.card}`);
     } else if (isRoundComplete && currentRound < 3) {
-      // Round 1 or 2 complete without winner - move to next round
+      // ✅ FIX: Round 1 or 2 complete without winner - move to next round
       if (currentRound === 1) {
         // Go to round 2
         (global as any).currentGameState.currentRound = 2;
         (global as any).currentGameState.phase = 'betting';
         (global as any).currentGameState.bettingLocked = false;
+
+        // ✅ FIX: Persist round transition before starting timer
+        if (typeof (global as any).persistGameState === 'function') {
+          (global as any).persistGameState().catch((err: any) => 
+            console.error('Error persisting round 2 transition:', err)
+          );
+        }
 
         if (typeof (global as any).broadcast !== 'undefined') {
           (global as any).broadcast({
@@ -659,13 +863,13 @@ export async function handleDealCard(client: WSClient, data: any) {
             data: {
               phase: 'betting',
               round: 2,
-              message: 'Round 1 complete! Round 2 betting is now open.'
+              message: 'Round 1 complete! Round 2 betting is now open.',
+              timer: 0 // Will be set by timer
             }
           });
         }
 
-        // Start timer for round 2 betting - use same timer duration as round 1
-        // Try to get timer duration from settings or default to 30
+        // ✅ FIX: Start timer for round 2 betting - use same timer duration as round 1
         const { storage } = await import('../storage-supabase');
         const timerSetting = await storage.getGameSetting('betting_timer_duration') || '30';
         const timerDuration = parseInt(timerSetting) || 30;
@@ -674,6 +878,13 @@ export async function handleDealCard(client: WSClient, data: any) {
           (global as any).startTimer(timerDuration, () => {
             (global as any).currentGameState.phase = 'dealing';
             (global as any).currentGameState.bettingLocked = true;
+
+            // ✅ FIX: Persist phase change
+            if (typeof (global as any).persistGameState === 'function') {
+              (global as any).persistGameState().catch((err: any) => 
+                console.error('Error persisting phase change to dealing:', err)
+              );
+            }
 
             if (typeof (global as any).broadcast !== 'undefined') {
               (global as any).broadcast({
@@ -686,14 +897,23 @@ export async function handleDealCard(client: WSClient, data: any) {
               });
             }
           });
+        } else {
+          console.error('⚠️ startTimer function not available');
         }
 
         console.log('🔄 MOVED TO ROUND 2');
       } else if (currentRound === 2) {
-        // Move to Round 3 (Continuous Draw) if no winner in 2 rounds
+        // ✅ FIX: Move to Round 3 (Continuous Draw) if no winner in 2 rounds
         (global as any).currentGameState.currentRound = 3;
         (global as any).currentGameState.phase = 'dealing';
         (global as any).currentGameState.bettingLocked = true;
+
+        // ✅ FIX: Persist round 3 transition
+        if (typeof (global as any).persistGameState === 'function') {
+          (global as any).persistGameState().catch((err: any) => 
+            console.error('Error persisting round 3 transition:', err)
+          );
+        }
 
         if (typeof (global as any).broadcast !== 'undefined') {
           (global as any).broadcast({

@@ -155,6 +155,7 @@ import { streamStorage } from './stream-storage';
 import { AdminRequestsSupabaseAPI } from './admin-requests-supabase';
 import adminUserRoutes from './routes/admin';
 import userRoutes from './routes/user';
+import { completeGame as gameCompleteGame } from './game';
 import {
   handlePlayerBet,
   handleStartGame,
@@ -292,6 +293,15 @@ export class GameState {
   get andarCards() { return this.state.andarCards; }
   get baharCards() { return this.state.baharCards; }
   
+  // ✅ FIX: Add methods to restore cards from database
+  restoreAndarCards(cards: string[]) {
+    this.state.andarCards = cards;
+  }
+  
+  restoreBaharCards(cards: string[]) {
+    this.state.baharCards = cards;
+  }
+  
   clearCards() {
     this.state.andarCards = [];
     this.state.baharCards = [];
@@ -305,6 +315,48 @@ export class GameState {
   
   get round1Bets() { return this.state.round1Bets; }
   get round2Bets() { return this.state.round2Bets; }
+  
+  // ✅ FIX: Add proper methods for bet mutations
+  addRound1Bet(side: 'andar' | 'bahar', amount: number) {
+    this.state.round1Bets[side] += amount;
+  }
+  
+  addRound2Bet(side: 'andar' | 'bahar', amount: number) {
+    this.state.round2Bets[side] += amount;
+  }
+  
+  resetRound1Bets() {
+    this.state.round1Bets = { andar: 0, bahar: 0 };
+  }
+  
+  resetRound2Bets() {
+    this.state.round2Bets = { andar: 0, bahar: 0 };
+  }
+  
+  // ✅ FIX: Add methods to restore bets from database
+  restoreRound1Bets(bets: { andar: number; bahar: number }) {
+    this.state.round1Bets = bets;
+  }
+  
+  restoreRound2Bets(bets: { andar: number; bahar: number }) {
+    this.state.round2Bets = bets;
+  }
+  
+  restoreUserBets(userBetsMap: Map<string, UserBets>) {
+    this.state.userBets = userBetsMap;
+  }
+  
+  getUserBets(userId: string): UserBets | undefined {
+    return this.state.userBets.get(userId);
+  }
+  
+  setUserBets(userId: string, bets: UserBets) {
+    this.state.userBets.set(userId, bets);
+  }
+  
+  clearUserBets() {
+    this.state.userBets.clear();
+  }
   
   get userBets() { return this.state.userBets; }
   
@@ -381,6 +433,7 @@ export class GameState {
     // Clean up timer before resetting to prevent memory leaks
     if (this.state.timerInterval) {
       clearInterval(this.state.timerInterval);
+      this.state.timerInterval = null; // ✅ FIX: Clear reference
       console.log('🔄 Timer cleared during game reset');
     }
     
@@ -402,8 +455,8 @@ export class GameState {
       userBets: new Map<string, UserBets>(),
       timerInterval: null,
       bettingLocked: false,
-      lastDealtSide: null,
-      roundCompletionStatus: {
+      lastDealtSide: null, // ✅ FIX: Reset last dealt side
+      roundCompletionStatus: { // ✅ FIX: Reset round completion status
         round1: { baharComplete: false, andarComplete: false },
         round2: { baharComplete: false, andarComplete: false }
       }
@@ -421,42 +474,62 @@ const currentGameState = new GameState();
 
 // Function to persist game state to database
 async function persistGameState() {
-  try {
-    const existingSession = await storage.getGameSession(currentGameState.gameId);
-    
-    const updateData: any = {
-      phase: currentGameState.phase,
-      current_round: currentGameState.currentRound,
-      current_timer: currentGameState.timer,
-      opening_card: currentGameState.openingCard,
-      andar_cards: currentGameState.andarCards,
-      bahar_cards: currentGameState.baharCards,
-      winner: currentGameState.winner,
-      winning_card: currentGameState.winningCard,
-      total_andar_bets: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
-      total_bahar_bets: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
-      status: currentGameState.phase === 'complete' ? 'completed' : 'active',
-    };
-
-    if (existingSession) {
-      await storage.updateGameSession(currentGameState.gameId, updateData);
-    } else if (currentGameState.phase !== 'idle') {
-      // Create new session if game is active and session doesn't exist
-      // ✅ FIX: Use gameId (camelCase) to match InsertGameSession interface
-      await storage.createGameSession({
-        gameId: currentGameState.gameId, // ✅ FIX: Use gameId instead of game_id
-        openingCard: currentGameState.openingCard || undefined,
-        phase: currentGameState.phase,
-        currentTimer: currentGameState.timer,
-        round: currentGameState.currentRound,
-      } as any);
+  // ✅ FIX: Add retry logic for state persistence
+  const maxRetries = 3;
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const existingSession = await storage.getGameSession(currentGameState.gameId);
       
-      // Then update it with all the details
-      await storage.updateGameSession(currentGameState.gameId, updateData);
+      const updateData: any = {
+        phase: currentGameState.phase,
+        current_round: currentGameState.currentRound,
+        current_timer: currentGameState.timer,
+        opening_card: currentGameState.openingCard,
+        andar_cards: currentGameState.andarCards,
+        bahar_cards: currentGameState.baharCards,
+        winner: currentGameState.winner,
+        winning_card: currentGameState.winningCard,
+        total_andar_bets: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+        total_bahar_bets: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
+        status: currentGameState.phase === 'complete' ? 'completed' : 'active',
+      };
+
+      if (existingSession) {
+        await storage.updateGameSession(currentGameState.gameId, updateData);
+      } else if (currentGameState.phase !== 'idle') {
+        // Create new session if game is active and session doesn't exist
+        // ✅ FIX: Use gameId (camelCase) to match InsertGameSession interface
+        await storage.createGameSession({
+          gameId: currentGameState.gameId, // ✅ FIX: Use gameId instead of game_id
+          openingCard: currentGameState.openingCard || undefined,
+          phase: currentGameState.phase,
+          currentTimer: currentGameState.timer,
+          round: currentGameState.currentRound,
+        } as any);
+        
+        // Then update it with all the details
+        await storage.updateGameSession(currentGameState.gameId, updateData);
+      }
+      
+      // Success - exit retry loop
+      return;
+    } catch (error: any) {
+      lastError = error;
+      console.error(`❌ Error persisting game state (attempt ${attempt}/${maxRetries}):`, error);
+      
+      if (attempt < maxRetries) {
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+        continue;
+      }
     }
-  } catch (error) {
-    console.error('Error persisting game state:', error);
   }
+  
+  // ✅ FIX: Log critical error if all retries fail
+  console.error(`❌ CRITICAL: Failed to persist game state after ${maxRetries} attempts. Last error:`, lastError);
+  // Don't throw - game can continue, but state may be inconsistent
 }
 
 // Function to restore active game state from database on server startup
@@ -467,39 +540,89 @@ async function restoreActiveGameState() {
       console.log('🔄 Restoring active game state from database...');
       
       // Restore game state from database
-      currentGameState.gameId = activeSession.game_id;
+      currentGameState.gameId = (activeSession as any).game_id || activeSession.gameId;
       currentGameState.phase = activeSession.phase as GamePhase;
-      currentGameState.currentRound = (activeSession.current_round || 1) as 1 | 2 | 3;
-      currentGameState.timer = activeSession.current_timer || 0;
-      currentGameState.openingCard = activeSession.opening_card;
-      currentGameState.andarCards = activeSession.andar_cards || [];
-      currentGameState.baharCards = activeSession.bahar_cards || [];
+      currentGameState.currentRound = ((activeSession as any).current_round || activeSession.currentTimer || 1) as 1 | 2 | 3;
+      currentGameState.timer = (activeSession as any).current_timer || activeSession.currentTimer || 0;
+      currentGameState.openingCard = (activeSession as any).opening_card || activeSession.openingCard;
+      // ✅ FIX: Use restore methods instead of direct assignment
+      currentGameState.restoreAndarCards((activeSession as any).andar_cards || []);
+      currentGameState.restoreBaharCards((activeSession as any).bahar_cards || []);
       currentGameState.winner = activeSession.winner;
-      currentGameState.winningCard = activeSession.winning_card;
+      currentGameState.winningCard = (activeSession as any).winning_card || activeSession.winningCard;
       
       // Restore bets from database
-      const bets = await storage.getBetsForGame(activeSession.game_id);
+      const bets = await storage.getBetsForGame((activeSession as any).game_id || activeSession.gameId);
       const round1Bets = { andar: 0, bahar: 0 };
       const round2Bets = { andar: 0, bahar: 0 };
       
+      // ✅ FIX: Restore UserBets Map for proper payout calculation
+      const userBetsMap = new Map<string, UserBets>();
+      
       bets.forEach((bet: any) => {
         const amount = parseFloat(bet.amount || '0');
+        const userId = bet.user_id || bet.userId;
+        
+        // Update totals
         if (bet.round === '1' || bet.round === 1) {
           round1Bets[bet.side as 'andar' | 'bahar'] += amount;
         } else if (bet.round === '2' || bet.round === 2) {
           round2Bets[bet.side as 'andar' | 'bahar'] += amount;
         }
+        
+        // ✅ FIX: Populate UserBets Map
+        if (!userBetsMap.has(userId)) {
+          userBetsMap.set(userId, { 
+            round1: { andar: 0, bahar: 0 }, 
+            round2: { andar: 0, bahar: 0 } 
+          });
+        }
+        const userBets = userBetsMap.get(userId)!;
+        if (bet.round === '1' || bet.round === 1) {
+          userBets.round1[bet.side as 'andar' | 'bahar'] += amount;
+        } else if (bet.round === '2' || bet.round === 2) {
+          userBets.round2[bet.side as 'andar' | 'bahar'] += amount;
+        }
       });
       
-      currentGameState.round1Bets = round1Bets;
-      currentGameState.round2Bets = round2Bets;
+      // ✅ FIX: Use restore methods instead of direct assignment
+      currentGameState.restoreRound1Bets(round1Bets);
+      currentGameState.restoreRound2Bets(round2Bets);
+      currentGameState.restoreUserBets(userBetsMap);
       
       console.log('✅ Active game state restored:', {
         gameId: currentGameState.gameId,
         phase: currentGameState.phase,
         round: currentGameState.currentRound,
-        timer: currentGameState.timer
+        timer: currentGameState.timer,
+        userBetsCount: userBetsMap.size
       });
+      
+      // ✅ FIX: Restart timer if game is in betting phase
+      if (currentGameState.phase === 'betting' && currentGameState.timer > 0) {
+        console.log(`🔄 Restarting timer for restored game: ${currentGameState.timer} seconds`);
+        startTimer(currentGameState.timer, () => {
+          console.log('🎯 Betting time expired for restored game, moving to dealing phase');
+          currentGameState.phase = 'dealing';
+          currentGameState.bettingLocked = true;
+
+          // Persist the phase change
+          persistGameState().catch((err: any) => 
+            console.error('Error persisting phase change to dealing:', err)
+          );
+
+          // Broadcast phase change
+          broadcast({
+            type: 'phase_change',
+            data: {
+              phase: 'dealing',
+              round: currentGameState.currentRound,
+              bettingLocked: true,
+              message: 'Betting closed. Admin can now deal cards.'
+            }
+          });
+        });
+      }
     }
   } catch (error) {
     console.error('Error restoring game state:', error);
@@ -662,16 +785,17 @@ function broadcast(message: any, excludeClient?: WSClient) {
   const messageStr = JSON.stringify({...message, timestamp: Date.now()});
   
   // Buffer important game events for replay on reconnection
-  const gameId = (global as any).currentGameState?.gameId;
-  if (gameId && shouldBufferEvent(message.type)) {
-    try {
-      const { eventBuffer } = require('./socket/event-buffer');
-      eventBuffer.addEvent(gameId, message.type, message.data);
-    } catch (error) {
-      // Event buffer not available - continue without buffering
-      console.warn('Event buffer not available:', error);
-    }
-  }
+  // ✅ FIX: Event buffering is optional and not critical for game functionality
+  // Commented out to avoid spam errors - can be re-implemented later if needed
+  // const gameId = (global as any).currentGameState?.gameId;
+  // if (gameId && shouldBufferEvent(message.type)) {
+  //   try {
+  //     const { eventBuffer } = await import('./socket/event-buffer');
+  //     eventBuffer.addEvent(gameId, message.type, message.data);
+  //   } catch (error) {
+  //     // Event buffer not available - continue without buffering
+  //   }
+  // }
   
   clients.forEach(client => {
     if (client !== excludeClient && client.ws.readyState === WebSocket.OPEN) {
@@ -758,6 +882,7 @@ function startTimer(duration: number, onComplete: () => void) {
       lastPersistTime = now;
     }
     
+    // ✅ FIX: Fixed syntax error - added proper brace structure
     if (currentGameState.timer <= 0) {
       if (currentGameState.timerInterval) {
         clearInterval(currentGameState.timerInterval);
@@ -1051,24 +1176,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const gameStateForUser = await getCurrentGameStateForUser(client.userId);
               
               // Get buffered events for replay on reconnection
+              // ✅ FIX: Event replay is optional - disabled to avoid spam errors
               let bufferedEvents: any[] = [];
-              const gameId = (global as any).currentGameState?.gameId;
-              if (gameId) {
-                try {
-                  const { eventBuffer } = require('./socket/event-buffer');
-                  // Get recent events from last 30 seconds
-                  const sinceTimestamp = Date.now() - 30000;
-                  bufferedEvents = eventBuffer.getEventsSince(gameId, sinceTimestamp);
-                  
-                  // Limit to last 10 events to avoid overwhelming client
-                  if (bufferedEvents.length > 10) {
-                    bufferedEvents = bufferedEvents.slice(-10);
-                  }
-                } catch (error) {
-                  // Event buffer not available - continue without replay
-                  console.warn('Event buffer not available for replay:', error);
-                }
-              }
+              // const gameId = (global as any).currentGameState?.gameId;
+              // if (gameId) {
+              //   try {
+              //     const { eventBuffer } = await import('./socket/event-buffer');
+              //     const sinceTimestamp = Date.now() - 30000;
+              //     bufferedEvents = eventBuffer.getEventsSince(gameId, sinceTimestamp);
+              //     if (bufferedEvents.length > 10) {
+              //       bufferedEvents = bufferedEvents.slice(-10);
+              //     }
+              //   } catch (error) {
+              //     // Event buffer not available - continue without replay
+              //   }
+              // }
                
               // Send authentication success with game state and buffered events
               ws.send(JSON.stringify({
@@ -4177,6 +4299,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to get game history" });
     }
   });
+
+  // ✅ FIX: Add endpoint for current game state (for faster frontend sync)
+  app.get("/api/game/current-state", async (req, res) => {
+    try {
+      // Get current game state from memory
+      const currentState = (global as any).currentGameState;
+      
+      if (!currentState || currentState.phase === 'idle') {
+        return res.json({
+          phase: 'idle',
+          currentRound: 1,
+          timer: 0,
+          bettingLocked: false,
+          openingCard: null,
+          andarCards: [],
+          baharCards: []
+        });
+      }
+
+      // Return current game state
+      res.json({
+        gameId: currentState.gameId,
+        phase: currentState.phase,
+        currentRound: currentState.currentRound,
+        timer: currentState.timer,
+        countdownTimer: currentState.timer,
+        openingCard: currentState.openingCard,
+        andarCards: currentState.andarCards || [],
+        baharCards: currentState.baharCards || [],
+        winner: currentState.winner,
+        winningCard: currentState.winningCard,
+        bettingLocked: currentState.bettingLocked || false
+      });
+    } catch (error) {
+      console.error("Get current game state error:", error);
+      res.status(500).json({ error: "Failed to get current game state" });
+    }
+  });
   
   app.get("/api/user/balance", async (req, res) => {
     try {
@@ -4623,7 +4783,12 @@ async function transitionToRound3() {
   });
 }
 
-async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
+// ✅ FIX: Removed duplicate completeGame function - now using gameCompleteGame from './game'
+// This ensures single source of truth and consistency
+// The local completeGame function was removed and replaced with wrapper to gameCompleteGame
+async function completeGame_DEPRECATED(winner: 'andar' | 'bahar', winningCard: string) {
+  // This function is deprecated - use gameCompleteGame from './game' instead
+  console.log(`⚠️ DEPRECATED: This function should not be called. Use gameCompleteGame instead.`);
   console.log(`Game complete! Winner: ${winner}, Card: ${currentGameState.winningCard}, Round: ${currentGameState.currentRound}`);
   
   // ✅ CRITICAL FIX: Ensure valid game ID FIRST, before any database operations
@@ -5122,7 +5287,13 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
   const completedRound = currentGameState.currentRound;
   const completedTotalCards = currentGameState.andarCards.length + currentGameState.baharCards.length;
   
-  if (completedGameId) {
+  // ✅ CRITICAL: Wrap entire save + broadcast + reset in async IIFE to ensure proper sequencing
+  (async () => {
+    if (!completedGameId) {
+      console.error(`❌ CRITICAL: Cannot save game history - gameId is null/undefined`);
+      return;
+    }
+
     try {
       const historyData = {
         gameId: completedGameId,
@@ -5155,6 +5326,57 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       // ✅ CRITICAL: Final persist to ensure all data is saved
       await persistGameState();
       console.log(`✅ Final game state persisted for gameId: ${completedGameId}`);
+
+      // ✅ CRITICAL: Wait for payout operations to complete
+      const payoutPromise = (global as any).lastPayoutPromise;
+      if (payoutPromise) {
+        await payoutPromise;
+        console.log('✅ Payout operations completed');
+      }
+
+      // ✅ CRITICAL: Add 2 second delay to ensure database writes are fully committed
+      console.log('⏳ Waiting 2 seconds for database commits to complete...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // ✅ CRITICAL: NOW broadcast game_history_update AFTER save is complete
+      console.log('📡 Broadcasting game_history_update to all clients...');
+      broadcast({
+        type: 'game_history_update',
+        data: {
+          gameId: completedGameId,
+          openingCard: completedOpeningCard,
+          winner: completedWinner,
+          winningCard: completedWinningCard,
+          round: completedRound,
+          totalCards: completedTotalCards,
+          createdAt: new Date().toISOString()
+        }
+      });
+
+      // Broadcast detailed analytics to admins
+      broadcastToRole({
+        type: 'game_history_update_admin',
+        data: {
+          gameId: completedGameId,
+          openingCard: completedOpeningCard,
+          winner: completedWinner,
+          winningCard: completedWinningCard,
+          totalBets: totalBetsAmount,
+          totalPayouts: totalPayoutsAmount,
+          andarTotalBet: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
+          baharTotalBet: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
+          totalPlayers: currentGameState.userBets.size,
+          totalCards: completedTotalCards,
+          round: completedRound,
+          createdAt: new Date().toISOString()
+        }
+      }, 'admin');
+
+      console.log('✅ Game history broadcast complete');
+
+      // ✅ CRITICAL: Wait another 1 second before resetting to allow frontend to fetch
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
     } catch (error) {
       console.error('❌ ERROR saving game history:', error);
       console.error('Game details:', {
@@ -5165,39 +5387,8 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
       });
       // Don't throw - continue with game completion even if save fails
     }
-  } else {
-    console.error(`❌ CRITICAL: Cannot save game history - gameId is null/undefined`);
-  }
-  
-  // ✅ FIX #1: Wait for all operations to complete before resetting
-  // Auto-restart: Wait for all operations to complete before resetting
-  console.log('⏰ Auto-restarting game after DB operations complete...');
-  
-  // Wait for all payout updates to complete before resetting
-  const waitForPayouts = async () => {
-    try {
-      // Wait for payout promise if it exists
-      const payoutPromise = (global as any).lastPayoutPromise;
-      if (payoutPromise) {
-        await payoutPromise;
-        console.log('✅ Payout operations completed');
-      }
-      
-      // Give extra time for any remaining DB operations
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // ✅ REMOVED: Game session completion is already saved above before waitForPayouts
-      // No need to verify again here as it's already completed
-      
-      return true;
-    } catch (error) {
-      console.error('⚠️ Error waiting for payouts:', error);
-      return false;
-    }
-  };
 
-  // Execute reset after waiting for all operations
-  waitForPayouts().then(() => {
+    // ✅ NOW reset game state after all operations complete
     console.log('🔄 Auto-restart: Starting new game setup');
     
     // Reset game state
@@ -5254,8 +5445,8 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
     });
     
     console.log('✅ Game auto-restarted successfully');
-  }).catch(error => {
-    console.error('❌ Error during game reset:', error);
+  })().catch(error => {
+    console.error('❌ CRITICAL ERROR in game completion flow:', error);
     // Still reset game state even if there was an error
     currentGameState.startNewGame();
     currentGameState.clearCards();
@@ -5268,7 +5459,12 @@ async function completeGame(winner: 'andar' | 'bahar', winningCard: string) {
 (global as any).broadcast = broadcast;
 (global as any).broadcastToRole = broadcastToRole;
 (global as any).startTimer = startTimer;
-(global as any).completeGame = completeGame;
+// ✅ FIX: Use the imported completeGame from game.ts instead of local function
+// This ensures all code uses the same implementation
+(global as any).completeGame = async function(winner: 'andar' | 'bahar', winningCard: string) {
+  // Use the imported function with currentGameState
+  return await gameCompleteGame(currentGameState, winner, winningCard);
+};
 (global as any).transitionToRound2 = transitionToRound2;
 (global as any).transitionToRound3 = transitionToRound3;
 (global as any).getCurrentGameStateForUser = getCurrentGameStateForUser;

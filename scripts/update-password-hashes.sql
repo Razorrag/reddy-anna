@@ -30,3 +30,6 @@ SELECT id, phone, full_name, updated_at FROM users WHERE phone IN ('9876543210',
 
 SELECT '✅ Password hashes updated successfully!' as result;
 
+
+
+

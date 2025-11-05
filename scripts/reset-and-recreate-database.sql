@@ -100,7 +100,7 @@ CREATE TYPE game_status AS ENUM ('active', 'completed', 'cancelled');
 CREATE TYPE bet_side AS ENUM ('andar', 'bahar');
 -- ✅ FIX: Added missing transaction types used by code
 CREATE TYPE transaction_type AS ENUM ('deposit', 'withdrawal', 'bet', 'win', 'refund', 'bonus', 'commission', 'support', 'bonus_applied', 'conditional_bonus_applied');
-CREATE TYPE transaction_status AS ENUM ('pending', 'completed', 'failed', 'cancelled');
+CREATE TYPE transaction_status AS ENUM ('pending', 'completed', 'failed', 'cancelled', 'won', 'lost');
 CREATE TYPE request_status AS ENUM ('pending', 'approved', 'rejected', 'processing', 'processed', 'completed');
 
 -- ============================================
@@ -849,6 +849,80 @@ BEGIN
     unique_players = daily_game_statistics.unique_players + 1;
   
   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ✅ CRITICAL FIX: Apply payouts and update bets atomically
+-- This function is called by the game completion logic to distribute winnings and update bet statuses
+CREATE OR REPLACE FUNCTION apply_payouts_and_update_bets(
+  payouts JSONB,
+  winning_bets_ids TEXT[],
+  losing_bets_ids TEXT[]
+)
+RETURNS void AS $$
+DECLARE
+  payout_record JSONB;
+  user_id_val VARCHAR(20);
+  amount_val DECIMAL(15, 2);
+BEGIN
+  -- Process each payout
+  FOR payout_record IN SELECT * FROM jsonb_array_elements(payouts)
+  LOOP
+    user_id_val := payout_record->>'userId';
+    amount_val := (payout_record->>'amount')::DECIMAL(15, 2);
+    
+    -- Add balance to user (if amount > 0)
+    IF amount_val > 0 THEN
+      UPDATE users 
+      SET balance = balance + amount_val,
+          updated_at = NOW()
+      WHERE id = user_id_val;
+      
+      -- Create transaction record
+      INSERT INTO user_transactions (
+        user_id,
+        transaction_type,
+        amount,
+        balance_before,
+        balance_after,
+        status,
+        description,
+        created_at
+      )
+      SELECT 
+        user_id_val,
+        'win',
+        amount_val,
+        balance - amount_val,
+        balance,
+        'completed',
+        'Game winnings',
+        NOW()
+      FROM users WHERE id = user_id_val;
+    END IF;
+  END LOOP;
+  
+  -- Update winning bets status and set actual_payout
+  IF array_length(winning_bets_ids, 1) > 0 THEN
+    UPDATE player_bets
+    SET status = 'won',
+        actual_payout = (
+          SELECT (payout_record->>'amount')::DECIMAL(15, 2)
+          FROM jsonb_array_elements(payouts) AS payout_record
+          WHERE payout_record->>'userId' = player_bets.user_id
+        ),
+        updated_at = NOW()
+    WHERE id = ANY(winning_bets_ids);
+  END IF;
+  
+  -- Update losing bets status
+  IF array_length(losing_bets_ids, 1) > 0 THEN
+    UPDATE player_bets
+    SET status = 'lost',
+        actual_payout = 0,
+        updated_at = NOW()
+    WHERE id = ANY(losing_bets_ids);
+  END IF;
 END;
 $$ LANGUAGE plpgsql;
 

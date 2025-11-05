@@ -1675,6 +1675,33 @@ export class SupabaseStorage implements IStorage {
   }
 
   async saveGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry> {
+    // ✅ CRITICAL: Validate required fields before inserting
+    if (!history.gameId || typeof history.gameId !== 'string' || history.gameId.trim() === '') {
+      const error = new Error(`Cannot save game history: invalid gameId (${history.gameId})`);
+      console.error('❌ VALIDATION ERROR:', error.message);
+      throw error;
+    }
+
+    if (!history.openingCard || typeof history.openingCard !== 'string') {
+      const error = new Error(`Cannot save game history: invalid openingCard (${history.openingCard})`);
+      console.error('❌ VALIDATION ERROR:', error.message);
+      throw error;
+    }
+
+    if (!history.winner || (history.winner !== 'andar' && history.winner !== 'bahar')) {
+      const error = new Error(`Cannot save game history: invalid winner (${history.winner})`);
+      console.error('❌ VALIDATION ERROR:', error.message);
+      throw error;
+    }
+
+    if (!history.winningCard || typeof history.winningCard !== 'string') {
+      const error = new Error(`Cannot save game history: invalid winningCard (${history.winningCard})`);
+      console.error('❌ VALIDATION ERROR:', error.message);
+      throw error;
+    }
+
+    console.log(`✅ Validation passed for game history: gameId=${history.gameId}, winner=${history.winner}`);
+
     // Convert camelCase to snake_case for Supabase
     const { data, error } = await supabaseServer
       .from('game_history')
@@ -1684,7 +1711,7 @@ export class SupabaseStorage implements IStorage {
         opening_card: history.openingCard,
         winner: history.winner,
         winning_card: history.winningCard,
-        total_cards: history.totalCards,
+        total_cards: history.totalCards || 0,
         winning_round: (history as any).round || 1,
         total_bets: (history as any).totalBets || 0,
         total_payouts: (history as any).totalPayouts || 0,
@@ -1694,10 +1721,18 @@ export class SupabaseStorage implements IStorage {
       .single();
 
     if (error) {
-      console.error('Error saving game history:', error);
-      throw new Error('Failed to save game history');
+      console.error('❌ Database error saving game history:', error);
+      console.error('History data attempted:', {
+        gameId: history.gameId,
+        openingCard: history.openingCard,
+        winner: history.winner,
+        winningCard: history.winningCard,
+        round: (history as any).round
+      });
+      throw new Error(`Failed to save game history: ${error.message}`);
     }
 
+    console.log(`✅ Game history saved to database successfully: ${history.gameId}`);
     return data;
   }
 
@@ -3578,12 +3613,12 @@ export class SupabaseStorage implements IStorage {
       // Update the payment request status
       await this.updatePaymentRequest(requestId, 'approved', adminId);
 
-      // Handle deposits and withdrawals differently
+      // ✅ FIX: Handle deposits and withdrawals with atomic operations
       if (requestType === 'deposit') {
-        // For deposits: add to user balance
-        await this.updateUserBalance(userId, amount);
+        // For deposits: use atomic operation to add balance
+        await this.addBalanceAtomic(userId, amount);
         
-        // CRITICAL FIX: Apply deposit bonus when admin approves deposit
+        // ✅ FIX: Apply deposit bonus when admin approves deposit
         try {
           const { applyDepositBonus } = await import('./payment');
           await applyDepositBonus(userId, amount);
@@ -3593,8 +3628,8 @@ export class SupabaseStorage implements IStorage {
           // Don't fail the approval if bonus fails
         }
       } else if (requestType === 'withdrawal') {
-        // For withdrawals: subtract from user balance (amount is positive)
-        await this.updateUserBalance(userId, -amount);
+        // ✅ FIX: For withdrawals: use atomic operation to deduct balance (checks balance atomically)
+        await this.deductBalanceAtomic(userId, amount);
         console.log(`✅ Withdrawal processed: deducted ₹${amount} from user ${userId}`);
       }
     } catch (error) {

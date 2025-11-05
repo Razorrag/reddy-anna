@@ -86,7 +86,8 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
     };
   }, [isOpen]);
 
-  const fetchHistory = async () => {
+  // ✅ FIX: Add retry logic for history fetch
+  const fetchHistory = async (retryCount = 0) => {
     setLoading(true);
     try {
       const response = await apiClient.get<EnhancedGameHistoryEntry[]>('/api/game/history?limit=50');
@@ -104,7 +105,28 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
       setSelectedRound(null); // Reset to default view (last game)
     } catch (error) {
       console.error('Failed to fetch game history:', error);
-      setHistory([]);
+      
+      // ✅ FIX: Retry logic with exponential backoff
+      if (retryCount < 3) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Max 5 seconds
+        console.log(`⚠️ Retrying game history fetch in ${delay}ms (attempt ${retryCount + 1}/3)`);
+        setTimeout(() => fetchHistory(retryCount + 1), delay);
+      } else {
+        // Final failure - show error but keep existing history if available
+        console.error('❌ Failed to fetch game history after 3 retries');
+        if (history.length === 0) {
+          setHistory([]); // Only clear if no history exists
+        }
+        // Show notification to user (if notification context available)
+        if (typeof window !== 'undefined' && window.dispatchEvent) {
+          window.dispatchEvent(new CustomEvent('show-notification', {
+            detail: {
+              message: 'Failed to load game history. Please refresh the page.',
+              type: 'error'
+            }
+          }));
+        }
+      }
     } finally {
       setLoading(false);
     }

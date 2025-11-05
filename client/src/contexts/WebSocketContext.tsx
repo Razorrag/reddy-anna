@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useEffect, useState, use
 import { useGameState } from './GameStateContext';
 import { useNotification } from './NotificationContext';
 import { useAuth } from './AuthContext';
+import { apiClient } from '../lib/api-client';
 import type { Card, BetSide } from '../types/game';
 import {
   WebSocketMessage,
@@ -146,6 +147,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     setScreenSharing,
     setWinningCard,
     removeLastBet,
+    setBettingLocked, // ✅ FIX: Add missing setBettingLocked
   } = useGameState();
   const { showNotification } = useNotification();
   const { state: authState, logout, refreshAccessToken } = useAuth();
@@ -297,13 +299,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               return true;
             });
             
-            console.log(`🔄 Replaying ${filteredEvents.length} buffered events (filtered ${bufferedEvents.length - filteredEvents.length} user-specific events)`);
+            // ✅ FIX: Sort buffered events by timestamp/sequence before replaying
+            const sortedEvents = filteredEvents.sort((a: any, b: any) => {
+              const timeA = a.timestamp || a.data?.timestamp || 0;
+              const timeB = b.timestamp || b.data?.timestamp || 0;
+              return timeA - timeB;
+            });
+            
+            console.log(`🔄 Replaying ${sortedEvents.length} buffered events in order (filtered ${bufferedEvents.length - filteredEvents.length} user-specific events)`);
             // Events will be handled by their respective handlers
-            filteredEvents.forEach((event: any) => {
-              // Process buffered events in sequence
+            sortedEvents.forEach((event: any, index: number) => {
+              // Process buffered events in sequence with proper timing
               setTimeout(() => {
                 handleWebSocketMessage({ type: event.type, data: event.data } as any);
-              }, 100);
+              }, index * 100); // Stagger events to prevent overwhelming
             });
           }
           
@@ -669,16 +678,35 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       case 'game_complete': {
-        const { winner, winningCard, message } = (data as GameCompleteMessage).data;
+        // ✅ FIX: Validate data before processing
+        const gameCompleteData = (data as GameCompleteMessage).data;
+        if (!gameCompleteData) {
+          console.error('❌ game_complete message missing data');
+          break;
+        }
+        
+        const { winner, winningCard, message, round, totalBets, totalPayouts } = gameCompleteData;
+        
+        // ✅ FIX: Validate required fields
+        if (!winner || !winningCard) {
+          console.error('❌ game_complete message missing required fields:', { winner, winningCard });
+          break;
+        }
+        
         setPhase('complete');
         setWinner(winner);
         
-        // Extract and set winningCard - parse if it's a string, use as-is if it's already a Card object
-        if (winningCard) {
-          const card = typeof winningCard === 'string' 
-            ? parseDisplayCard(winningCard) 
-            : winningCard;
-          setWinningCard(card);
+        // ✅ FIX: Extract and set winningCard - parse if it's a string, use as-is if it's already a Card object
+        try {
+          if (winningCard) {
+            const card = typeof winningCard === 'string' 
+              ? parseDisplayCard(winningCard) 
+              : winningCard;
+            setWinningCard(card);
+          }
+        } catch (error) {
+          console.error('❌ Error parsing winning card:', error);
+          // Still set winner even if card parsing fails
         }
         
         // ❌ REMOVED: showNotification(message, 'success'); - Duplicate, shown in VideoArea overlay
@@ -1343,12 +1371,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
   }, [authState.authChecked, authState.isAuthenticated, authState.token, initWebSocketManager]); // Depend on auth state
 
-  // Subscribe to game state only after WebSocket is authenticated
+  // ✅ FIX: Subscribe to game state immediately after WebSocket authentication
   useEffect(() => {
     if (connectionStatus === ConnectionStatus.CONNECTED && isWebSocketAuthenticated && webSocketManagerRef.current) {
       console.log('✅ WebSocket authenticated - subscribing to game state');
       
-      // Subscribe to current game state after authentication
+      // ✅ FIX: Subscribe immediately (no delay) for faster state sync
       const subscribeToGameState = () => {
         sendWebSocketMessage({
           type: 'game_subscribe',
@@ -1358,10 +1386,36 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         console.log('📡 Game state subscription sent');
       };
       
-      // Delay the subscription slightly to ensure auth is fully processed
-      const subscriptionTimer = setTimeout(subscribeToGameState, 500);
+      // ✅ FIX: Subscribe immediately after auth, but also fetch via REST API as fallback
+      subscribeToGameState();
       
-      return () => clearTimeout(subscriptionTimer);
+      // ✅ FIX: Also fetch game state via REST API as fallback for faster sync
+      const fetchGameStateFallback = async () => {
+        try {
+          // Fetch current game state via REST API for immediate display
+          const response = await apiClient.get('/api/game/current-state');
+          if (response && response.phase && response.phase !== 'idle') {
+            console.log('📊 Fallback: Fetched game state via REST API:', response);
+            // Update state from REST API response
+            if (response.openingCard) {
+              const parsed = typeof response.openingCard === 'string' ? parseDisplayCard(response.openingCard) : response.openingCard;
+              setSelectedOpeningCard(parsed);
+            }
+            if (response.phase) setPhase(response.phase as any);
+            if (response.currentRound) setCurrentRound(response.currentRound as any);
+            if (response.timer !== undefined) setCountdown(response.timer);
+            if (response.bettingLocked !== undefined) setBettingLocked(response.bettingLocked);
+          }
+        } catch (error) {
+          console.error('⚠️ Fallback game state fetch failed (non-critical):', error);
+          // Non-critical, WebSocket subscription will handle it
+        }
+      };
+      
+      // Fetch fallback state after a short delay
+      const fallbackTimer = setTimeout(fetchGameStateFallback, 100);
+      
+      return () => clearTimeout(fallbackTimer);
     } else if (connectionStatus === ConnectionStatus.DISCONNECTED) {
       console.log('⏸️ WebSocket disconnected');
       setIsWebSocketAuthenticated(false); // Reset auth state on disconnect

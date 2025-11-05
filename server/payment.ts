@@ -41,14 +41,14 @@ export const processPayment = async (request: PaymentRequest): Promise<PaymentRe
     let error: string | undefined;
     
     if (request.type === 'deposit') {
-      // Process deposit based on method
+      // ✅ FIX: Process deposit based on method
       const result = await processDeposit(request);
       if (result.success) {
         status = 'success';
-        // Add amount to user balance
-        await storage.updateUserBalance(request.userId, request.amount);
+        // ✅ FIX: Use atomic operation for deposit
+        await storage.addBalanceAtomic(request.userId, request.amount);
         
-        // CRITICAL FIX: Apply deposit bonus automatically
+        // ✅ FIX: Apply deposit bonus automatically (only once - removed from processDeposit)
         try {
           await applyDepositBonus(request.userId, request.amount);
           console.log(`✅ Deposit bonus applied for user ${request.userId} on deposit of ₹${request.amount}`);
@@ -61,12 +61,12 @@ export const processPayment = async (request: PaymentRequest): Promise<PaymentRe
         error = result.error;
       }
     } else if (request.type === 'withdraw') {
-      // Process withdrawal based on method - this will use atomic operations to check balance and deduct
+      // ✅ FIX: Process withdrawal using atomic operation
       const result = await processWithdraw(request, user);
       if (result.success) {
-        // Use atomic operation to deduct amount from user balance - this checks balance and deducts in one operation
+        // ✅ FIX: Use atomic operation to deduct amount - checks balance and deducts atomically
         try {
-          await storage.updateUserBalance(request.userId, -request.amount);
+          await storage.deductBalanceAtomic(request.userId, request.amount);
         } catch (balanceError: any) {
           if (balanceError.message?.includes('Insufficient balance')) {
             return { success: false, status: 'failed', error: 'Insufficient balance' };
@@ -112,8 +112,7 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         // In a real implementation, this would integrate with a UPI payment gateway
         console.log(`Processing UPI deposit of ${amount} to ${method.details.upiId}`);
         
-        // Apply deposit bonus
-        await applyDepositBonus(userId, amount);
+        // ✅ FIX: Removed duplicate bonus application - bonus is applied in processPayment()
         
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
@@ -132,8 +131,7 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         // Process bank transfer
         console.log(`Processing bank deposit of ${amount} to account ${method.details.accountNumber}`);
         
-        // Apply deposit bonus
-        await applyDepositBonus(userId, amount);
+        // ✅ FIX: Removed duplicate bonus application - bonus is applied in processPayment()
         
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
@@ -150,8 +148,7 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         }
         console.log(`Processing wallet deposit of ${amount} to ${method.details.walletType}`);
         
-        // Apply deposit bonus
-        await applyDepositBonus(userId, amount);
+        // ✅ FIX: Removed duplicate bonus application - bonus is applied in processPayment()
         
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
@@ -169,8 +166,7 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         // In a real implementation, this would integrate with a card payment processor
         console.log(`Processing card deposit of ${amount}`);
         
-        // Apply deposit bonus
-        await applyDepositBonus(userId, amount);
+        // ✅ FIX: Removed duplicate bonus application - bonus is applied in processPayment()
         
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
