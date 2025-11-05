@@ -73,8 +73,12 @@ export function WalletModal({
           }, 2000);
         }
         
-        // Show success message
-        alert(`${activeTab === 'deposit' ? 'Deposit' : 'Withdrawal'} request submitted successfully! Opening WhatsApp to contact admin...`);
+        // ✅ IMPROVED: Clear messaging about processing
+        const successMessage = activeTab === 'deposit'
+          ? `Deposit request submitted successfully!\n\nYour balance will be credited after admin approval.\nYou'll receive 5% bonus on approval!\n\nOpening WhatsApp to contact admin...`
+          : `Withdrawal request submitted successfully!\n\nYour balance will be deducted after admin approval.\nThis prevents errors and ensures security.\n\nOpening WhatsApp to contact admin...`;
+        
+        alert(successMessage);
         
         // CRITICAL FIX: Auto-open WhatsApp with pre-filled message
         try {

@@ -267,18 +267,15 @@ export interface IStorage {
 }
 
 export class SupabaseStorage implements IStorage {
-  // Circuit breaker for database operations
+  // Circuit breaker for database operations (disabled - ES module compatibility)
   private circuitBreaker: any = null;
 
   constructor() {
-    // Lazy load circuit breaker to avoid circular dependencies
-    try {
-      const { dbCircuitBreaker } = require('../lib/circuit-breaker');
-      this.circuitBreaker = dbCircuitBreaker;
-    } catch (error) {
-      // Circuit breaker not available - operations will still work without it
-      console.warn('Circuit breaker not available:', error);
-    }
+    // ✅ FIX: Circuit breaker disabled due to ES module incompatibility
+    // This is an optional resilience feature - database operations work without it
+    // To re-enable: convert circuit-breaker to ES module with dynamic import()
+    this.circuitBreaker = null;
+    console.log('ℹ️ Circuit breaker disabled (optional feature)');
   }
 
   // Helper function to convert decimal balance to number
@@ -1702,6 +1699,19 @@ export class SupabaseStorage implements IStorage {
 
     console.log(`✅ Validation passed for game history: gameId=${history.gameId}, winner=${history.winner}`);
 
+    // ✅ CRITICAL FIX: Extract and validate round field
+    const roundValue = (history as any).round || (history as any).winningRound || 1;
+    console.log(`📊 Game history data being saved:`, {
+      gameId: history.gameId,
+      openingCard: history.openingCard,
+      winner: history.winner,
+      winningCard: history.winningCard,
+      totalCards: history.totalCards || 0,
+      round: roundValue,
+      totalBets: (history as any).totalBets || 0,
+      totalPayouts: (history as any).totalPayouts || 0
+    });
+
     // Convert camelCase to snake_case for Supabase
     const { data, error } = await supabaseServer
       .from('game_history')
@@ -1712,7 +1722,7 @@ export class SupabaseStorage implements IStorage {
         winner: history.winner,
         winning_card: history.winningCard,
         total_cards: history.totalCards || 0,
-        winning_round: (history as any).round || 1,
+        winning_round: roundValue, // ✅ FIX: Use extracted round value
         total_bets: (history as any).totalBets || 0,
         total_payouts: (history as any).totalPayouts || 0,
         created_at: new Date()
@@ -1722,17 +1732,27 @@ export class SupabaseStorage implements IStorage {
 
     if (error) {
       console.error('❌ Database error saving game history:', error);
-      console.error('History data attempted:', {
+      console.error('❌ Full error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      console.error('❌ History data attempted:', {
         gameId: history.gameId,
         openingCard: history.openingCard,
         winner: history.winner,
         winningCard: history.winningCard,
-        round: (history as any).round
+        round: roundValue,
+        totalCards: history.totalCards || 0,
+        totalBets: (history as any).totalBets || 0,
+        totalPayouts: (history as any).totalPayouts || 0
       });
-      throw new Error(`Failed to save game history: ${error.message}`);
+      throw new Error(`Failed to save game history: ${error.message} (Code: ${error.code})`);
     }
 
     console.log(`✅ Game history saved to database successfully: ${history.gameId}`);
+    console.log(`✅ Saved record ID: ${data.id}, Round: ${roundValue}`);
     return data;
   }
 
@@ -2092,8 +2112,10 @@ export class SupabaseStorage implements IStorage {
   }
 
   async applyPayoutsAndupdateBets(payouts: { userId: string; amount: number }[], winningBets: string[], losingBets: string[]): Promise<void> {
+    // ✅ CRITICAL FIX: Pass payouts as array directly - Supabase will convert to JSONB
+    // DO NOT use JSON.stringify() as it causes double-stringification
     const { error } = await supabaseServer.rpc('apply_payouts_and_update_bets', {
-      payouts: JSON.stringify(payouts),
+      payouts: payouts,
       winning_bets_ids: winningBets,
       losing_bets_ids: losingBets,
     });
@@ -3628,9 +3650,22 @@ export class SupabaseStorage implements IStorage {
           // Don't fail the approval if bonus fails
         }
       } else if (requestType === 'withdrawal') {
-        // ✅ FIX: For withdrawals: use atomic operation to deduct balance (checks balance atomically)
-        await this.deductBalanceAtomic(userId, amount);
-        console.log(`✅ Withdrawal processed: deducted ₹${amount} from user ${userId}`);
+        // ✅ CRITICAL FIX: Balance already deducted on request submission
+        // No need to deduct again - just create transaction record for approval
+        const user = await this.getUser(userId);
+        const currentBalance = user ? parseFloat(user.balance) : 0;
+        
+        await this.addTransaction({
+          userId,
+          transactionType: 'withdrawal_approved',
+          amount: -amount,
+          balanceBefore: currentBalance,
+          balanceAfter: currentBalance,
+          referenceId: `withdrawal_approved_${requestId}`,
+          description: `Withdrawal approved by admin - ₹${amount} (balance already deducted on request)`
+        });
+        
+        console.log(`✅ Withdrawal approved: ₹${amount} for user ${userId} (balance was deducted on request submission)`);
       }
     } catch (error) {
       console.error('Error approving payment request:', error);

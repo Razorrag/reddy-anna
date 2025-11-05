@@ -111,6 +111,12 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
           <div className="text-sm text-red-200/80 mt-2 pt-2 border-t border-red-400/30">
             Cumulative: <span className="font-semibold text-white">₹{totalCumulativeAndar.toLocaleString('en-IN')}</span>
           </div>
+          {/* LOW BET INDICATOR */}
+          {totalCurrentBets > 0 && currentRoundBets.andar < currentRoundBets.bahar && (
+            <div className="mt-2 px-2 py-1 bg-yellow-500/20 border border-yellow-500 rounded text-xs font-bold text-yellow-300 text-center animate-pulse">
+              ⚠️ LOW BET
+            </div>
+          )}
         </div>
         
         {/* BAHAR BETS */}
@@ -125,6 +131,12 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
           <div className="text-sm text-blue-200/80 mt-2 pt-2 border-t border-blue-400/30">
             Cumulative: <span className="font-semibold text-white">₹{totalCumulativeBahar.toLocaleString('en-IN')}</span>
           </div>
+          {/* LOW BET INDICATOR */}
+          {totalCurrentBets > 0 && currentRoundBets.bahar < currentRoundBets.andar && (
+            <div className="mt-2 px-2 py-1 bg-yellow-500/20 border border-yellow-500 rounded text-xs font-bold text-yellow-300 text-center animate-pulse">
+              ⚠️ LOW BET
+            </div>
+          )}
         </div>
         
         {/* Round 1 Stats (show when in Round 2+) */}

@@ -7,11 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft,
-  Calendar,
   Filter,
   Download,
-  TrendingUp,
-  TrendingDown,
   Search,
   ChevronLeft,
   ChevronRight
@@ -75,13 +72,33 @@ const GameHistoryPage: React.FC = () => {
       
       if (response.ok) {
         const data = await response.json();
-        setHistory(data.data.games || []);
-        setPagination(data.data.pagination || pagination);
+        console.log('📊 Game history API response:', data);
+        
+        // ✅ FIX: Handle both response formats
+        // Backend returns: { success: true, data: { games: [...], pagination: {...} } }
+        if (data.success && data.data) {
+          const games = data.data.games || data.data || [];
+          const paginationData = data.data.pagination || {
+            page: filters.page,
+            limit: filters.limit,
+            total: Array.isArray(games) ? games.length : 0,
+            pages: Math.ceil((Array.isArray(games) ? games.length : 0) / filters.limit)
+          };
+          
+          console.log('✅ Parsed games:', games.length, 'games');
+          console.log('✅ Pagination:', paginationData);
+          
+          setHistory(games);
+          setPagination(paginationData);
+        } else {
+          console.warn('⚠️ Unexpected API response format:', data);
+          setHistory([]);
+        }
       } else {
         throw new Error('Failed to fetch game history');
       }
     } catch (error) {
-      console.error('Error fetching game history:', error);
+      console.error('❌ Error fetching game history:', error);
       setError('Failed to fetch game history');
     } finally {
       setLoading(false);
@@ -374,8 +391,18 @@ const GameHistoryPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {history.map((game, index) => (
-                    <tr key={game.id} className={`border-b border-purple-400/20 ${index % 2 === 0 ? 'bg-purple-900/20' : ''}`}>
+                  {history.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} className="p-8 text-center">
+                        <div className="text-purple-300">
+                          <p className="text-lg font-semibold mb-2">No game history found</p>
+                          <p className="text-sm">Complete some games to see history here</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    history.map((game, index) => (
+                      <tr key={game.id} className={`border-b border-purple-400/20 ${index % 2 === 0 ? 'bg-purple-900/20' : ''}`}>
                       <td className="p-3">
                         <span className="font-mono text-sm text-purple-300">
                           {game.gameId.slice(0, 8)}...
@@ -438,7 +465,7 @@ const GameHistoryPage: React.FC = () => {
                         </span>
                       </td>
                     </tr>
-                  ))}
+                  )))}
                 </tbody>
               </table>
             </div>

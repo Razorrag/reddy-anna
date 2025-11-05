@@ -78,27 +78,34 @@ export default function Login() {
     } catch (err: any) {
       console.error('Login error:', err);
       
-      // Enhanced error messages
-      let errorMessage = 'Unable to log in. Please try again.';
+      // ✅ CRITICAL FIX: Handle account blocking and suspension with enhanced error messages
+      const errorMsg = err.message || err.error || 'Login failed';
+      const message = errorMsg.toLowerCase();
       
-      if (err.message) {
-        const message = err.message.toLowerCase();
-        if (message.includes('network') || message.includes('fetch')) {
-          errorMessage = '🌐 Network Error: Unable to connect to server. Please check your internet connection and try again.';
-        } else if (message.includes('timeout')) {
-          errorMessage = '⏱️ Connection Timeout: The server took too long to respond. Please try again.';
-        } else if (message.includes('401') || message.includes('unauthorized') || message.includes('invalid')) {
-          errorMessage = '❌ Invalid Credentials: Phone number or password is incorrect. Please check and try again.';
-        } else if (message.includes('404') || message.includes('not found')) {
-          errorMessage = '⚠️ Service Unavailable: Authentication service not found. Please try again later.';
-        } else if (message.includes('500') || message.includes('server error')) {
-          errorMessage = '🔴 Server Error: Our servers are experiencing issues. Please try again in a few moments.';
-        } else {
-          errorMessage = `⚠️ Error: ${err.message}`;
-        }
+      let displayError = 'Unable to log in. Please try again.';
+      
+      // Check for account status issues first
+      if (errorMsg.includes('ACCOUNT_BLOCKED')) {
+        displayError = '🚫 Your account has been blocked by admin. Please contact support for assistance.';
+      } else if (message.includes('suspended')) {
+        displayError = '⚠️ Your account is suspended. You can login and view the game, but betting is disabled. Contact admin for support.';
+      } else if (message.includes('user not found') || message.includes('invalid password')) {
+        displayError = '❌ Invalid phone number or password. Please try again.';
+      } else if (message.includes('network') || message.includes('fetch')) {
+        displayError = '🌐 Network Error: Unable to connect to server. Please check your internet connection and try again.';
+      } else if (message.includes('timeout')) {
+        displayError = '⏱️ Connection Timeout: The server took too long to respond. Please try again.';
+      } else if (message.includes('401') || message.includes('unauthorized')) {
+        displayError = '❌ Invalid Credentials: Phone number or password is incorrect. Please check and try again.';
+      } else if (message.includes('404') || message.includes('not found')) {
+        displayError = '⚠️ Service Unavailable: Authentication service not found. Please try again later.';
+      } else if (message.includes('500') || message.includes('server error')) {
+        displayError = '🔴 Server Error: Our servers are experiencing issues. Please try again in a few moments.';
+      } else {
+        displayError = `⚠️ Error: ${errorMsg}`;
       }
       
-      setError(errorMessage);
+      setError(displayError);
     } finally {
       setIsLoading(false);
     }

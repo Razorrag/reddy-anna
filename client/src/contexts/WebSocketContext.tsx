@@ -130,7 +130,8 @@ const getWebSocketUrl = (): string => {
 
 export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { 
-    gameState, 
+    gameState,
+    setGameId,
     setPhase, 
     setCountdown, 
     setWinner, 
@@ -234,6 +235,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           });
           
           const {
+            gameId,
             phase,
             countdownTimer,
             timer,
@@ -251,6 +253,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             bettingLocked
           } = gameState;
           
+          // ✅ FIX: Set gameId from server
+          if (gameId) setGameId(gameId);
           setPhase(phase as any);
           setCountdown(countdownTimer || timer || 0);
           setWinner(winner);
@@ -458,11 +462,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           window.dispatchEvent(balanceEvent);
         }
         
-        // Add new bet to array as BetInfo object
+        // ✅ FIX: Add new bet to array as BetInfo object with proper normalization
+        console.log('✅ Bet confirmed:', data.data);
+        
         const currentBets = data.data.round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
         const currentSideBets = Array.isArray(currentBets[data.data.side as keyof typeof currentBets])
           ? (currentBets[data.data.side as keyof typeof currentBets] as any[])
           : [];
+        
+        // ✅ FIX: Normalize existing bets to BetInfo format
+        const normalizedCurrentBets = currentSideBets.map((bet: any) => 
+          typeof bet === 'number' 
+            ? { amount: bet, betId: `legacy-${Date.now()}`, timestamp: Date.now() }
+            : bet
+        );
         
         // Create BetInfo object with actual bet ID from server
         const betInfo = {
@@ -473,8 +486,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         
         const newBets = {
           ...currentBets,
-          [data.data.side]: [...currentSideBets, betInfo],
+          [data.data.side]: [...normalizedCurrentBets, betInfo],
         };
+        
+        console.log('📊 Updated bets:', newBets);
         updatePlayerRoundBets(data.data.round as any, newBets);
         break;
 
@@ -1304,11 +1319,29 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const placeBet = async (side: BetSide, amount: number) => {
     try {
-      // Add gameId to bet message (FIX: Missing gameId was causing server to reject bets)
+      // ✅ FIX: Validate gameId before sending bet
+      if (!gameState.gameId || gameState.gameId === 'default-game') {
+        console.error('❌ Cannot place bet: No valid gameId', {
+          gameId: gameState.gameId,
+          phase: gameState.phase,
+          round: gameState.currentRound
+        });
+        showNotification('Game session not ready. Please wait for admin to start the game.', 'error');
+        return;
+      }
+      
+      console.log('📝 Placing bet:', {
+        gameId: gameState.gameId,
+        side,
+        amount,
+        round: gameState.currentRound
+      });
+      
+      // Add gameId to bet message
       sendWebSocketMessage({
         type: 'place_bet',
         data: {
-          gameId: gameState.gameId || 'default-game',
+          gameId: gameState.gameId,
           side,
           amount,
           round: String(gameState.currentRound),

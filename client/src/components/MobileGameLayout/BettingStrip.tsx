@@ -36,6 +36,18 @@ const BettingStrip: React.FC<BettingStripProps> = ({
   const [minBet, setMinBet] = useState(1000);
   const [maxBet, setMaxBet] = useState(100000);
 
+  // ✅ FIX: Add debug logging to track bet updates
+  useEffect(() => {
+    console.log('🎲 BettingStrip - Player Bets Updated:', {
+      round1Andar: gameState.playerRound1Bets.andar,
+      round1Bahar: gameState.playerRound1Bets.bahar,
+      round2Andar: gameState.playerRound2Bets.andar,
+      round2Bahar: gameState.playerRound2Bets.bahar,
+      currentRound: gameState.currentRound,
+      phase: gameState.phase
+    });
+  }, [gameState.playerRound1Bets, gameState.playerRound2Bets, gameState.currentRound, gameState.phase]);
+
   useEffect(() => {
     // Fetch game settings for min/max bet limits
     const fetchSettings = async () => {
@@ -154,8 +166,11 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                     ? gameState.playerRound1Bets.andar 
                     : [];
                   const r1AndarTotal = r1Andar.reduce((sum: number, bet: any) => {
-                    const amount = typeof bet === 'number' ? bet : bet.amount;
-                    return sum + amount;
+                    // ✅ FIX: Handle both number and object, with fallback to prevent NaN
+                    const amount = typeof bet === 'number' 
+                      ? bet 
+                      : (bet?.amount ?? 0);  // Use nullish coalescing for safety
+                    return sum + (isNaN(amount) ? 0 : amount);
                   }, 0);
                   
                   // Calculate total bet amount for Round 2 Andar
@@ -163,8 +178,10 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                     ? gameState.playerRound2Bets.andar 
                     : [];
                   const r2AndarTotal = r2Andar.reduce((sum: number, bet: any) => {
-                    const amount = typeof bet === 'number' ? bet : bet.amount;
-                    return sum + amount;
+                    const amount = typeof bet === 'number' 
+                      ? bet 
+                      : (bet?.amount ?? 0);
+                    return sum + (isNaN(amount) ? 0 : amount);
                   }, 0);
                   
                   return (
@@ -298,8 +315,10 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                     ? gameState.playerRound1Bets.bahar 
                     : [];
                   const r1BaharTotal = r1Bahar.reduce((sum: number, bet: any) => {
-                    const amount = typeof bet === 'number' ? bet : bet.amount;
-                    return sum + amount;
+                    const amount = typeof bet === 'number' 
+                      ? bet 
+                      : (bet?.amount ?? 0);
+                    return sum + (isNaN(amount) ? 0 : amount);
                   }, 0);
                   
                   // Calculate total bet amount for Round 2 Bahar
@@ -307,8 +326,10 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                     ? gameState.playerRound2Bets.bahar 
                     : [];
                   const r2BaharTotal = r2Bahar.reduce((sum: number, bet: any) => {
-                    const amount = typeof bet === 'number' ? bet : bet.amount;
-                    return sum + amount;
+                    const amount = typeof bet === 'number' 
+                      ? bet 
+                      : (bet?.amount ?? 0);
+                    return sum + (isNaN(amount) ? 0 : amount);
                   }, 0);
                   
                   return (

@@ -537,11 +537,45 @@ async function restoreActiveGameState() {
   try {
     const activeSession = await storage.getActiveGameSession();
     if (activeSession && activeSession.status === 'active') {
+      const phase = activeSession.phase as GamePhase;
+      const gameId = (activeSession as any).game_id || activeSession.gameId;
+      
+      // ✅ FIX: Auto-reset incomplete games on server restart
+      // Games in 'dealing' or 'complete' phase should be reset to prevent stuck states
+      if (phase === 'dealing' || phase === 'complete') {
+        console.log(`⚠️ Found incomplete game in phase '${phase}', auto-resetting to idle`);
+        console.log(`Game ID: ${gameId}`);
+        
+        try {
+          // Mark old game as cancelled in database
+          await storage.updateGameSession(gameId, {
+            status: 'cancelled',
+            ended_at: new Date()
+          });
+          console.log(`✅ Marked game ${gameId} as cancelled in database`);
+        } catch (updateError) {
+          console.error('⚠️ Could not mark game as cancelled:', updateError);
+        }
+        
+        // Reset to idle state
+        currentGameState.reset();
+        console.log('✅ Game reset to idle state - ready for new game');
+        console.log('💡 Admin can now start a new game, players can place bets');
+        return;
+      }
+      
+      // Only restore if in betting phase (safe to restore)
+      if (phase !== 'betting') {
+        console.log(`⚠️ Game in phase '${phase}', resetting to idle for safety`);
+        currentGameState.reset();
+        return;
+      }
+      
       console.log('🔄 Restoring active game state from database...');
       
       // Restore game state from database
-      currentGameState.gameId = (activeSession as any).game_id || activeSession.gameId;
-      currentGameState.phase = activeSession.phase as GamePhase;
+      currentGameState.gameId = gameId;
+      currentGameState.phase = phase;
       currentGameState.currentRound = ((activeSession as any).current_round || activeSession.currentTimer || 1) as 1 | 2 | 3;
       currentGameState.timer = (activeSession as any).current_timer || activeSession.currentTimer || 0;
       currentGameState.openingCard = (activeSession as any).opening_card || activeSession.openingCard;
@@ -1473,7 +1507,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
               return;
             }
 
+            // ✅ CRITICAL FIX: Check account status before allowing bets
             try {
+              const user = await storage.getUser(client.userId);
+              
+              if (!user) {
+                sendError(ws, 'User account not found');
+                return;
+              }
+              
+              if (user.status === 'banned') {
+                sendError(ws, '🚫 Your account has been banned. Betting is not allowed. Please contact admin for support.');
+                ws.close(4003, 'Account banned');
+                return;
+              }
+              
+              if (user.status === 'suspended') {
+                sendError(ws, '⚠️ Your account is suspended. Betting is blocked. Please contact admin for support.');
+                return;
+              }
+              
+              // Account is active, proceed with bet
               await handlePlayerBet(client, (message as any).data);
             } catch (error: any) {
               console.error('Bet handler error:', error);
@@ -1509,6 +1563,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (client.role !== 'admin') {
                 sendError(ws, 'Unauthorized: Only admins can reset game');
                 break;
+              }
+
+              // ✅ CRITICAL FIX: Refund all player bets BEFORE resetting game
+              console.log('🔄 Game reset initiated - refunding all player bets...');
+              const userBets = (global as any).currentGameState?.userBets;
+              let totalRefunded = 0;
+              let playersRefunded = 0;
+              
+              if (userBets && userBets.size > 0) {
+                for (const [userId, bets] of userBets.entries()) {
+                  let totalRefund = 0;
+                  
+                  // Calculate total bet amount from all rounds
+                  if (bets.round1) {
+                    totalRefund += (bets.round1.andar || 0) + (bets.round1.bahar || 0);
+                  }
+                  if (bets.round2) {
+                    totalRefund += (bets.round2.andar || 0) + (bets.round2.bahar || 0);
+                  }
+                  
+                  if (totalRefund > 0) {
+                    try {
+                      // Refund to user balance atomically
+                      const newBalance = await storage.addBalanceAtomic(userId, totalRefund);
+                      
+                      // Create transaction record for audit trail
+                      await storage.addTransaction({
+                        userId: userId,
+                        transactionType: 'refund',
+                        amount: totalRefund,
+                        balanceBefore: newBalance - totalRefund,
+                        balanceAfter: newBalance,
+                        referenceId: `game-reset-${Date.now()}-${userId}`,
+                        description: 'Bet refunded - Admin reset game before completion'
+                      });
+                      
+                      totalRefunded += totalRefund;
+                      playersRefunded++;
+                      
+                      // Notify user of refund via WebSocket
+                      const userClient = Array.from(clients.values()).find(c => c.userId === userId);
+                      if (userClient?.ws && userClient.ws.readyState === WebSocket.OPEN) {
+                        userClient.ws.send(JSON.stringify({
+                          type: 'bet_refunded',
+                          data: {
+                            amount: totalRefund,
+                            reason: 'Game reset by admin before completion',
+                            newBalance: newBalance
+                          }
+                        }));
+                      }
+                      
+                      console.log(`✅ Refunded ₹${totalRefund} to user ${userId} (new balance: ₹${newBalance})`);
+                    } catch (refundError) {
+                      console.error(`❌ Failed to refund ₹${totalRefund} to user ${userId}:`, refundError);
+                      // Continue with other refunds even if one fails
+                    }
+                  }
+                }
+                console.log(`💰 Total refunded: ₹${totalRefunded} to ${playersRefunded} players`);
+              } else {
+                console.log('ℹ️ No bets to refund');
               }
 
               // Reset server-side game state
@@ -2272,7 +2388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // 🔒 WITHDRAWAL VALIDATION: Check if user has sufficient balance for withdrawal requests
+      // 🔒 WITHDRAWAL VALIDATION & BALANCE DEDUCTION
       if (requestType === 'withdrawal') {
         const user = await storage.getUser(req.user.id);
         if (!user) {
@@ -2287,6 +2403,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({
             success: false,
             error: `Insufficient balance for withdrawal. Current balance: ₹${currentBalance.toLocaleString()}, Requested: ₹${numAmount.toLocaleString()}`
+          });
+        }
+        
+        // ✅ CRITICAL FIX: Deduct balance immediately on withdrawal request submission
+        try {
+          const newBalance = await storage.deductBalanceAtomic(req.user.id, numAmount);
+          console.log(`💰 Withdrawal balance deducted: User ${req.user.id}, Amount: ₹${numAmount}, New Balance: ₹${newBalance}`);
+          
+          // Create transaction record for audit trail
+          await storage.addTransaction({
+            userId: req.user.id,
+            transactionType: 'withdrawal_pending',
+            amount: -numAmount,
+            balanceBefore: currentBalance,
+            balanceAfter: newBalance,
+            referenceId: `withdrawal_pending_${Date.now()}`,
+            description: `Withdrawal requested - ₹${numAmount} deducted (pending admin approval)`
+          });
+        } catch (deductError: any) {
+          console.error('Failed to deduct withdrawal amount:', deductError);
+          return res.status(400).json({
+            success: false,
+            error: deductError.message || 'Failed to process withdrawal request'
           });
         }
       }
@@ -2555,6 +2694,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // ✅ CRITICAL FIX: Refund balance if withdrawal is rejected
+      if (request.request_type === 'withdrawal') {
+        try {
+          const newBalance = await storage.addBalanceAtomic(request.user_id, request.amount);
+          console.log(`💰 Withdrawal rejected - refund issued: User ${request.user_id}, Amount: ₹${request.amount}, New Balance: ₹${newBalance}`);
+          
+          // Create transaction record for refund
+          await storage.addTransaction({
+            userId: request.user_id,
+            transactionType: 'withdrawal_refund',
+            amount: request.amount,
+            balanceBefore: newBalance - request.amount,
+            balanceAfter: newBalance,
+            referenceId: `withdrawal_refund_${id}`,
+            description: `Withdrawal request rejected - ₹${request.amount} refunded to balance`
+          });
+          
+          // Send WebSocket notification to user about refund
+          try {
+            clients.forEach(client => {
+              if (client.userId === request.user_id && client.ws.readyState === WebSocket.OPEN) {
+                client.ws.send(JSON.stringify({
+                  type: 'admin_payment_notification',
+                  data: {
+                    message: `Your withdrawal request of ₹${request.amount.toLocaleString('en-IN')} was rejected. Amount refunded to your balance.`,
+                    reason: 'Admin rejected withdrawal',
+                    timestamp: Date.now(),
+                    requestType: 'withdrawal',
+                    amount: request.amount,
+                    newBalance: newBalance
+                  }
+                }));
+                
+                // Balance update notification
+                client.ws.send(JSON.stringify({
+                  type: 'balance_update',
+                  data: {
+                    balance: newBalance,
+                    amount: request.amount,
+                    type: 'refund',
+                    timestamp: Date.now()
+                  }
+                }));
+              }
+            });
+            console.log(`📢 Withdrawal rejection notification sent to user ${request.user_id}`);
+          } catch (notificationError) {
+            console.error('Failed to send rejection notification:', notificationError);
+            // Don't fail the rejection if notification fails
+          }
+        } catch (refundError: any) {
+          console.error('Failed to refund withdrawal amount:', refundError);
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to refund withdrawal amount'
+          });
+        }
+      }
+      
       // Update the payment request status to rejected
       if (!req.user) {
         return res.status(401).json({
@@ -2569,13 +2767,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         auditLogger('payment_request_rejected', req.user.id, {
           requestId: id,
           userId: request.user_id,
-          amount: request.amount
+          amount: request.amount,
+          refunded: request.request_type === 'withdrawal'
         });
       }
       
       res.json({
         success: true,
-        message: 'Payment request rejected successfully'
+        message: request.request_type === 'withdrawal' 
+          ? 'Withdrawal request rejected and amount refunded to user balance'
+          : 'Payment request rejected successfully'
       });
     } catch (error) {
       console.error('Payment request rejection error:', error);
@@ -4783,675 +4984,9 @@ async function transitionToRound3() {
   });
 }
 
-// ✅ FIX: Removed duplicate completeGame function - now using gameCompleteGame from './game'
-// This ensures single source of truth and consistency
-// The local completeGame function was removed and replaced with wrapper to gameCompleteGame
-async function completeGame_DEPRECATED(winner: 'andar' | 'bahar', winningCard: string) {
-  // This function is deprecated - use gameCompleteGame from './game' instead
-  console.log(`⚠️ DEPRECATED: This function should not be called. Use gameCompleteGame instead.`);
-  console.log(`Game complete! Winner: ${winner}, Card: ${currentGameState.winningCard}, Round: ${currentGameState.currentRound}`);
-  
-  // ✅ CRITICAL FIX: Ensure valid game ID FIRST, before any database operations
-  // This fixes the issue where gameId was 'default-game' or invalid, causing operations to be skipped
-  if (!currentGameState.gameId || 
-      typeof currentGameState.gameId !== 'string' || 
-      currentGameState.gameId.trim() === '' ||
-      currentGameState.gameId === 'default-game') {
-    currentGameState.gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    console.warn(`⚠️ Game ID was invalid or missing, generated new ID: ${currentGameState.gameId}`);
-  }
-  
-  // ✅ FIX: Ensure opening card exists, use fallback if missing
-  if (!currentGameState.openingCard) {
-    currentGameState.openingCard = 'UNKNOWN';
-    console.warn(`⚠️ Opening card was missing, using fallback: UNKNOWN`);
-  }
-  
-  currentGameState.winner = winner;
-  currentGameState.winningCard = winningCard;
-  currentGameState.phase = 'complete';
-  currentGameState.bettingLocked = true;
-  
-  if (currentGameState.timerInterval) {
-    clearInterval(currentGameState.timerInterval);
-    currentGameState.timerInterval = null;
-  }
-  
-  // ✅ CRITICAL FIX: Save game state FIRST before any other operations
-  // This ensures the game is marked as complete in the database
-  await persistGameState();
-  
-  // Calculate payouts and analytics
-  const payouts: Record<string, number> = {};
-  let totalBetsAmount = 0;
-  let totalPayoutsAmount = 0;
-  let uniquePlayers = 0;
-  
-  // Calculate total bets for this game
-  totalBetsAmount = (
-    currentGameState.round1Bets.andar +
-    currentGameState.round1Bets.bahar +
-    currentGameState.round2Bets.andar +
-    currentGameState.round2Bets.bahar
-  );
-  
-  uniquePlayers = currentGameState.userBets.size;
-  
-  // OPTIMIZATION: Calculate all payouts and send optimistic WebSocket updates FIRST
-  const payoutNotifications: Array<{
-    userId: string;
-    payout: number;
-    calculatedBalance: number;
-    bets: { round1: { andar: number; bahar: number }, round2: { andar: number; bahar: number } };
-    userTotalBet: number;
-    userWon: boolean;
-  }> = [];
-  
-  // ✅ FIX #2: Fetch bets from database FIRST to ensure accuracy (prevents race conditions)
-  let dbBets: any[] = [];
-  if (currentGameState.gameId && currentGameState.gameId !== 'default-game') {
-    try {
-      dbBets = await storage.getBetsForGame(currentGameState.gameId);
-      console.log(`📊 Fetched ${dbBets.length} bets from database for payout calculation`);
-    } catch (error) {
-      console.error('⚠️ Error fetching bets from DB, using in-memory state:', error);
-      // Fallback to in-memory state if DB fetch fails
-    }
-  }
-
-  // Step 1: Calculate payouts from DB bets (more accurate) or in-memory state (fallback)
-  // Use DB bets if available, otherwise fall back to in-memory state
-  const userBetsMap = new Map<string, { round1: { andar: number; bahar: number }, round2: { andar: number; bahar: number } }>();
-  
-  if (dbBets.length > 0) {
-    // Process DB bets - group by userId
-    for (const bet of dbBets) {
-      const userId = bet.user_id || bet.userId;
-      if (!userBetsMap.has(userId)) {
-        userBetsMap.set(userId, {
-          round1: { andar: 0, bahar: 0 },
-          round2: { andar: 0, bahar: 0 }
-        });
-      }
-      const userBets = userBetsMap.get(userId)!;
-      const round = bet.round === '1' || bet.round === 1 ? 'round1' : 'round2';
-      const side = bet.side === 'andar' ? 'andar' : 'bahar';
-      userBets[round][side] += parseFloat(bet.amount || '0');
-    }
-  } else {
-    // Fallback to in-memory state
-    for (const [userId, bets] of currentGameState.userBets.entries()) {
-      userBetsMap.set(userId, bets);
-    }
-  }
-
-  // Calculate payouts and send optimistic WebSocket updates IMMEDIATELY
-  for (const [userId, bets] of userBetsMap.entries()) {
-    const payout = calculatePayout(currentGameState.currentRound, winner, bets);
-    payouts[userId] = payout;
-    totalPayoutsAmount += payout;
-    
-    const userTotalBet = bets.round1.andar + bets.round1.bahar + bets.round2.andar + bets.round2.bahar;
-    const userWon = payout > userTotalBet;
-    
-    // Get current balance from memory/cache (fast - optimized)
-    let currentBalance = 0;
-    try {
-      currentBalance = await storage.getUserBalance(userId);
-    } catch (error) {
-      console.error(`Error getting balance for ${userId}:`, error);
-      // Fallback: try to get full user object
-      try {
-        const user = await storage.getUser(userId);
-        currentBalance = user ? parseFloat(user.balance) : 0;
-      } catch (fallbackError) {
-        console.error(`Fallback error getting balance for ${userId}:`, fallbackError);
-        currentBalance = 0;
-      }
-    }
-    
-    const calculatedBalance = currentBalance + payout;
-    
-    // Send WebSocket update IMMEDIATELY (optimistic update - before DB commit)
-    const client = clients.find(c => c.userId === userId && c.ws.readyState === WebSocket.OPEN);
-    if (client) {
-      try {
-        // Send payout notification with optimistic balance
-        client.ws.send(JSON.stringify({
-          type: 'payout_received',
-          data: {
-            amount: payout,
-            balance: calculatedBalance, // Optimistic balance
-            winner,
-            round: currentGameState.currentRound,
-            yourBets: bets,
-            timestamp: Date.now()
-          }
-        }));
-        
-        // Send balance update
-        client.ws.send(JSON.stringify({
-          type: 'balance_update',
-          data: {
-            balance: calculatedBalance, // Optimistic balance
-            amount: payout,
-            type: payout > 0 ? 'win' : 'loss',
-            timestamp: Date.now()
-          }
-        }));
-      } catch (wsError) {
-        console.error(`Error sending WebSocket update to ${userId}:`, wsError);
-      }
-    }
-    
-    // Queue for database update (background)
-    payoutNotifications.push({
-      userId,
-      payout,
-      calculatedBalance,
-      bets,
-      userTotalBet,
-      userWon
-    });
-  }
-  
-  // ✅ FIX #3: Use database transaction for payout updates (atomic operation)
-  // Step 2: Update database using transaction (atomic operation)
-  if (currentGameState.gameId && payoutNotifications.length > 0) {
-    // Store payout promise so we can wait for it before resetting
-    const payoutPromise = (async () => {
-      try {
-        // Prepare payout data for transaction
-        const payoutArray: Array<{ userId: string; amount: number }> = [];
-        const winningBets: string[] = [];
-        const losingBets: string[] = [];
-        
-        // Get all bets for this game to update their status
-        const allBets = dbBets.length > 0 ? dbBets : await storage.getBetsForGame(currentGameState.gameId);
-        
-        for (const notification of payoutNotifications) {
-          if (notification.payout > 0) {
-            payoutArray.push({ userId: notification.userId, amount: notification.payout });
-          }
-        }
-        
-        // Group bets by status (winning vs losing)
-        for (const bet of allBets) {
-          const userId = bet.user_id || bet.userId;
-          const notification = payoutNotifications.find(n => n.userId === userId);
-          const payout = notification?.payout || 0;
-          
-          if (bet.side === winner && payout > 0) {
-            winningBets.push(bet.id);
-          } else {
-            losingBets.push(bet.id);
-          }
-        }
-        
-        // Use atomic transaction function if available
-        if (payoutArray.length > 0 || winningBets.length > 0 || losingBets.length > 0) {
-          try {
-            await storage.applyPayoutsAndupdateBets(payoutArray, winningBets, losingBets);
-            console.log(`✅ Applied payouts for ${payoutArray.length} users via transaction`);
-          } catch (transactionError) {
-            console.error('⚠️ Transaction failed, falling back to individual updates:', transactionError);
-            // Fallback to individual updates
-            await Promise.all(
-              payoutNotifications.map(async ({ userId, payout, userTotalBet, userWon }) => {
-                try {
-                  if (payout > 0) {
-                    await storage.addBalanceAtomic(userId, payout);
-                    await storage.updateBetStatusByGameUser(currentGameState.gameId!, userId, winner, 'won');
-                  } else {
-                    const loserSide = winner === 'andar' ? 'bahar' : 'andar';
-                    await storage.updateBetStatusByGameUser(currentGameState.gameId!, userId, loserSide, 'lost');
-                  }
-                  await storage.updateUserGameStats(userId, userWon, userTotalBet, payout);
-                } catch (error) {
-                  console.error(`⚠️ Error updating payout for user ${userId}:`, error);
-                }
-              })
-            );
-          }
-        }
-        
-        // Verify balances and send corrections if needed
-        for (const notification of payoutNotifications) {
-          if (notification.payout > 0) {
-            try {
-              const actualBalance = await storage.getUserBalance(notification.userId);
-              if (Math.abs(actualBalance - notification.calculatedBalance) > 0.01) {
-                console.warn(`⚠️ Balance mismatch for ${notification.userId}: expected ${notification.calculatedBalance}, got ${actualBalance}`);
-                const client = clients.find(c => c.userId === notification.userId && c.ws.readyState === WebSocket.OPEN);
-                if (client) {
-                  client.ws.send(JSON.stringify({
-                    type: 'balance_correction',
-                    data: {
-                      balance: actualBalance,
-                      reason: 'Balance correction after verification',
-                      timestamp: Date.now()
-                    }
-                  }));
-                }
-              }
-            } catch (error) {
-              console.error(`⚠️ Error verifying balance for ${notification.userId}:`, error);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('❌ Error in payout processing:', error);
-        // Send error notifications to affected users
-        for (const notification of payoutNotifications) {
-          const client = clients.find(c => c.userId === notification.userId && c.ws.readyState === WebSocket.OPEN);
-          if (client) {
-            client.ws.send(JSON.stringify({
-              type: 'payout_error',
-              data: {
-                message: 'Failed to process payout. Please contact support.',
-                timestamp: Date.now()
-              }
-            }));
-          }
-        }
-      }
-    })();
-    
-    // Store promise for waiting before reset
-    (global as any).lastPayoutPromise = payoutPromise;
-  }
-  
-  // Calculate company profit/loss for this game
-  const companyProfitLoss = totalBetsAmount - totalPayoutsAmount;
-  const profitLossPercentage = totalBetsAmount > 0 ? (companyProfitLoss / totalBetsAmount) * 100 : 0;
-  
-  // Store game statistics
-  // ✅ FIX: Game ID is now validated at the start, so this check is redundant but kept for safety
-  if (currentGameState.gameId) {
-    try {
-      await storage.saveGameStatistics({
-        gameId: currentGameState.gameId,
-        totalPlayers: uniquePlayers,
-        totalBets: totalBetsAmount,
-        totalWinnings: totalPayoutsAmount,
-        houseEarnings: companyProfitLoss,
-        profitLoss: companyProfitLoss,
-        profitLossPercentage: profitLossPercentage,
-        housePayout: totalPayoutsAmount,
-        andarBetsCount: getBetCountForSide('andar'),
-        baharBetsCount: getBetCountForSide('bahar'),
-        andarTotalBet: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
-        baharTotalBet: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
-        uniquePlayers: uniquePlayers,
-        gameDuration: 0 // Default to 0 for now, could be calculated later
-      });
-      
-      // Update daily statistics
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      await storage.incrementDailyStats(today, {
-        totalGames: 1,
-        totalBets: totalBetsAmount,
-        totalPayouts: totalPayoutsAmount,
-        totalRevenue: companyProfitLoss,
-        profitLoss: companyProfitLoss,
-        uniquePlayers: uniquePlayers
-      });
-      
-      // Update monthly stats
-      const monthYear = today.toISOString().slice(0, 7); // YYYY-MM
-      await storage.incrementMonthlyStats(monthYear, {
-        totalGames: 1,
-        totalBets: totalBetsAmount,
-        totalPayouts: totalPayoutsAmount,
-        totalRevenue: companyProfitLoss,
-        profitLoss: companyProfitLoss,
-        uniquePlayers: uniquePlayers
-      });
-      
-      // Update yearly stats
-      const year = today.getFullYear();
-      await storage.incrementYearlyStats(year, {
-        totalGames: 1,
-        totalBets: totalBetsAmount,
-        totalPayouts: totalPayoutsAmount,
-        totalRevenue: companyProfitLoss,
-        profitLoss: companyProfitLoss,
-        uniquePlayers: uniquePlayers
-      });
-    } catch (error) {
-      console.error('⚠️ Error saving game statistics:', error);
-    }
-  }
-  
-  // Broadcast analytics updates to all admin clients after game completion
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Get updated analytics data
-    const updatedDailyStats = await storage.getDailyStats(today);
-    const monthYear = today.toISOString().slice(0, 7);
-    const updatedMonthlyStats = await storage.getMonthlyStats(monthYear);
-    const year = today.getFullYear();
-    const updatedYearlyStats = await storage.getYearlyStats(year);
-    const todayStats = await storage.getTodayStats();
-    const todayGameCount = await storage.getTodayGameCount();
-    const todayBetTotal = await storage.getTodayBetsTotal();
-    const todayPlayers = await storage.getTodayUniquePlayers();
-    
-    // Broadcast real-time stats update (frontend will convert to 'realtime-analytics-update' event)
-    broadcastToRole({
-      type: 'analytics_update',
-      data: {
-        currentGame: {
-          id: currentGameState.gameId,
-          phase: 'complete',
-          currentRound: currentGameState.currentRound,
-          timer: 0,
-          andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
-          baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
-          bettingLocked: true,
-          totalPlayers: uniquePlayers
-        },
-        todayStats,
-        todayGameCount,
-        todayBetTotal,
-        todayPlayers
-      }
-    }, 'admin');
-    
-    // Broadcast daily analytics update
-    if (updatedDailyStats) {
-      broadcastToRole({
-        type: 'analytics_update',
-        data: {
-          type: 'daily',
-          data: updatedDailyStats
-        }
-      }, 'admin');
-    }
-    
-    // Broadcast monthly analytics update
-    if (updatedMonthlyStats) {
-      broadcastToRole({
-        type: 'analytics_update',
-        data: {
-          type: 'monthly',
-          data: updatedMonthlyStats
-        }
-      }, 'admin');
-    }
-    
-    // Broadcast yearly analytics update
-    if (updatedYearlyStats) {
-      broadcastToRole({
-        type: 'analytics_update',
-        data: {
-          type: 'yearly',
-          data: updatedYearlyStats
-        }
-      }, 'admin');
-    }
-    
-    // Broadcast game history update to ALL users (basic data only)
-    broadcast({
-      type: 'game_history_update',
-      data: {
-        gameId: currentGameState.gameId,
-        openingCard: currentGameState.openingCard,
-        winner,
-        winningCard,
-        round: currentGameState.currentRound,
-        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
-        createdAt: new Date().toISOString()
-      }
-    });
-
-    // Broadcast detailed analytics to admins only (with financial data) - separate event type
-    broadcastToRole({
-      type: 'game_history_update_admin',
-      data: {
-        gameId: currentGameState.gameId,
-        openingCard: currentGameState.openingCard,
-        winner,
-        winningCard,
-        totalBets: totalBetsAmount,
-        totalPayouts: totalPayoutsAmount,
-        andarTotalBet: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
-        baharTotalBet: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
-        totalPlayers: uniquePlayers,
-        totalCards: currentGameState.andarCards.length + currentGameState.baharCards.length,
-        round: currentGameState.currentRound,
-        createdAt: new Date().toISOString()
-      }
-    }, 'admin');
-    
-    console.log('✅ Analytics updates broadcasted to admin clients');
-  } catch (error) {
-    console.error('⚠️ Error broadcasting analytics updates:', error);
-  }
-  
-  // Determine payout message and winner display based on winner and round
-  let payoutMessage = '';
-  let winnerDisplay = '';
-  
-  if (currentGameState.currentRound === 1) {
-    if (winner === 'andar') {
-      payoutMessage = 'Andar wins! Payout: 1:1 (Double money) 💰';
-      winnerDisplay = 'ANDAR WON';
-    } else {
-      payoutMessage = 'Baba wins! Payout: 1:0 (Refund only) 💵';
-      winnerDisplay = 'BABA WON'; // Round 1 Bahar = Baba Won
-    }
-  } else if (currentGameState.currentRound === 2) {
-    if (winner === 'andar') {
-      payoutMessage = 'Andar wins! Payout: 1:1 on ALL bets (R1+R2) 💰💰';
-      winnerDisplay = 'ANDAR WON';
-    } else {
-      payoutMessage = 'Shoot wins! R1 bets: 1:1, R2 bets: 1:0 (Refund) 💵';
-      winnerDisplay = 'SHOOT WON'; // Round 2 Bahar = Shoot Won
-    }
-  } else {
-    // Round 3
-    if (winner === 'andar') {
-      payoutMessage = 'Andar wins! Payout: 1:1 on ALL bets 💰💰💰';
-      winnerDisplay = 'ANDAR WON';
-    } else {
-      payoutMessage = 'Bahar wins! Payout: 1:1 on ALL bets 💰💰💰';
-      winnerDisplay = 'BAHAR WON'; // Round 3 Bahar = Bahar Won
-    }
-  }
-  
-  broadcast({
-    type: 'game_complete',
-    data: {
-      winner: currentGameState.winner,
-      winningCard: currentGameState.winningCard,
-      round: currentGameState.currentRound,
-      andarTotal: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
-      baharTotal: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
-      payoutMessage,
-      winnerDisplay, // Custom display text for UI
-      message: `🎉 Game Complete! ${winnerDisplay} with ${winningCard}!`
-    }
-  });
-  
-  // ✅ CRITICAL FIX: Save game history and complete game session BEFORE auto-restart
-  // This ensures the game is properly saved even if auto-restart happens
-  // Store game data in variables BEFORE reset to avoid losing data
-  const completedGameId = currentGameState.gameId;
-  const completedOpeningCard = currentGameState.openingCard || 'UNKNOWN';
-  const completedWinner = winner;
-  const completedWinningCard = winningCard;
-  const completedRound = currentGameState.currentRound;
-  const completedTotalCards = currentGameState.andarCards.length + currentGameState.baharCards.length;
-  
-  // ✅ CRITICAL: Wrap entire save + broadcast + reset in async IIFE to ensure proper sequencing
-  (async () => {
-    if (!completedGameId) {
-      console.error(`❌ CRITICAL: Cannot save game history - gameId is null/undefined`);
-      return;
-    }
-
-    try {
-      const historyData = {
-        gameId: completedGameId,
-        openingCard: completedOpeningCard,
-        winner: completedWinner,
-        winningCard: completedWinningCard,
-        totalCards: completedTotalCards,
-        ...(completedRound && { round: completedRound } as any),
-        ...(totalBetsAmount && { totalBets: totalBetsAmount } as any),
-        ...(totalPayoutsAmount && { totalPayouts: totalPayoutsAmount } as any)
-      };
-      
-      console.log(`💾 Saving game history for gameId: ${completedGameId}`, {
-        winner: completedWinner,
-        winningCard: completedWinningCard,
-        totalCards: historyData.totalCards,
-        round: completedRound,
-        totalBets: totalBetsAmount,
-        totalPayouts: totalPayoutsAmount
-      });
-      
-      // ✅ CRITICAL: Save game history FIRST - this is the most important save
-      await storage.saveGameHistory(historyData as any);
-      console.log(`✅ Game history saved successfully for gameId: ${completedGameId}`);
-      
-      // ✅ CRITICAL: Mark game session as completed - ensure status is saved
-      await storage.completeGameSession(completedGameId, completedWinner, completedWinningCard);
-      console.log(`✅ Game session completed in database: ${completedGameId}`);
-      
-      // ✅ CRITICAL: Final persist to ensure all data is saved
-      await persistGameState();
-      console.log(`✅ Final game state persisted for gameId: ${completedGameId}`);
-
-      // ✅ CRITICAL: Wait for payout operations to complete
-      const payoutPromise = (global as any).lastPayoutPromise;
-      if (payoutPromise) {
-        await payoutPromise;
-        console.log('✅ Payout operations completed');
-      }
-
-      // ✅ CRITICAL: Add 2 second delay to ensure database writes are fully committed
-      console.log('⏳ Waiting 2 seconds for database commits to complete...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // ✅ CRITICAL: NOW broadcast game_history_update AFTER save is complete
-      console.log('📡 Broadcasting game_history_update to all clients...');
-      broadcast({
-        type: 'game_history_update',
-        data: {
-          gameId: completedGameId,
-          openingCard: completedOpeningCard,
-          winner: completedWinner,
-          winningCard: completedWinningCard,
-          round: completedRound,
-          totalCards: completedTotalCards,
-          createdAt: new Date().toISOString()
-        }
-      });
-
-      // Broadcast detailed analytics to admins
-      broadcastToRole({
-        type: 'game_history_update_admin',
-        data: {
-          gameId: completedGameId,
-          openingCard: completedOpeningCard,
-          winner: completedWinner,
-          winningCard: completedWinningCard,
-          totalBets: totalBetsAmount,
-          totalPayouts: totalPayoutsAmount,
-          andarTotalBet: currentGameState.round1Bets.andar + currentGameState.round2Bets.andar,
-          baharTotalBet: currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar,
-          totalPlayers: currentGameState.userBets.size,
-          totalCards: completedTotalCards,
-          round: completedRound,
-          createdAt: new Date().toISOString()
-        }
-      }, 'admin');
-
-      console.log('✅ Game history broadcast complete');
-
-      // ✅ CRITICAL: Wait another 1 second before resetting to allow frontend to fetch
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-    } catch (error) {
-      console.error('❌ ERROR saving game history:', error);
-      console.error('Game details:', {
-        gameId: completedGameId,
-        winner: completedWinner,
-        winningCard: completedWinningCard,
-        round: completedRound
-      });
-      // Don't throw - continue with game completion even if save fails
-    }
-
-    // ✅ NOW reset game state after all operations complete
-    console.log('🔄 Auto-restart: Starting new game setup');
-    
-    // Reset game state
-    currentGameState.startNewGame();
-    currentGameState.clearCards();
-    currentGameState.winner = null;
-    currentGameState.winningCard = null;
-    currentGameState.round1Bets.andar = 0;
-    currentGameState.round1Bets.bahar = 0;
-    currentGameState.round2Bets.andar = 0;
-    currentGameState.round2Bets.bahar = 0;
-    currentGameState.userBets.clear();
-    currentGameState.bettingLocked = false;
-    currentGameState.timer = 0;
-    
-    // Clear payout promise
-    (global as any).lastPayoutPromise = null;
-    
-    // Broadcast return to opening card panel
-    broadcast({
-      type: 'game_return_to_opening',
-      data: {
-        message: 'Game completed. Starting new game setup...',
-        gameState: {
-          phase: 'idle',
-          currentRound: 1,
-          openingCard: null,
-          andarCards: [],
-          baharCards: [],
-          winner: null,
-          winningCard: null,
-          gameId: currentGameState.gameId
-        }
-      }
-    });
-    
-    // Also broadcast reset message
-    broadcast({
-      type: 'game_reset',
-      data: {
-        message: '🔄 Game reset. Ready for new game!',
-        gameState: {
-          gameId: currentGameState.gameId,
-          phase: 'idle',
-          currentRound: 1,
-          timer: 0,
-          openingCard: null,
-          andarCards: [],
-          baharCards: [],
-          winner: null,
-          winningCard: null
-        }
-      }
-    });
-    
-    console.log('✅ Game auto-restarted successfully');
-  })().catch(error => {
-    console.error('❌ CRITICAL ERROR in game completion flow:', error);
-    // Still reset game state even if there was an error
-    currentGameState.startNewGame();
-    currentGameState.clearCards();
-  });
-}
+// ✅ REMOVED: Deprecated completeGame function completely removed
+// All game completion logic now uses gameCompleteGame from './game.ts'
+// The wrapper function at line 5464 calls gameCompleteGame from './game'
 
 // Make game state and functions globally available
 // NOTE: These assignments must happen AFTER all function definitions

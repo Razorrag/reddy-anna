@@ -276,6 +276,20 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
       return { success: false, error: 'User not found' };
     }
 
+    // ✅ CRITICAL FIX: Check account status BEFORE password validation
+    if (user.status === 'banned') {
+      console.log('❌ Blocked login attempt for banned user:', user.id);
+      return { 
+        success: false, 
+        error: 'ACCOUNT_BLOCKED: Your account has been blocked by admin. Please contact support for assistance.' 
+      };
+    }
+    
+    if (user.status === 'suspended') {
+      console.log('⚠️ Suspended user login attempt:', user.id, '- Login allowed but betting will be blocked');
+      // Allow login but betting will be blocked in game handlers
+    }
+
     console.log('User found, attempting password validation for user ID:', user.id);
 
     // Verify password

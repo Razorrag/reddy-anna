@@ -152,12 +152,23 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   
   // STEP 1: Update database with bet statuses and payouts ATOMICALLY
   // ✅ CRITICAL FIX: Decouple payout processing from game history saving
-  // Game history MUST be saved even if payouts fail
+  // STEP 1: Apply payouts and update bet statuses in database
+  // ✅ FIX: Use RPC function for atomic updates
   let payoutSuccess = false;
-  let fallbackUsed = false;
   let payoutError: any = null;
+  let fallbackUsed = false;
+  
+  console.log(`🔄 Starting payout processing for ${payoutArray.length} payouts...`);
+  console.log(`📊 Payout summary: ${winningBetIds.length} winning bets, ${losingBetIds.length} losing bets`);
   
   try {
+    console.log(`💾 Calling storage.applyPayoutsAndupdateBets with:`, {
+      payoutsCount: payoutArray.length,
+      winningBetsCount: winningBetIds.length,
+      losingBetsCount: losingBetIds.length,
+      totalPayoutAmount: payoutArray.reduce((sum, p) => sum + p.amount, 0)
+    });
+    
     await storage.applyPayoutsAndupdateBets(
       payoutArray.map(p => ({ userId: p.userId, amount: p.amount })),
       winningBetIds,
@@ -356,22 +367,41 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
           winner: winningSide,
           winningCard: winningCard,
           totalCards: totalCards,
-          winningRound: gameState.currentRound, // ✅ FIX: Use correct field name
+          round: gameState.currentRound, // ✅ CRITICAL FIX: Changed from 'winningRound' to 'round' to match storage layer
           totalBets: totalBetsAmount,
           totalPayouts: totalPayoutsAmount,
           createdAt: new Date().toISOString()
         };
+        
+        console.log(`💾 [Attempt ${attempt}/${maxRetries}] Saving game history with data:`, {
+          gameId: historyData.gameId,
+          openingCard: historyData.openingCard,
+          winner: historyData.winner,
+          winningCard: historyData.winningCard,
+          totalCards: historyData.totalCards,
+          round: historyData.round,
+          totalBets: historyData.totalBets,
+          totalPayouts: historyData.totalPayouts
+        });
         
         await storage.saveGameHistory(historyData as any);
         console.log(`✅ Game history saved successfully for gameId: ${gameState.gameId} (attempt ${attempt})`);
         
         // ✅ FIX: Complete session immediately after history save (in same transaction context)
         try {
+          console.log(`🔄 Completing game session in database for gameId: ${gameState.gameId}`);
           await storage.completeGameSession(gameState.gameId, winningSide, winningCard);
           console.log(`✅ Game session completed in database: ${gameState.gameId}`);
         } catch (completeError) {
           // ✅ FIX: If completion fails, log critical error and retry
           console.error(`❌ CRITICAL: Failed to complete game session after history save:`, completeError);
+          console.error(`Session completion error details:`, {
+            gameId: gameState.gameId,
+            winner: winningSide,
+            winningCard: winningCard,
+            error: completeError instanceof Error ? completeError.message : String(completeError),
+            stack: completeError instanceof Error ? completeError.stack : undefined
+          });
           throw new Error(`Game history saved but session completion failed: ${completeError instanceof Error ? completeError.message : String(completeError)}`);
         }
         
