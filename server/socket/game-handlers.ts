@@ -415,6 +415,11 @@ export async function handlePlayerBet(client: WSClient, data: any) {
           side,
           amount,
           round,
+          // ✅ FIX: Include cumulative totals for admin dashboard
+          totalAndar,
+          totalBahar,
+          round1Bets,
+          round2Bets
         },
       }, 'admin');
       
@@ -594,6 +599,7 @@ export async function handleStartGame(client: WSClient, data: any) {
         (global as any).broadcast({
           type: 'opening_card_confirmed',
           data: {
+            gameId: (global as any).currentGameState.gameId,  // ✅ FIX: Include gameId
             openingCard: data.openingCard,
             phase: 'betting',
             round: 1,
@@ -1010,6 +1016,7 @@ export async function handleGameSubscribe(client: WSClient, data: any) {
       }
       
       const currentState = {
+        gameId: (global as any).currentGameState?.gameId || null,  // ✅ FIX: Include gameId
         phase: (global as any).currentGameState?.phase || 'idle',
         currentRound: (global as any).currentGameState?.currentRound || 1,
         timer: (global as any).currentGameState?.timer || 0,

@@ -137,10 +137,17 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
                 <span className="text-yellow-300 font-bold text-base tracking-wide">
                   ₹{displayBalance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </span>
-                {hasBonus && (
-                  <span className="text-[11px] text-yellow-200/90">
-                    Bonus: ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                  </span>
+                {hasBonus && bonusInfo && (
+                  <div className="flex flex-col text-[10px]">
+                    <span className="text-yellow-200/90">
+                      🔒 ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} locked
+                    </span>
+                    {bonusInfo.wageringProgress > 0 && (
+                      <span className="text-green-300/90">
+                        {bonusInfo.wageringProgress.toFixed(0)}% wagered
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </button>

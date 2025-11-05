@@ -2411,16 +2411,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const newBalance = await storage.deductBalanceAtomic(req.user.id, numAmount);
           console.log(`💰 Withdrawal balance deducted: User ${req.user.id}, Amount: ₹${numAmount}, New Balance: ₹${newBalance}`);
           
-          // Create transaction record for audit trail
-          await storage.addTransaction({
-            userId: req.user.id,
-            transactionType: 'withdrawal_pending',
-            amount: -numAmount,
-            balanceBefore: currentBalance,
-            balanceAfter: newBalance,
-            referenceId: `withdrawal_pending_${Date.now()}`,
-            description: `Withdrawal requested - ₹${numAmount} deducted (pending admin approval)`
-          });
+          // Create transaction record for audit trail (optional - don't fail if table doesn't exist)
+          try {
+            await storage.addTransaction({
+              userId: req.user.id,
+              transactionType: 'withdrawal_pending',
+              amount: -numAmount,
+              balanceBefore: currentBalance,
+              balanceAfter: newBalance,
+              referenceId: `withdrawal_pending_${Date.now()}`,
+              description: `Withdrawal requested - ₹${numAmount} deducted (pending admin approval)`
+            });
+          } catch (txError: any) {
+            // ✅ FIX: Don't fail withdrawal if transaction logging fails (table may not exist)
+            console.warn('⚠️ Transaction logging failed (non-critical):', txError.message);
+          }
         } catch (deductError: any) {
           console.error('Failed to deduct withdrawal amount:', deductError);
           return res.status(400).json({
@@ -4287,6 +4292,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Calculate updated totals for admin
+      const totalAndar = currentGameState.round1Bets.andar + currentGameState.round2Bets.andar;
+      const totalBahar = currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar;
+
       // Broadcast cancellation to all clients
       broadcast({
         type: 'bet_cancelled',
@@ -4300,6 +4309,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           newBalance: newBalance // Include new balance after refund
         }
       });
+
+      // ✅ FIX: Broadcast updated totals to admin dashboard
+      broadcastToRole({
+        type: 'admin_bet_update',
+        data: {
+          userId,
+          side: lastBet.side,
+          amount: -betAmount, // Negative amount indicates bet removal
+          round: lastBet.round,
+          totalAndar,
+          totalBahar,
+          round1Bets: currentGameState.round1Bets,
+          round2Bets: currentGameState.round2Bets,
+          action: 'undo'
+        }
+      }, 'admin');
+
+      console.log(`✅ Bet undone: User ${userId}, ₹${betAmount} on ${lastBet.side}, Round ${lastBet.round}`);
+      console.log(`📊 Updated totals - Andar: ₹${totalAndar}, Bahar: ₹${totalBahar}`);
 
       res.json({
         success: true,

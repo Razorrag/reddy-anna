@@ -253,23 +253,81 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       
       payoutSuccess = true;
       console.log('✅ Fallback: Individual payout processing completed');
+      
+      // ✅ FIX: If fallback succeeds, notify admins but don't treat as critical error
+      broadcastToRole({
+        type: 'warning',
+        data: { 
+          message: 'Payout processing used fallback method. All payouts completed successfully.',
+          code: 'PAYOUT_FALLBACK_SUCCESS',
+          fallbackUsed: true
+        }
+      }, 'admin');
     } catch (fallbackError) {
       console.error('❌ CRITICAL: Fallback payout processing also failed:', fallbackError);
+      
+      // ✅ CRITICAL: If both primary and fallback fail, we need to rollback any partial payouts
+      // This prevents the issue where balance increases but game doesn't complete properly
+      console.error('⚠️ ROLLBACK REQUIRED: Attempting to reverse any partial payouts...');
+      
+      try {
+        // Get all bets for this game to identify which users received payouts
+        const allBetsForGame = await storage.getBetsForGame(gameState.gameId);
+        const usersToRollback = new Set<string>();
+        
+        // Identify users who may have received partial payouts
+        for (const notification of payoutNotifications) {
+          if (notification.payout > 0) {
+            usersToRollback.add(notification.userId);
+          }
+        }
+        
+        // Rollback balances for affected users
+        for (const userId of Array.from(usersToRollback)) {
+          const userNotification = payoutNotifications.find(n => n.userId === userId);
+          if (userNotification && userNotification.payout > 0) {
+            try {
+              // Deduct the payout amount that may have been added
+              await storage.deductBalanceAtomic(userId, userNotification.payout);
+              console.log(`✅ Rolled back ₹${userNotification.payout} from user ${userId}`);
+            } catch (rollbackError) {
+              console.error(`❌ Failed to rollback payout for user ${userId}:`, rollbackError);
+            }
+          }
+        }
+        
+        console.log('✅ Rollback completed for partial payouts');
+      } catch (rollbackError) {
+        console.error('❌ CRITICAL: Rollback also failed:', rollbackError);
+      }
+      
+      // Broadcast critical error to admins
+      broadcastToRole({
+        type: 'error',
+        data: { 
+          message: 'CRITICAL ERROR: Payout processing failed completely. Partial payouts have been rolled back. Please verify user balances.',
+          code: 'PAYOUT_TOTAL_FAILURE',
+          error: payoutError instanceof Error ? payoutError.message : String(payoutError),
+          fallbackUsed: true,
+          rollbackAttempted: true
+        }
+      }, 'admin');
+      
       // Still continue to save game history even if all payouts fail
     }
     
-    // Broadcast error to admins only
-    broadcastToRole({
-      type: 'error',
-      data: { 
-        message: payoutSuccess 
-          ? 'WARNING: Payout processing required fallback method. Game history will be saved.'
-          : 'CRITICAL ERROR: Payout processing failed. Game history will still be saved.',
-        code: 'PAYOUT_DB_ERROR',
-        error: payoutError instanceof Error ? payoutError.message : String(payoutError),
-        fallbackUsed: fallbackUsed
-      }
-    }, 'admin');
+    // ✅ FIX: Only broadcast error if payouts actually failed (not if fallback succeeded)
+    if (!payoutSuccess) {
+      broadcastToRole({
+        type: 'error',
+        data: { 
+          message: 'CRITICAL ERROR: Payout processing failed. Game history will still be saved.',
+          code: 'PAYOUT_DB_ERROR',
+          error: payoutError instanceof Error ? payoutError.message : String(payoutError),
+          fallbackUsed: fallbackUsed
+        }
+      }, 'admin');
+    }
     
     // ✅ CRITICAL: DO NOT RETURN - continue to save game history even if payouts fail
     // The return statement was preventing game history from being saved
@@ -278,9 +336,12 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   // STEP 2: Send WebSocket updates with more detailed information
   const clients = (global as any).clients as Set<{ ws: any; userId: string; role: string; wallet: number }>;
   
-  // Send payout notifications to players who won, with detailed breakdown
-  for (const notification of payoutNotifications) {
-    const client = Array.from(clients).find(c => c.userId === notification.userId);
+  // ✅ FIX: Check if payoutNotifications and clients exist before iterating
+  if (payoutNotifications && payoutNotifications.length > 0 && clients) {
+    // Send payout notifications to players who won, with detailed breakdown
+    for (const notification of payoutNotifications) {
+      const clientsArray = Array.from(clients);
+      const client = clientsArray.find(c => c.userId === notification.userId);
     if (client) {
       try {
         // Send payout details to the winning player
@@ -309,6 +370,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       } catch (error) {
         console.error(`❌ Error sending payout notification to user ${notification.userId}:`, error);
       }
+    }
     }
   }
   

@@ -61,7 +61,7 @@ export function WalletModal({
       const response = await apiClient.post('/payment-requests', {
         amount: numAmount,
         paymentMethod: activeTab === 'deposit' ? 'UPI' : 'Bank Transfer', // Default method
-        requestType: activeTab
+        requestType: activeTab === 'deposit' ? 'deposit' : 'withdrawal' // ✅ FIX: Map 'withdraw' to 'withdrawal'
       });
 
       if (response.success) {

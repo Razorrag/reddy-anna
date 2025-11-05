@@ -543,10 +543,10 @@ const Profile: React.FC = () => {
                             }`} />
                             <div>
                               <div className="text-white font-medium">
-                                Game #{game.gameId.slice(-6)} - {game.winner.toUpperCase()} Won
+                                Game #{game.gameId.slice(-6)} - {game.winner ? game.winner.toUpperCase() : 'IN PROGRESS'} {game.winner ? 'Won' : ''}
                               </div>
                               <div className="text-white/60 text-sm">
-                                Opening Card: {game.openingCard} | Your Bet: {game.yourBet ? `${game.yourBet.side.toUpperCase()} ₹${game.yourBet.amount}` : game.yourTotalBet ? `Total: ₹${game.yourTotalBet}` : 'No bet'}
+                                Opening Card: {game.openingCard || 'N/A'} | Your Bet: {game.yourBet ? `${game.yourBet.side?.toUpperCase() || 'N/A'} ₹${game.yourBet.amount}` : game.yourTotalBet ? `Total: ₹${game.yourTotalBet}` : 'No bet'}
                               </div>
                               <div className="text-white/40 text-xs">{formatDate(game.createdAt)}</div>
                             </div>

@@ -108,9 +108,29 @@ export function useAdminStats() {
         : 0;
 
       // Calculate financial statistics from all users
-      const totalWinnings = allUsers.reduce((sum: number, u: any) => sum + (parseFloat(u.totalWinnings) || 0), 0);
-      const totalLosses = allUsers.reduce((sum: number, u: any) => sum + (parseFloat(u.totalLosses) || 0), 0);
+      // ✅ FIX: Use snake_case field names from database
+      const totalWinnings = allUsers.reduce((sum: number, u: any) => {
+        const winnings = u.total_winnings || u.totalWinnings || 0;
+        return sum + (typeof winnings === 'string' ? parseFloat(winnings) : winnings);
+      }, 0);
+      const totalLosses = allUsers.reduce((sum: number, u: any) => {
+        const losses = u.total_losses || u.totalLosses || 0;
+        return sum + (typeof losses === 'string' ? parseFloat(losses) : losses);
+      }, 0);
       const netHouseProfit = totalLosses - totalWinnings;
+
+      // 📊 DEBUG: Log profit/loss calculation
+      console.log('💰 Admin Stats - Financial Calculation:', {
+        totalUsers: allUsers.length,
+        totalWinnings,
+        totalLosses,
+        netHouseProfit,
+        sampleUser: allUsers[0] ? {
+          id: allUsers[0].id?.slice(0, 8),
+          total_winnings: allUsers[0].total_winnings,
+          total_losses: allUsers[0].total_losses
+        } : 'No users'
+      });
 
       const combinedStats: AdminStats = {
         totalUsers: userStats?.totalUsers || 0,

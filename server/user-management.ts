@@ -23,6 +23,7 @@ export interface UserManagementResponse {
   success: boolean;
   user?: any;
   users?: any[];
+  data?: any; // ✅ FIX: Add data field for consistent API responses
   total?: number;
   error?: string;
   message?: string;
@@ -517,7 +518,8 @@ export const getUserStatistics = async (userId?: string): Promise<UserManagement
         averageBalance
       };
 
-      return { success: true, user: statistics };
+      // ✅ FIX: Return 'data' instead of 'user' to match frontend expectations
+      return { success: true, data: statistics };
     }
   } catch (error) {
     console.error('User statistics error:', error);

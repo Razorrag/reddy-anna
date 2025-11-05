@@ -540,6 +540,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
         
         const {
+          gameId,
           phase,
           countdown,
           countdownTimer,
@@ -558,6 +559,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           userBalance,
           bettingLocked
         } = gameStateData;
+        
+        // ✅ FIX: Set gameId from game_state for late-joining players
+        if (gameId) {
+          setGameId(gameId);
+          console.log(`✅ Game ID set from game_state: ${gameId}`);
+        }
         
         if (phase) setPhase(phase as any);
         if (countdown !== undefined) setCountdown(countdown);
@@ -626,8 +633,15 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
         
       case 'opening_card_confirmed': {
-        const { openingCard, phase, round, timer } = (data as OpeningCardConfirmedMessage).data;
+        const { gameId, openingCard, phase, round, timer } = (data as OpeningCardConfirmedMessage).data;
         const parsed = typeof openingCard === 'string' ? parseDisplayCard(openingCard) : openingCard;
+        
+        // ✅ FIX: Set gameId from broadcast so players can place bets
+        if (gameId) {
+          setGameId(gameId);
+          console.log(`✅ Game ID set from opening_card_confirmed: ${gameId}`);
+        }
+        
         setSelectedOpeningCard(parsed);
         setPhase(phase);
         setCurrentRound(round);
@@ -900,10 +914,28 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       
       // Admin dashboards: real-time bet updates
       case 'admin_bet_update': {
+        const betData = (data as any).data;
+        
+        // ✅ FIX: Update GameState context with new bet totals so admin dashboard displays them
+        if (betData.round1Bets) {
+          updateRoundBets(1, betData.round1Bets);
+        }
+        if (betData.round2Bets) {
+          updateRoundBets(2, betData.round2Bets);
+        }
+        
+        // Also dispatch event for other components that may listen
         const event = new CustomEvent('admin_bet_update', {
-          detail: (data as any).data
+          detail: betData
         });
         window.dispatchEvent(event);
+        
+        console.log('✅ Admin bet totals updated:', {
+          round1: betData.round1Bets,
+          round2: betData.round2Bets,
+          totalAndar: betData.totalAndar,
+          totalBahar: betData.totalBahar
+        });
         break;
       }
 

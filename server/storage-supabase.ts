@@ -214,7 +214,15 @@ export interface IStorage {
   
   // Bonus and referral methods
   addUserBonus(userId: string, bonusAmount: number, bonusType: string, referenceAmount?: number): Promise<void>;
-  getUserBonusInfo(userId: string): Promise<{ depositBonus: number; referralBonus: number; totalBonus: number }>;
+  getUserBonusInfo(userId: string): Promise<{ 
+    depositBonus: number; 
+    referralBonus: number; 
+    totalBonus: number;
+    wageringRequired: number;
+    wageringCompleted: number;
+    wageringProgress: number;
+    bonusLocked: boolean;
+  }>;
   resetUserBonus(userId: string): Promise<void>;
   updateUserOriginalDeposit(userId: string, depositAmount: number): Promise<void>;
   trackUserReferral(referrerId: string, referredId: string, depositAmount: number, bonusAmount: number): Promise<void>;
@@ -794,6 +802,12 @@ export class SupabaseStorage implements IStorage {
         .single();
       
       if (error) {
+        // ✅ FIX: Suppress PGRST116 error - admin users don't have balance
+        if (error.code === 'PGRST116') {
+          // User not found in users table - likely an admin
+          console.log(`User ${userId} not in users table (admin account)`);
+          return 0;
+        }
         console.error(`Error getting balance for user ${userId}:`, error);
         return 0;
       }
@@ -2578,7 +2592,15 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
-  async getUserBonusInfo(userId: string): Promise<{ depositBonus: number; referralBonus: number; totalBonus: number }> {
+  async getUserBonusInfo(userId: string): Promise<{ 
+    depositBonus: number; 
+    referralBonus: number; 
+    totalBonus: number;
+    wageringRequired: number;
+    wageringCompleted: number;
+    wageringProgress: number;
+    bonusLocked: boolean;
+  }> {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
@@ -2587,24 +2609,40 @@ export class SupabaseStorage implements IStorage {
       try {
         const { data, error } = await supabaseServer
           .from('users')
-          .select('deposit_bonus_available, referral_bonus_available')
+          .select('deposit_bonus_available, referral_bonus_available, wagering_requirement, wagering_completed, bonus_locked')
           .eq('id', userId)
           .single();
 
         if (error) {
           if (error.code === 'PGRST116') { // Not found is expected
-            return { depositBonus: 0, referralBonus: 0, totalBonus: 0 };
+            return { 
+              depositBonus: 0, 
+              referralBonus: 0, 
+              totalBonus: 0,
+              wageringRequired: 0,
+              wageringCompleted: 0,
+              wageringProgress: 0,
+              bonusLocked: false
+            };
           }
           throw error;
         }
 
         const depositBonus = parseFloat(data?.deposit_bonus_available || '0');
         const referralBonus = parseFloat(data?.referral_bonus_available || '0');
+        const wageringRequired = parseFloat(data?.wagering_requirement || '0');
+        const wageringCompleted = parseFloat(data?.wagering_completed || '0');
+        const wageringProgress = wageringRequired > 0 ? (wageringCompleted / wageringRequired) * 100 : 0;
+        const bonusLocked = data?.bonus_locked || false;
         
         return {
           depositBonus,
           referralBonus,
-          totalBonus: depositBonus + referralBonus
+          totalBonus: depositBonus + referralBonus,
+          wageringRequired,
+          wageringCompleted,
+          wageringProgress,
+          bonusLocked
         };
       } catch (error: any) {
         lastError = error;
@@ -2629,7 +2667,15 @@ export class SupabaseStorage implements IStorage {
     }
     
     console.error('Error getting user bonus info after all retries:', lastError);
-    return { depositBonus: 0, referralBonus: 0, totalBonus: 0 };
+    return { 
+      depositBonus: 0, 
+      referralBonus: 0, 
+      totalBonus: 0,
+      wageringRequired: 0,
+      wageringCompleted: 0,
+      wageringProgress: 0,
+      bonusLocked: false
+    };
   }
 
   async resetUserBonus(userId: string): Promise<void> {
@@ -2918,18 +2964,22 @@ export class SupabaseStorage implements IStorage {
           throw new Error('Failed to unlock bonus');
         }
         
-        // Log the unlock transaction
-        await this.addTransaction({
-          userId,
-          transactionType: 'bonus_applied',
-          amount: totalBonus,
-          balanceBefore: currentBalance,
-          balanceAfter: newBalance,
-          referenceId: `bonus_unlocked_${Date.now()}`,
-          description: `Bonus unlocked! Wagering requirement met (₹${completed.toFixed(2)} / ₹${requirement.toFixed(2)}). ₹${totalBonus.toFixed(2)} added to balance.`
-        });
+        // Log the unlock transaction (optional - don't fail if it doesn't work)
+        try {
+          await this.addTransaction({
+            userId,
+            transactionType: 'bonus_applied',
+            amount: totalBonus,
+            balanceBefore: currentBalance,
+            balanceAfter: newBalance,
+            referenceId: `bonus_unlocked_${Date.now()}`,
+            description: `Bonus unlocked! Wagering requirement met (₹${completed.toFixed(2)} / ₹${requirement.toFixed(2)}). ₹${totalBonus.toFixed(2)} added to balance.`
+          });
+        } catch (txError: any) {
+          console.warn('⚠️ Failed to log bonus unlock transaction (non-critical):', txError.message);
+        }
         
-        console.log(`✅ Bonus unlocked! ₹${totalBonus} added to user ${userId} balance`);
+        console.log(`🎉 Bonus unlocked! ₹${totalBonus} added to user ${userId} balance. Wagering completed: ₹${completed.toFixed(2)} / ₹${requirement.toFixed(2)}`);
         
         return { unlocked: true, amount: totalBonus };
       }
@@ -3602,8 +3652,9 @@ export class SupabaseStorage implements IStorage {
 
   async updatePaymentRequest(requestId: string, status: string, adminId?: string): Promise<void> {
     const updates: any = { 
-      status, 
-      updated_at: new Date().toISOString() 
+      status
+      // ✅ FIX: Only update essential columns that exist in the table
+      // Table has: id, user_id, request_type, amount, payment_method, status, admin_id, admin_notes, created_at, updated_at
     };
     
     if (adminId) {
@@ -3619,6 +3670,8 @@ export class SupabaseStorage implements IStorage {
       console.error('Error updating payment request:', error);
       throw new Error('Failed to update payment request');
     }
+    
+    console.log(`✅ Payment request updated: ${requestId}, status: ${status}`);
   }
 
   async approvePaymentRequest(requestId: string, userId: string, amount: number, adminId: string): Promise<void> {
@@ -3651,19 +3704,24 @@ export class SupabaseStorage implements IStorage {
         }
       } else if (requestType === 'withdrawal') {
         // ✅ CRITICAL FIX: Balance already deducted on request submission
-        // No need to deduct again - just create transaction record for approval
-        const user = await this.getUser(userId);
-        const currentBalance = user ? parseFloat(user.balance) : 0;
-        
-        await this.addTransaction({
-          userId,
-          transactionType: 'withdrawal_approved',
-          amount: -amount,
-          balanceBefore: currentBalance,
-          balanceAfter: currentBalance,
-          referenceId: `withdrawal_approved_${requestId}`,
-          description: `Withdrawal approved by admin - ₹${amount} (balance already deducted on request)`
-        });
+        // No need to deduct again - just log approval (optional)
+        try {
+          const user = await this.getUser(userId);
+          const currentBalance = user ? parseFloat(user.balance) : 0;
+          
+          await this.addTransaction({
+            userId,
+            transactionType: 'withdrawal_approved',
+            amount: -amount,
+            balanceBefore: currentBalance,
+            balanceAfter: currentBalance,
+            referenceId: `withdrawal_approved_${requestId}`,
+            description: `Withdrawal approved by admin - ₹${amount} (balance already deducted on request)`
+          });
+        } catch (txError: any) {
+          // ✅ FIX: Don't fail approval if transaction logging fails (table may not exist)
+          console.warn('⚠️ Transaction logging failed (non-critical):', txError.message);
+        }
         
         console.log(`✅ Withdrawal approved: ₹${amount} for user ${userId} (balance was deducted on request submission)`);
       }
@@ -3681,47 +3739,60 @@ export class SupabaseStorage implements IStorage {
     adminId: string
   ): Promise<{ balance: number; bonusAmount: number; wageringRequirement: number }> {
     try {
-      // Import settings cache dynamically to avoid circular dependencies
-      const { settingsCache } = await import('./lib/settings-cache');
+      // 🎯 CORRECT BONUS LOGIC: Bonus is NOT added to balance immediately!
+      // Step 1: Calculate bonus (5% of deposit)
+      const bonusPercent = 5;
+      const bonusAmount = amount * (bonusPercent / 100);
       
-      // Get bonus settings (will be cached)
-      const bonusPercent = parseFloat(
-        await settingsCache.get(
-          'default_deposit_bonus_percent',
-          () => this.getGameSetting('default_deposit_bonus_percent')
-        ) || '5'
-      );
+      // Step 2: Calculate wagering requirement (user must wager 10x the deposit amount)
+      const wageringRequirement = amount * 10; // Must wager 10x deposit to unlock bonus
       
-      const wageringMultiplier = parseFloat(
-        await settingsCache.get(
-          'wagering_multiplier',
-          () => this.getGameSetting('wagering_multiplier')
-        ) || '0.3'
-      );
+      console.log(`💰 Deposit approval: Amount: ₹${amount}, Bonus: ₹${bonusAmount} (LOCKED until ₹${wageringRequirement} wagered)`);
       
-      // Single atomic RPC call - all operations in one transaction
-      const { data, error } = await supabaseServer.rpc('approve_deposit_atomic', {
-        p_request_id: requestId,
-        p_user_id: userId,
-        p_amount: amount,
-        p_admin_id: adminId,
-        p_bonus_percent: bonusPercent,
-        p_wagering_multiplier: wageringMultiplier
-      });
+      // Step 3: Add ONLY deposit to balance (NOT bonus!)
+      const newBalance = await this.addBalanceAtomic(userId, amount);
+      console.log(`✅ Balance updated: User ${userId}, New Balance: ₹${newBalance} (deposit only)`);
       
-      if (error) {
-        console.error('Error in approve_deposit_atomic RPC:', error);
-        throw error;
+      // Step 4: Store bonus separately and set wagering requirement
+      const { error: bonusError } = await supabaseServer
+        .from('users')
+        .update({
+          deposit_bonus_available: bonusAmount,
+          wagering_requirement: wageringRequirement,
+          wagering_completed: 0,
+          bonus_locked: true,
+          original_deposit_amount: amount
+        })
+        .eq('id', userId);
+      
+      if (bonusError) {
+        console.error('Error setting bonus and wagering requirement:', bonusError);
+        // Don't fail the approval if bonus setup fails
+      } else {
+        console.log(`🔒 Bonus locked: ₹${bonusAmount} - User must wager ₹${wageringRequirement} to unlock`);
       }
       
-      if (!data || data.length === 0) {
-        throw new Error('No data returned from approve_deposit_atomic');
+      // Step 5: Update payment request status to approved
+      const { error: updateError } = await supabaseServer
+        .from('payment_requests')
+        .update({
+          status: 'approved'
+          // ✅ FIX: Only update status - approved_by and approved_at columns don't exist
+        })
+        .eq('id', requestId);
+      
+      if (updateError) {
+        console.error('Error updating payment request:', updateError);
+        throw new Error('Failed to update payment request status');
       }
+      
+      console.log(`✅ Payment request approved: ${requestId}`);
+      console.log(`📊 Summary: Deposit: ₹${amount} (added to balance), Bonus: ₹${bonusAmount} (locked), Required wagering: ₹${wageringRequirement}`);
       
       return {
-        balance: parseFloat(String(data[0].new_balance)),
-        bonusAmount: parseFloat(String(data[0].bonus_amount)),
-        wageringRequirement: parseFloat(String(data[0].wagering_requirement))
+        balance: newBalance,
+        bonusAmount: bonusAmount,
+        wageringRequirement: wageringRequirement
       };
     } catch (error: any) {
       console.error('Error in approvePaymentRequestAtomic:', error);

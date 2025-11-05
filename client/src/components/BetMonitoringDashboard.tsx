@@ -170,8 +170,8 @@ const BetMonitoringDashboard: React.FC = () => {
   }, [fetchBets]);
 
   const filteredBets = bets.filter(bet => 
-    bet.userPhone.includes(searchTerm) || 
-    bet.userName.toLowerCase().includes(searchTerm.toLowerCase())
+    (bet.userPhone && bet.userPhone.includes(searchTerm)) || 
+    (bet.userName && bet.userName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const formatCurrency = (amount: number) => {
@@ -244,9 +244,9 @@ const BetMonitoringDashboard: React.FC = () => {
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="font-semibold text-white">{bet.userName}</span>
+                          <span className="font-semibold text-white">{bet.userName || 'Unknown User'}</span>
                           <Badge variant="outline" className="text-purple-300 border-purple-400/30">
-                            {bet.userPhone}
+                            {bet.userPhone || 'N/A'}
                           </Badge>
                           <Badge className={`${
                             bet.side === 'andar' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 

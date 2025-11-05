@@ -1,3 +1,5 @@
+-- Fix ambiguous column reference in apply_payouts_and_update_bets function
+-- This fixes the error: column reference "payout_record" is ambiguous
 
 CREATE OR REPLACE FUNCTION apply_payouts_and_update_bets(
   payouts JSONB,

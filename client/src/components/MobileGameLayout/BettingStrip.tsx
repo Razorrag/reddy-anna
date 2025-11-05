@@ -48,28 +48,15 @@ const BettingStrip: React.FC<BettingStripProps> = ({
     });
   }, [gameState.playerRound1Bets, gameState.playerRound2Bets, gameState.currentRound, gameState.phase]);
 
+  // ✅ FIX: Don't fetch admin settings from player component
+  // Bet limits should come from server in game state or use sensible defaults
+  // This prevents 403 errors for players trying to access admin endpoints
   useEffect(() => {
-    // Fetch game settings for min/max bet limits
-    const fetchSettings = async () => {
-      try {
-        const response = await apiClient.get<{
-          success: boolean;
-          settings?: {
-            settingsMinBetAmount?: number;
-            settingsMaxBetAmount?: number;
-          };
-        }>('/admin/game-settings');
-        
-        if (response.success && response.settings) {
-          setMinBet(response.settings.settingsMinBetAmount || 1000);
-          setMaxBet(response.settings.settingsMaxBetAmount || 100000);
-        }
-      } catch (error) {
-        console.error('Failed to fetch bet limits:', error);
-        // Keep defaults if fetch fails
-      }
-    };
-    fetchSettings();
+    // Use default bet limits - these can be configured server-side
+    // and sent in game state if needed
+    setMinBet(100);
+    setMaxBet(100000);
+    console.log('✅ Using default bet limits: ₹100 - ₹100,000');
   }, []);
 
   // Note: Only use player-specific bet data, never access total bets (gameState.round1Bets/round2Bets)

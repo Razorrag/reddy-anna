@@ -83,6 +83,21 @@ export default function Admin() {
   const netProfit = (stats?.netHouseProfit || 0) >= 0 ? (stats?.netHouseProfit || 0) : 0;
   const netLoss = (stats?.netHouseProfit || 0) < 0 ? Math.abs(stats?.netHouseProfit || 0) : 0;
 
+  // 📊 DEBUG: Log calculated profit/loss
+  if (stats) {
+    console.log('📊 Admin Dashboard Display:', {
+      netHouseProfit: stats.netHouseProfit,
+      totalWinnings: stats.totalWinnings,
+      totalLosses: stats.totalLosses,
+      netProfit,
+      netLoss,
+      formatted: {
+        profit: formatCurrency(netProfit),
+        loss: formatCurrency(netLoss)
+      }
+    });
+  }
+
   return (
     <AdminLayout>
       <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-4">

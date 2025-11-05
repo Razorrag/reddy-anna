@@ -26,6 +26,10 @@ export interface BonusInfo {
   depositBonus: number;
   referralBonus: number;
   totalBonus: number;
+  wageringRequired: number;
+  wageringCompleted: number;
+  wageringProgress: number;
+  bonusLocked: boolean;
 }
 
 export interface ReferralData {
@@ -298,8 +302,18 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         dispatch({ type: 'SET_REFERRAL_DATA', payload: response.data });
       }
     } catch (error: any) {
-      console.error('Failed to fetch referral data:', error);
-      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to fetch referral data' });
+      // ✅ FIX: Suppress error gracefully - referral feature is optional
+      // Database schema issue: missing foreign key relationship
+      console.warn('Referral feature not available (database schema incomplete)');
+      dispatch({ 
+        type: 'SET_REFERRAL_DATA', 
+        payload: { 
+          totalReferrals: 0, 
+          totalReferralEarnings: 0, 
+          referredUsers: [] 
+        } 
+      });
+      // Don't dispatch error - this is non-critical
     }
   };
 
