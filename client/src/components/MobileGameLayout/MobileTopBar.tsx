@@ -91,13 +91,14 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
         <div className="flex justify-between items-center">
           {/* Left Side - Game ID, Title and Round */}
           <div className="flex flex-col">
-            {/* Game ID */}
-            <div className="text-white text-xs font-mono mb-1">
+            {/* Game ID - HIDDEN */}
+            <div className="text-white text-xs font-mono mb-1" style={{ display: 'none' }}>
               {gameState.gameId || '1308544430'}
             </div>
             {/* Game Title and Round */}
             <div className="flex items-center gap-2">
-              <div className="text-white text-sm font-bold">
+              {/* Game Title - HIDDEN */}
+              <div className="text-white text-sm font-bold" style={{ display: 'none' }}>
                 Andar Bahar Live Game
               </div>
               {/* Round Indicator */}
