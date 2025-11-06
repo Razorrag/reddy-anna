@@ -3740,20 +3740,27 @@ export class SupabaseStorage implements IStorage {
   ): Promise<{ balance: number; bonusAmount: number; wageringRequirement: number }> {
     try {
       // 🎯 CORRECT BONUS LOGIC: Bonus is NOT added to balance immediately!
-      // Step 1: Calculate bonus (5% of deposit)
-      const bonusPercent = 5;
+      // Step 1: Get admin-configured settings
+      const bonusPercentSetting = await this.getGameSetting('default_deposit_bonus_percent');
+      const wageringMultiplierSetting = await this.getGameSetting('wagering_multiplier');
+      
+      const bonusPercent = parseFloat(bonusPercentSetting || '5'); // Default 5%
+      const wageringMultiplier = parseFloat(wageringMultiplierSetting || '0.3'); // Default 0.3 (30% of deposit)
+      
+      // Step 2: Calculate bonus amount
       const bonusAmount = amount * (bonusPercent / 100);
       
-      // Step 2: Calculate wagering requirement (user must wager 10x the deposit amount)
-      const wageringRequirement = amount * 10; // Must wager 10x deposit to unlock bonus
+      // Step 3: Calculate wagering requirement (multiplier of deposit amount)
+      // e.g., 0.3 = 30% of deposit, 1.0 = 100% of deposit, 10.0 = 10x deposit
+      const wageringRequirement = amount * wageringMultiplier;
       
-      console.log(`💰 Deposit approval: Amount: ₹${amount}, Bonus: ₹${bonusAmount} (LOCKED until ₹${wageringRequirement} wagered)`);
+      console.log(`💰 Deposit approval: Amount: ₹${amount}, Bonus: ₹${bonusAmount} (${bonusPercent}%) LOCKED until ₹${wageringRequirement} wagered (${wageringMultiplier * 100}% of deposit)`);
       
-      // Step 3: Add ONLY deposit to balance (NOT bonus!)
+      // Step 4: Add ONLY deposit to balance (NOT bonus!)
       const newBalance = await this.addBalanceAtomic(userId, amount);
       console.log(`✅ Balance updated: User ${userId}, New Balance: ₹${newBalance} (deposit only)`);
       
-      // Step 4: Store bonus separately and set wagering requirement
+      // Step 5: Store bonus separately and set wagering requirement
       const { error: bonusError } = await supabaseServer
         .from('users')
         .update({

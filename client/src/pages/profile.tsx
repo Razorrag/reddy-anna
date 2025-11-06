@@ -42,6 +42,8 @@ const Profile: React.FC = () => {
   // Payment requests state
   const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
   const [loadingPaymentRequests, setLoadingPaymentRequests] = useState(false);
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'deposit' | 'withdrawal'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   
   // WhatsApp deeplink helper
   const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '';
@@ -446,57 +448,231 @@ const Profile: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Payment Requests Card */}
+            {/* Payment Requests Card - ENHANCED */}
             <Card className="bg-black/50 border-gold/30 mt-6">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-gold">Payment Requests</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={fetchPaymentRequests}
-                    disabled={loadingPaymentRequests}
-                    className="border-gold/30 text-gold hover:bg-gold/10"
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${loadingPaymentRequests ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </Button>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-gold">💰 Deposits & Withdrawals</CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchPaymentRequests}
+                      disabled={loadingPaymentRequests}
+                      className="border-gold/30 text-gold hover:bg-gold/10"
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${loadingPaymentRequests ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
+                  
+                  {/* Filters */}
+                  <div className="flex flex-wrap gap-3">
+                    <div className="flex gap-2">
+                      <Button
+                        variant={paymentFilter === 'all' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setPaymentFilter('all')}
+                        className={paymentFilter === 'all' ? 'bg-gold text-black' : 'border-gold/30 text-gold hover:bg-gold/10'}
+                      >
+                        All
+                      </Button>
+                      <Button
+                        variant={paymentFilter === 'deposit' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setPaymentFilter('deposit')}
+                        className={paymentFilter === 'deposit' ? 'bg-green-600 text-white' : 'border-green-400/30 text-green-400 hover:bg-green-400/10'}
+                      >
+                        Deposits
+                      </Button>
+                      <Button
+                        variant={paymentFilter === 'withdrawal' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setPaymentFilter('withdrawal')}
+                        className={paymentFilter === 'withdrawal' ? 'bg-red-600 text-white' : 'border-red-400/30 text-red-400 hover:bg-red-400/10'}
+                      >
+                        Withdrawals
+                      </Button>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Button
+                        variant={statusFilter === 'all' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setStatusFilter('all')}
+                        className={statusFilter === 'all' ? 'bg-gold text-black' : 'border-gold/30 text-gold hover:bg-gold/10'}
+                      >
+                        All Status
+                      </Button>
+                      <Button
+                        variant={statusFilter === 'pending' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setStatusFilter('pending')}
+                        className={statusFilter === 'pending' ? 'bg-yellow-600 text-white' : 'border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10'}
+                      >
+                        Pending
+                      </Button>
+                      <Button
+                        variant={statusFilter === 'approved' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setStatusFilter('approved')}
+                        className={statusFilter === 'approved' ? 'bg-green-600 text-white' : 'border-green-400/30 text-green-400 hover:bg-green-400/10'}
+                      >
+                        Approved
+                      </Button>
+                      <Button
+                        variant={statusFilter === 'rejected' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setStatusFilter('rejected')}
+                        className={statusFilter === 'rejected' ? 'bg-red-600 text-white' : 'border-red-400/30 text-red-400 hover:bg-red-400/10'}
+                      >
+                        Rejected
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
                 {loadingPaymentRequests ? (
                   <div className="text-center py-8 text-white/60">Loading payment requests...</div>
-                ) : paymentRequests.length === 0 ? (
-                  <div className="text-center py-8 text-white/60">No payment requests found</div>
-                ) : (
-                  <div className="space-y-3">
-                    {paymentRequests.map((request: any) => (
-                      <div key={request.id} className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-gold/10">
-                        <div className="flex items-center gap-4">
-                          <div className={`w-3 h-3 rounded-full ${
-                            request.status === 'pending' ? 'bg-yellow-400' :
-                            request.status === 'approved' || request.status === 'completed' ? 'bg-green-400' :
-                            'bg-red-400'
-                          }`} />
-                          <div>
-                            <div className="text-white font-medium capitalize">{request.request_type || request.type}</div>
-                            <div className="text-white/60 text-sm">Amount: {formatCurrency(request.amount)}</div>
-                            <div className="text-white/40 text-xs">Requested: {formatDate(new Date(request.created_at || request.createdAt))}</div>
+                ) : (() => {
+                  // Apply filters
+                  const filteredRequests = paymentRequests.filter(request => {
+                    const typeMatch = paymentFilter === 'all' || (request.request_type || request.type) === paymentFilter;
+                    const statusMatch = statusFilter === 'all' || request.status === statusFilter;
+                    return typeMatch && statusMatch;
+                  });
+                  
+                  if (filteredRequests.length === 0) {
+                    return <div className="text-center py-8 text-white/60">No payment requests found</div>;
+                  }
+                  
+                  // Group by type
+                  const deposits = filteredRequests.filter(r => (r.request_type || r.type) === 'deposit');
+                  const withdrawals = filteredRequests.filter(r => (r.request_type || r.type) === 'withdrawal');
+                  
+                  return (
+                    <div className="space-y-6">
+                      {/* Summary Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                          <div className="text-green-400 text-sm mb-1">Total Deposits</div>
+                          <div className="text-2xl font-bold text-green-400">
+                            {formatCurrency(deposits.filter(d => d.status === 'approved' || d.status === 'completed').reduce((sum, d) => sum + parseFloat(d.amount), 0))}
                           </div>
+                          <div className="text-green-400/60 text-xs mt-1">{deposits.filter(d => d.status === 'approved' || d.status === 'completed').length} approved</div>
                         </div>
-                        <div className="text-right">
-                          <Badge variant="outline" className={`text-xs ${
-                            request.status === 'approved' || request.status === 'completed' ? 'border-green-400 text-green-400' :
-                            request.status === 'rejected' ? 'border-red-400 text-red-400' :
-                            'border-yellow-400 text-yellow-400'
-                          }`}>
-                            {request.status}
-                          </Badge>
+                        
+                        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                          <div className="text-red-400 text-sm mb-1">Total Withdrawals</div>
+                          <div className="text-2xl font-bold text-red-400">
+                            {formatCurrency(withdrawals.filter(w => w.status === 'approved' || w.status === 'completed').reduce((sum, w) => sum + parseFloat(w.amount), 0))}
+                          </div>
+                          <div className="text-red-400/60 text-xs mt-1">{withdrawals.filter(w => w.status === 'approved' || w.status === 'completed').length} approved</div>
+                        </div>
+                        
+                        <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                          <div className="text-yellow-400 text-sm mb-1">Pending Requests</div>
+                          <div className="text-2xl font-bold text-yellow-400">
+                            {filteredRequests.filter(r => r.status === 'pending').length}
+                          </div>
+                          <div className="text-yellow-400/60 text-xs mt-1">{formatCurrency(filteredRequests.filter(r => r.status === 'pending').reduce((sum, r) => sum + parseFloat(r.amount), 0))}</div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      
+                      {/* Requests List */}
+                      <div className="space-y-3">
+                        {filteredRequests.map((request: any) => {
+                          const isDeposit = (request.request_type || request.type) === 'deposit';
+                          const isPending = request.status === 'pending';
+                          const isApproved = request.status === 'approved' || request.status === 'completed';
+                          const isRejected = request.status === 'rejected';
+                          
+                          return (
+                            <div key={request.id} className={`p-4 rounded-lg border ${
+                              isDeposit ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'
+                            }`}>
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-start gap-4 flex-1">
+                                  {/* Icon */}
+                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                                    isDeposit ? 'bg-green-500/20' : 'bg-red-500/20'
+                                  }`}>
+                                    {isDeposit ? (
+                                      <TrendingUp className="w-6 h-6 text-green-400" />
+                                    ) : (
+                                      <TrendingDown className="w-6 h-6 text-red-400" />
+                                    )}
+                                  </div>
+                                  
+                                  {/* Details */}
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-1">
+                                      <h4 className={`text-lg font-semibold ${
+                                        isDeposit ? 'text-green-400' : 'text-red-400'
+                                      }`}>
+                                        {isDeposit ? '📥 Deposit' : '📤 Withdrawal'}
+                                      </h4>
+                                      <Badge className={`${
+                                        isPending ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' :
+                                        isApproved ? 'bg-green-500/20 border-green-500 text-green-400' :
+                                        'bg-red-500/20 border-red-500 text-red-400'
+                                      }`}>
+                                        {isPending && '⏳ '}
+                                        {isApproved && '✅ '}
+                                        {isRejected && '❌ '}
+                                        {request.status.toUpperCase()}
+                                      </Badge>
+                                    </div>
+                                    
+                                    <div className="text-white/90 text-sm space-y-1">
+                                      <div className="flex items-center gap-2">
+                                        <Wallet className="w-4 h-4 text-white/40" />
+                                        <span className="text-white/60">Amount:</span>
+                                        <span className="font-bold text-white">{formatCurrency(parseFloat(request.amount))}</span>
+                                      </div>
+                                      
+                                      {request.payment_method && (
+                                        <div className="text-white/60 text-xs">
+                                          Method: {request.payment_method}
+                                        </div>
+                                      )}
+                                      
+                                      <div className="text-white/40 text-xs">
+                                        📅 Requested: {formatDate(new Date(request.created_at || request.createdAt))}
+                                      </div>
+                                      
+                                      {request.updated_at && request.updated_at !== request.created_at && (
+                                        <div className="text-white/40 text-xs">
+                                          🔄 Updated: {formatDate(new Date(request.updated_at || request.updatedAt))}
+                                        </div>
+                                      )}
+                                      
+                                      {request.admin_notes && (
+                                        <div className="text-white/60 text-xs mt-2 p-2 bg-black/30 rounded">
+                                          💬 Admin Note: {request.admin_notes}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Amount Badge */}
+                                <div className="text-right">
+                                  <div className={`text-2xl font-bold ${
+                                    isDeposit ? 'text-green-400' : 'text-red-400'
+                                  }`}>
+                                    {isDeposit ? '+' : '-'}{formatCurrency(parseFloat(request.amount))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>

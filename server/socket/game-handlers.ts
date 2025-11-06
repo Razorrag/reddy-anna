@@ -197,21 +197,37 @@ export async function handlePlayerBet(client: WSClient, data: any) {
     // ✅ FIX: Add bet to current game state using proper methods (only after successful balance deduction)
     if (roundNum === 1) {
       if ((global as any).currentGameState?.userBets?.get) {
+        // Log BEFORE for debugging
+        const beforeTotal = (global as any).currentGameState.round1Bets[side];
+        console.log(`🔍 BEFORE BET - Round 1 ${side}:`, { globalTotal: beforeTotal, betToAdd: amount });
+        
         if (!(global as any).currentGameState.userBets.has(userId)) {
           (global as any).currentGameState.setUserBets(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
         }
         const userBets = (global as any).currentGameState.getUserBets(userId);
         userBets.round1[side] += amount;
         (global as any).currentGameState.addRound1Bet(side, amount);
+        
+        // Log AFTER for debugging
+        const afterTotal = (global as any).currentGameState.round1Bets[side];
+        console.log(`✅ AFTER BET - Round 1 ${side}:`, { globalTotal: afterTotal, added: amount, calculation: `${beforeTotal} + ${amount} = ${afterTotal}` });
       }
     } else if (roundNum === 2) {
       if ((global as any).currentGameState?.userBets?.get) {
+        // Log BEFORE for debugging
+        const beforeTotal = (global as any).currentGameState.round2Bets[side];
+        console.log(`🔍 BEFORE BET - Round 2 ${side}:`, { globalTotal: beforeTotal, betToAdd: amount });
+        
         if (!(global as any).currentGameState.userBets.has(userId)) {
           (global as any).currentGameState.setUserBets(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
         }
         const userBets = (global as any).currentGameState.getUserBets(userId);
         userBets.round2[side] += amount;
         (global as any).currentGameState.addRound2Bet(side, amount);
+        
+        // Log AFTER for debugging
+        const afterTotal = (global as any).currentGameState.round2Bets[side];
+        console.log(`✅ AFTER BET - Round 2 ${side}:`, { globalTotal: afterTotal, added: amount, calculation: `${beforeTotal} + ${amount} = ${afterTotal}` });
       }
     }
 

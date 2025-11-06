@@ -796,13 +796,75 @@ Expected:
 17. ✅ Admin statistics accuracy
 18. ✅ Cross-page consistency
 19. ✅ Security vulnerabilities
+20. ✅ Undo bet admin update
+21. ✅ Bonus settings configuration
 
-**Total Development Time:** ~90 minutes  
-**Total Sessions:** 9 (8A, 8B, 8C, 8D, 9)  
-**Total Files Modified:** 5  
-**Total Lines Changed:** ~300  
+**Total Development Time:** ~120 minutes  
+**Total Sessions:** 11 (8A, 8B, 8C, 8D, 9, 10, 11)  
+**Total Files Modified:** 6  
+**Total Lines Changed:** ~350  
 **Critical Security Issues:** 1 MAJOR (closed)  
 **Production Status:** ✅ READY
+
+---
+
+## Session 10: Undo Bet Admin Update (Nov 6, 2025 - 10:49am)
+
+**Issue:** When player undos bet, admin dashboard doesn't update
+
+**Problem:**
+```
+Player undos ₹2,500 bet
+     ↓
+Player's view: ✅ Bet removed
+Admin's view: ❌ Still shows ₹2,500
+```
+
+**Fix:** Added `admin_bet_update` broadcast when bet is undone
+
+**File:** `server/routes.ts` (Lines 4295-4330)
+
+**Now Working:**
+- ✅ Admin sees real-time update when player undos
+- ✅ Only player's specific bet removed
+- ✅ Other players unaffected
+- ✅ No page refresh needed
+
+---
+
+## Session 11: Bonus Settings Configuration (Nov 6, 2025 - 10:49am)
+
+**Issue:** Bonus system using hardcoded values instead of admin settings
+
+**Problems Found:**
+1. ❌ Wagering requirement hardcoded as 10x (1000%)
+2. ❌ Bonus percentage hardcoded as 5%
+3. ❌ Admin couldn't configure from dashboard
+
+**Expected:** Use 30% wagering threshold (0.3x) from settings
+
+**Fix:** Read from `game_settings` table
+
+**File:** `server/storage-supabase.ts` (Lines 3743-3757)
+
+**Before:**
+```typescript
+const bonusPercent = 5; // ❌ Hardcoded
+const wageringRequirement = amount * 10; // ❌ Hardcoded 10x
+```
+
+**After:**
+```typescript
+const bonusPercent = parseFloat(await this.getGameSetting('default_deposit_bonus_percent') || '5');
+const wageringMultiplier = parseFloat(await this.getGameSetting('wagering_multiplier') || '0.3');
+const wageringRequirement = amount * wageringMultiplier; // ✅ Configurable
+```
+
+**Impact:**
+- ✅ Default: 30% wagering (₹100K deposit → wager ₹30K to unlock)
+- ✅ Admin can configure via API
+- ✅ Settings: 0.1 to 10.0 multiplier (10% to 1000%)
+- ✅ All previous fixes preserved
 
 ---
 

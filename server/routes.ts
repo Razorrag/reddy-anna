@@ -4123,7 +4123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // 🔒 SECURITY: Only allow bet modification during betting phase
+      // 🔒 SECURITY: Allow bet modification until game completes
       const game = await storage.getGameSession(currentBet.gameId);
       if (!game) {
         return res.status(404).json({
@@ -4132,10 +4132,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      if (game.phase !== 'betting') {
+      // ✅ NEW: Allow editing during betting and dealing phases (until winner is announced)
+      if (game.phase === 'complete') {
         return res.status(400).json({
           success: false,
-          error: `Cannot modify bets after betting phase. Current phase: ${game.phase}`
+          error: `Cannot modify bets after game completes. Current phase: ${game.phase}`
         });
       }
       
@@ -4215,6 +4216,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get LIVE grouped player bets (cumulative by user and round) for current game
+  app.get("/api/admin/bets/live-grouped", generalLimiter, async (req, res) => {
+    try {
+      // Get current game ID
+      const gameId = currentGameState.gameId;
+      if (!gameId || gameId === 'default-game') {
+        return res.json({ success: true, data: [] });
+      }
+      
+      // Get all active bets for current game
+      const bets = await storage.getBetsForGame(gameId);
+      
+      // Filter only 'active' bets (not cancelled)
+      const activeBets = bets.filter(bet => bet.status === 'active' || bet.status === 'pending');
+      
+      // Group by user ID and calculate cumulative amounts
+      const userBetsMap = new Map<string, {
+        userId: string;
+        userName: string;
+        userPhone: string;
+        round1Andar: number;
+        round1Bahar: number;
+        round2Andar: number;
+        round2Bahar: number;
+        totalAndar: number;
+        totalBahar: number;
+        grandTotal: number;
+        bets: any[]; // Individual bet records for reference
+      }>();
+      
+      // Fetch user details and group bets
+      for (const bet of activeBets) {
+        const userId = bet.userId;
+        
+        if (!userBetsMap.has(userId)) {
+          const user = await storage.getUser(userId);
+          userBetsMap.set(userId, {
+            userId,
+            userName: user?.full_name || 'Unknown',
+            userPhone: user?.phone || 'N/A',
+            round1Andar: 0,
+            round1Bahar: 0,
+            round2Andar: 0,
+            round2Bahar: 0,
+            totalAndar: 0,
+            totalBahar: 0,
+            grandTotal: 0,
+            bets: []
+          });
+        }
+        
+        const userBets = userBetsMap.get(userId)!;
+        const amount = parseFloat(bet.amount);
+        const round = parseInt(bet.round);
+        const side = bet.side as 'andar' | 'bahar';
+        
+        // Add to round-specific totals
+        if (round === 1) {
+          if (side === 'andar') userBets.round1Andar += amount;
+          else userBets.round1Bahar += amount;
+        } else if (round === 2) {
+          if (side === 'andar') userBets.round2Andar += amount;
+          else userBets.round2Bahar += amount;
+        }
+        
+        // Store individual bet for editing
+        userBets.bets.push({
+          id: bet.id,
+          round: bet.round,
+          side: bet.side,
+          amount: amount,
+          status: bet.status,
+          createdAt: bet.createdAt
+        });
+      }
+      
+      // Calculate cumulative totals for each user
+      const groupedBets = Array.from(userBetsMap.values()).map(userBet => {
+        userBet.totalAndar = userBet.round1Andar + userBet.round2Andar;
+        userBet.totalBahar = userBet.round1Bahar + userBet.round2Bahar;
+        userBet.grandTotal = userBet.totalAndar + userBet.totalBahar;
+        return userBet;
+      });
+      
+      // Sort by grand total (highest first) so admin sees biggest bets first
+      groupedBets.sort((a, b) => b.grandTotal - a.grandTotal);
+      
+      console.log(`📊 Live grouped bets: ${groupedBets.length} players, Game ID: ${gameId}`);
+      
+      res.json({ 
+        success: true, 
+        data: groupedBets,
+        gameId,
+        gamePhase: currentGameState.phase,
+        currentRound: currentGameState.currentRound
+      });
+    } catch (error) {
+      console.error('Get live grouped bets error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get live grouped bets'
+      });
+    }
+  });
+
   // Player-facing undo last bet endpoint
   app.delete("/api/user/undo-last-bet", generalLimiter, async (req, res) => {
     try {
@@ -4277,20 +4383,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'cancelled'
       });
 
-      // Update the current game state in memory
+      // ✅ CRITICAL FIX: Update the current game state in memory
+      // Always subtract from totals, even if user not in userBets map
+      // (map can be out of sync if server restarted or state was reset)
+      const side = lastBet.side as 'andar' | 'bahar';
+      const round = parseInt(lastBet.round);
+      
+      // Log BEFORE state for debugging
+      console.log(`🔍 BEFORE UNDO - Round ${round} ${side}:`, {
+        globalTotal: round === 1 ? currentGameState.round1Bets[side] : currentGameState.round2Bets[side],
+        userInMap: currentGameState.userBets.has(userId),
+        betToRemove: betAmount
+      });
+      
+      // Update user's individual bet tracking (if they exist in map)
       if (currentGameState.userBets.has(userId)) {
         const userBetsState = currentGameState.userBets.get(userId)!;
-        const side = lastBet.side as 'andar' | 'bahar';
-        const round = parseInt(lastBet.round);
-        
         if (round === 1) {
-          userBetsState.round1[side] -= betAmount;
-          currentGameState.round1Bets[side] -= betAmount;
+          userBetsState.round1[side] = Math.max(0, userBetsState.round1[side] - betAmount);
         } else {
-          userBetsState.round2[side] -= betAmount;
-          currentGameState.round2Bets[side] -= betAmount;
+          userBetsState.round2[side] = Math.max(0, userBetsState.round2[side] - betAmount);
         }
       }
+      
+      // ✅ ALWAYS update global totals (critical for admin dashboard)
+      if (round === 1) {
+        currentGameState.round1Bets[side] = Math.max(0, currentGameState.round1Bets[side] - betAmount);
+      } else {
+        currentGameState.round2Bets[side] = Math.max(0, currentGameState.round2Bets[side] - betAmount);
+      }
+      
+      // Log AFTER state for debugging
+      console.log(`✅ AFTER UNDO - Round ${round} ${side}:`, {
+        globalTotal: round === 1 ? currentGameState.round1Bets[side] : currentGameState.round2Bets[side],
+        removed: betAmount
+      });
 
       // Calculate updated totals for admin
       const totalAndar = currentGameState.round1Bets.andar + currentGameState.round2Bets.andar;
