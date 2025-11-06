@@ -480,29 +480,26 @@ export const applyAvailableBonus = async (userId: string): Promise<boolean> => {
     // Get current bonus info
     const bonusInfo = await storage.getUserBonusInfo(userId);
     
-    // If bonus has reached threshold, it should have been auto-credited already
-    // Only allow manual claim if bonus is below threshold
-    if (claimThreshold > 0 && bonusInfo.totalBonus >= claimThreshold) {
-      console.log(`⚠️ Bonus (₹${bonusInfo.totalBonus}) has reached threshold (₹${claimThreshold}). It should be auto-credited. Checking...`);
-      // Try to auto-credit it now if it wasn't already
-      const autoCredited = await checkAndAutoCreditBonus(userId);
-      if (autoCredited) {
-        return true;
-      }
-      // If auto-credit failed but threshold is reached, still allow manual claim
+    // ✅ CRITICAL FIX: Check if bonus is locked (wagering requirement not met)
+    if (bonusInfo.bonusLocked) {
+      console.log(`❌ Cannot claim bonus for user ${userId}: Wagering requirement not met (${bonusInfo.wageringProgress.toFixed(1)}% complete)`);
+      return false;
     }
     
-    if (bonusInfo.totalBonus > 0) {
+    // ✅ CRITICAL FIX: Only claim bonus that has met wagering requirement
+    // If bonus is unlocked, it means wagering requirement is met
+    if (!bonusInfo.bonusLocked && bonusInfo.totalBonus > 0) {
       const user = await storage.getUser(userId);
       if (!user) {
         return false;
       }
       
       const balanceBefore = parseFloat(user.balance);
-      const newBalance = balanceBefore + bonusInfo.totalBonus;
+      const claimableAmount = bonusInfo.totalBonus;
+      const newBalance = balanceBefore + claimableAmount;
       
       // Add to main balance
-      await storage.updateUserBalance(userId, bonusInfo.totalBonus);
+      await storage.updateUserBalance(userId, claimableAmount);
       
       // Reset bonus amounts
       await storage.resetUserBonus(userId);
@@ -511,17 +508,18 @@ export const applyAvailableBonus = async (userId: string): Promise<boolean> => {
       await storage.addTransaction({
         userId,
         transactionType: 'bonus_applied',
-        amount: bonusInfo.totalBonus,
+        amount: claimableAmount,
         balanceBefore,
         balanceAfter: newBalance,
         referenceId: `bonus_applied_${Date.now()}`,
-        description: `Bonus manually claimed: ₹${bonusInfo.depositBonus} deposit + ₹${bonusInfo.referralBonus} referral`
+        description: `Bonus manually claimed: ₹${bonusInfo.depositBonus} deposit + ₹${bonusInfo.referralBonus} referral (wagering requirement met)`
       });
       
-      console.log(`Bonus of ₹${bonusInfo.totalBonus} applied to main balance for user ${userId}`);
+      console.log(`✅ Bonus of ₹${claimableAmount} applied to main balance for user ${userId} (wagering requirement met)`);
       return true;
     }
     
+    console.log(`⚠️ No claimable bonus for user ${userId}: Total bonus ₹${bonusInfo.totalBonus}, Locked: ${bonusInfo.bonusLocked}`);
     return false;
   } catch (error) {
     console.error('Error applying available bonus:', error);

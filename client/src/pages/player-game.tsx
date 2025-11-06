@@ -183,7 +183,8 @@ const PlayerGame: React.FC = () => {
         }
       );
       
-      showNotification(`Bet placed: ₹${selectedBetAmount} on ${position.toUpperCase()} (Round ${gameState.currentRound})`, 'success');
+      // ❌ REMOVED: Duplicate notification - WebSocket bet_confirmed already shows this
+      // showNotification(`Bet placed: ₹${selectedBetAmount} on ${position.toUpperCase()} (Round ${gameState.currentRound})`, 'success');
     } catch (error: any) {
       // Revert balance if bet fails
       updateBalance(userBalance, 'local');

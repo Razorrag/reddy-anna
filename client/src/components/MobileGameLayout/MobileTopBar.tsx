@@ -35,6 +35,11 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
   const { showNotification } = useNotification();
   const [isClaiming, setIsClaiming] = React.useState(false);
   
+  // ✅ FIX: Auto-fetch bonus info on mount and when balance changes
+  React.useEffect(() => {
+    fetchBonusInfo();
+  }, [userBalance]); // Refresh bonus when balance changes
+  
   // Use props gameState if provided, otherwise use context
   const gameState = propsGameState || contextGameState;
 
@@ -52,6 +57,16 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
 
   const handleClaimBonus = async () => {
     if (isClaiming) return;
+    
+    // ✅ Check if bonus is locked (wagering requirement not met)
+    if (bonusInfo?.bonusLocked) {
+      const progress = bonusInfo.wageringProgress || 0;
+      showNotification(
+        `Bonus is locked! Complete ${(100 - progress).toFixed(0)}% more wagering to unlock (${progress.toFixed(0)}% done)`,
+        'error'
+      );
+      return;
+    }
     
     setIsClaiming(true);
     try {
@@ -113,13 +128,30 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
               <button
                 onClick={handleClaimBonus}
                 disabled={isClaiming}
-                className="flex items-center space-x-1.5 bg-gradient-to-r from-green-500/30 to-green-600/30 border-2 border-green-400 rounded-full px-3 py-1.5 hover:from-green-500/40 hover:to-green-600/40 hover:border-green-300 transition-all active:scale-95 shadow-lg shadow-green-500/20 animate-pulse"
-                title="Click to claim bonus"
+                className={`flex items-center space-x-1.5 rounded-full px-3 py-1.5 transition-all active:scale-95 shadow-lg ${
+                  bonusInfo?.bonusLocked
+                    ? 'bg-gradient-to-r from-yellow-500/30 to-orange-600/30 border-2 border-yellow-400 hover:from-yellow-500/40 hover:to-orange-600/40 hover:border-yellow-300 shadow-yellow-500/20'
+                    : 'bg-gradient-to-r from-green-500/30 to-green-600/30 border-2 border-green-400 hover:from-green-500/40 hover:to-green-600/40 hover:border-green-300 shadow-green-500/20 animate-pulse'
+                }`}
+                title={bonusInfo?.bonusLocked ? `Locked: ${bonusInfo.wageringProgress.toFixed(0)}% wagering complete` : 'Click to claim bonus'}
               >
-                <Gift className="w-4 h-4 text-green-300" />
-                <span className="text-green-300 font-bold text-sm">
-                  ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                </span>
+                {bonusInfo?.bonusLocked ? (
+                  <>
+                    <svg className="w-4 h-4 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-yellow-300 font-bold text-sm">
+                      ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Gift className="w-4 h-4 text-green-300" />
+                    <span className="text-green-300 font-bold text-sm">
+                      ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </span>
+                  </>
+                )}
               </button>
             )}
 
@@ -137,18 +169,6 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
                 <span className="text-yellow-300 font-bold text-base tracking-wide">
                   ₹{displayBalance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </span>
-                {hasBonus && bonusInfo && (
-                  <div className="flex flex-col text-[10px]">
-                    <span className="text-yellow-200/90">
-                      🔒 ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} locked
-                    </span>
-                    {bonusInfo.wageringProgress > 0 && (
-                      <span className="text-green-300/90">
-                        {bonusInfo.wageringProgress.toFixed(0)}% wagered
-                      </span>
-                    )}
-                  </div>
-                )}
               </div>
             </button>
           </div>

@@ -728,16 +728,27 @@ const Profile: React.FC = () => {
                             </div>
                           </div>
                           <div className="text-right">
-                              <div className={`font-bold text-lg ${
-                              game.result === 'win' ? 'text-green-400' : 'text-red-400'
-                            }`}>
-                              {game.result === 'win' ? '+' : '-'}
-                              {formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)}
-                            </div>
-                            {game.result === 'win' && (
-                              <div className="text-green-400 text-sm">
-                                Payout: {formatCurrency(game.payout || game.yourTotalPayout || 0)}
-                              </div>
+                            {game.result === 'win' ? (
+                              <>
+                                <div className="text-green-400 font-bold text-lg">
+                                  +{formatCurrency(game.payout || game.yourTotalPayout || 0)}
+                                </div>
+                                <div className="text-green-400/70 text-sm">
+                                  Won (Bet: {formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)})
+                                </div>
+                                <div className="text-green-400 text-xs font-semibold">
+                                  Net: +{formatCurrency((game.payout || game.yourTotalPayout || 0) - (game.yourTotalBet || game.yourBet?.amount || 0))}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-red-400 font-bold text-lg">
+                                  -{formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)}
+                                </div>
+                                <div className="text-red-400/70 text-sm">
+                                  Lost
+                                </div>
+                              </>
                             )}
                           </div>
                         </div>

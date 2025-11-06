@@ -344,11 +344,16 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       const client = clientsArray.find(c => c.userId === notification.userId);
     if (client) {
       try {
-        // Send payout details to the winning player
+        // ✅ FIX: Fetch updated balance immediately for instant client update
+        const updatedUser = await storage.getUser(notification.userId);
+        const updatedBalance = updatedUser?.balance || 0;
+        
+        // Send payout details to the winning player with UPDATED BALANCE
         client.ws.send(JSON.stringify({
           type: 'payout_received',
           data: {
             amount: notification.payout,
+            balance: updatedBalance, // ✅ CRITICAL: Include updated balance for instant UI update
             betAmount: notification.betAmount,
             winner: winningSide,
             round: gameState.currentRound,
@@ -366,11 +371,42 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
           }
         }));
         
-        console.log(`💸 Sent payout notification to user ${notification.userId}: ₹${notification.payout}`);
+        console.log(`💸 Sent payout notification to user ${notification.userId}: ₹${notification.payout}, New Balance: ₹${updatedBalance}`);
       } catch (error) {
         console.error(`❌ Error sending payout notification to user ${notification.userId}:`, error);
       }
     }
+    }
+  }
+  
+  // ✅ NEW: Send balance refresh to ALL players who had bets (winners AND losers)
+  // This ensures everyone sees their updated balance instantly, even if they lost
+  if (clients && payoutNotifications) {
+    const clientsArray = Array.from(clients);
+    const allBettingUserIds = Array.from(new Set(payoutNotifications.map(n => n.userId)));
+    
+    for (const userId of allBettingUserIds) {
+      const client = clientsArray.find(c => c.userId === userId);
+      if (client) {
+        try {
+          const updatedUser = await storage.getUser(userId);
+          const updatedBalance = updatedUser?.balance || 0;
+          
+          // Send balance update to ensure UI refreshes instantly
+          client.ws.send(JSON.stringify({
+            type: 'balance_update',
+            data: {
+              balance: updatedBalance,
+              amount: 0, // Just a refresh, not a transaction
+              type: 'game_complete_refresh'
+            }
+          }));
+          
+          console.log(`🔄 Sent balance refresh to user ${userId}: ₹${updatedBalance}`);
+        } catch (error) {
+          console.error(`❌ Error sending balance refresh to user ${userId}:`, error);
+        }
+      }
     }
   }
   

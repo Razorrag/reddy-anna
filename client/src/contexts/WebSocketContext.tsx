@@ -830,6 +830,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           break;
         }
         
+        // ✅ NEW: Immediately update wallet for game_complete_refresh (instant balance after game)
+        if (type === 'game_complete_refresh' && balance !== undefined && balance !== null) {
+          updatePlayerWallet(balance);
+          console.log(`✅ Instant balance refresh after game complete: ₹${balance}`);
+        }
+        
         const balanceEvent = new CustomEvent('balance-websocket-update', {
           detail: { balance, amount, type, timestamp: Date.now() }
         });
