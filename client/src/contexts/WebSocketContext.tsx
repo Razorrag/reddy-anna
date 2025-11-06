@@ -148,6 +148,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     setScreenSharing,
     setWinningCard,
     removeLastBet,
+    clearRoundBets,
     setBettingLocked, // ✅ FIX: Add missing setBettingLocked
   } = useGameState();
   const { showNotification } = useNotification();
@@ -518,17 +519,26 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           window.dispatchEvent(balanceEvent);
         }
         
-        // Remove ALL cancelled bets from local state
+        // ✅ FIX: Clear ALL bets for the current round at once
+        // Group bets by round and side, then clear each group
         if (data.data.cancelledBets && Array.isArray(data.data.cancelledBets)) {
+          const betsByRoundAndSide = new Map<string, { round: 1 | 2; side: BetSide }>();
+          
           for (const bet of data.data.cancelledBets) {
             const round = parseInt(bet.round || '1') as 1 | 2;
             const side = bet.side as BetSide;
-            removeLastBet(round, side);
+            const key = `${round}-${side}`;
+            betsByRoundAndSide.set(key, { round, side });
+          }
+          
+          // Clear each round/side combination
+          for (const { round, side } of betsByRoundAndSide.values()) {
+            clearRoundBets(round, side);
           }
         }
         
         showNotification(
-          `All bets (₹${data.data.totalRefunded?.toLocaleString('en-IN') || 0}) have been cancelled`,
+          `All Round ${gameState.currentRound} bets (₹${data.data.totalRefunded?.toLocaleString('en-IN') || 0}) have been cancelled`,
           'success'
         );
         break;

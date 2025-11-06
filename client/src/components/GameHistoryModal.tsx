@@ -257,7 +257,7 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
                   >
                     {displayGame.winner === 'andar' 
                       ? 'ANDAR' 
-                      : (displayGame.round === 1 ? 'BABA' : 'BAHAR')}
+                      : (displayGame.round === 3 ? 'BAHAR' : 'BABA')}
                   </div>
                 </div>
                 

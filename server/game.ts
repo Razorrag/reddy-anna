@@ -682,8 +682,8 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       payoutMessage = 'Andar wins! Payout: 1:1 on all Andar bets 🎰';
       winnerDisplay = 'ANDAR WON';
     } else {
-      payoutMessage = 'Bahar wins! Payout: 1:1 on Round 1 + 1:0 on Round 2 💸';
-      winnerDisplay = 'BAHAR WON'; // ✅ FIX: Round 2 Bahar = Bahar Won (not Baba)
+      payoutMessage = 'Baba wins! Payout: 1:1 on Round 1 + 1:0 on Round 2 💸';
+      winnerDisplay = 'BABA WON'; // Round 2 Bahar = Baba Won (same as Round 1)
     }
   } else {
     // Round 3: Both sides get proper names

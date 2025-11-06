@@ -303,7 +303,7 @@ const PlayerGame: React.FC = () => {
         }
         
         showNotification(
-          `All bets (₹${refundedAmount.toLocaleString('en-IN')}) have been undone`,
+          `All Round ${gameState.currentRound} bets (₹${refundedAmount.toLocaleString('en-IN')}) removed`,
           'success'
         );
       } else {
@@ -313,11 +313,14 @@ const PlayerGame: React.FC = () => {
       console.error('Failed to undo bet:', error);
       let errorMessage = 'Failed to undo bet';
       if (error.message?.includes('betting phase')) {
-        errorMessage = 'Cannot undo bet - betting phase has ended';
+        errorMessage = 'Cannot undo - betting phase has ended';
       } else if (error.message?.includes('No active bets')) {
-        errorMessage = 'No active bets found to undo';
+        errorMessage = `No bets in Round ${gameState.currentRound} to undo`;
+      } else if (error.message?.includes('Round')) {
+        // Extract the error message from server (already includes round number)
+        errorMessage = error.message;
       }
-      showNotification(errorMessage, 'error');
+      showNotification(errorMessage, 'warning');
     }
   }, [gameState, showNotification, updateBalance, removeLastBet]);
 

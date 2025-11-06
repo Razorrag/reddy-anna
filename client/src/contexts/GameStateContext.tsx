@@ -114,6 +114,7 @@ type GameStateAction =
   | { type: 'SET_USER_DATA'; payload: { userId: string; username: string; wallet: number } }
   | { type: 'UPDATE_PLAYER_ROUND_BETS'; payload: { round: GameRound; bets: RoundBets } }
   | { type: 'REMOVE_LAST_BET'; payload: { round: GameRound; side: BetSide } }
+  | { type: 'CLEAR_ROUND_BETS'; payload: { round: GameRound; side?: BetSide } }
   | { type: 'SET_SCREEN_SHARING'; payload: boolean }
   | { type: 'CLEAR_CARDS' };
 
@@ -269,6 +270,52 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
       }
       return state;
     }
+    case 'CLEAR_ROUND_BETS': {
+      // ✅ NEW: Clear ALL bets for a specific round and side (or both sides if side not specified)
+      const { round, side } = action.payload;
+      if (round === 1) {
+        if (side) {
+          // Clear specific side only
+          return {
+            ...state,
+            playerRound1Bets: {
+              ...state.playerRound1Bets,
+              [side]: []
+            }
+          };
+        } else {
+          // Clear both sides
+          return {
+            ...state,
+            playerRound1Bets: {
+              andar: [],
+              bahar: []
+            }
+          };
+        }
+      } else if (round === 2) {
+        if (side) {
+          // Clear specific side only
+          return {
+            ...state,
+            playerRound2Bets: {
+              ...state.playerRound2Bets,
+              [side]: []
+            }
+          };
+        } else {
+          // Clear both sides
+          return {
+            ...state,
+            playerRound2Bets: {
+              andar: [],
+              bahar: []
+            }
+          };
+        }
+      }
+      return state;
+    }
     case 'SET_SCREEN_SHARING':
       return { ...state, isScreenSharingActive: action.payload };
     case 'CLEAR_CARDS':
@@ -311,6 +358,7 @@ interface GameStateContextType {
   clearCards: () => void;
   placeBet: (side: BetSide, amount: number, betId?: string) => void;
   removeLastBet: (round: GameRound, side: BetSide) => void;
+  clearRoundBets: (round: GameRound, side?: BetSide) => void;
   resetBettingData: () => void;
   setScreenSharing: (isSharing: boolean) => void;
   phase: GamePhase;
@@ -642,6 +690,10 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'REMOVE_LAST_BET', payload: { round, side } });
   };
 
+  const clearRoundBets = (round: GameRound, side?: BetSide) => {
+    dispatch({ type: 'CLEAR_ROUND_BETS', payload: { round, side } });
+  };
+
   const value: GameStateContextType = {
     gameState,
     setGameId,
@@ -667,6 +719,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     clearCards,
     placeBet,
     removeLastBet,
+    clearRoundBets,
     resetBettingData,
     setScreenSharing,
     phase: gameState.phase,

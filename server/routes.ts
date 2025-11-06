@@ -4351,16 +4351,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // ✅ CRITICAL FIX: Get current round from game state
+      const currentRound = currentGameState.currentRound;
+      
+      console.log(`🔍 UNDO REQUEST: User ${userId}, Current Round: ${currentRound}, Game Phase: ${currentGame.phase}`);
+      
       // Get user's bets for current game
       const userBets = await storage.getBetsForUser(userId, currentGame.game_id);
       
-      // Filter active bets (not cancelled)
-      const activeBets = userBets.filter(bet => bet.status !== 'cancelled');
+      // ✅ CRITICAL FIX: Filter active bets ONLY from CURRENT round
+      // Cannot undo previous round bets once that round is over
+      const activeBets = userBets.filter(bet => 
+        bet.status !== 'cancelled' && 
+        parseInt(bet.round) === currentRound
+      );
       
       if (activeBets.length === 0) {
         return res.status(404).json({
           success: false,
-          error: 'No active bets found to undo'
+          error: `No active bets found in Round ${currentRound} to undo`
         });
       }
 
@@ -4464,8 +4473,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           round2Bets: currentGameState.round2Bets
         }
       }, 'admin');
+      
+      // ✅ CRITICAL: Broadcast full game state sync to ALL clients (admin + players)
+      broadcast({
+        type: 'game_state_sync',
+        data: {
+          gameId: currentGameState.gameId,
+          phase: currentGameState.phase,
+          currentRound: currentGameState.currentRound,
+          round1Bets: currentGameState.round1Bets,
+          round2Bets: currentGameState.round2Bets,
+          totalAndar,
+          totalBahar,
+          message: `Bets undone by user ${userId}`
+        }
+      });
 
-      console.log(`✅ ALL BETS UNDONE: User ${userId}, ${activeBets.length} bets, Total ₹${totalRefundAmount}`);
+      console.log(`✅ ALL BETS UNDONE: User ${userId}, ${activeBets.length} bets from Round ${currentRound}, Total ₹${totalRefundAmount}`);
       console.log(`📊 Updated totals - Andar: ₹${totalAndar}, Bahar: ₹${totalBahar}`);
 
       res.json({

@@ -140,9 +140,9 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
               <h1 className={`text-6xl font-black mb-4 bg-gradient-to-r ${winnerGradient} bg-clip-text text-transparent`}>
                 {winner === 'andar' 
                   ? 'ANDAR WON!' 
-                  : round === 1 
-                  ? 'BABA WON!' 
-                  : 'BAHAR WON!'}
+                  : round === 3 
+                  ? 'BAHAR WON!' 
+                  : 'BABA WON!'}
               </h1>
               <div className="text-4xl font-bold text-white mb-2">
                 {typeof winningCard === 'string' ? winningCard : winningCard?.display}

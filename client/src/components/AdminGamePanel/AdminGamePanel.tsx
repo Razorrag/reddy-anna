@@ -204,9 +204,9 @@ const AdminGamePanel: React.FC = () => {
                 }`}>
                   {gameState.gameWinner === 'andar' 
                     ? 'ANDAR WINS!' 
-                    : (gameState.currentRound === 1 
-                      ? 'BABA WINS!' 
-                      : 'BAHAR WINS!')}
+                    : (gameState.currentRound === 3 
+                      ? 'BAHAR WINS!' 
+                      : 'BABA WINS!')}
                 </div>
                 <div className="text-2xl text-gray-200 mb-6 font-semibold">
                   Winning Card: {typeof gameState.winningCard === 'string' 
