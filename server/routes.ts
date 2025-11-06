@@ -4364,107 +4364,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Find the most recent bet (sort by created_at descending)
-      activeBets.sort((a, b) => {
-        const aTime = new Date(a.created_at || 0).getTime();
-        const bTime = new Date(b.created_at || 0).getTime();
-        return bTime - aTime;
-      });
-
-      const lastBet = activeBets[0];
-      const betId = lastBet.id;
-      const betAmount = parseFloat(lastBet.amount);
-
-      // Refund the bet amount to user's balance
-      const newBalance = await storage.addBalanceAtomic(userId, betAmount);
-
-      // Update bet status to cancelled in database
-      await storage.updateBetDetails(betId, {
-        status: 'cancelled'
-      });
-
-      // ✅ CRITICAL FIX: Update the current game state in memory
-      // Always subtract from totals, even if user not in userBets map
-      // (map can be out of sync if server restarted or state was reset)
-      const side = lastBet.side as 'andar' | 'bahar';
-      const round = parseInt(lastBet.round);
+      // ✅ FIX: Calculate TOTAL refund amount for ALL bets
+      const totalRefundAmount = activeBets.reduce((sum, bet) => sum + parseFloat(bet.amount), 0);
       
-      // Log BEFORE state for debugging
-      console.log(`🔍 BEFORE UNDO - Round ${round} ${side}:`, {
-        globalTotal: round === 1 ? currentGameState.round1Bets[side] : currentGameState.round2Bets[side],
-        userInMap: currentGameState.userBets.has(userId),
-        betToRemove: betAmount
+      console.log(`🔄 UNDOING ALL BETS for user ${userId}:`, {
+        betCount: activeBets.length,
+        totalRefund: totalRefundAmount,
+        bets: activeBets.map(b => ({ side: b.side, amount: b.amount, round: b.round }))
+      });
+
+      // Refund ALL bets at once
+      const newBalance = await storage.addBalanceAtomic(userId, totalRefundAmount);
+
+      // Cancel ALL bets in database
+      for (const bet of activeBets) {
+        await storage.updateBetDetails(bet.id, {
+          status: 'cancelled'
+        });
+      }
+
+      // ✅ CRITICAL FIX: Update in-memory state for ALL bets
+      // Log BEFORE state
+      console.log(`🔍 BEFORE UNDO ALL - State:`, {
+        round1Andar: currentGameState.round1Bets.andar,
+        round1Bahar: currentGameState.round1Bets.bahar,
+        round2Andar: currentGameState.round2Bets.andar,
+        round2Bahar: currentGameState.round2Bets.bahar,
+        userInMap: currentGameState.userBets.has(userId)
       });
       
-      // Update user's individual bet tracking (if they exist in map)
-      if (currentGameState.userBets.has(userId)) {
-        const userBetsState = currentGameState.userBets.get(userId)!;
+      // Process each bet
+      for (const bet of activeBets) {
+        const side = bet.side as 'andar' | 'bahar';
+        const round = parseInt(bet.round);
+        const amount = parseFloat(bet.amount);
+        
+        // Update user's individual bet tracking (if they exist in map)
+        if (currentGameState.userBets.has(userId)) {
+          const userBetsState = currentGameState.userBets.get(userId)!;
+          if (round === 1) {
+            userBetsState.round1[side] = Math.max(0, userBetsState.round1[side] - amount);
+          } else {
+            userBetsState.round2[side] = Math.max(0, userBetsState.round2[side] - amount);
+          }
+        }
+        
+        // ✅ ALWAYS update global totals (critical for admin dashboard)
         if (round === 1) {
-          userBetsState.round1[side] = Math.max(0, userBetsState.round1[side] - betAmount);
+          currentGameState.round1Bets[side] = Math.max(0, currentGameState.round1Bets[side] - amount);
         } else {
-          userBetsState.round2[side] = Math.max(0, userBetsState.round2[side] - betAmount);
+          currentGameState.round2Bets[side] = Math.max(0, currentGameState.round2Bets[side] - amount);
         }
       }
       
-      // ✅ ALWAYS update global totals (critical for admin dashboard)
-      if (round === 1) {
-        currentGameState.round1Bets[side] = Math.max(0, currentGameState.round1Bets[side] - betAmount);
-      } else {
-        currentGameState.round2Bets[side] = Math.max(0, currentGameState.round2Bets[side] - betAmount);
-      }
-      
-      // Log AFTER state for debugging
-      console.log(`✅ AFTER UNDO - Round ${round} ${side}:`, {
-        globalTotal: round === 1 ? currentGameState.round1Bets[side] : currentGameState.round2Bets[side],
-        removed: betAmount
+      // Log AFTER state
+      console.log(`✅ AFTER UNDO ALL - State:`, {
+        round1Andar: currentGameState.round1Bets.andar,
+        round1Bahar: currentGameState.round1Bets.bahar,
+        round2Andar: currentGameState.round2Bets.andar,
+        round2Bahar: currentGameState.round2Bets.bahar,
+        totalRemoved: totalRefundAmount
       });
 
       // Calculate updated totals for admin
       const totalAndar = currentGameState.round1Bets.andar + currentGameState.round2Bets.andar;
       const totalBahar = currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar;
 
-      // Broadcast cancellation to all clients
+      // ✅ FIX: Broadcast ALL cancelled bets to all clients
       broadcast({
-        type: 'bet_cancelled',
+        type: 'all_bets_cancelled',
         data: {
-          betId,
           userId,
-          side: lastBet.side,
-          amount: betAmount,
-          round: lastBet.round,
-          cancelledBy: userId, // Player cancelled their own bet
-          newBalance: newBalance // Include new balance after refund
+          cancelledBets: activeBets.map(bet => ({
+            betId: bet.id,
+            side: bet.side,
+            amount: parseFloat(bet.amount),
+            round: bet.round
+          })),
+          totalRefunded: totalRefundAmount,
+          newBalance: newBalance
         }
       });
 
-      // ✅ FIX: Broadcast updated totals to admin dashboard
+      // ✅ FIX: Broadcast updated totals to admin dashboard (INSTANT UPDATE)
       broadcastToRole({
         type: 'admin_bet_update',
         data: {
           userId,
-          side: lastBet.side,
-          amount: -betAmount, // Negative amount indicates bet removal
-          round: lastBet.round,
+          action: 'undo_all',
+          cancelledBets: activeBets.map(bet => ({
+            side: bet.side,
+            amount: parseFloat(bet.amount),
+            round: bet.round
+          })),
+          totalRefunded: totalRefundAmount,
           totalAndar,
           totalBahar,
           round1Bets: currentGameState.round1Bets,
-          round2Bets: currentGameState.round2Bets,
-          action: 'undo'
+          round2Bets: currentGameState.round2Bets
         }
       }, 'admin');
 
-      console.log(`✅ Bet undone: User ${userId}, ₹${betAmount} on ${lastBet.side}, Round ${lastBet.round}`);
+      console.log(`✅ ALL BETS UNDONE: User ${userId}, ${activeBets.length} bets, Total ₹${totalRefundAmount}`);
       console.log(`📊 Updated totals - Andar: ₹${totalAndar}, Bahar: ₹${totalBahar}`);
 
       res.json({
         success: true,
-        message: 'Bet undone successfully. Amount refunded to your balance.',
+        message: `All bets undone successfully. ₹${totalRefundAmount.toLocaleString('en-IN')} refunded to your balance.`,
         data: {
-          betId,
-          refundedAmount: betAmount,
-          newBalance,
-          side: lastBet.side,
-          round: lastBet.round
+          cancelledBets: activeBets.map(bet => ({
+            betId: bet.id,
+            side: bet.side,
+            amount: parseFloat(bet.amount),
+            round: bet.round
+          })),
+          refundedAmount: totalRefundAmount,
+          newBalance
         }
       });
     } catch (error) {

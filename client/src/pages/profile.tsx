@@ -731,13 +731,13 @@ const Profile: React.FC = () => {
                             {game.result === 'win' ? (
                               <>
                                 <div className="text-green-400 font-bold text-lg">
-                                  +{formatCurrency(game.payout || game.yourTotalPayout || 0)}
+                                  +{formatCurrency(game.yourNetProfit || ((game.payout || game.yourTotalPayout || 0) - (game.yourTotalBet || game.yourBet?.amount || 0)))}
                                 </div>
                                 <div className="text-green-400/70 text-sm">
-                                  Won (Bet: {formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)})
+                                  Won ₹{formatCurrency(game.payout || game.yourTotalPayout || 0)} (Bet: ₹{formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)})
                                 </div>
                                 <div className="text-green-400 text-xs font-semibold">
-                                  Net: +{formatCurrency((game.payout || game.yourTotalPayout || 0) - (game.yourTotalBet || game.yourBet?.amount || 0))}
+                                  💰 Net Profit
                                 </div>
                               </>
                             ) : (
@@ -746,7 +746,10 @@ const Profile: React.FC = () => {
                                   -{formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)}
                                 </div>
                                 <div className="text-red-400/70 text-sm">
-                                  Lost
+                                  Lost (Bet: ₹{formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)})
+                                </div>
+                                <div className="text-red-400 text-xs font-semibold">
+                                  📉 Net Loss
                                 </div>
                               </>
                             )}

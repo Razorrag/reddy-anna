@@ -202,7 +202,11 @@ const AdminGamePanel: React.FC = () => {
                 <div className={`text-5xl font-black mb-4 drop-shadow-lg ${
                   gameState.gameWinner === 'andar' ? 'text-red-300' : 'text-blue-300'
                 }`}>
-                  {gameState.gameWinner.toUpperCase()} WINS!
+                  {gameState.gameWinner === 'andar' 
+                    ? 'ANDAR WINS!' 
+                    : (gameState.currentRound === 1 || gameState.currentRound === 2 
+                      ? 'BABA WINS!' 
+                      : 'BAHAR WINS!')}
                 </div>
                 <div className="text-2xl text-gray-200 mb-6 font-semibold">
                   Winning Card: {typeof gameState.winningCard === 'string' 

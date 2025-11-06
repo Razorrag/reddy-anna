@@ -69,7 +69,13 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       const customEvent = event as CustomEvent;
       const detail = customEvent.detail;
       
-      if (detail?.winner && gameState.phase === 'complete') {
+      console.log('🎉 CELEBRATION EVENT RECEIVED:', detail);
+      console.log('📊 Game State Phase:', gameState.phase);
+      console.log('📊 Current Round:', gameState.currentRound);
+      console.log('📊 Show Result State (before):', showResult);
+      console.log('📊 Game Result State (before):', gameResult);
+      
+      if (detail?.winner) {
         const payoutAmount = detail.localWinAmount || 0;
         const totalBetAmount = detail.totalBetAmount || 0;
         const netProfit = payoutAmount - totalBetAmount;
@@ -105,10 +111,13 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           isRefundOnly
         });
         setShowResult(true);
+        console.log('✅ CELEBRATION TRIGGERED - showResult set to TRUE');
+        console.log('✅ Game Result:', { winner: detail.winner, round: detail.round || gameState.currentRound, resultType });
         
         // Auto-hide after appropriate duration
         const duration = resultType === 'no_bet' ? 2500 : 5000;
         setTimeout(() => {
+          console.log('⏰ HIDING CELEBRATION after', duration, 'ms');
           setShowResult(false);
           setTimeout(() => setGameResult(null), 500);
         }, duration);
@@ -119,13 +128,14 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => window.removeEventListener('game-complete-celebration', handleGameComplete as EventListener);
   }, [gameState.phase, gameState.winningCard, gameState.currentRound]);
 
-  // Hide result when phase changes away from complete
-  useEffect(() => {
-    if (gameState.phase !== 'complete') {
-      setShowResult(false);
-      setTimeout(() => setGameResult(null), 500);
-    }
-  }, [gameState.phase]);
+  // ❌ DISABLED: This was causing celebrations to hide immediately
+  // The phase can change before the celebration renders, causing it to never show
+  // useEffect(() => {
+  //   if (gameState.phase !== 'complete') {
+  //     setShowResult(false);
+  //     setTimeout(() => setGameResult(null), 500);
+  //   }
+  // }, [gameState.phase]);
 
   // Get timer color based on phase
   const getTimerColor = () => {
@@ -247,14 +257,14 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         </div>
       )}
 
-      {/* Game Result Overlay - ONLY VISIBLE DURING COMPLETE PHASE */}
+      {/* Game Result Overlay - Shows when showResult is true */}
       <AnimatePresence>
-        {gameState.phase === 'complete' && showResult && gameResult && (
+        {showResult && gameResult && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none"
+            className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none"
           >
             {/* Backdrop */}
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />

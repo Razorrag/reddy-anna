@@ -493,7 +493,48 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         updatePlayerRoundBets(data.data.round as any, newBets);
         break;
 
+      case 'all_bets_cancelled':
+        // ✅ NEW: Handle ALL bets being cancelled at once
+        // Only process if it's for the current user
+        if (data.data.userId && authState.user?.id && data.data.userId !== authState.user.id) {
+          console.log(`⚠️ Ignoring all_bets_cancelled for different user: ${data.data.userId} (current: ${authState.user.id})`);
+          break;
+        }
+        
+        console.log('🔄 ALL BETS CANCELLED:', data.data);
+        
+        // Update balance if provided
+        if (data.data.newBalance !== undefined && data.data.newBalance !== null) {
+          updatePlayerWallet(data.data.newBalance);
+          // Dispatch balance event for other contexts to update immediately
+          const balanceEvent = new CustomEvent('balance-websocket-update', {
+            detail: { 
+              balance: data.data.newBalance, 
+              amount: data.data.totalRefunded, // Total refund amount
+              type: 'bet_refund', 
+              timestamp: Date.now() 
+            }
+          });
+          window.dispatchEvent(balanceEvent);
+        }
+        
+        // Remove ALL cancelled bets from local state
+        if (data.data.cancelledBets && Array.isArray(data.data.cancelledBets)) {
+          for (const bet of data.data.cancelledBets) {
+            const round = parseInt(bet.round || '1') as 1 | 2;
+            const side = bet.side as BetSide;
+            removeLastBet(round, side);
+          }
+        }
+        
+        showNotification(
+          `All bets (₹${data.data.totalRefunded?.toLocaleString('en-IN') || 0}) have been cancelled`,
+          'success'
+        );
+        break;
+
       case 'bet_cancelled':
+        // Legacy handler for single bet cancellation
         // Only process bet_cancelled if it's for the current user
         if (data.data.userId && authState.user?.id && data.data.userId !== authState.user.id) {
           console.log(`⚠️ Ignoring bet_cancelled for different user: ${data.data.userId} (current: ${authState.user.id})`);

@@ -273,32 +273,37 @@ const PlayerGame: React.FC = () => {
     }
 
     try {
-      // Call the undo endpoint
+      // Call the undo endpoint (now undos ALL bets)
       const response = await apiClient.delete<{
         success: boolean;
         message?: string;
         data?: {
-          betId: string;
+          cancelledBets: Array<{
+            betId: string;
+            side: BetSide;
+            amount: number;
+            round: string;
+          }>;
           refundedAmount: number;
           newBalance: number;
-          side: BetSide;
-          round: string;
         };
         error?: string;
       }>('/user/undo-last-bet');
 
       if (response.success && response.data) {
-        const { refundedAmount, newBalance, side, round } = response.data;
+        const { refundedAmount, newBalance, cancelledBets } = response.data;
         
         // Update balance
         updateBalance(newBalance, 'api');
         
-        // Update local state to remove the last bet
-        const roundNum = parseInt(round) as 1 | 2;
-        removeLastBet(roundNum, side);
+        // ✅ FIX: Remove ALL bets from local state
+        for (const bet of cancelledBets) {
+          const roundNum = parseInt(bet.round) as 1 | 2;
+          removeLastBet(roundNum, bet.side);
+        }
         
         showNotification(
-          `Last bet of ₹${refundedAmount.toLocaleString('en-IN')} on ${side.toUpperCase()} (Round ${round}) has been undone`,
+          `All bets (₹${refundedAmount.toLocaleString('en-IN')}) have been undone`,
           'success'
         );
       } else {
