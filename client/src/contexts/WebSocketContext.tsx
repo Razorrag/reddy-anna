@@ -770,7 +770,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             localWinAmount,
             totalBetAmount,
             result,
-            round: gameState.currentRound
+            round: gameState.currentRound,
+            playerBets // Include bet breakdown for mixed bet detection
           }
         });
         window.dispatchEvent(celebrationEvent);

@@ -210,8 +210,16 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
             <div className="text-3xl font-bold text-[#A52A2A]">{andarWins}</div>
             <div className="text-sm text-white/80 mt-1">Andar Wins</div>
           </div>
-          <div className="text-center p-4 bg-[#01073b]/20 rounded-lg border border-[#01073b]/50">
-            <div className="text-3xl font-bold text-[#01073b]">{baharWins}</div>
+          <div className="text-center p-4 bg-[#01073b]/20 rounded-lg border border-white/20">
+            <div 
+              className="text-3xl font-bold text-[#01073b]" 
+              style={{
+                textShadow: '0 0 8px rgba(255, 255, 255, 0.7), 0 0 16px rgba(255, 255, 255, 0.5), 0 0 24px rgba(255, 255, 255, 0.3), -1px -1px 0 rgba(255, 255, 255, 0.8), 1px -1px 0 rgba(255, 255, 255, 0.8), -1px 1px 0 rgba(255, 255, 255, 0.8), 1px 1px 0 rgba(255, 255, 255, 0.8)',
+                WebkitTextStroke: '0.3px rgba(255, 255, 255, 0.4)'
+              }}
+            >
+              {baharWins}
+            </div>
             <div className="text-sm text-white/80 mt-1">Bahar Wins</div>
           </div>
         </div>
@@ -238,10 +246,18 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
                 
                 <div className="bg-gray-800/50 rounded-lg p-3">
                   <div className="text-xs text-gray-400 mb-1">Winner</div>
-                  <div className={`text-lg font-bold uppercase ${
-                    displayGame.winner === 'andar' ? 'text-[#A52A2A]' : 'text-[#01073b]'
-                  }`}>
-                    {displayGame.winner}
+                  <div 
+                    className={`text-lg font-bold uppercase ${
+                      displayGame.winner === 'andar' ? 'text-[#A52A2A]' : 'text-[#01073b]'
+                    }`}
+                    style={displayGame.winner === 'bahar' ? {
+                      textShadow: '0 0 6px rgba(255, 255, 255, 0.6), 0 0 12px rgba(255, 255, 255, 0.4), -1px -1px 0 rgba(255, 255, 255, 0.7), 1px -1px 0 rgba(255, 255, 255, 0.7), -1px 1px 0 rgba(255, 255, 255, 0.7), 1px 1px 0 rgba(255, 255, 255, 0.7)',
+                      WebkitTextStroke: '0.2px rgba(255, 255, 255, 0.3)'
+                    } : {}}
+                  >
+                    {displayGame.winner === 'andar' 
+                      ? 'ANDAR' 
+                      : (displayGame.round === 1 || displayGame.round === 2 ? 'BABA' : 'BAHAR')}
                   </div>
                 </div>
                 
@@ -271,7 +287,15 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
                   
                   <div className="bg-gray-800/50 rounded-lg p-3">
                     <div className="text-xs text-gray-400 mb-1">Bahar Total Bets</div>
-                    <div className="text-lg font-bold text-[#01073b]">{formatCurrency(displayGame.baharTotalBet || 0)}</div>
+                    <div 
+                      className="text-lg font-bold text-[#01073b]"
+                      style={{
+                        textShadow: '0 0 6px rgba(255, 255, 255, 0.6), 0 0 12px rgba(255, 255, 255, 0.4), -1px -1px 0 rgba(255, 255, 255, 0.7), 1px -1px 0 rgba(255, 255, 255, 0.7), -1px 1px 0 rgba(255, 255, 255, 0.7), 1px 1px 0 rgba(255, 255, 255, 0.7)',
+                        WebkitTextStroke: '0.2px rgba(255, 255, 255, 0.3)'
+                      }}
+                    >
+                      {formatCurrency(displayGame.baharTotalBet || 0)}
+                    </div>
                   </div>
                   
                   <div className="bg-gray-800/50 rounded-lg p-3">
