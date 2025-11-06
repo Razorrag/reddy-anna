@@ -142,15 +142,13 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
                   ? 'ANDAR WON!' 
                   : round === 1 
                   ? 'BABA WON!' 
-                  : round === 2 
-                  ? 'SHOOT WON!' 
                   : 'BAHAR WON!'}
               </h1>
               <div className="text-4xl font-bold text-white mb-2">
                 {typeof winningCard === 'string' ? winningCard : winningCard?.display}
               </div>
               <div className="text-xl text-gray-400">
-                Round {round}
+                Round {round} Completed
               </div>
             </motion.div>
 

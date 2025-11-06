@@ -1077,6 +1077,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'payout_received': {
         const { amount, balance, winner, round } = (data as PayoutReceivedMessage).data;
         
+        // ✅ Store the payout amount for celebration display
+        console.log(`💰 Payout received: ₹${amount}, Winner: ${winner}, Round: ${round}`);
+        
         // Immediately update balance from the message (no API delay)
         if (balance !== undefined && balance !== null) {
           updatePlayerWallet(balance);
@@ -1087,8 +1090,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           window.dispatchEvent(balanceEvent);
         }
         
-        // ❌ REMOVED: showNotification - Duplicate, shown in VideoArea overlay
-        // Balance update is silent (no notification needed)
+        // ✅ Dispatch payout event so celebration can use the exact server amount
+        const payoutEvent = new CustomEvent('payout-received-event', {
+          detail: { amount, winner, round, balance }
+        });
+        window.dispatchEvent(payoutEvent);
+        
+        console.log(`✅ Payout event dispatched: ₹${amount}`);
         break;
       }
       

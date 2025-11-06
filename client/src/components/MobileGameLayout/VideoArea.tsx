@@ -310,7 +310,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                     <div className="text-3xl font-black text-white mb-2">
                       {gameResult.winner === 'andar' 
                         ? 'ANDAR WON!' 
-                        : (gameResult.round === 1 || gameResult.round === 2 ? 'BABA WON!' : 'BAHAR WON!')}
+                        : (gameResult.round === 1 ? 'BABA WON!' : 'BAHAR WON!')}
                     </div>
                     <div className="text-xl font-bold text-yellow-200">
                       {typeof gameResult.winningCard === 'string' 
@@ -319,7 +319,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                     </div>
                     {/* Round Info */}
                     <div className="text-sm font-semibold text-white/80 mt-1">
-                      Round {gameResult.round}
+                      Round {gameResult.round} Completed
                     </div>
                   </motion.div>
                   
@@ -418,7 +418,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                     <div className="text-2xl font-bold text-white mb-2">
                       {gameResult.winner === 'andar' 
                         ? 'ANDAR WON' 
-                        : (gameResult.round === 1 || gameResult.round === 2 ? 'BABA WON' : 'BAHAR WON')}
+                        : (gameResult.round === 1 ? 'BABA WON' : 'BAHAR WON')}
                     </div>
                     <div className="text-xl font-semibold text-gray-300 mb-3">
                       Better Luck Next Round!
@@ -451,7 +451,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                     <div className="text-3xl font-black text-white mb-2">
                       {gameResult.winner === 'andar' 
                         ? 'ANDAR WON!' 
-                        : (gameResult.round === 1 || gameResult.round === 2 ? 'BABA WON!' : 'BAHAR WON!')}
+                        : (gameResult.round === 1 ? 'BABA WON!' : 'BAHAR WON!')}
                     </div>
                     <div className="text-lg text-purple-200">
                       {typeof gameResult.winningCard === 'string' 

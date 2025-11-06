@@ -818,11 +818,46 @@ export async function handleDealCard(client: WSClient, data: any) {
       );
     }
 
-    // Check if round should end after this card
+    // ✅ CRITICAL FIX: Check if we need to transition to Round 3 BEFORE checking for winner
+    // This ensures the 5th card (first card of Round 3) uses Round 3 payout logic
     const currentRound = (global as any).currentGameState.currentRound;
     const isRoundComplete = (global as any).currentGameState.isRoundComplete();
     
-    console.log(`🎯 Card dealt - Round: ${currentRound}, Complete: ${isRoundComplete}, Winner: ${isWinningCard}`);
+    // ✅ FIX: If Round 2 just completed (4 cards dealt), transition to Round 3 NOW
+    if (currentRound === 2 && isRoundComplete) {
+      console.log('🔄 TRANSITIONING TO ROUND 3 BEFORE CHECKING WINNER');
+      (global as any).currentGameState.currentRound = 3;
+      (global as any).currentGameState.phase = 'dealing';
+      (global as any).currentGameState.bettingLocked = true;
+      
+      // Persist round 3 transition
+      if (typeof (global as any).persistGameState === 'function') {
+        (global as any).persistGameState().catch((err: any) => 
+          console.error('Error persisting round 3 transition:', err)
+        );
+      }
+      
+      // Broadcast round 3 start
+      if (typeof (global as any).broadcast !== 'undefined') {
+        (global as any).broadcast({
+          type: 'start_final_draw',
+          data: {
+            gameId: (global as any).currentGameState.gameId,
+            round: 3,
+            round1Bets: (global as any).currentGameState.round1Bets,
+            round2Bets: (global as any).currentGameState.round2Bets,
+            message: 'Round 3: Continuous draw started!'
+          }
+        });
+      }
+      
+      console.log('✅ MOVED TO ROUND 3 (BEFORE WINNER CHECK)');
+    }
+    
+    // Re-read currentRound after potential transition
+    const finalRound = (global as any).currentGameState.currentRound;
+    
+    console.log(`🎯 Card dealt - Round: ${finalRound}, Complete: ${isRoundComplete}, Winner: ${isWinningCard}`);
     
     if (isWinningCard) {
       // ✅ FIX: Game ends with winner regardless of round

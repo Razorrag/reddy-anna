@@ -199,12 +199,12 @@ const AdminGamePanel: React.FC = () => {
                   : 'bg-gradient-to-br from-blue-900/50 to-blue-800/50 border-blue-400'
               }`}>
                 <div className="text-7xl mb-6 animate-bounce">🎉</div>
-                <div className={`text-5xl font-black mb-4 drop-shadow-lg ${
-                  gameState.gameWinner === 'andar' ? 'text-red-300' : 'text-blue-300'
+                <div className={`text-5xl font-black mb-4 ${
+                  gameState.gameWinner === 'andar' ? 'text-[#A52A2A]' : 'text-[#01073b]'
                 }`}>
                   {gameState.gameWinner === 'andar' 
                     ? 'ANDAR WINS!' 
-                    : (gameState.currentRound === 1 || gameState.currentRound === 2 
+                    : (gameState.currentRound === 1 
                       ? 'BABA WINS!' 
                       : 'BAHAR WINS!')}
                 </div>
