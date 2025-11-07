@@ -8,7 +8,8 @@ import {
   Filter,
   RefreshCw,
   Download,
-  ChevronLeft
+  ChevronLeft,
+  Gift
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,13 +18,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import { useBalance } from '@/contexts/BalanceContext';
 import { WalletModal } from '@/components/WalletModal';
 import { apiClient } from '@/lib/api-client';
 import { useNotification } from '@/contexts/NotificationContext';
+import {
+  BonusOverviewCard,
+  DepositBonusesList,
+  ReferralBonusesList,
+  BonusHistoryTimeline
+} from '@/components/Bonus';
 
 const Profile: React.FC = () => {
   const [location] = useLocation();
@@ -56,10 +63,18 @@ const Profile: React.FC = () => {
     window.open(url, '_blank');
   };
 
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('profile');
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [claimingBonus, setClaimingBonus] = useState(false);
+  
+  // Bonus data state
+  const [bonusSummary, setBonusSummary] = useState<any>(null);
+  const [depositBonuses, setDepositBonuses] = useState<any[]>([]);
+  const [referralBonuses, setReferralBonuses] = useState<any[]>([]);
+  const [bonusTransactions, setBonusTransactions] = useState<any[]>([]);
+  const [loadingBonuses, setLoadingBonuses] = useState(false);
+  const [bonusHasMore, setBonusHasMore] = useState(false);
   const [profileForm, setProfileForm] = useState({
     fullName: '',
     mobile: '',
@@ -77,7 +92,8 @@ const Profile: React.FC = () => {
     const params = new URLSearchParams(location.split('?')[1]);
     const tab = params.get('tab');
     if (tab) {
-      setActiveTab(tab);
+      // Redirect old 'overview' links to 'profile'
+      setActiveTab(tab === 'overview' ? 'profile' : tab);
     }
   }, [location]);
 
@@ -105,6 +121,37 @@ const Profile: React.FC = () => {
       }
     }
   }, [activeTab, user, fetchGameHistory, profileState.gameHistory.length]);
+
+  // Fetch bonus data when bonuses tab is active
+  useEffect(() => {
+    const fetchBonusData = async () => {
+      if (activeTab === 'bonuses' && user) {
+        setLoadingBonuses(true);
+        try {
+          // Fetch all bonus data in parallel
+          const [summaryRes, depositRes, referralRes, transactionsRes] = await Promise.all([
+            apiClient.get('/api/user/bonus-summary'),
+            apiClient.get('/api/user/deposit-bonuses'),
+            apiClient.get('/api/user/referral-bonuses'),
+            apiClient.get('/api/user/bonus-transactions?limit=20&offset=0')
+          ]);
+
+          setBonusSummary(summaryRes.data || summaryRes);
+          setDepositBonuses(depositRes.data || depositRes);
+          setReferralBonuses(referralRes.data || referralRes);
+          setBonusTransactions(transactionsRes.data || transactionsRes.data || []);
+          setBonusHasMore(transactionsRes.hasMore || false);
+        } catch (error) {
+          console.error('Failed to fetch bonus data:', error);
+          showNotification('Failed to load bonus data', 'error');
+        } finally {
+          setLoadingBonuses(false);
+        }
+      }
+    };
+
+    fetchBonusData();
+  }, [activeTab, user, showNotification]);
 
   // Fetch payment requests when transactions tab is active
   const fetchPaymentRequests = async () => {
@@ -206,6 +253,33 @@ const Profile: React.FC = () => {
     }
   };
 
+  // ✅ Listen for payment request updates
+  useEffect(() => {
+    const handlePaymentUpdate = (event: CustomEvent) => {
+      // Refresh payment requests
+      if (activeTab === 'transactions') {
+        fetchPaymentRequests();
+      }
+      
+      // Refresh balance
+      refreshBalance();
+      
+      // Refresh transactions
+      fetchTransactions(false);
+      
+      // Show notification
+      const { message } = event.detail;
+      if (message) {
+        showNotification(message, 'success');
+      }
+    };
+    
+    window.addEventListener('payment-request-updated', handlePaymentUpdate as EventListener);
+    return () => {
+      window.removeEventListener('payment-request-updated', handlePaymentUpdate as EventListener);
+    };
+  }, [activeTab, fetchPaymentRequests, refreshBalance, fetchTransactions, showNotification]);
+
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center">
@@ -248,9 +322,6 @@ const Profile: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5 bg-black/50 border-gold/30">
-            <TabsTrigger value="overview" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
-              Overview
-            </TabsTrigger>
             <TabsTrigger value="profile" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
               Profile
             </TabsTrigger>
@@ -260,41 +331,14 @@ const Profile: React.FC = () => {
             <TabsTrigger value="game-history" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
               Game History
             </TabsTrigger>
+            <TabsTrigger value="bonuses" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
+              <Gift className="w-4 h-4 mr-1 inline" />
+              Bonuses
+            </TabsTrigger>
             <TabsTrigger value="referral" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
               Referral
             </TabsTrigger>
           </TabsList>
-
-          {/* Overview Tab - Simplified with just sign out and delete account */}
-          <TabsContent value="overview" className="space-y-6">
-            <Card className="bg-black/50 border-gold/30">
-              <CardHeader>
-                <CardTitle className="text-gold">Account Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button
-                  onClick={() => {
-                    logout(); // This will clear auth and redirect to landing page
-                  }}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Sign Out
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-                      // Add delete account logic here
-                      alert('Delete account functionality to be implemented');
-                    }
-                  }}
-                  variant="outline"
-                  className="w-full border-red-500 text-red-500 hover:bg-red-500/10"
-                >
-                  Delete Account
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* Profile Tab - Simplified */}
           <TabsContent value="profile" className="space-y-6">
@@ -365,6 +409,36 @@ const Profile: React.FC = () => {
                     </Button>
                   </div>
                 )}
+
+                {/* Divider */}
+                <div className="border-t border-gold/20 my-6 max-w-md mx-auto"></div>
+
+                {/* Account Actions */}
+                <div className="max-w-md mx-auto space-y-4">
+                  <h3 className="text-gold font-semibold text-lg">Account Actions</h3>
+                  
+                  <Button
+                    onClick={() => {
+                      logout(); // This will clear auth and redirect to landing page
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Sign Out
+                  </Button>
+                  
+                  <Button
+                    onClick={() => {
+                      if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+                        // Add delete account logic here
+                        alert('Delete account functionality to be implemented');
+                      }
+                    }}
+                    variant="outline"
+                    className="w-full border-red-500 text-red-500 hover:bg-red-500/10"
+                  >
+                    Delete Account
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -547,9 +621,15 @@ const Profile: React.FC = () => {
                     return <div className="text-center py-8 text-white/60">No payment requests found</div>;
                   }
                   
-                  // Group by type
+                  // Group by type with null safety
                   const deposits = filteredRequests.filter(r => (r.request_type || r.type) === 'deposit');
                   const withdrawals = filteredRequests.filter(r => (r.request_type || r.type) === 'withdrawal');
+                  
+                  // Helper to safely parse amount
+                  const safeParseAmount = (amount: any) => {
+                    const parsed = parseFloat(amount);
+                    return isNaN(parsed) ? 0 : parsed;
+                  };
                   
                   return (
                     <div className="space-y-6">
@@ -558,7 +638,7 @@ const Profile: React.FC = () => {
                         <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
                           <div className="text-green-400 text-sm mb-1">Total Deposits</div>
                           <div className="text-2xl font-bold text-green-400">
-                            {formatCurrency(deposits.filter(d => d.status === 'approved' || d.status === 'completed').reduce((sum, d) => sum + parseFloat(d.amount), 0))}
+                            {formatCurrency(deposits.filter(d => d.status === 'approved' || d.status === 'completed').reduce((sum, d) => sum + safeParseAmount(d.amount), 0))}
                           </div>
                           <div className="text-green-400/60 text-xs mt-1">{deposits.filter(d => d.status === 'approved' || d.status === 'completed').length} approved</div>
                         </div>
@@ -566,7 +646,7 @@ const Profile: React.FC = () => {
                         <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
                           <div className="text-red-400 text-sm mb-1">Total Withdrawals</div>
                           <div className="text-2xl font-bold text-red-400">
-                            {formatCurrency(withdrawals.filter(w => w.status === 'approved' || w.status === 'completed').reduce((sum, w) => sum + parseFloat(w.amount), 0))}
+                            {formatCurrency(withdrawals.filter(w => w.status === 'approved' || w.status === 'completed').reduce((sum, w) => sum + safeParseAmount(w.amount), 0))}
                           </div>
                           <div className="text-red-400/60 text-xs mt-1">{withdrawals.filter(w => w.status === 'approved' || w.status === 'completed').length} approved</div>
                         </div>
@@ -576,7 +656,7 @@ const Profile: React.FC = () => {
                           <div className="text-2xl font-bold text-yellow-400">
                             {filteredRequests.filter(r => r.status === 'pending').length}
                           </div>
-                          <div className="text-yellow-400/60 text-xs mt-1">{formatCurrency(filteredRequests.filter(r => r.status === 'pending').reduce((sum, r) => sum + parseFloat(r.amount), 0))}</div>
+                          <div className="text-yellow-400/60 text-xs mt-1">{formatCurrency(filteredRequests.filter(r => r.status === 'pending').reduce((sum, r) => sum + safeParseAmount(r.amount), 0))}</div>
                         </div>
                       </div>
                       
@@ -629,7 +709,7 @@ const Profile: React.FC = () => {
                                       <div className="flex items-center gap-2">
                                         <Wallet className="w-4 h-4 text-white/40" />
                                         <span className="text-white/60">Amount:</span>
-                                        <span className="font-bold text-white">{formatCurrency(parseFloat(request.amount))}</span>
+                                        <span className="font-bold text-white">{formatCurrency(safeParseAmount(request.amount))}</span>
                                       </div>
                                       
                                       {request.payment_method && (
@@ -662,7 +742,7 @@ const Profile: React.FC = () => {
                                   <div className={`text-2xl font-bold ${
                                     isDeposit ? 'text-green-400' : 'text-red-400'
                                   }`}>
-                                    {isDeposit ? '+' : '-'}{formatCurrency(parseFloat(request.amount))}
+                                    {isDeposit ? '+' : '-'}{formatCurrency(safeParseAmount(request.amount))}
                                   </div>
                                 </div>
                               </div>
@@ -715,14 +795,14 @@ const Profile: React.FC = () => {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <div className={`w-3 h-3 rounded-full ${
-                              game.result === 'win' ? 'bg-green-400' : 'bg-red-400'
+                              game.result === 'win' ? 'bg-green-400' : game.result === 'loss' ? 'bg-red-400' : 'bg-gray-400'
                             }`} />
                             <div>
                               <div className="text-white font-medium">
                                 Game #{game.gameId.slice(-6)} - {game.winner ? game.winner.toUpperCase() : 'IN PROGRESS'} {game.winner ? 'Won' : ''}
                               </div>
                               <div className="text-white/60 text-sm">
-                                Opening Card: {game.openingCard || 'N/A'} | Your Bet: {game.yourBet ? `${game.yourBet.side?.toUpperCase() || 'N/A'} ₹${game.yourBet.amount}` : game.yourTotalBet ? `Total: ₹${game.yourTotalBet}` : 'No bet'}
+                                Opening Card: {game.openingCard || 'N/A'} | Your Bet: {game.yourBet ? `${game.yourBet.side?.toUpperCase() || 'N/A'} ₹${game.yourBet.amount}` : game.yourTotalBet > 0 ? `Total: ₹${game.yourTotalBet}` : 'No bet'}
                               </div>
                               <div className="text-white/40 text-xs">{formatDate(game.createdAt)}</div>
                             </div>
@@ -731,25 +811,40 @@ const Profile: React.FC = () => {
                             {game.result === 'win' ? (
                               <>
                                 <div className="text-green-400 font-bold text-lg">
-                                  +{formatCurrency(game.yourNetProfit || ((game.payout || game.yourTotalPayout || 0) - (game.yourTotalBet || game.yourBet?.amount || 0)))}
+                                  +{formatCurrency(game.yourNetProfit)}
                                 </div>
                                 <div className="text-green-400/70 text-sm">
-                                  Won ₹{formatCurrency(game.payout || game.yourTotalPayout || 0)} (Bet: ₹{formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)})
+                                  Won: {formatCurrency(game.yourTotalPayout)}
                                 </div>
-                                <div className="text-green-400 text-xs font-semibold">
+                                <div className="text-white/50 text-xs">
+                                  Bet: {formatCurrency(game.yourTotalBet)}
+                                </div>
+                                <div className="text-green-400 text-xs font-semibold mt-1">
                                   💰 Net Profit
+                                </div>
+                              </>
+                            ) : game.result === 'loss' ? (
+                              <>
+                                <div className="text-red-400 font-bold text-lg">
+                                  -{formatCurrency(game.yourTotalBet)}
+                                </div>
+                                <div className="text-red-400/70 text-sm">
+                                  Lost: {formatCurrency(game.yourTotalBet)}
+                                </div>
+                                <div className="text-white/50 text-xs">
+                                  Payout: {formatCurrency(0)}
+                                </div>
+                                <div className="text-red-400 text-xs font-semibold mt-1">
+                                  📉 Net Loss
                                 </div>
                               </>
                             ) : (
                               <>
-                                <div className="text-red-400 font-bold text-lg">
-                                  -{formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)}
+                                <div className="text-gray-400 font-bold text-lg">
+                                  {formatCurrency(0)}
                                 </div>
-                                <div className="text-red-400/70 text-sm">
-                                  Lost (Bet: ₹{formatCurrency(game.yourTotalBet || game.yourBet?.amount || 0)})
-                                </div>
-                                <div className="text-red-400 text-xs font-semibold">
-                                  📉 Net Loss
+                                <div className="text-gray-400/70 text-sm">
+                                  No Result
                                 </div>
                               </>
                             )}
@@ -774,6 +869,51 @@ const Profile: React.FC = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Bonuses Tab */}
+          <TabsContent value="bonuses" className="space-y-6">
+            {loadingBonuses ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold mx-auto"></div>
+                <p className="text-white/60 mt-4">Loading bonus data...</p>
+              </div>
+            ) : (
+              <>
+                {/* Bonus Overview */}
+                {bonusSummary && (
+                  <BonusOverviewCard
+                    totalAvailable={bonusSummary.totals?.available || 0}
+                    totalLocked={bonusSummary.depositBonuses?.locked || 0}
+                    totalCredited={bonusSummary.totals?.credited || 0}
+                    lifetimeEarnings={bonusSummary.totals?.lifetime || 0}
+                  />
+                )}
+
+                {/* Deposit Bonuses */}
+                <DepositBonusesList bonuses={depositBonuses} />
+
+                {/* Referral Bonuses */}
+                <ReferralBonusesList bonuses={referralBonuses} />
+
+                {/* Bonus History */}
+                <BonusHistoryTimeline
+                  transactions={bonusTransactions}
+                  hasMore={bonusHasMore}
+                  loading={loadingBonuses}
+                  onLoadMore={async () => {
+                    try {
+                      const offset = bonusTransactions.length;
+                      const res = await apiClient.get(`/api/user/bonus-transactions?limit=20&offset=${offset}`);
+                      setBonusTransactions([...bonusTransactions, ...(res.data || [])]);
+                      setBonusHasMore(res.hasMore || false);
+                    } catch (error) {
+                      console.error('Failed to load more transactions:', error);
+                    }
+                  }}
+                />
+              </>
+            )}
           </TabsContent>
 
           {/* Referral Tab */}
@@ -913,47 +1053,10 @@ const Profile: React.FC = () => {
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
         userBalance={balance}
+        onBalanceUpdate={(newBalance) => refreshBalance()}
       />
     </div>
   );
-
-  // Listen for balance updates
-  useEffect(() => {
-    const handleBalanceUpdate = (event: CustomEvent) => {
-      const { balance: newBalance, source } = event.detail;
-      console.log('Profile page received balance update:', newBalance, 'from', source);
-    };
-
-    window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
-    return () => window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
-  }, []);
-
-  // Listen for payment request updates
-  useEffect(() => {
-    const handlePaymentUpdate = (event: CustomEvent) => {
-      // Refresh payment requests
-      if (activeTab === 'transactions') {
-        fetchPaymentRequests();
-      }
-      
-      // Refresh balance
-      refreshBalance();
-      
-      // Refresh transactions
-      fetchTransactions(false);
-      
-      // Show notification
-      const { message } = event.detail;
-      if (message) {
-        showNotification(message, 'success');
-      }
-    };
-    
-    window.addEventListener('payment-request-updated', handlePaymentUpdate as EventListener);
-    return () => {
-      window.removeEventListener('payment-request-updated', handlePaymentUpdate as EventListener);
-    };
-  }, [activeTab, fetchPaymentRequests, refreshBalance, fetchTransactions, showNotification]);
 };
 
 export default Profile;

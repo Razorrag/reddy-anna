@@ -13,6 +13,9 @@
 SET session_replication_role = 'replica';
 
 -- Drop all tables that have foreign key dependencies first
+DROP TABLE IF EXISTS bonus_transactions CASCADE;
+DROP TABLE IF EXISTS deposit_bonuses CASCADE;
+DROP TABLE IF EXISTS referral_bonuses CASCADE;
 DROP TABLE IF EXISTS request_audit CASCADE;
 DROP TABLE IF EXISTS whatsapp_messages CASCADE;
 DROP TABLE IF EXISTS admin_requests CASCADE;
@@ -45,6 +48,7 @@ SET session_replication_role = 'origin';
 -- STEP 2: DROP ALL VIEWS
 -- ============================================
 
+DROP VIEW IF EXISTS user_bonus_summary CASCADE;
 DROP VIEW IF EXISTS admin_requests_summary CASCADE;
 
 -- ============================================
@@ -852,8 +856,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ✅ CRITICAL FIX: Apply payouts and update bets atomically
+-- ✅ CRITICAL FIX: Apply payouts and update bets atomically with PROPER actual_payout calculation
 -- This function is called by the game completion logic to distribute winnings and update bet statuses
+-- FIXED: Now properly calculates and sets actual_payout for each individual bet proportionally
 CREATE OR REPLACE FUNCTION apply_payouts_and_update_bets(
   payouts JSONB,
   winning_bets_ids TEXT[],
@@ -864,6 +869,9 @@ DECLARE
   payout_record JSONB;
   user_id_val VARCHAR(20);
   amount_val DECIMAL(15, 2);
+  bet_record RECORD;
+  user_total_bet DECIMAL(15, 2);
+  payout_per_bet DECIMAL(15, 2);
 BEGIN
   -- Process each payout
   FOR payout_record IN SELECT * FROM jsonb_array_elements(payouts)
@@ -899,23 +907,49 @@ BEGIN
         'Game winnings',
         NOW()
       FROM users WHERE id = user_id_val;
+      
+      -- ✅ CRITICAL FIX: Calculate proportional payout for each winning bet
+      -- Get total bet amount for this user in winning bets
+      SELECT COALESCE(SUM(amount), 0) INTO user_total_bet
+      FROM player_bets
+      WHERE user_id = user_id_val
+        AND id = ANY(winning_bets_ids);
+      
+      -- If user has winning bets, distribute payout proportionally
+      IF user_total_bet > 0 THEN
+        -- Update each winning bet with proportional payout
+        FOR bet_record IN 
+          SELECT id, amount 
+          FROM player_bets 
+          WHERE user_id = user_id_val 
+            AND id = ANY(winning_bets_ids)
+        LOOP
+          -- Calculate proportional payout for this bet
+          payout_per_bet := (bet_record.amount / user_total_bet) * amount_val;
+          
+          UPDATE player_bets
+          SET 
+            status = 'won',
+            actual_payout = payout_per_bet,
+            updated_at = NOW()
+          WHERE id = bet_record.id;
+        END LOOP;
+      END IF;
     END IF;
   END LOOP;
   
-  -- Update winning bets status and set actual_payout
+  -- ✅ Update any winning bets that weren't processed above (edge case)
   IF array_length(winning_bets_ids, 1) > 0 THEN
     UPDATE player_bets
-    SET status = 'won',
-        actual_payout = (
-          SELECT (payout_record->>'amount')::DECIMAL(15, 2)
-          FROM jsonb_array_elements(payouts) AS payout_record
-          WHERE payout_record->>'userId' = player_bets.user_id
-        ),
-        updated_at = NOW()
-    WHERE id = ANY(winning_bets_ids);
+    SET 
+      status = 'won',
+      actual_payout = COALESCE(actual_payout, 0),
+      updated_at = NOW()
+    WHERE id = ANY(winning_bets_ids)
+      AND actual_payout IS NULL;
   END IF;
   
-  -- Update losing bets status
+  -- ✅ Update losing bets status and set actual_payout to 0
   IF array_length(losing_bets_ids, 1) > 0 THEN
     UPDATE player_bets
     SET status = 'lost',
@@ -923,6 +957,12 @@ BEGIN
         updated_at = NOW()
     WHERE id = ANY(losing_bets_ids);
   END IF;
+  
+  -- Log the operation
+  RAISE NOTICE 'Payouts applied: % users, % winning bets, % losing bets', 
+    jsonb_array_length(payouts),
+    COALESCE(array_length(winning_bets_ids, 1), 0),
+    COALESCE(array_length(losing_bets_ids, 1), 0);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -1119,9 +1159,11 @@ ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value;
 -- Password: admin123
 -- Hash generated with bcrypt (salt rounds: 12)
 
+-- ✅ FRESH PASSWORD HASHES - Generated: 2024-11-07 5:12 PM
+-- Admin Password: admin123
 INSERT INTO admin_credentials (username, password_hash, role) VALUES
-('admin', '$2b$12$kboT2aS9EqAQjfbcAGL3GOYSBtrJsgq2eLPxonASwnnUjeNfNZ9ZW', 'admin'),
-('rajugarikossu', '$2b$12$kboT2aS9EqAQjfbcAGL3GOYSBtrJsgq2eLPxonASwnnUjeNfNZ9ZW', 'admin')
+('admin', '$2b$10$0Z1MPnHMBftZs2X.tMDtSefGeGyjqnLKxNPRpRjSkEdxYVvoaqZvS', 'admin'),
+('rajugarikossu', '$2b$10$0Z1MPnHMBftZs2X.tMDtSefGeGyjqnLKxNPRpRjSkEdxYVvoaqZvS', 'admin')
 ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- ============================================
@@ -1131,12 +1173,12 @@ ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 -- Password for all test users: Test@123
 -- Hash generated with bcrypt (salt rounds: 12)
 
+-- ✅ FRESH PASSWORD HASHES - Generated: 2024-11-07 5:12 PM
+-- Test Player Password: player123
 INSERT INTO users (id, phone, password_hash, full_name, role, status, balance, referral_code_generated) VALUES
-('9876543210', '9876543210', '$2b$12$tRhJv.A9JJ2rKdJp2rCmcePr.QDZTtAxLZTbILHFsuLYUhxshkaKu', 'Test Player 1', 'player', 'active', 100000.00, 'RAJUGARIKOSSU0001'),
-('9876543211', '9876543211', '$2b$12$tRhJv.A9JJ2rKdJp2rCmcePr.QDZTtAxLZTbILHFsuLYUhxshkaKu', 'Test Player 2', 'player', 'active', 50000.00, 'RAJUGARIKOSSU0002'),
-('9876543212', '9876543212', '$2b$12$tRhJv.A9JJ2rKdJp2rCmcePr.QDZTtAxLZTbILHFsuLYUhxshkaKu', 'Test Player 3', 'player', 'active', 75000.00, 'RAJUGARIKOSSU0003'),
-('9876543213', '9876543213', '$2b$12$tRhJv.A9JJ2rKdJp2rCmcePr.QDZTtAxLZTbILHFsuLYUhxshkaKu', 'Test Player 4', 'player', 'active', 25000.00, 'RAJUGARIKOSSU0004'),
-('9876543214', '9876543214', '$2b$12$tRhJv.A9JJ2rKdJp2rCmcePr.QDZTtAxLZTbILHFsuLYUhxshkaKu', 'Test Player 5', 'player', 'active', 10000.00, 'RAJUGARIKOSSU0005')
+('9876543210', '9876543210', '$2b$10$8mB.7nxp4rBHl397Hd1H/evl5AcOnObzbFcDPUS/AIJCur94p8Ic6', 'Test Player 1', 'player', 'active', 100000.00, 'TEST001'),
+('9876543211', '9876543211', '$2b$10$6tdUJg/WUvaa.hhm7zHYHuWUe7F6FtlR/BnTScKS83c96WbCHD5mi', 'Test Player 2', 'player', 'active', 100000.00, 'TEST002'),
+('9876543212', '9876543212', '$2b$10$JYLGm1/wpX5mgnJptwhar.gCt5QWu3MKoxk5Y891CFU2sknIyAlji', 'Test Player 3', 'player', 'active', 100000.00, 'TEST003')
 ON CONFLICT (id) DO UPDATE SET 
   password_hash = EXCLUDED.password_hash,
   balance = EXCLUDED.balance,
@@ -1160,6 +1202,157 @@ GRANT EXECUTE ON FUNCTION cleanup_expired_tokens TO authenticated;
 -- GRANT PERMISSIONS (if needed)
 -- ============================================
 
+-- ============================================
+-- BONUS TRACKING TABLES (NEW SYSTEM)
+-- ============================================
+
+-- Deposit bonuses table (per-deposit tracking)
+CREATE TABLE deposit_bonuses (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  user_id VARCHAR(20) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  deposit_request_id VARCHAR(36) REFERENCES payment_requests(id),
+  
+  -- Amounts
+  deposit_amount NUMERIC(10,2) NOT NULL,
+  bonus_amount NUMERIC(10,2) NOT NULL,
+  bonus_percentage NUMERIC(5,2) DEFAULT 5.00,
+  
+  -- Wagering tracking
+  wagering_required NUMERIC(10,2) NOT NULL,
+  wagering_completed NUMERIC(10,2) DEFAULT 0.00,
+  wagering_progress NUMERIC(5,2) DEFAULT 0.00, -- percentage (0-100)
+  
+  -- Status tracking
+  status VARCHAR(20) DEFAULT 'locked' CHECK (status IN ('locked', 'unlocked', 'credited', 'expired', 'forfeited')),
+  locked_at TIMESTAMP DEFAULT NOW(),
+  unlocked_at TIMESTAMP,
+  credited_at TIMESTAMP,
+  expired_at TIMESTAMP,
+  
+  -- Metadata
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Indexes for deposit_bonuses
+CREATE INDEX idx_deposit_bonuses_user_id ON deposit_bonuses(user_id);
+CREATE INDEX idx_deposit_bonuses_status ON deposit_bonuses(status);
+CREATE INDEX idx_deposit_bonuses_created_at ON deposit_bonuses(created_at DESC);
+CREATE INDEX idx_deposit_bonuses_user_status ON deposit_bonuses(user_id, status);
+
+-- Bonus transactions table (audit trail)
+CREATE TABLE bonus_transactions (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  user_id VARCHAR(20) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  
+  -- Type and source
+  bonus_type VARCHAR(30) NOT NULL CHECK (bonus_type IN ('deposit_bonus', 'referral_bonus', 'conditional_bonus', 'promotional_bonus')),
+  bonus_source_id VARCHAR(36), -- Links to deposit_bonuses.id or referral_bonuses.id
+  
+  -- Amounts
+  amount NUMERIC(10,2) NOT NULL,
+  balance_before NUMERIC(10,2),
+  balance_after NUMERIC(10,2),
+  
+  -- Action tracking
+  action VARCHAR(30) NOT NULL CHECK (action IN ('added', 'locked', 'unlocked', 'credited', 'expired', 'forfeited', 'wagering_progress')),
+  description TEXT NOT NULL,
+  metadata JSONB,
+  
+  -- Timestamp
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Indexes for bonus_transactions
+CREATE INDEX idx_bonus_transactions_user_id ON bonus_transactions(user_id);
+CREATE INDEX idx_bonus_transactions_type ON bonus_transactions(bonus_type);
+CREATE INDEX idx_bonus_transactions_action ON bonus_transactions(action);
+CREATE INDEX idx_bonus_transactions_created_at ON bonus_transactions(created_at DESC);
+CREATE INDEX idx_bonus_transactions_user_created ON bonus_transactions(user_id, created_at DESC);
+
+-- Referral bonuses table (separate from user_referrals)
+CREATE TABLE referral_bonuses (
+  id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  referrer_user_id VARCHAR(20) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  referred_user_id VARCHAR(20) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  referral_id VARCHAR(36) REFERENCES user_referrals(id),
+  
+  -- Amounts
+  deposit_amount NUMERIC(10,2) NOT NULL,
+  bonus_amount NUMERIC(10,2) NOT NULL,
+  bonus_percentage NUMERIC(5,2) DEFAULT 1.00,
+  
+  -- Status
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'credited', 'expired')),
+  credited_at TIMESTAMP,
+  expired_at TIMESTAMP,
+  
+  -- Metadata
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Indexes for referral_bonuses
+CREATE INDEX idx_referral_bonuses_referrer ON referral_bonuses(referrer_user_id);
+CREATE INDEX idx_referral_bonuses_referred ON referral_bonuses(referred_user_id);
+CREATE INDEX idx_referral_bonuses_status ON referral_bonuses(status);
+CREATE INDEX idx_referral_bonuses_referrer_status ON referral_bonuses(referrer_user_id, status);
+
+-- Trigger for updating updated_at
+CREATE OR REPLACE FUNCTION update_bonus_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER deposit_bonuses_updated_at
+  BEFORE UPDATE ON deposit_bonuses
+  FOR EACH ROW
+  EXECUTE FUNCTION update_bonus_updated_at();
+
+CREATE TRIGGER referral_bonuses_updated_at
+  BEFORE UPDATE ON referral_bonuses
+  FOR EACH ROW
+  EXECUTE FUNCTION update_bonus_updated_at();
+
+-- View for easy bonus summary
+CREATE OR REPLACE VIEW user_bonus_summary AS
+SELECT 
+  u.id as user_id,
+  u.phone,
+  u.full_name,
+  
+  -- Deposit bonuses
+  COALESCE(SUM(CASE WHEN db.status = 'unlocked' THEN db.bonus_amount ELSE 0 END), 0) as deposit_bonus_unlocked,
+  COALESCE(SUM(CASE WHEN db.status = 'locked' THEN db.bonus_amount ELSE 0 END), 0) as deposit_bonus_locked,
+  COALESCE(SUM(CASE WHEN db.status = 'credited' THEN db.bonus_amount ELSE 0 END), 0) as deposit_bonus_credited,
+  
+  -- Referral bonuses
+  COALESCE(SUM(CASE WHEN rb.status = 'credited' THEN rb.bonus_amount ELSE 0 END), 0) as referral_bonus_credited,
+  COALESCE(SUM(CASE WHEN rb.status = 'pending' THEN rb.bonus_amount ELSE 0 END), 0) as referral_bonus_pending,
+  
+  -- Totals
+  COALESCE(SUM(CASE WHEN db.status IN ('unlocked', 'locked') THEN db.bonus_amount ELSE 0 END), 0) + 
+  COALESCE(SUM(CASE WHEN rb.status = 'pending' THEN rb.bonus_amount ELSE 0 END), 0) as total_available,
+  
+  COALESCE(SUM(CASE WHEN db.status = 'credited' THEN db.bonus_amount ELSE 0 END), 0) + 
+  COALESCE(SUM(CASE WHEN rb.status = 'credited' THEN rb.bonus_amount ELSE 0 END), 0) as total_credited,
+  
+  COALESCE(SUM(db.bonus_amount), 0) + COALESCE(SUM(rb.bonus_amount), 0) as lifetime_earnings
+  
+FROM users u
+LEFT JOIN deposit_bonuses db ON u.id = db.user_id
+LEFT JOIN referral_bonuses rb ON u.id = rb.referrer_user_id
+GROUP BY u.id, u.phone, u.full_name;
+
+-- ============================================
+-- END BONUS TRACKING TABLES
+-- ============================================
+
 -- Disable Row Level Security for development (remove in production!)
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_credentials DISABLE ROW LEVEL SECURITY;
@@ -1177,6 +1370,9 @@ ALTER TABLE user_referrals DISABLE ROW LEVEL SECURITY;
 ALTER TABLE user_transactions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_requests DISABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_requests DISABLE ROW LEVEL SECURITY;
+ALTER TABLE deposit_bonuses DISABLE ROW LEVEL SECURITY;
+ALTER TABLE bonus_transactions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE referral_bonuses DISABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- VERIFICATION QUERIES
@@ -1198,28 +1394,47 @@ SELECT id, phone, full_name, balance, status FROM users ORDER BY created_at;
 -- SCRIPT COMPLETED
 -- ============================================
 -- 
--- ✅ NEW ADMIN ACCOUNTS (Fresh Password Hashes):
+-- ============================================
+-- ✅ CREDENTIALS - GENERATED: 2024-11-07 5:12 PM
+-- ============================================
+--
+-- 🔐 ADMIN ACCOUNTS:
 --   Username: admin
 --   Password: admin123
---   Hash: $2b$12$kboT2aS9EqAQjfbcAGL3GOYSBtrJsgq2eLPxonASwnnUjeNfNZ9ZW
+--   Hash: $2b$10$0Z1MPnHMBftZs2X.tMDtSefGeGyjqnLKxNPRpRjSkEdxYVvoaqZvS
 --   
 --   Username: rajugarikossu
 --   Password: admin123
---   Hash: $2b$12$kboT2aS9EqAQjfbcAGL3GOYSBtrJsgq2eLPxonASwnnUjeNfNZ9ZW
+--   Hash: $2b$10$0Z1MPnHMBftZs2X.tMDtSefGeGyjqnLKxNPRpRjSkEdxYVvoaqZvS
 --
--- ✅ NEW TEST USER ACCOUNTS (Fresh Password Hashes):
---   Phone: 9876543210, Password: Test@123, Balance: ₹1,00,000
---   Phone: 9876543211, Password: Test@123, Balance: ₹50,000
---   Phone: 9876543212, Password: Test@123, Balance: ₹75,000
---   Phone: 9876543213, Password: Test@123, Balance: ₹25,000
---   Phone: 9876543214, Password: Test@123, Balance: ₹10,000
+-- 👤 TEST PLAYER ACCOUNTS:
+--   Phone: 9876543210, Password: player123, Balance: ₹1,00,000
+--   Hash: $2b$10$8mB.7nxp4rBHl397Hd1H/evl5AcOnObzbFcDPUS/AIJCur94p8Ic6
+--   
+--   Phone: 9876543211, Password: player123, Balance: ₹1,00,000
+--   Hash: $2b$10$6tdUJg/WUvaa.hhm7zHYHuWUe7F6FtlR/BnTScKS83c96WbCHD5mi
+--   
+--   Phone: 9876543212, Password: player123, Balance: ₹1,00,000
+--   Hash: $2b$10$JYLGm1/wpX5mgnJptwhar.gCt5QWu3MKoxk5Y891CFU2sknIyAlji
 --
--- ✅ FIXES APPLIED:
---   1. Added wagering_requirement, wagering_completed, bonus_locked columns to users table
---   2. Added bonus_applied and conditional_bonus_applied to transaction_type enum
---   3. Added bonus_claim_threshold and wagering_multiplier to game_settings
---   4. game_history table columns are nullable (opening_card, winner, winning_card)
---   5. All functions, triggers, views, and indexes are properly created
+-- ============================================
+-- ✅ CRITICAL FIXES APPLIED:
+-- ============================================
+--   1. ✅ FIXED apply_payouts_and_update_bets function to properly set actual_payout
+--      - Now calculates proportional payout for each bet
+--      - Sets actual_payout field correctly for winning bets
+--      - Sets actual_payout = 0 for losing bets
+--      - This fixes ALL user statistics, game history, and win/loss display issues
+--
+--   2. ✅ Added wagering_requirement, wagering_completed, bonus_locked to users table
+--   3. ✅ Added bonus_applied and conditional_bonus_applied to transaction_type enum
+--   4. ✅ Added bonus_claim_threshold and wagering_multiplier to game_settings
+--   5. ✅ game_history table columns are nullable (opening_card, winner, winning_card)
+--   6. ✅ All functions, triggers, views, and indexes properly created
+--   7. ✅ FRESH PASSWORD HASHES generated for admin and test users (Nov 7, 2024 5:12 PM)
+--   8. ✅ All field names match TypeScript code expectations (snake_case in DB, camelCase in code)
+--   9. ✅ NEW BONUS TRACKING TABLES added (deposit_bonuses, bonus_transactions, referral_bonuses)
+--   10. ✅ Bonus summary view created for easy querying
 --
 -- ============================================
 

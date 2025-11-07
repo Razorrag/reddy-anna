@@ -19,6 +19,8 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
   const [countdown, setCountdown] = useState(5);
   const [showConfetti, setShowConfetti] = useState(true);
   const [localWinAmount, setLocalWinAmount] = useState<number | null>(null);
+  const [totalBetAmount, setTotalBetAmount] = useState<number>(0);
+  const [netProfit, setNetProfit] = useState<number | null>(null);
 
   useEffect(() => {
     if (!winner) return;
@@ -46,11 +48,17 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
     };
   }, [winner, onComplete]);
 
-  // Listen for celebration event to capture per-user win amount
+  // Listen for celebration event to capture per-user win amount and calculate net profit
   useEffect(() => {
     const handler = (e: any) => {
       if (e?.detail?.localWinAmount != null) {
-        setLocalWinAmount(Number(e.detail.localWinAmount) || 0);
+        const payout = Number(e.detail.localWinAmount) || 0;
+        const bet = Number(e.detail.totalBetAmount) || 0;
+        const profit = payout - bet;
+        
+        setLocalWinAmount(payout);
+        setTotalBetAmount(bet);
+        setNetProfit(profit);
       }
     };
     window.addEventListener('game-complete-celebration', handler as EventListener);
@@ -140,7 +148,7 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
               <h1 className={`text-6xl font-black mb-4 bg-gradient-to-r ${winnerGradient} bg-clip-text text-transparent`}>
                 {winner === 'andar' 
                   ? 'ANDAR WON!' 
-                  : round === 3 
+                  : round >= 3 
                   ? 'BAHAR WON!' 
                   : 'BABA WON!'}
               </h1>
@@ -159,15 +167,37 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
               transition={{ delay: 0.7 }}
               className="bg-black/40 rounded-xl p-6 mb-6 border border-gray-700"
             >
-            {localWinAmount != null ? (
-              <div className="text-center">
-                {localWinAmount > 0 ? (
-                  <div>
-                    <div className="text-3xl font-extrabold text-gold mb-1">You won</div>
-                    <div className="text-5xl font-black text-white">₹{localWinAmount.toLocaleString('en-IN')}</div>
-                  </div>
+            {netProfit != null ? (
+              <div className="text-center space-y-3">
+                {netProfit > 0 ? (
+                  <>
+                    <div className="text-3xl font-extrabold text-gold mb-1">🎉 You Won!</div>
+                    <div className="text-5xl font-black text-green-400">+₹{netProfit.toLocaleString('en-IN')}</div>
+                    <div className="text-sm text-white/60 space-y-1 pt-2 border-t border-gray-600">
+                      <div className="flex justify-between items-center">
+                        <span>Total Payout:</span>
+                        <span className="font-semibold text-white">₹{localWinAmount?.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span>Your Bet:</span>
+                        <span className="font-semibold text-white">₹{totalBetAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-gray-600">
+                        <span className="text-gold font-bold">Net Profit:</span>
+                        <span className="font-bold text-green-400">+₹{netProfit.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  </>
+                ) : netProfit === 0 ? (
+                  <>
+                    <div className="text-2xl font-semibold text-yellow-400">Bet Refunded</div>
+                    <div className="text-lg text-white/60">Your bet of ₹{totalBetAmount.toLocaleString('en-IN')} was returned</div>
+                  </>
                 ) : (
-                  <div className="text-2xl font-semibold text-gray-300">No winnings this round</div>
+                  <>
+                    <div className="text-2xl font-semibold text-red-400">Better luck next time!</div>
+                    <div className="text-lg text-white/60">Lost: ₹{totalBetAmount.toLocaleString('en-IN')}</div>
+                  </>
                 )}
               </div>
             ) : (

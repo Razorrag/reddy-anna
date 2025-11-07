@@ -96,9 +96,23 @@ export function useAdminStats() {
       const dailyAnalytics = (analyticsResponse as any).success ? (analyticsResponse as any).data : null;
       const realtimeStats = (realtimeResponse as any).success ? (realtimeResponse as any).data : null;
       const paymentRequests = (paymentsResponse as any).success ? (paymentsResponse as any).data : [];
-      const allUsers = (allUsersResponse as any).success && (allUsersResponse as any).data?.users 
-        ? (allUsersResponse as any).data.users 
-        : [];
+      let allUsers: any[] = [];
+      if ((allUsersResponse as any).success) {
+        const responseBody = allUsersResponse as any;
+        if (Array.isArray(responseBody.users)) {
+          allUsers = responseBody.users;
+        } else if (responseBody.data?.users && Array.isArray(responseBody.data.users)) {
+          allUsers = responseBody.data.users;
+        } else if (Array.isArray(responseBody.data)) {
+          allUsers = responseBody.data;
+        }
+      }
+
+      console.log('🧮 Users array selected for calculation:', {
+        length: allUsers.length,
+        keys: allUsers.length > 0 ? Object.keys(allUsers[0]) : [],
+        rawResponseKeys: Object.keys(allUsersResponse as any ?? {})
+      });
 
       const pendingDeposits = Array.isArray(paymentRequests) 
         ? paymentRequests.filter((r: any) => r.request_type === 'deposit' && r.status === 'pending').length
@@ -107,29 +121,52 @@ export function useAdminStats() {
         ? paymentRequests.filter((r: any) => r.request_type === 'withdrawal' && r.status === 'pending').length
         : 0;
 
+      // 🔍 DEBUG: Log RAW user data received from backend
+      console.log('📥 Frontend received ALL users from backend:', {
+        totalUsers: allUsers.length,
+        allUsersData: allUsers.map((u: any) => ({
+          id: u.id,
+          totalWinnings: u.totalWinnings || u.total_winnings || 0,
+          totalLosses: u.totalLosses || u.total_losses || 0,
+          gamesPlayed: u.gamesPlayed || u.games_played || 0
+        }))
+      });
+
       // Calculate financial statistics from all users
       // ✅ FIX: Use snake_case field names from database
       const totalWinnings = allUsers.reduce((sum: number, u: any) => {
-        const winnings = u.total_winnings || u.totalWinnings || 0;
-        return sum + (typeof winnings === 'string' ? parseFloat(winnings) : winnings);
+        // Try multiple field name formats
+        const winnings = u.totalWinnings ?? u.total_winnings ?? 0;
+        const parsedWinnings = typeof winnings === 'string' ? parseFloat(winnings) : (typeof winnings === 'number' ? winnings : 0);
+        const finalWinnings = isNaN(parsedWinnings) ? 0 : parsedWinnings;
+        console.log(`  User ${u.id}: adding ${finalWinnings} winnings (raw: ${winnings}, type: ${typeof winnings})`);
+        return sum + finalWinnings;
       }, 0);
+      
       const totalLosses = allUsers.reduce((sum: number, u: any) => {
-        const losses = u.total_losses || u.totalLosses || 0;
-        return sum + (typeof losses === 'string' ? parseFloat(losses) : losses);
+        // Try multiple field name formats
+        const losses = u.totalLosses ?? u.total_losses ?? 0;
+        const parsedLosses = typeof losses === 'string' ? parseFloat(losses) : (typeof losses === 'number' ? losses : 0);
+        const finalLosses = isNaN(parsedLosses) ? 0 : parsedLosses;
+        console.log(`  User ${u.id}: adding ${finalLosses} losses (raw: ${losses}, type: ${typeof losses})`);
+        return sum + finalLosses;
       }, 0);
+      
       const netHouseProfit = totalLosses - totalWinnings;
+      
+      console.log('🔢 Calculation breakdown:', {
+        totalWinningsCalculated: totalWinnings,
+        totalLossesCalculated: totalLosses,
+        formula: `${totalLosses} - ${totalWinnings} = ${netHouseProfit}`,
+        netHouseProfit
+      });
 
       // 📊 DEBUG: Log profit/loss calculation
-      console.log('💰 Admin Stats - Financial Calculation:', {
+      console.log('💰 Admin Stats - Financial Calculation RESULT:', {
         totalUsers: allUsers.length,
         totalWinnings,
         totalLosses,
-        netHouseProfit,
-        sampleUser: allUsers[0] ? {
-          id: allUsers[0].id?.slice(0, 8),
-          total_winnings: allUsers[0].total_winnings,
-          total_losses: allUsers[0].total_losses
-        } : 'No users'
+        netHouseProfit
       });
 
       const combinedStats: AdminStats = {

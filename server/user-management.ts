@@ -97,11 +97,21 @@ export const getUserDetails = async (userId: string): Promise<UserManagementResp
       return { success: false, error: 'User not found' };
     }
 
-    // Format response
+    // Format response with ALL user fields including statistics
     const userResponse = {
       id: user.id,
+      phone: user.phone,
       username: user.phone, // Use phone as username since that's our identifier
-      balance: user.balance,
+      fullName: user.full_name,
+      role: user.role,
+      status: user.status,
+      balance: parseFloat(user.balance as any),
+      totalWinnings: parseFloat(user.total_winnings as any || '0'),
+      totalLosses: parseFloat(user.total_losses as any || '0'),
+      gamesPlayed: user.games_played || 0,
+      gamesWon: user.games_won || 0,
+      phoneVerified: user.phone_verified,
+      lastLogin: user.last_login,
       createdAt: user.created_at,
       updatedAt: user.updated_at
     };
@@ -196,6 +206,18 @@ export const getAllUsers = async (filters: UserFilters = {}): Promise<UserManage
     // Get all users from storage
     const allUsers = await storage.getAllUsers();
     
+    // 🔍 DEBUG: Log what we got from database
+    console.log(`📊 getAllUsers - Fetched ${allUsers.length} users from database`);
+    if (allUsers.length > 0) {
+      console.log(`📊 Sample user data:`, {
+        id: allUsers[0].id,
+        total_winnings: allUsers[0].total_winnings,
+        total_losses: allUsers[0].total_losses,
+        games_played: allUsers[0].games_played,
+        games_won: allUsers[0].games_won
+      });
+    }
+    
     if (!allUsers || allUsers.length === 0) {
       return { success: true, users: [], total: 0 };
     }
@@ -288,6 +310,17 @@ export const getAllUsers = async (filters: UserFilters = {}): Promise<UserManage
       createdAt: u.created_at,
       updatedAt: u.updated_at
     }));
+
+    // 🔍 DEBUG: Log formatted output
+    if (formattedUsers.length > 0) {
+      console.log(`📊 Formatted user data (sending to frontend):`, {
+        id: formattedUsers[0].id,
+        totalWinnings: formattedUsers[0].totalWinnings,
+        totalLosses: formattedUsers[0].totalLosses,
+        gamesPlayed: formattedUsers[0].gamesPlayed,
+        gamesWon: formattedUsers[0].gamesWon
+      });
+    }
 
     return { success: true, users: formattedUsers, total };
   } catch (error) {

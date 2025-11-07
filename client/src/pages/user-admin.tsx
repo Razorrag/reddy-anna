@@ -5,17 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import {
   Search,
-  Filter,
   Ban,
   CheckCircle,
   XCircle,
   UserCheck,
-  Mail,
   Phone,
   Trophy,
   CreditCard,
   Activity,
-  Plus,
   RefreshCw,
   Loader2,
   UserPlus
@@ -28,10 +25,8 @@ import {
   formatCurrency,
   getStatusBadgeClass,
   formatMobileNumber,
-  validateMobileNumber,
   type UserAdminFilters,
   type UserBalanceUpdate,
-  type UserStatusUpdate,
   createUserManually
 } from "@/services/userAdminService";
 import { type AdminUser } from "@/types/game";
@@ -443,55 +438,73 @@ export default function UserAdmin() {
             "grid grid-cols-1 md:grid-cols-3 gap-6 transition-all duration-1000",
             isLoaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           )}>
-            <Card className="bg-black/40 border-green-500/30 backdrop-blur-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-green-400">Total Winnings</CardTitle>
-                <Trophy className="h-4 w-4 text-green-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-400">
-                  {formatCurrency(users.reduce((sum, u) => sum + (u.totalWinnings || 0), 0))}
-                </div>
-                <p className="text-xs text-gray-400">
-                  All users combined
-                </p>
-              </CardContent>
-            </Card>
+            {/* Helper function for safe number parsing */}
+            {(() => {
+              const safeNumber = (value: any): number => {
+                if (typeof value === 'number') return value;
+                if (typeof value === 'string') {
+                  const parsed = parseFloat(value);
+                  return isNaN(parsed) ? 0 : parsed;
+                }
+                return 0;
+              };
+              
+              const totalWinnings = users.reduce((sum, u) => sum + safeNumber(u.totalWinnings), 0);
+              const totalLosses = users.reduce((sum, u) => sum + safeNumber(u.totalLosses), 0);
+              const netProfit = totalLosses - totalWinnings;
+              
+              return (
+                <>
+                <Card className="bg-black/40 border-green-500/30 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-green-400">Total Winnings</CardTitle>
+                    <Trophy className="h-4 w-4 text-green-400" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-400">
+                      {formatCurrency(totalWinnings)}
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      All users combined
+                    </p>
+                  </CardContent>
+                </Card>
 
-            <Card className="bg-black/40 border-red-500/30 backdrop-blur-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-red-400">Total Losses</CardTitle>
-                <Activity className="h-4 h-4 text-red-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-400">
-                  {formatCurrency(users.reduce((sum, u) => sum + (u.totalLosses || 0), 0))}
-                </div>
-                <p className="text-xs text-gray-400">
-                  All users combined
-                </p>
-              </CardContent>
-            </Card>
+                <Card className="bg-black/40 border-red-500/30 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-red-400">Total Losses</CardTitle>
+                    <Activity className="h-4 h-4 text-red-400" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-red-400">
+                      {formatCurrency(totalLosses)}
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      All users combined
+                    </p>
+                  </CardContent>
+                </Card>
 
-            <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gold">Net House Profit</CardTitle>
-                <CreditCard className="h-4 w-4 text-gold" />
-              </CardHeader>
-              <CardContent>
-                <div className={cn(
-                  "text-2xl font-bold",
-                  users.reduce((sum, u) => sum + ((u.totalLosses || 0) - (u.totalWinnings || 0)), 0) >= 0 
-                    ? "text-green-400" 
-                    : "text-red-400"
-                )}>
-                  {formatCurrency(users.reduce((sum, u) => sum + ((u.totalLosses || 0) - (u.totalWinnings || 0)), 0))}
-                </div>
-                <p className="text-xs text-gray-400">
-                  House earnings (losses - winnings)
-                </p>
-              </CardContent>
-            </Card>
+                <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-gold">Net House Profit</CardTitle>
+                    <CreditCard className="h-4 w-4 text-gold" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className={cn(
+                      "text-2xl font-bold",
+                      netProfit >= 0 ? "text-green-400" : "text-red-400"
+                    )}>
+                      {formatCurrency(netProfit)}
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      House earnings (losses - winnings)
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+              );
+            })()}
           </div>
         </div>
 
@@ -593,7 +606,7 @@ export default function UserAdmin() {
                         <div>
                           <span className="text-purple-300">Win Rate:</span>
                           <span className="text-green-400 ml-2 font-semibold">
-                            {user.gamesPlayed > 0 ? Math.round((user.gamesWon / user.gamesPlayed) * 100) : 0}%
+                            {user.gamesPlayed && user.gamesPlayed > 0 ? Math.round(((user.gamesWon || 0) / user.gamesPlayed) * 100) : 0}%
                           </span>
                         </div>
                       </div>

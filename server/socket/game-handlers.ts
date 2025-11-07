@@ -244,6 +244,15 @@ export async function handlePlayerBet(client: WSClient, data: any) {
           status: 'pending'
         });
         console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
+        
+        // ✅ NEW: Track wagering for deposit bonuses
+        try {
+          await storage.updateDepositBonusWagering(userId, amount);
+          console.log(`📊 Wagering tracked: ${userId} - ₹${amount} towards bonus unlock`);
+        } catch (wageringError) {
+          console.error('⚠️ Error tracking wagering:', wageringError);
+          // Don't fail bet if wagering tracking fails
+        }
       } catch (error) {
         console.error('❌ CRITICAL: Error storing bet in database:', error);
         

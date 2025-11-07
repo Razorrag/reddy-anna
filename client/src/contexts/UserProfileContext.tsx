@@ -64,8 +64,19 @@ export interface GameHistoryEntry {
     side: 'andar' | 'bahar';
     amount: number;
     round: number;
-  };
-  result: 'win' | 'loss';
+  } | null;
+  yourBets?: Array<{
+    id: string;
+    side: 'andar' | 'bahar';
+    amount: number;
+    round: number;
+    payout: number;
+    status: string;
+  }>;
+  yourTotalBet: number;
+  yourTotalPayout: number;
+  yourNetProfit: number;
+  result: 'win' | 'loss' | 'no_bet';
   payout: number;
   totalCards: number;
   round: number;
@@ -536,7 +547,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     ]);
   };
 
-  // Initialize data on mount (only for players, not admins)
+  // ✅ OPTIMIZED: Initialize essential data only, lazy load the rest
   useEffect(() => {
     const initializeData = async () => {
       const isLoggedIn = localStorage.getItem('isLoggedIn');
@@ -545,10 +556,13 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (isLoggedIn === 'true' && userStr) {
         try {
           const userData = JSON.parse(userStr);
-          // Only fetch profile data for players, not admins
+          // Only fetch essential data for players (not all 6 endpoints)
           if (userData.role === 'player') {
-            console.log('✅ Initializing player profile data');
-            await refreshData();
+            console.log('✅ Initializing player profile data (lazy load)');
+            // Fetch only essential data - others will load when tabs are opened
+            await fetchUserProfile();
+            await fetchBonusInfo();
+            // Don't fetch transactions/history/analytics until user navigates to those tabs
           } else {
             console.log('ℹ️ Skipping profile data fetch for admin user');
           }
@@ -621,34 +635,9 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     }));
   };
 
-  // Auto-refresh bonus info every 30 seconds (skip for admin users)
-  useEffect(() => {
-    // Check if user is admin
-    const userStr = localStorage.getItem('user');
-    let isAdmin = false;
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        isAdmin = user.role === 'admin' || user.role === 'super_admin';
-      } catch (e) {
-        // Continue if parsing fails
-      }
-    }
-    
-    // Don't set up interval for admins
-    if (isAdmin) {
-      return;
-    }
-    
-    const interval = setInterval(() => {
-      const isLoggedIn = localStorage.getItem('isLoggedIn');
-      if (isLoggedIn === 'true') {
-        fetchBonusInfo();
-      }
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, []);
+  // ✅ REMOVED: Auto-refresh bonus info interval
+  // WebSocket provides real-time bonus updates when they change
+  // No need for polling - reduces API calls and improves performance
 
   const value = {
     state,

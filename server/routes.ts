@@ -2532,7 +2532,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Pending payment requests retrieval error:', error);
       res.status(500).json({
         success: false,
-        error: 'Pending payment requests retrieval failed'
+        error: 'Failed to retrieve pending payment requests'
+      });
+    }
+  });
+
+  // Admin: Get payment request history with filters
+  app.get("/api/admin/payment-requests/history", apiLimiter, async (req, res) => {
+    try {
+      const { status, type, limit = '100', offset = '0', startDate, endDate } = req.query;
+      
+      const filters: any = {
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      };
+      
+      if (status && status !== 'all') filters.status = status;
+      if (type && type !== 'all') filters.type = type;
+      if (startDate) filters.startDate = new Date(startDate as string);
+      if (endDate) filters.endDate = new Date(endDate as string);
+      
+      const requests = await storage.getAllPaymentRequests(filters);
+      
+      res.json({
+        success: true,
+        data: requests,
+        total: requests.length
+      });
+    } catch (error) {
+      console.error('Payment request history retrieval error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve payment request history'
       });
     }
   });
@@ -2576,6 +2607,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
             request.amount,
             req.user.id
           );
+          
+          // ✅ NEW: Create deposit bonus record for tracking
+          try {
+            const depositAmount = parseFloat(request.amount);
+            const bonusPercentage = 5; // 5% deposit bonus
+            const bonusAmount = depositAmount * (bonusPercentage / 100);
+            const wageringMultiplier = 10; // 10x wagering requirement
+            const wageringRequired = bonusAmount * wageringMultiplier;
+            
+            await storage.createDepositBonus({
+              userId: request.user_id,
+              depositRequestId: id,
+              depositAmount,
+              bonusAmount,
+              bonusPercentage,
+              wageringRequired
+            });
+            
+            console.log(`✅ Deposit bonus created: ₹${bonusAmount} for user ${request.user_id} (${bonusPercentage}% of ₹${depositAmount})`);
+          } catch (bonusError) {
+            console.error(`⚠️ Error creating deposit bonus:`, bonusError);
+            // Don't fail approval if bonus creation fails
+          }
           
           // Check if bonus threshold reached for auto-credit (if applicable)
           try {
@@ -3148,6 +3202,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================
+  // NEW BONUS TRACKING API ENDPOINTS
+  // ============================================
+
+  // Get Bonus Summary (Cumulative)
+  app.get("/api/user/bonus-summary", generalLimiter, async (req, res) => {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+      
+      const userId = req.user.id;
+      const summary = await storage.getBonusSummary(userId);
+      
+      res.json({
+        success: true,
+        data: {
+          depositBonuses: {
+            unlocked: summary.depositBonusUnlocked,
+            locked: summary.depositBonusLocked,
+            credited: summary.depositBonusCredited,
+            total: summary.depositBonusUnlocked + summary.depositBonusLocked + summary.depositBonusCredited
+          },
+          referralBonuses: {
+            pending: summary.referralBonusPending,
+            credited: summary.referralBonusCredited,
+            total: summary.referralBonusPending + summary.referralBonusCredited
+          },
+          totals: {
+            available: summary.totalAvailable,
+            credited: summary.totalCredited,
+            lifetime: summary.lifetimeEarnings
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Bonus summary error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve bonus summary'
+      });
+    }
+  });
+
+  // Get Deposit Bonuses (Detailed List)
+  app.get("/api/user/deposit-bonuses", generalLimiter, async (req, res) => {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+      
+      const userId = req.user.id;
+      const bonuses = await storage.getDepositBonuses(userId);
+      
+      // Transform to camelCase for frontend
+      const formattedBonuses = bonuses.map(bonus => ({
+        id: bonus.id,
+        depositRequestId: bonus.deposit_request_id,
+        depositAmount: parseFloat(bonus.deposit_amount),
+        bonusAmount: parseFloat(bonus.bonus_amount),
+        bonusPercentage: parseFloat(bonus.bonus_percentage),
+        wageringRequired: parseFloat(bonus.wagering_required),
+        wageringCompleted: parseFloat(bonus.wagering_completed),
+        wageringProgress: parseFloat(bonus.wagering_progress),
+        status: bonus.status,
+        lockedAt: bonus.locked_at,
+        unlockedAt: bonus.unlocked_at,
+        creditedAt: bonus.credited_at,
+        expiredAt: bonus.expired_at,
+        notes: bonus.notes,
+        createdAt: bonus.created_at,
+        updatedAt: bonus.updated_at
+      }));
+      
+      res.json({
+        success: true,
+        data: formattedBonuses
+      });
+    } catch (error) {
+      console.error('Deposit bonuses error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve deposit bonuses'
+      });
+    }
+  });
+
+  // Get Referral Bonuses
+  app.get("/api/user/referral-bonuses", generalLimiter, async (req, res) => {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+      
+      const userId = req.user.id;
+      const bonuses = await storage.getReferralBonuses(userId);
+      
+      // Transform to camelCase for frontend
+      const formattedBonuses = bonuses.map(bonus => ({
+        id: bonus.id,
+        referrerUserId: bonus.referrer_user_id,
+        referredUserId: bonus.referred_user_id,
+        referredUsername: bonus.referred_user?.phone || bonus.referred_user?.full_name || 'Unknown',
+        referralId: bonus.referral_id,
+        depositAmount: parseFloat(bonus.deposit_amount),
+        bonusAmount: parseFloat(bonus.bonus_amount),
+        bonusPercentage: parseFloat(bonus.bonus_percentage),
+        status: bonus.status,
+        creditedAt: bonus.credited_at,
+        expiredAt: bonus.expired_at,
+        notes: bonus.notes,
+        createdAt: bonus.created_at,
+        updatedAt: bonus.updated_at
+      }));
+      
+      res.json({
+        success: true,
+        data: formattedBonuses
+      });
+    } catch (error) {
+      console.error('Referral bonuses error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve referral bonuses'
+      });
+    }
+  });
+
+  // Get Bonus Transaction History
+  app.get("/api/user/bonus-transactions", generalLimiter, async (req, res) => {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+      
+      const userId = req.user.id;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      const transactions = await storage.getBonusTransactions(userId, { limit, offset });
+      
+      // Transform to camelCase for frontend
+      const formattedTransactions = transactions.map(tx => ({
+        id: tx.id,
+        userId: tx.user_id,
+        bonusType: tx.bonus_type,
+        bonusSourceId: tx.bonus_source_id,
+        amount: parseFloat(tx.amount),
+        balanceBefore: tx.balance_before ? parseFloat(tx.balance_before) : null,
+        balanceAfter: tx.balance_after ? parseFloat(tx.balance_after) : null,
+        action: tx.action,
+        description: tx.description,
+        metadata: tx.metadata,
+        createdAt: tx.created_at
+      }));
+      
+      res.json({
+        success: true,
+        data: formattedTransactions,
+        hasMore: transactions.length === limit
+      });
+    } catch (error) {
+      console.error('Bonus transactions error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve bonus transactions'
+      });
+    }
+  });
+
   // Enhanced User Game History Route
   app.get("/api/user/game-history", generalLimiter, async (req, res) => {
     try {
@@ -3464,6 +3688,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         success: false,
         error: 'Referred users retrieval failed'
+      });
+    }
+  });
+
+  // Admin endpoint to get specific user's game history
+  app.get("/api/admin/users/:userId/game-history", generalLimiter, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { limit = 20, offset = 0 } = req.query;
+      
+      // Get user's game history with bet details
+      const gameHistory = await storage.getUserGameHistory(userId);
+
+      if (!gameHistory || gameHistory.length === 0) {
+        return res.json({
+          success: true,
+          data: {
+            games: [],
+            total: 0
+          }
+        });
+      }
+
+      // Transform to match expected format
+      const enhancedGameHistory = gameHistory.map(game => ({
+        id: game.id,
+        gameId: game.gameId,
+        openingCard: game.openingCard,
+        winner: game.winner,
+        winningCard: game.winningCard,
+        yourBet: game.yourBet || (game.yourBets && game.yourBets.length > 0 ? {
+          side: game.yourBets[0].side,
+          amount: game.yourTotalBet || game.yourBets[0].amount,
+          round: game.yourBets[0].round
+        } : null),
+        yourBets: game.yourBets || [],
+        yourTotalBet: game.yourTotalBet || 0,
+        yourTotalPayout: game.yourTotalPayout || game.payout || 0,
+        yourNetProfit: game.yourNetProfit || 0,
+        result: game.result || 'no_bet',
+        payout: game.payout || game.yourTotalPayout || 0,
+        totalCards: game.totalCards,
+        round: game.round || game.winningRound || 1,
+        dealtCards: game.dealtCards || [],
+        createdAt: game.createdAt
+      }));
+
+      // Apply pagination
+      const paginatedHistory = enhancedGameHistory.slice(
+        parseInt(offset as string),
+        parseInt(offset as string) + parseInt(limit as string)
+      );
+
+      res.json({
+        success: true,
+        data: {
+          games: paginatedHistory,
+          total: enhancedGameHistory.length
+        }
+      });
+    } catch (error) {
+      console.error('Admin user game history error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve user game history'
       });
     }
   });
@@ -4878,15 +5167,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const stats = await storage.getDailyStats(today);
-        res.json({ success: true, data: stats });
+        
+        // Transform snake_case to camelCase for frontend
+        const transformedStats = stats ? {
+          date: stats.date,
+          totalGames: stats.total_games,
+          totalBets: parseFloat(stats.total_bets as any) || 0,
+          totalPayouts: parseFloat(stats.total_payouts as any) || 0,
+          totalRevenue: parseFloat(stats.total_revenue as any) || 0,
+          profitLoss: parseFloat(stats.profit_loss as any) || 0,
+          profitLossPercentage: stats.profit_loss_percentage || 0,
+          uniquePlayers: stats.unique_players || 0,
+          peakBetsHour: stats.peak_bets_hour,
+          createdAt: stats.created_at,
+          updatedAt: stats.updated_at
+        } : null;
+        
+        res.json({ success: true, data: transformedStats });
       } else if (period === 'monthly') {
         const monthYear = month ? month as string : new Date().toISOString().slice(0, 7); // YYYY-MM
         const stats = await storage.getMonthlyStats(monthYear);
-        res.json({ success: true, data: stats });
+        
+        // Transform snake_case to camelCase for frontend
+        const transformedStats = stats ? {
+          monthYear: stats.month_year,
+          totalGames: stats.total_games,
+          totalBets: parseFloat(stats.total_bets as any) || 0,
+          totalPayouts: parseFloat(stats.total_payouts as any) || 0,
+          totalRevenue: parseFloat(stats.total_revenue as any) || 0,
+          profitLoss: parseFloat(stats.profit_loss as any) || 0,
+          profitLossPercentage: stats.profit_loss_percentage || 0,
+          uniquePlayers: stats.unique_players || 0,
+          createdAt: stats.created_at,
+          updatedAt: stats.updated_at
+        } : null;
+        
+        res.json({ success: true, data: transformedStats });
       } else if (period === 'yearly') {
         const yearNum = year ? parseInt(year as string) : new Date().getFullYear();
         const stats = await storage.getYearlyStats(yearNum);
-        res.json({ success: true, data: stats });
+        
+        // Transform snake_case to camelCase for frontend
+        const transformedStats = stats ? {
+          year: stats.year,
+          totalGames: stats.total_games,
+          totalBets: parseFloat(stats.total_bets as any) || 0,
+          totalPayouts: parseFloat(stats.total_payouts as any) || 0,
+          totalRevenue: parseFloat(stats.total_revenue as any) || 0,
+          profitLoss: parseFloat(stats.profit_loss as any) || 0,
+          profitLossPercentage: stats.profit_loss_percentage || 0,
+          uniquePlayers: stats.unique_players || 0,
+          createdAt: stats.created_at,
+          updatedAt: stats.updated_at
+        } : null;
+        
+        res.json({ success: true, data: transformedStats });
       } else {
         res.status(400).json({ success: false, error: 'Invalid period' });
       }
@@ -5016,6 +5351,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const stats = statsMap.get(history.game_id);
         const cards = cardsMap.get(history.game_id) || [];
         
+        // 🔍 DEBUG: Log stats for this game
+        console.log(`📊 Processing game ${history.game_id}:`, {
+          hasStats: !!stats,
+          statsKeys: stats ? Object.keys(stats) : [],
+          profit_loss: stats?.profit_loss,
+          house_payout: stats?.house_payout,
+          total_winnings: stats?.total_winnings
+        });
+        
         return {
           id: history.id,
           gameId: history.game_id,
@@ -5045,7 +5389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           houseEarnings: stats ? parseFloat(stats.house_earnings || '0') : 0,
           profitLoss: stats ? parseFloat(stats.profit_loss || '0') : 0,
           profitLossPercentage: stats ? parseFloat(stats.profit_loss_percentage || '0') : 0,
-          housePayout: stats ? parseFloat(stats.house_payout || '0') : (parseFloat(history.total_payouts || '0') || 0),
+          housePayout: stats ? parseFloat(stats.total_winnings || '0') : (parseFloat(history.total_payouts || '0') || 0),
           gameDuration: stats ? (stats.game_duration || 0) : 0,
           uniquePlayers: stats ? (stats.unique_players || 0) : 0,
         };
@@ -5092,6 +5436,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limitNum = parseInt(limit as string);
       const startIndex = (pageNum - 1) * limitNum;
       const paginatedStats = gameStats.slice(startIndex, startIndex + limitNum);
+      
+      // 🔍 DEBUG: Log what we're sending
+      if (paginatedStats.length > 0) {
+        console.log('📊 Game history - sending first game:', {
+          gameId: paginatedStats[0].gameId,
+          totalBets: paginatedStats[0].totalBets,
+          totalWinnings: paginatedStats[0].totalWinnings,
+          housePayout: paginatedStats[0].housePayout,
+          profitLoss: paginatedStats[0].profitLoss,
+          profitLossPercentage: paginatedStats[0].profitLossPercentage
+        });
+      }
       
       res.json({
         success: true,

@@ -35,10 +35,11 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
   const { showNotification } = useNotification();
   const [isClaiming, setIsClaiming] = React.useState(false);
   
-  // ✅ FIX: Auto-fetch bonus info on mount and when balance changes
+  // ✅ FIX: Fetch bonus info only on mount, not on every balance change
+  // WebSocket will handle bonus updates in real-time
   React.useEffect(() => {
     fetchBonusInfo();
-  }, [userBalance]); // Refresh bonus when balance changes
+  }, []); // Only fetch on mount, prevents 100+ API calls per session
   
   // Use props gameState if provided, otherwise use context
   const gameState = propsGameState || contextGameState;

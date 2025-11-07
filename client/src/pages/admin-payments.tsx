@@ -31,6 +31,7 @@ interface PaymentRequest {
 }
 
 export default function AdminPayments() {
+  const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -39,7 +40,7 @@ export default function AdminPayments() {
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const fetchPaymentRequests = async () => {
+  const fetchPendingRequests = async () => {
     try {
       setLoadingRequests(true);
       const response = await apiClient.get('/admin/payment-requests/pending') as { success?: boolean; data?: PaymentRequest[] };
@@ -78,18 +79,72 @@ export default function AdminPayments() {
     }
   };
 
+  const fetchHistory = async () => {
+    try {
+      setLoadingRequests(true);
+      const params = new URLSearchParams({
+        status: statusFilter,
+        type: typeFilter,
+        limit: '100',
+        offset: '0'
+      });
+      const response = await apiClient.get(`/admin/payment-requests/history?${params}`) as { success?: boolean; data?: PaymentRequest[] };
+      
+      if (response.success !== false) {
+        const requests = response.data || [];
+        const formattedRequests = requests.map((req: any) => ({
+          id: req.id,
+          user_id: req.user_id,
+          phone: req.phone || req.user_id || 'N/A',
+          full_name: req.full_name || req.phone || 'Unknown User',
+          request_type: req.request_type || req.type || 'deposit',
+          amount: parseFloat(req.amount) || 0,
+          payment_method: req.payment_method || 'N/A',
+          status: req.status || 'pending',
+          created_at: req.created_at || new Date().toISOString(),
+          updated_at: req.updated_at,
+          admin_id: req.admin_id,
+          admin_notes: req.admin_notes
+        }));
+        setPaymentRequests(formattedRequests);
+      } else {
+        setPaymentRequests([]);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch payment history:', error);
+      setPaymentRequests([]);
+    } finally {
+      setLoadingRequests(false);
+      setIsLoaded(true);
+    }
+  };
+
   useEffect(() => {
-    fetchPaymentRequests();
+    if (activeTab === 'pending') {
+      fetchPendingRequests();
+    } else {
+      fetchHistory();
+    }
     
     // Auto-refresh every 10 seconds
-    const interval = setInterval(fetchPaymentRequests, 10000);
+    const interval = setInterval(() => {
+      if (activeTab === 'pending') {
+        fetchPendingRequests();
+      } else {
+        fetchHistory();
+      }
+    }, 10000);
     
     // Real-time refresh on admin notifications
     const handleAdminNotification = (evt: Event) => {
       const msg: any = (evt as CustomEvent).detail;
       if (!msg || msg.type !== 'admin_notification') return;
       if (msg.event === 'new_request' || msg.event === 'payment_request_created' || msg.event === 'request_status_update' || msg.event === 'request_processed') {
-        fetchPaymentRequests();
+        if (activeTab === 'pending') {
+          fetchPendingRequests();
+        } else {
+          fetchHistory();
+        }
       }
     };
     window.addEventListener('admin_notification', handleAdminNotification as EventListener);
@@ -98,7 +153,7 @@ export default function AdminPayments() {
       clearInterval(interval);
       window.removeEventListener('admin_notification', handleAdminNotification as EventListener);
     };
-  }, []);
+  }, [activeTab, statusFilter, typeFilter]);
 
   const formatCurrency = (amount: number) => {
     return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -139,10 +194,14 @@ export default function AdminPayments() {
       await apiClient.patch(`/admin/payment-requests/${requestId}/approve`);
       
       // Show success message
-      alert(`✅ ${requestType} approved successfully! User balance updated.`);
+      alert(`✅ ${requestType} approved successfully. New balance will be reflected immediately.`);
       
       // Refresh the request list
-      await fetchPaymentRequests();
+      if (activeTab === 'pending') {
+        await fetchPendingRequests();
+      } else {
+        await fetchHistory();
+      }
     } catch (error: any) {
       console.error('Failed to approve request:', error);
       alert(`❌ Failed to approve: ${error.message || 'Unknown error'}`);
@@ -167,7 +226,11 @@ export default function AdminPayments() {
       alert(`✅ ${requestType} rejected successfully.`);
       
       // Refresh the request list
-      await fetchPaymentRequests();
+      if (activeTab === 'pending') {
+        await fetchPendingRequests();
+      } else {
+        await fetchHistory();
+      }
     } catch (error: any) {
       console.error('Failed to reject request:', error);
       alert(`❌ Failed to reject: ${error.message || 'Unknown error'}`);
@@ -209,7 +272,7 @@ export default function AdminPayments() {
               <Button 
                 variant="outline" 
                 className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10"
-                onClick={fetchPaymentRequests}
+                onClick={() => activeTab === 'pending' ? fetchPendingRequests() : fetchHistory()}
                 disabled={loadingRequests}
               >
                 <Activity className={`w-4 h-4 mr-2 ${loadingRequests ? 'animate-spin' : ''}`} />
@@ -219,6 +282,32 @@ export default function AdminPayments() {
                 Auto-refreshes every 10s
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="max-w-7xl mx-auto mb-6">
+          <div className="flex gap-4">
+            <Button
+              variant={activeTab === 'pending' ? 'default' : 'outline'}
+              onClick={() => setActiveTab('pending')}
+              className={activeTab === 'pending' 
+                ? 'bg-gold text-black hover:bg-gold/90' 
+                : 'border-purple-400/30 text-purple-200 hover:bg-purple-400/10'}
+            >
+              <Clock className="w-4 h-4 mr-2" />
+              Pending ({pendingRequests})
+            </Button>
+            <Button
+              variant={activeTab === 'history' ? 'default' : 'outline'}
+              onClick={() => setActiveTab('history')}
+              className={activeTab === 'history' 
+                ? 'bg-gold text-black hover:bg-gold/90' 
+                : 'border-purple-400/30 text-purple-200 hover:bg-purple-400/10'}
+            >
+              <Activity className="w-4 h-4 mr-2" />
+              History
+            </Button>
           </div>
         </div>
 
@@ -357,6 +446,32 @@ export default function AdminPayments() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Audit Trail for History View */}
+                    {activeTab === 'history' && request.updated_at && (
+                      <div className="mt-4 pt-4 border-t border-gold/10">
+                        <div className="text-sm text-white/60 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-3 h-3" />
+                            <span>Processed: {new Date(request.updated_at).toLocaleString('en-IN')}</span>
+                          </div>
+                          {(request as any).admin_id && (
+                            <div className="flex items-center gap-2">
+                              <Activity className="w-3 h-3" />
+                              <span>Admin ID: {(request as any).admin_id.substring(0, 8)}...</span>
+                            </div>
+                          )}
+                          {(request as any).admin_notes && (
+                            <div className="flex items-start gap-2 mt-2">
+                              <div className="text-white/80 bg-black/30 p-2 rounded border border-gold/10">
+                                <span className="font-semibold">Notes: </span>
+                                {(request as any).admin_notes}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex justify-end gap-2 pt-4 border-t border-gold/20">
                       {request.status === 'pending' && (

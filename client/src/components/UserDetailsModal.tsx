@@ -73,45 +73,42 @@ export default function UserDetailsModal({
     
     setIsLoadingHistory(true);
     try {
-      // In a real implementation, this would fetch from the API
-      // For now, we'll use mock data
-      const mockHistory: GameHistoryItem[] = [
-        {
-          id: '1',
-          gameId: 'game-123',
-          openingCard: '7♥',
-          winner: 'andar',
-          yourBet: {
-            side: 'andar',
-            amount: 5000,
-            round: 1
-          },
-          result: 'win',
-          payout: 10000,
-          totalCards: 2,
-          round: 1,
-          createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-        },
-        {
-          id: '2',
-          gameId: 'game-124',
-          openingCard: 'K♠',
-          winner: 'bahar',
-          yourBet: {
-            side: 'andar',
-            amount: 3000,
-            round: 2
-          },
-          result: 'loss',
-          payout: 0,
-          totalCards: 4,
-          round: 2,
-          createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+      // Fetch real game history from API
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/users/${user.id}/game-history?limit=10`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-      ];
-      setGameHistory(mockHistory);
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch game history');
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.data?.games) {
+        // Transform API response to match GameHistoryItem interface
+        const transformedHistory: GameHistoryItem[] = data.data.games.map((game: any) => ({
+          id: game.id,
+          gameId: game.gameId,
+          openingCard: game.openingCard,
+          winner: game.winner,
+          yourBet: game.yourBet,
+          result: game.result,
+          payout: game.payout,
+          totalCards: game.totalCards,
+          round: game.round,
+          createdAt: game.createdAt
+        }));
+        setGameHistory(transformedHistory);
+      } else {
+        setGameHistory([]);
+      }
     } catch (error) {
       console.error('Failed to load game history:', error);
+      setGameHistory([]);
     } finally {
       setIsLoadingHistory(false);
     }

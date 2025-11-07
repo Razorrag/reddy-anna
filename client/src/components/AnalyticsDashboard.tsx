@@ -72,8 +72,12 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
       // Fetch monthly stats
       try {
         const monthlyResult = await apiClient.get(`/admin/analytics?period=monthly&month=${selectedMonth}`) as any;
+        console.log('📊 Monthly Analytics Response:', monthlyResult);
         if (monthlyResult.success && monthlyResult.data) {
+          console.log('📊 Monthly Data Received:', monthlyResult.data);
           setMonthlyData(monthlyResult.data);
+        } else {
+          console.log('❌ Monthly data missing or unsuccessful');
         }
       } catch (error) {
         console.error('Failed to fetch monthly stats:', error);

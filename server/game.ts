@@ -254,6 +254,28 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       payoutSuccess = true;
       console.log('✅ Fallback: Individual payout processing completed');
       
+      // ✅ CRITICAL FIX: Update user game statistics in fallback too!
+      for (const [userId, userBets] of Array.from(gameState.userBets.entries())) {
+        const totalUserBets = 
+          userBets.round1.andar + 
+          userBets.round1.bahar + 
+          userBets.round2.andar + 
+          userBets.round2.bahar;
+        
+        if (totalUserBets > 0) {
+          const userPayout = payouts[userId] || 0;
+          const won = userPayout > 0;
+          
+          try {
+            await storage.updateUserGameStats(userId, won, totalUserBets, userPayout);
+            console.log(`✅ Fallback: Updated stats for user ${userId}: won=${won}, bet=${totalUserBets}, payout=${userPayout}`);
+          } catch (statsError) {
+            console.error(`⚠️ Fallback: Failed to update stats for user ${userId}:`, statsError);
+            // Don't fail the entire operation if stats update fails
+          }
+        }
+      }
+      
       // ✅ FIX: If fallback succeeds, notify admins but don't treat as critical error
       broadcastToRole({
         type: 'warning',
@@ -505,28 +527,117 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
         
         historySaveSuccess = true;
         
-        // ✅ FIX: Save game statistics after history is saved
-        try {
-          await storage.saveGameStatistics({
-            gameId: gameState.gameId,
-            totalPlayers: uniquePlayers,
-            totalBets: totalBetsAmount,
-            totalWinnings: totalPayoutsAmount,
-            houseEarnings: companyProfitLoss,
-            andarBetsCount: allBets.filter(b => b.side === 'andar').length,
-            baharBetsCount: allBets.filter(b => b.side === 'bahar').length,
-            andarTotalBet: gameState.round1Bets.andar + gameState.round2Bets.andar,
-            baharTotalBet: gameState.round1Bets.bahar + gameState.round2Bets.bahar,
-            profitLoss: companyProfitLoss,
-            profitLossPercentage: profitLossPercentage,
-            housePayout: totalPayoutsAmount,
-            gameDuration: 0,
-            uniquePlayers: uniquePlayers
-          });
-          console.log(`✅ Game statistics saved for gameId: ${gameState.gameId}`);
-        } catch (statsError) {
-          console.error(`⚠️ Failed to save game statistics:`, statsError);
-          // Don't fail the entire operation if statistics save fails
+        // ✅ FIX: Save game statistics after history is saved (with retry)
+        let statsSuccess = false;
+        for (let statsAttempt = 1; statsAttempt <= 3; statsAttempt++) {
+          try {
+            await storage.saveGameStatistics({
+              gameId: gameState.gameId,
+              totalPlayers: uniquePlayers,
+              totalBets: totalBetsAmount,
+              totalWinnings: totalPayoutsAmount,
+              houseEarnings: companyProfitLoss,
+              andarBetsCount: allBets.filter(b => b.side === 'andar').length,
+              baharBetsCount: allBets.filter(b => b.side === 'bahar').length,
+              andarTotalBet: gameState.round1Bets.andar + gameState.round2Bets.andar,
+              baharTotalBet: gameState.round1Bets.bahar + gameState.round2Bets.bahar,
+              profitLoss: companyProfitLoss,
+              profitLossPercentage: profitLossPercentage,
+              housePayout: totalPayoutsAmount,
+              gameDuration: 0,
+              uniquePlayers: uniquePlayers
+            });
+            console.log(`✅ Game statistics saved for gameId: ${gameState.gameId}`);
+            console.log(`📊 Saved stats:`, {
+              profitLoss: companyProfitLoss,
+              housePayout: totalPayoutsAmount,
+              totalBets: totalBetsAmount,
+              totalWinnings: totalPayoutsAmount
+            });
+            statsSuccess = true;
+            break;
+          } catch (statsError) {
+            console.error(`❌ Game statistics save attempt ${statsAttempt}/3 failed:`, {
+              error: statsError instanceof Error ? statsError.message : String(statsError),
+              stack: statsError instanceof Error ? statsError.stack : undefined,
+              gameId: gameState.gameId,
+              profitLoss: companyProfitLoss,
+              housePayout: totalPayoutsAmount,
+              totalBets: totalBetsAmount
+            });
+            if (statsAttempt < 3) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+              console.log(`🔄 Retrying game statistics save (attempt ${statsAttempt + 1}/3)...`);
+            } else {
+              console.error(`❌ CRITICAL: All 3 attempts to save game statistics failed for gameId: ${gameState.gameId}`);
+            }
+          }
+        }
+        
+        // ✅ NEW: Update daily, monthly, and yearly analytics tables (with retry)
+        let analyticsSuccess = false;
+        for (let analyticsAttempt = 1; analyticsAttempt <= 3; analyticsAttempt++) {
+          try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const monthYear = new Date().toISOString().slice(0, 7); // YYYY-MM
+            const year = new Date().getFullYear();
+            
+            // Update daily stats
+            await storage.incrementDailyStats(today, {
+              totalGames: 1,
+              totalBets: totalBetsAmount,
+              totalPayouts: totalPayoutsAmount,
+              totalRevenue: totalBetsAmount,
+              profitLoss: companyProfitLoss,
+              profitLossPercentage: profitLossPercentage,
+              uniquePlayers: uniquePlayers
+            } as any);
+            
+            // Update monthly stats
+            await storage.incrementMonthlyStats(monthYear, {
+              totalGames: 1,
+              totalBets: totalBetsAmount,
+              totalPayouts: totalPayoutsAmount,
+              totalRevenue: totalBetsAmount,
+              profitLoss: companyProfitLoss,
+              profitLossPercentage: profitLossPercentage,
+              uniquePlayers: uniquePlayers
+            } as any);
+            
+            // Update yearly stats
+            await storage.incrementYearlyStats(year, {
+              totalGames: 1,
+              totalBets: totalBetsAmount,
+              totalPayouts: totalPayoutsAmount,
+              totalRevenue: totalBetsAmount,
+              profitLoss: companyProfitLoss,
+              profitLossPercentage: profitLossPercentage,
+              uniquePlayers: uniquePlayers
+            } as any);
+            
+            console.log(`✅ Analytics tables updated (daily/monthly/yearly) for gameId: ${gameState.gameId}`);
+            console.log(`📈 Updated analytics with:`, {
+              totalGames: 1,
+              totalBets: totalBetsAmount,
+              totalPayouts: totalPayoutsAmount,
+              profitLoss: companyProfitLoss
+            });
+            analyticsSuccess = true;
+            break;
+          } catch (analyticsError) {
+            console.error(`❌ Analytics update attempt ${analyticsAttempt}/3 failed:`, {
+              error: analyticsError instanceof Error ? analyticsError.message : String(analyticsError),
+              stack: analyticsError instanceof Error ? analyticsError.stack : undefined,
+              gameId: gameState.gameId
+            });
+            if (analyticsAttempt < 3) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+              console.log(`🔄 Retrying analytics update (attempt ${analyticsAttempt + 1}/3)...`);
+            } else {
+              console.error(`❌ CRITICAL: All 3 attempts to update analytics tables failed for gameId: ${gameState.gameId}`);
+            }
+          }
         }
         
         // ✅ ADDITIONAL FIX: Persist game state one more time to ensure completion status is saved

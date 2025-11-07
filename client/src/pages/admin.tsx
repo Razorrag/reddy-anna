@@ -14,11 +14,10 @@ import {
   MessageSquare,
   Video,
   RefreshCw,
-  TrendingDown,
-  Activity
+  TrendingDown
 } from "lucide-react";
 import AdminLayout from "@/components/AdminLayout";
-import BetMonitoringDashboard from "@/components/BetMonitoringDashboard";
+import LiveBetMonitoring from "@/components/LiveBetMonitoring";
 import { useAdminStats } from "@/hooks/useAdminStats";
 import { useNotification } from "@/contexts/NotificationContext";
 
@@ -211,7 +210,7 @@ export default function Admin() {
         <div className="max-w-7xl mx-auto mb-8">
           <h2 className="text-2xl font-bold text-gold mb-4">🧭 Live Bet Monitoring</h2>
           <div className="bg-black/40 border-gold/30 backdrop-blur-sm rounded-lg p-4">
-            <BetMonitoringDashboard />
+            <LiveBetMonitoring />
           </div>
         </div>
 

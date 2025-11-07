@@ -63,6 +63,7 @@ const GameHistoryPage: React.FC = () => {
       });
       params.set('limit', filters.limit.toString());
       params.set('offset', ((filters.page - 1) * filters.limit).toString());
+      params.set('_v', Date.now().toString()); // Cache buster
       
       const response = await fetch(`/api/admin/game-history?${params}`, {
         headers: {
@@ -87,6 +88,20 @@ const GameHistoryPage: React.FC = () => {
           
           console.log('✅ Parsed games:', games.length, 'games');
           console.log('✅ Pagination:', paginationData);
+          if (games.length > 0) {
+            console.log('📊 First game data - ALL FIELDS:', JSON.stringify(games[0], null, 2));
+            console.log('📊 Field check:', {
+              housePayout: games[0].housePayout,
+              house_payout: games[0].house_payout,
+              totalWinnings: games[0].totalWinnings,
+              total_winnings: games[0].total_winnings,
+              profitLoss: games[0].profitLoss,
+              profit_loss: games[0].profit_loss,
+              totalBets: games[0].totalBets,
+              total_bets: games[0].total_bets,
+              allKeys: Object.keys(games[0])
+            });
+          }
           
           setHistory(games);
           setPagination(paginationData);
@@ -341,7 +356,7 @@ const GameHistoryPage: React.FC = () => {
               <div className="text-center">
                 <p className="text-purple-300 text-sm">Total Payouts</p>
                 <p className="text-2xl font-bold text-white">
-                  {formatCurrency(history.reduce((sum, game) => sum + (game.housePayout || 0), 0))}
+                  {formatCurrency(history.reduce((sum, game) => sum + (game.housePayout || game.totalWinnings || 0), 0))}
                 </p>
               </div>
             </CardContent>
@@ -351,11 +366,11 @@ const GameHistoryPage: React.FC = () => {
               <div className="text-center">
                 <p className="text-purple-300 text-sm">Net Profit/Loss</p>
                 <p className={`text-2xl font-bold ${
-                  history.reduce((sum, game) => sum + (game.profitLoss || 0), 0) >= 0 
+                  history.reduce((sum, game) => sum + (game.profitLoss || (game as any).profit_loss || 0), 0) >= 0 
                     ? 'text-green-400' 
                     : 'text-red-400'
                 }`}>
-                  {formatCurrency(history.reduce((sum, game) => sum + (game.profitLoss || 0), 0))}
+                  {formatCurrency(history.reduce((sum, game) => sum + (game.profitLoss || (game as any).profit_loss || 0), 0))}
                 </p>
               </div>
             </CardContent>
@@ -447,7 +462,7 @@ const GameHistoryPage: React.FC = () => {
                       </td>
                       <td className="p-3 text-right">
                         <span className="text-purple-200">
-                          {formatCurrency(game.housePayout || 0)}
+                          {formatCurrency(game.housePayout || game.totalWinnings || 0)}
                         </span>
                       </td>
                       <td className="p-3 text-right">

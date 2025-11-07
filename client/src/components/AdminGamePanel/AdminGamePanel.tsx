@@ -204,7 +204,7 @@ const AdminGamePanel: React.FC = () => {
                 }`}>
                   {gameState.gameWinner === 'andar' 
                     ? 'ANDAR WINS!' 
-                    : (gameState.currentRound === 3 
+                    : (gameState.currentRound >= 3 
                       ? 'BAHAR WINS!' 
                       : 'BABA WINS!')}
                 </div>

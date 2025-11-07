@@ -43,6 +43,7 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
   const [history, setHistory] = useState<EnhancedGameHistoryEntry[]>(propHistory || []);
   const [loading, setLoading] = useState(false);
   const [selectedRound, setSelectedRound] = useState<EnhancedGameHistoryEntry | null>(null);
+  const [selectedCard, setSelectedCard] = useState<DealtCard | null>(null);
   const { user } = useAuth();
   
   // Determine if user is admin - show admin data only to admins
@@ -57,14 +58,8 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
         fetchHistory();
       }
       
-      // Auto-refresh every 30 seconds as fallback (real-time updates handle most cases)
-      const interval = setInterval(() => {
-        if (!propHistory || propHistory.length === 0) {
-          fetchHistory();
-        }
-      }, 30000); // Changed from 10000 to 30000 since we have real-time updates
-      
-      return () => clearInterval(interval);
+      // ✅ REMOVED AUTO-REFRESH: WebSocket provides real-time updates
+      // No interval needed - prevents page jumping and unnecessary API calls
     }
   }, [isOpen, propHistory]);
 
@@ -106,14 +101,14 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
     } catch (error) {
       console.error('Failed to fetch game history:', error);
       
-      // ✅ FIX: Retry logic with exponential backoff
-      if (retryCount < 3) {
-        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Max 5 seconds
-        console.log(`⚠️ Retrying game history fetch in ${delay}ms (attempt ${retryCount + 1}/3)`);
+      // ✅ FIX: Retry logic with exponential backoff (reduced to 2 retries)
+      if (retryCount < 2) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 3000); // Max 3 seconds
+        console.log(`⚠️ Retrying game history fetch in ${delay}ms (attempt ${retryCount + 1}/2)`);
         setTimeout(() => fetchHistory(retryCount + 1), delay);
       } else {
         // Final failure - show error but keep existing history if available
-        console.error('❌ Failed to fetch game history after 3 retries');
+        console.error('❌ Failed to fetch game history after 2 retries');
         if (history.length === 0) {
           setHistory([]); // Only clear if no history exists
         }
@@ -160,6 +155,14 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
 
   const handleBackToRecent = () => {
     setSelectedRound(null);
+  };
+
+  const handleCardClick = (card: DealtCard) => {
+    setSelectedCard(card);
+  };
+
+  const handleCloseCardDetail = () => {
+    setSelectedCard(null);
   };
 
   return (
@@ -257,7 +260,7 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
                   >
                     {displayGame.winner === 'andar' 
                       ? 'ANDAR' 
-                      : (displayGame.round === 3 ? 'BAHAR' : 'BABA')}
+                      : (displayGame.round >= 3 ? 'BAHAR' : 'BABA')}
                   </div>
                 </div>
                 
@@ -339,14 +342,15 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
                     {displayGame.dealtCards.map((dealtCard: DealtCard, index: number) => (
                       <div
                         key={dealtCard.id || index}
-                        className={`p-3 rounded-lg border-2 transition-all cursor-pointer hover:scale-105 ${
+                        onClick={() => handleCardClick(dealtCard)}
+                        className={`p-3 rounded-lg border-2 transition-all cursor-pointer hover:scale-110 hover:shadow-xl ${
                           dealtCard.isWinningCard
                             ? 'border-gold bg-gold/20 scale-105 shadow-lg shadow-gold/50'
                             : dealtCard.side === 'andar'
                             ? 'border-[#A52A2A] bg-[#A52A2A]/20 hover:bg-[#A52A2A]/30'
                             : 'border-[#01073b] bg-[#01073b]/20 hover:bg-[#01073b]/30'
                         }`}
-                        title={`${dealtCard.side === 'andar' ? 'Andar' : 'Bahar'} card #${dealtCard.position}${dealtCard.isWinningCard ? ' - WINNER' : ''}`}
+                        title={`Click to view details: ${dealtCard.side === 'andar' ? 'Andar' : 'Bahar'} card #${dealtCard.position}${dealtCard.isWinningCard ? ' - WINNER' : ''}`}
                       >
                         <div className="text-xs text-gray-400 mb-1 text-center">
                           {dealtCard.side === 'andar' ? 'A' : 'B'} #{dealtCard.position}
@@ -362,8 +366,8 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
                       </div>
                     ))}
                   </div>
-                  <div className="mt-3 text-xs text-gray-400 text-center">
-                    Total Cards: {displayGame.dealtCards.length} | Click cards for details
+                  <div className="mt-3 text-xs text-gold text-center font-semibold animate-pulse">
+                    💡 Click any card to view detailed statistics
                   </div>
                 </div>
               )}
@@ -417,6 +421,194 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
           )}
         </div>
       </div>
+
+      {/* Card Detail Modal */}
+      {selectedCard && displayGame && (
+        <div 
+          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={handleCloseCardDetail}
+        >
+          <div 
+            className="legacy-panel rounded-xl max-w-2xl w-full shadow-2xl shadow-gold/30 border-2 border-gold/50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gold/30 bg-gradient-to-r from-black/80 to-black/90">
+              <h3 className="text-2xl font-bold text-gold">
+                Card Details: {selectedCard.card}
+              </h3>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleCloseCardDetail}
+                className="text-gold hover:text-gold-light"
+              >
+                <X className="w-6 h-6" />
+              </Button>
+            </div>
+
+            {/* Card Info */}
+            <div className="p-6 space-y-6">
+              {/* Large Card Display */}
+              <div className="flex justify-center">
+                <div className={`p-8 rounded-2xl border-4 shadow-2xl ${
+                  selectedCard.isWinningCard
+                    ? 'border-gold bg-gold/20 shadow-gold/50'
+                    : selectedCard.side === 'andar'
+                    ? 'border-[#A52A2A] bg-[#A52A2A]/20'
+                    : 'border-[#01073b] bg-[#01073b]/20'
+                }`}>
+                  <div className="text-6xl font-bold text-center text-white">
+                    {selectedCard.card}
+                  </div>
+                  {selectedCard.isWinningCard && (
+                    <div className="text-center mt-4">
+                      <div className="text-2xl text-gold font-bold">⭐ WINNING CARD ⭐</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Card Statistics */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-2">Side</div>
+                  <div className={`text-2xl font-bold uppercase ${
+                    selectedCard.side === 'andar' ? 'text-[#A52A2A]' : 'text-[#01073b]'
+                  }`}
+                  style={selectedCard.side === 'bahar' ? {
+                    textShadow: '0 0 6px rgba(255, 255, 255, 0.6), 0 0 12px rgba(255, 255, 255, 0.4)',
+                    WebkitTextStroke: '0.2px rgba(255, 255, 255, 0.3)'
+                  } : {}}
+                  >
+                    {selectedCard.side === 'andar' ? 'ANDAR' : 'BAHAR'}
+                  </div>
+                </div>
+
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-2">Position</div>
+                  <div className="text-2xl font-bold text-white">
+                    #{selectedCard.position}
+                  </div>
+                </div>
+
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-2">Card Rank</div>
+                  <div className="text-2xl font-bold text-white">
+                    {selectedCard.card.slice(0, -1) || selectedCard.card}
+                  </div>
+                </div>
+
+                <div className="bg-gray-800/50 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-2">Suit</div>
+                  <div className="text-2xl font-bold text-white">
+                    {selectedCard.card.slice(-1)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Game Context */}
+              <div className="border-t border-gold/30 pt-4">
+                <h4 className="text-lg font-semibold text-gold mb-3">Game Context</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Opening Card</div>
+                    <div className="text-xl font-bold text-white">{displayGame.openingCard}</div>
+                  </div>
+
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Round</div>
+                    <div className="text-xl font-bold text-gold">{displayGame.round || 1}</div>
+                  </div>
+
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Total Cards</div>
+                    <div className="text-xl font-bold text-white">{displayGame.totalCards}</div>
+                  </div>
+
+                  {isAdmin && (
+                    <>
+                      <div className="bg-gray-800/50 rounded-lg p-3">
+                        <div className="text-xs text-gray-400 mb-1">Total Bets</div>
+                        <div className="text-lg font-bold text-white">{formatCurrency(displayGame.totalBets || 0)}</div>
+                      </div>
+
+                      <div className="bg-gray-800/50 rounded-lg p-3">
+                        <div className="text-xs text-gray-400 mb-1">Andar Bets</div>
+                        <div className="text-lg font-bold text-[#A52A2A]">{formatCurrency(displayGame.andarTotalBet || 0)}</div>
+                      </div>
+
+                      <div className="bg-gray-800/50 rounded-lg p-3">
+                        <div className="text-xs text-gray-400 mb-1">Bahar Bets</div>
+                        <div className="text-lg font-bold text-[#01073b]"
+                          style={{
+                            textShadow: '0 0 6px rgba(255, 255, 255, 0.6)',
+                            WebkitTextStroke: '0.2px rgba(255, 255, 255, 0.3)'
+                          }}
+                        >
+                          {formatCurrency(displayGame.baharTotalBet || 0)}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Winner Info */}
+              {selectedCard.isWinningCard && (
+                <div className="bg-gold/10 border border-gold/30 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="text-3xl">🏆</div>
+                    <div>
+                      <div className="text-lg font-bold text-gold">Winning Card!</div>
+                      <div className="text-sm text-white/80">This card determined the game outcome</div>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div className="bg-black/30 rounded p-2">
+                        <div className="text-xs text-gray-400">Winners</div>
+                        <div className="text-lg font-bold text-green-400">
+                          {displayGame.winner === 'andar' ? displayGame.andarBetsCount : displayGame.baharBetsCount} players
+                        </div>
+                      </div>
+                      <div className="bg-black/30 rounded p-2">
+                        <div className="text-xs text-gray-400">Total Winnings</div>
+                        <div className="text-lg font-bold text-green-400">
+                          {formatCurrency(displayGame.totalWinnings || 0)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Card Sequence Info */}
+              <div className="bg-gray-800/30 rounded-lg p-4">
+                <div className="text-sm text-gray-400 mb-2">Card Sequence</div>
+                <div className="text-white/80 text-sm">
+                  This was the <span className="text-gold font-bold">#{selectedCard.position}</span> card dealt in the game.
+                  {selectedCard.isWinningCard ? (
+                    <span className="text-gold"> It matched the opening card rank and ended the game!</span>
+                  ) : (
+                    <span> The game continued after this card was dealt.</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <div className="flex justify-center pt-4">
+                <Button
+                  onClick={handleCloseCardDetail}
+                  className="bg-gold text-black hover:bg-gold-light px-8 py-3 text-lg font-semibold"
+                >
+                  Close Details
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

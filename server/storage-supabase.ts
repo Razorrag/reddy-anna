@@ -272,6 +272,31 @@ export interface IStorage {
   getAllBonusTransactions(filters?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<any[]>;
   getAllReferralData(filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
   getPlayerBonusAnalytics(filters?: { userId?: string; limit?: number; offset?: number }): Promise<any[]>;
+  
+  // New Bonus System Methods
+  createDepositBonus(data: {
+    userId: string;
+    depositRequestId: string;
+    depositAmount: number;
+    bonusAmount: number;
+    bonusPercentage: number;
+    wageringRequired: number;
+  }): Promise<any>;
+  updateDepositBonusWagering(userId: string, betAmount: number): Promise<void>;
+  getBonusSummary(userId: string): Promise<any>;
+  getDepositBonuses(userId: string, filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
+  getReferralBonuses(userId: string, filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
+  getBonusTransactions(userId: string, filters?: { limit?: number; offset?: number }): Promise<any[]>;
+  
+  // Payment History Method
+  getAllPaymentRequests(filters?: {
+    status?: string;
+    type?: string;
+    limit?: number;
+    offset?: number;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<any[]>;
 }
 
 export class SupabaseStorage implements IStorage {
@@ -639,6 +664,18 @@ export class SupabaseStorage implements IStorage {
               user.balance = this.parseBalance(user.balance) as any;
             }
           });
+          
+          // 🔍 DEBUG: Log what we got from Supabase
+          console.log(`🗄️ Storage.getAllUsers - Got ${data.length} users from Supabase`);
+          if (data.length > 0) {
+            console.log(`🗄️ First user from database:`, {
+              id: data[0].id,
+              total_winnings: data[0].total_winnings,
+              total_losses: data[0].total_losses,
+              games_played: data[0].games_played,
+              games_won: data[0].games_won
+            });
+          }
         }
         return data || [];
       } catch (error: any) {
@@ -1884,12 +1921,46 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getUserGameHistory(userId: string): Promise<any[]> {
+    console.log(`\n🔍 ========== getUserGameHistory START ==========`);
+    console.log(`User ID: ${userId}`);
+    
+    // First, check if user has any bets at all (diagnostic)
+    const { data: allBets, error: betsError } = await supabaseServer
+      .from('player_bets')
+      .select('id, game_id, amount, side, status, created_at')
+      .eq('user_id', userId);
+    
+    console.log(`📊 Total bets for user: ${allBets?.length || 0}`);
+    if (allBets && allBets.length > 0) {
+      console.log(`Sample bet:`, allBets[0]);
+      
+      // Check if game_sessions exist for these bets
+      const gameIds = Array.from(new Set(allBets.map(b => b.game_id)));
+      console.log(`🎮 Unique game IDs: ${gameIds.length}`);
+      
+      const { data: sessions } = await supabaseServer
+        .from('game_sessions')
+        .select('game_id, status, winner')
+        .in('game_id', gameIds);
+      
+      console.log(`🎮 Game sessions found: ${sessions?.length || 0} out of ${gameIds.length}`);
+      
+      // Check game_history
+      const { data: history } = await supabaseServer
+        .from('game_history')
+        .select('game_id, winner')
+        .in('game_id', gameIds);
+      
+      console.log(`📜 Game history records found: ${history?.length || 0} out of ${gameIds.length}`);
+    }
+    
     // Get user's bets and join with game sessions to get results
+    // ✅ FIX: Use LEFT JOIN instead of INNER JOIN to show all bets even if session is missing
     const { data, error } = await supabaseServer
       .from('player_bets')
       .select(`
         *,
-        game_sessions!inner(
+        game_sessions(
           opening_card,
           winner,
           winning_card,
@@ -1902,11 +1973,16 @@ export class SupabaseStorage implements IStorage {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error getting user game history:', error);
+      console.error('❌ Error getting user game history:', error);
+      console.log(`========== getUserGameHistory END (ERROR) ==========\n`);
       return [];
     }
 
+    console.log(`✅ Joined query returned: ${data?.length || 0} results`);
+
     if (!data || data.length === 0) {
+      console.log(`⚠️ No results from joined query - bets exist but game_sessions might be missing`);
+      console.log(`========== getUserGameHistory END (EMPTY) ==========\n`);
       return [];
     }
 
@@ -2206,6 +2282,8 @@ export class SupabaseStorage implements IStorage {
   // Daily statistics methods
   async getDailyStats(date: Date): Promise<DailyGameStatistics | null> {
     const dateStr = date.toISOString().split('T')[0];
+    console.log(`📊 getDailyStats - Querying for date: ${dateStr}`);
+    
     const { data, error } = await supabaseServer
       .from('daily_game_statistics')
       .select('*')
@@ -2216,6 +2294,13 @@ export class SupabaseStorage implements IStorage {
       console.error('Error getting daily stats:', error);
       return null;
     }
+
+    console.log(`📊 getDailyStats - Result:`, data ? {
+      date: data.date,
+      total_games: data.total_games,
+      total_bets: data.total_bets,
+      profit_loss: data.profit_loss
+    } : 'No data found');
 
     return data as DailyGameStatistics;
   }
@@ -2282,16 +2367,23 @@ export class SupabaseStorage implements IStorage {
     let existing = await this.getDailyStats(date);
     
     if (existing) {
-      // Update existing record
+      // Update existing record - FIX: Use snake_case field names from database
+      const currentGames = (existing as any).total_games || 0;
+      const currentBets = parseFloat((existing as any).total_bets || '0');
+      const currentPayouts = parseFloat((existing as any).total_payouts || '0');
+      const currentRevenue = parseFloat((existing as any).total_revenue || '0');
+      const currentProfitLoss = parseFloat((existing as any).profit_loss || '0');
+      const currentPlayers = (existing as any).unique_players || 0;
+      
       const { error } = await supabaseServer
         .from('daily_game_statistics')
         .update({
-          total_games: existing.totalGames + (increments.totalGames || 0),
-          total_bets: existing.totalBets + (increments.totalBets || 0),
-          total_payouts: existing.totalPayouts + (increments.totalPayouts || 0),
-          total_revenue: existing.totalRevenue + (increments.totalRevenue || 0),
-          profit_loss: existing.profitLoss + (increments.profitLoss || 0),
-          unique_players: existing.uniquePlayers + (increments.uniquePlayers || 0),
+          total_games: currentGames + (increments.totalGames || 0),
+          total_bets: currentBets + (increments.totalBets || 0),
+          total_payouts: currentPayouts + (increments.totalPayouts || 0),
+          total_revenue: currentRevenue + (increments.totalRevenue || 0),
+          profit_loss: currentProfitLoss + (increments.profitLoss || 0),
+          unique_players: currentPlayers + (increments.uniquePlayers || 0),
           updated_at: new Date()
         })
         .eq('date', dateStr);
@@ -2318,6 +2410,8 @@ export class SupabaseStorage implements IStorage {
 
   // Monthly statistics methods
   async getMonthlyStats(monthYear: string): Promise<MonthlyGameStatistics | null> {
+    console.log(`📊 getMonthlyStats - Querying for month: ${monthYear}`);
+    
     const { data, error } = await supabaseServer
       .from('monthly_game_statistics')
       .select('*')
@@ -2328,6 +2422,13 @@ export class SupabaseStorage implements IStorage {
       console.error('Error getting monthly stats:', error);
       return null;
     }
+
+    console.log(`📊 getMonthlyStats - Result:`, data ? {
+      month_year: data.month_year,
+      total_games: data.total_games,
+      total_bets: data.total_bets,
+      profit_loss: data.profit_loss
+    } : 'No data found');
 
     return data as MonthlyGameStatistics;
   }
@@ -2375,16 +2476,23 @@ export class SupabaseStorage implements IStorage {
     let existing = await this.getMonthlyStats(monthYear);
     
     if (existing) {
-      // Update existing record
+      // Update existing record - FIX: Use snake_case field names from database
+      const currentGames = (existing as any).total_games || 0;
+      const currentBets = parseFloat((existing as any).total_bets || '0');
+      const currentPayouts = parseFloat((existing as any).total_payouts || '0');
+      const currentRevenue = parseFloat((existing as any).total_revenue || '0');
+      const currentProfitLoss = parseFloat((existing as any).profit_loss || '0');
+      const currentPlayers = (existing as any).unique_players || 0;
+      
       const { error } = await supabaseServer
         .from('monthly_game_statistics')
         .update({
-          total_games: existing.totalGames + (increments.totalGames || 0),
-          total_bets: existing.totalBets + (increments.totalBets || 0),
-          total_payouts: existing.totalPayouts + (increments.totalPayouts || 0),
-          total_revenue: existing.totalRevenue + (increments.totalRevenue || 0),
-          profit_loss: existing.profitLoss + (increments.profitLoss || 0),
-          unique_players: existing.uniquePlayers + (increments.uniquePlayers || 0),
+          total_games: currentGames + (increments.totalGames || 0),
+          total_bets: currentBets + (increments.totalBets || 0),
+          total_payouts: currentPayouts + (increments.totalPayouts || 0),
+          total_revenue: currentRevenue + (increments.totalRevenue || 0),
+          profit_loss: currentProfitLoss + (increments.profitLoss || 0),
+          unique_players: currentPlayers + (increments.uniquePlayers || 0),
           updated_at: new Date()
         })
         .eq('month_year', monthYear);
@@ -2410,6 +2518,8 @@ export class SupabaseStorage implements IStorage {
 
   // Yearly statistics methods
   async getYearlyStats(year: number): Promise<YearlyGameStatistics | null> {
+    console.log(`📊 getYearlyStats - Querying for year: ${year}`);
+    
     const { data, error } = await supabaseServer
       .from('yearly_game_statistics')
       .select('*')
@@ -2420,6 +2530,13 @@ export class SupabaseStorage implements IStorage {
       console.error('Error getting yearly stats:', error);
       return null;
     }
+
+    console.log(`📊 getYearlyStats - Result:`, data ? {
+      year: data.year,
+      total_games: data.total_games,
+      total_bets: data.total_bets,
+      profit_loss: data.profit_loss
+    } : 'No data found');
 
     return data as YearlyGameStatistics;
   }
@@ -2467,16 +2584,23 @@ export class SupabaseStorage implements IStorage {
     let existing = await this.getYearlyStats(year);
     
     if (existing) {
-      // Update existing record
+      // Update existing record - FIX: Use snake_case field names from database
+      const currentGames = (existing as any).total_games || 0;
+      const currentBets = parseFloat((existing as any).total_bets || '0');
+      const currentPayouts = parseFloat((existing as any).total_payouts || '0');
+      const currentRevenue = parseFloat((existing as any).total_revenue || '0');
+      const currentProfitLoss = parseFloat((existing as any).profit_loss || '0');
+      const currentPlayers = (existing as any).unique_players || 0;
+      
       const { error } = await supabaseServer
         .from('yearly_game_statistics')
         .update({
-          total_games: existing.totalGames + (increments.totalGames || 0),
-          total_bets: existing.totalBets + (increments.totalBets || 0),
-          total_payouts: existing.totalPayouts + (increments.totalPayouts || 0),
-          total_revenue: existing.totalRevenue + (increments.totalRevenue || 0),
-          profit_loss: existing.profitLoss + (increments.profitLoss || 0),
-          unique_players: existing.uniquePlayers + (increments.uniquePlayers || 0),
+          total_games: currentGames + (increments.totalGames || 0),
+          total_bets: currentBets + (increments.totalBets || 0),
+          total_payouts: currentPayouts + (increments.totalPayouts || 0),
+          total_revenue: currentRevenue + (increments.totalRevenue || 0),
+          profit_loss: currentProfitLoss + (increments.profitLoss || 0),
+          unique_players: currentPlayers + (increments.uniquePlayers || 0),
           updated_at: new Date()
         })
         .eq('year', year);
@@ -3650,6 +3774,69 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
+  /**
+   * Get all payment requests with optional filters (for history view)
+   */
+  async getAllPaymentRequests(filters?: {
+    status?: string;
+    type?: string;
+    limit?: number;
+    offset?: number;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<any[]> {
+    try {
+      let query = supabaseServer
+        .from('payment_requests')
+        .select(`
+          *,
+          user:users!payment_requests_user_id_fkey(phone, full_name, id)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (filters?.status && filters.status !== 'all') {
+        query = query.eq('status', filters.status);
+      }
+      
+      if (filters?.type && filters.type !== 'all') {
+        query = query.eq('request_type', filters.type);
+      }
+      
+      if (filters?.startDate) {
+        query = query.gte('created_at', filters.startDate.toISOString());
+      }
+      
+      if (filters?.endDate) {
+        query = query.lte('created_at', filters.endDate.toISOString());
+      }
+      
+      if (filters?.limit) {
+        const offset = filters.offset || 0;
+        query = query.range(offset, offset + filters.limit - 1);
+      }
+
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Error fetching all payment requests:', error);
+        return [];
+      }
+      
+      // Flatten the nested user data
+      const flattenedData = (data || []).map((req: any) => ({
+        ...req,
+        phone: req.user?.phone || req.phone || 'N/A',
+        full_name: req.user?.full_name || req.full_name || 'Unknown User',
+        user: undefined // Remove nested object
+      }));
+      
+      return flattenedData;
+    } catch (err: any) {
+      console.error('Exception in getAllPaymentRequests:', err);
+      return [];
+    }
+  }
+
   async updatePaymentRequest(requestId: string, status: string, adminId?: string): Promise<void> {
     const updates: any = { 
       status
@@ -3867,6 +4054,441 @@ export class SupabaseStorage implements IStorage {
       }
       return results;
     }
+  }
+
+  // ============================================
+  // NEW BONUS TRACKING METHODS
+  // ============================================
+
+  /**
+   * Create a new deposit bonus record
+   */
+  async createDepositBonus(data: {
+    userId: string;
+    depositRequestId: string;
+    depositAmount: number;
+    bonusAmount: number;
+    bonusPercentage: number;
+    wageringRequired: number;
+  }): Promise<string> {
+    const { data: bonus, error } = await supabaseServer
+      .from('deposit_bonuses')
+      .insert({
+        user_id: data.userId,
+        deposit_request_id: data.depositRequestId,
+        deposit_amount: data.depositAmount,
+        bonus_amount: data.bonusAmount,
+        bonus_percentage: data.bonusPercentage,
+        wagering_required: data.wageringRequired,
+        wagering_completed: 0,
+        wagering_progress: 0,
+        status: 'locked',
+        locked_at: new Date().toISOString()
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Error creating deposit bonus:', error);
+      throw new Error('Failed to create deposit bonus');
+    }
+
+    // Log bonus transaction
+    await this.logBonusTransaction({
+      userId: data.userId,
+      bonusType: 'deposit_bonus',
+      bonusSourceId: bonus.id,
+      amount: data.bonusAmount,
+      action: 'added',
+      description: `Deposit bonus added: ₹${data.bonusAmount} (${data.bonusPercentage}% of ₹${data.depositAmount})`
+    });
+
+    console.log(`✅ Deposit bonus created: ₹${data.bonusAmount} for user ${data.userId}`);
+    return bonus.id;
+  }
+
+  /**
+   * Get all deposit bonuses for a user
+   */
+  async getDepositBonuses(userId: string): Promise<any[]> {
+    const { data, error } = await supabaseServer
+      .from('deposit_bonuses')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching deposit bonuses:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Update wagering progress for all locked deposit bonuses
+   */
+  async updateDepositBonusWagering(userId: string, betAmount: number): Promise<void> {
+    // Get all locked bonuses for this user
+    const { data: lockedBonuses, error: fetchError } = await supabaseServer
+      .from('deposit_bonuses')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'locked');
+
+    if (fetchError || !lockedBonuses || lockedBonuses.length === 0) {
+      return; // No locked bonuses to update
+    }
+
+    // Update each locked bonus
+    for (const bonus of lockedBonuses) {
+      const newCompleted = parseFloat(bonus.wagering_completed) + betAmount;
+      const progress = (newCompleted / parseFloat(bonus.wagering_required)) * 100;
+
+      const { error: updateError } = await supabaseServer
+        .from('deposit_bonuses')
+        .update({
+          wagering_completed: newCompleted,
+          wagering_progress: Math.min(100, progress),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bonus.id);
+
+      if (updateError) {
+        console.error('Error updating deposit bonus wagering:', updateError);
+        continue;
+      }
+
+      // Check if wagering requirement met
+      if (newCompleted >= parseFloat(bonus.wagering_required)) {
+        await this.unlockDepositBonus(bonus.id);
+      }
+
+      // Log progress milestone (every 25%)
+      if (Math.floor(progress / 25) > Math.floor((progress - (betAmount / parseFloat(bonus.wagering_required)) * 100) / 25)) {
+        await this.logBonusTransaction({
+          userId,
+          bonusType: 'deposit_bonus',
+          bonusSourceId: bonus.id,
+          amount: betAmount,
+          action: 'wagering_progress',
+          description: `Wagering progress: ${Math.floor(progress)}% complete (₹${newCompleted.toFixed(2)} / ₹${bonus.wagering_required})`
+        });
+      }
+    }
+  }
+
+  /**
+   * Unlock a deposit bonus when wagering requirement is met
+   */
+  async unlockDepositBonus(bonusId: string): Promise<void> {
+    const { data: bonus, error: fetchError } = await supabaseServer
+      .from('deposit_bonuses')
+      .select('*')
+      .eq('id', bonusId)
+      .single();
+
+    if (fetchError || !bonus) {
+      return;
+    }
+
+    // Update status to unlocked
+    const { error: updateError } = await supabaseServer
+      .from('deposit_bonuses')
+      .update({
+        status: 'unlocked',
+        unlocked_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', bonusId);
+
+    if (updateError) {
+      console.error('Error unlocking deposit bonus:', updateError);
+      return;
+    }
+
+    // Log unlock
+    await this.logBonusTransaction({
+      userId: bonus.user_id,
+      bonusType: 'deposit_bonus',
+      bonusSourceId: bonusId,
+      amount: parseFloat(bonus.bonus_amount),
+      action: 'unlocked',
+      description: `Bonus unlocked! Wagering requirement met (₹${bonus.wagering_completed} / ₹${bonus.wagering_required})`
+    });
+
+    // Auto-credit to balance
+    await this.creditDepositBonus(bonusId);
+
+    console.log(`🔓 Deposit bonus unlocked: ₹${bonus.bonus_amount} for user ${bonus.user_id}`);
+  }
+
+  /**
+   * Credit unlocked deposit bonus to user balance
+   */
+  async creditDepositBonus(bonusId: string): Promise<void> {
+    const { data: bonus, error: fetchError } = await supabaseServer
+      .from('deposit_bonuses')
+      .select('*')
+      .eq('id', bonusId)
+      .single();
+
+    if (fetchError || !bonus || bonus.status !== 'unlocked') {
+      return;
+    }
+
+    const user = await this.getUserById(bonus.user_id);
+    if (!user) {
+      return;
+    }
+
+    const balanceBefore = parseFloat(user.balance);
+    const bonusAmount = parseFloat(bonus.bonus_amount);
+    const balanceAfter = balanceBefore + bonusAmount;
+
+    // Add to balance
+    await this.updateUserBalance(bonus.user_id, bonusAmount);
+
+    // Update bonus status
+    const { error: updateError } = await supabaseServer
+      .from('deposit_bonuses')
+      .update({
+        status: 'credited',
+        credited_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', bonusId);
+
+    if (updateError) {
+      console.error('Error updating deposit bonus status:', updateError);
+    }
+
+    // Log credit
+    await this.logBonusTransaction({
+      userId: bonus.user_id,
+      bonusType: 'deposit_bonus',
+      bonusSourceId: bonusId,
+      amount: bonusAmount,
+      balanceBefore,
+      balanceAfter,
+      action: 'credited',
+      description: `Bonus automatically credited to balance: ₹${bonusAmount}`
+    });
+
+    console.log(`✅ Deposit bonus credited: ₹${bonusAmount} to user ${bonus.user_id}`);
+  }
+
+  /**
+   * Create a referral bonus record
+   */
+  async createReferralBonus(data: {
+    referrerUserId: string;
+    referredUserId: string;
+    referralId?: string;
+    depositAmount: number;
+    bonusAmount: number;
+    bonusPercentage: number;
+  }): Promise<string> {
+    const { data: bonus, error } = await supabaseServer
+      .from('referral_bonuses')
+      .insert({
+        referrer_user_id: data.referrerUserId,
+        referred_user_id: data.referredUserId,
+        referral_id: data.referralId,
+        deposit_amount: data.depositAmount,
+        bonus_amount: data.bonusAmount,
+        bonus_percentage: data.bonusPercentage,
+        status: 'pending'
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Error creating referral bonus:', error);
+      throw new Error('Failed to create referral bonus');
+    }
+
+    // Log bonus transaction
+    await this.logBonusTransaction({
+      userId: data.referrerUserId,
+      bonusType: 'referral_bonus',
+      bonusSourceId: bonus.id,
+      amount: data.bonusAmount,
+      action: 'added',
+      description: `Referral bonus earned: ₹${data.bonusAmount} from user deposit`
+    });
+
+    // Auto-credit referral bonuses immediately
+    await this.creditReferralBonus(bonus.id);
+
+    console.log(`✅ Referral bonus created: ₹${data.bonusAmount} for user ${data.referrerUserId}`);
+    return bonus.id;
+  }
+
+  /**
+   * Credit referral bonus to user balance
+   */
+  async creditReferralBonus(bonusId: string): Promise<void> {
+    const { data: bonus, error: fetchError } = await supabaseServer
+      .from('referral_bonuses')
+      .select('*')
+      .eq('id', bonusId)
+      .single();
+
+    if (fetchError || !bonus || bonus.status === 'credited') {
+      return;
+    }
+
+    const user = await this.getUserById(bonus.referrer_user_id);
+    if (!user) {
+      return;
+    }
+
+    const balanceBefore = parseFloat(user.balance);
+    const bonusAmount = parseFloat(bonus.bonus_amount);
+    const balanceAfter = balanceBefore + bonusAmount;
+
+    // Add to balance
+    await this.updateUserBalance(bonus.referrer_user_id, bonusAmount);
+
+    // Update bonus status
+    const { error: updateError } = await supabaseServer
+      .from('referral_bonuses')
+      .update({
+        status: 'credited',
+        credited_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', bonusId);
+
+    if (updateError) {
+      console.error('Error updating referral bonus status:', updateError);
+    }
+
+    // Log credit
+    await this.logBonusTransaction({
+      userId: bonus.referrer_user_id,
+      bonusType: 'referral_bonus',
+      bonusSourceId: bonusId,
+      amount: bonusAmount,
+      balanceBefore,
+      balanceAfter,
+      action: 'credited',
+      description: `Referral bonus automatically credited: ₹${bonusAmount}`
+    });
+
+    console.log(`✅ Referral bonus credited: ₹${bonusAmount} to user ${bonus.referrer_user_id}`);
+  }
+
+  /**
+   * Get all referral bonuses for a user
+   */
+  async getReferralBonuses(userId: string): Promise<any[]> {
+    const { data, error } = await supabaseServer
+      .from('referral_bonuses')
+      .select(`
+        *,
+        referred_user:users!referral_bonuses_referred_user_id_fkey(phone, full_name)
+      `)
+      .eq('referrer_user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching referral bonuses:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Log a bonus transaction
+   */
+  async logBonusTransaction(data: {
+    userId: string;
+    bonusType: string;
+    bonusSourceId?: string;
+    amount: number;
+    balanceBefore?: number;
+    balanceAfter?: number;
+    action: string;
+    description: string;
+    metadata?: any;
+  }): Promise<void> {
+    const { error } = await supabaseServer
+      .from('bonus_transactions')
+      .insert({
+        user_id: data.userId,
+        bonus_type: data.bonusType,
+        bonus_source_id: data.bonusSourceId,
+        amount: data.amount,
+        balance_before: data.balanceBefore,
+        balance_after: data.balanceAfter,
+        action: data.action,
+        description: data.description,
+        metadata: data.metadata
+      });
+
+    if (error) {
+      console.error('Error logging bonus transaction:', error);
+    }
+  }
+
+  /**
+   * Get bonus transaction history for a user
+   */
+  async getBonusTransactions(userId: string, filters?: { limit?: number; offset?: number }): Promise<any[]> {
+    const limit = filters?.limit || 20;
+    const offset = filters?.offset || 0;
+    const { data, error } = await supabaseServer
+      .from('bonus_transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      console.error('Error fetching bonus transactions:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Get bonus summary for a user
+   */
+  async getBonusSummary(userId: string): Promise<any> {
+    const { data, error } = await supabaseServer
+      .from('user_bonus_summary')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching bonus summary:', error);
+      return {
+        depositBonusUnlocked: 0,
+        depositBonusLocked: 0,
+        depositBonusCredited: 0,
+        referralBonusCredited: 0,
+        referralBonusPending: 0,
+        totalAvailable: 0,
+        totalCredited: 0,
+        lifetimeEarnings: 0
+      };
+    }
+
+    return {
+      depositBonusUnlocked: parseFloat(data.deposit_bonus_unlocked || '0'),
+      depositBonusLocked: parseFloat(data.deposit_bonus_locked || '0'),
+      depositBonusCredited: parseFloat(data.deposit_bonus_credited || '0'),
+      referralBonusCredited: parseFloat(data.referral_bonus_credited || '0'),
+      referralBonusPending: parseFloat(data.referral_bonus_pending || '0'),
+      totalAvailable: parseFloat(data.total_available || '0'),
+      totalCredited: parseFloat(data.total_credited || '0'),
+      lifetimeEarnings: parseFloat(data.lifetime_earnings || '0')
+    };
   }
 }
 

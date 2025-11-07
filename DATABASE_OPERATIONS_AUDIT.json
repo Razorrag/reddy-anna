@@ -1,0 +1,1479 @@
+{
+  "timestamp": "2025-11-07T10:02:25.836Z",
+  "summary": {
+    "totalTables": 20,
+    "totalRpcCalls": 0,
+    "totalColumns": 80
+  },
+  "tables": {
+    "admin_requests": {
+      "files": [
+        "server\\admin-requests-supabase.ts"
+      ],
+      "operations": [
+        {
+          "type": "INSERT",
+          "fields": [
+            "user_id",
+            "status"
+          ],
+          "file": "server\\admin-requests-supabase.ts"
+        }
+      ]
+    },
+    "request_audit": {
+      "files": [
+        "server\\admin-requests-supabase.ts"
+      ],
+      "operations": []
+    },
+    "admin_requests_summary": {
+      "files": [
+        "server\\admin-requests-supabase.ts"
+      ],
+      "operations": []
+    },
+    "users": {
+      "files": [
+        "server\\admin-requests-supabase.ts",
+        "server\\auth.ts",
+        "server\\storage-supabase.ts"
+      ],
+      "operations": [
+        {
+          "type": "INSERT",
+          "fields": [
+            "id",
+            "user_id",
+            "game_id",
+            "round",
+            "side",
+            "amount",
+            "status",
+            "created_at",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "INSERT",
+          "fields": [
+            "id",
+            "game_id",
+            "card",
+            "side",
+            "position",
+            "is_winning_card",
+            "dealt_at",
+            "created_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "INSERT",
+          "fields": [
+            "id",
+            "game_id",
+            "opening_card",
+            "winner",
+            "winning_card",
+            "total_cards",
+            "winning_round",
+            "FIX",
+            "total_bets",
+            "total_payouts",
+            "created_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "INSERT",
+          "fields": [
+            "game_id",
+            "total_players",
+            "total_bets",
+            "total_winnings",
+            "house_earnings",
+            "andar_bets_count",
+            "bahar_bets_count",
+            "andar_total_bet",
+            "bahar_total_bet",
+            "profit_loss",
+            "profit_loss_percentage",
+            "house_payout",
+            "game_duration",
+            "unique_players",
+            "created_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "INSERT",
+          "fields": [
+            "date",
+            "total_games",
+            "total_bets",
+            "total_payouts",
+            "total_revenue",
+            "profit_loss",
+            "profit_loss_percentage",
+            "unique_players",
+            "peak_bets_hour",
+            "created_at",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "INSERT",
+          "fields": [
+            "month_year",
+            "total_games",
+            "total_bets",
+            "total_payouts",
+            "total_revenue",
+            "profit_loss",
+            "profit_loss_percentage",
+            "unique_players",
+            "created_at",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "INSERT",
+          "fields": [
+            "year",
+            "total_games",
+            "total_bets",
+            "total_payouts",
+            "total_revenue",
+            "profit_loss",
+            "profit_loss_percentage",
+            "unique_players",
+            "created_at",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "INSERT",
+          "fields": [
+            "user_id",
+            "transaction_type",
+            "amount",
+            "balance_before",
+            "balance_after",
+            "reference_id",
+            "description",
+            "created_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "balance",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "balance",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "balance",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "games_played",
+            "games_won",
+            "total_winnings",
+            "total_losses",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "status",
+            "phase",
+            "winning_card",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "side",
+            "amount",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "setting_value"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "total_games",
+            "total_bets",
+            "total_payouts",
+            "total_revenue",
+            "profit_loss",
+            "unique_players",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "total_games",
+            "total_bets",
+            "total_payouts",
+            "total_revenue",
+            "profit_loss",
+            "unique_players",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "total_games",
+            "total_bets",
+            "total_payouts",
+            "total_revenue",
+            "profit_loss",
+            "unique_players",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "total_bonus_earned",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "deposit_bonus_available",
+            "referral_bonus_available",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "original_deposit_amount",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "wagering_requirement",
+            "wagering_completed",
+            "bonus_locked",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "wagering_completed",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "balance",
+            "deposit_bonus_available",
+            "referral_bonus_available",
+            "bonus_locked",
+            "wagering_requirement",
+            "wagering_completed",
+            "updated_at"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "deposit_bonus_available",
+            "wagering_requirement",
+            "wagering_completed",
+            "bonus_locked",
+            "original_deposit_amount"
+          ],
+          "file": "server\\storage-supabase.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "status",
+            "FIX"
+          ],
+          "file": "server\\storage-supabase.ts"
+        }
+      ]
+    },
+    "stream_config": {
+      "files": [
+        "server\\routes\\stream-config.ts",
+        "server\\stream-storage.ts"
+      ],
+      "operations": [
+        {
+          "type": "UPDATE",
+          "fields": [
+            "active_method",
+            "stream_width",
+            "stream_height",
+            "show_stream",
+            "stream_title",
+            "rtmp_server_url",
+            "rtmp_stream_key",
+            "webrtc_resolution",
+            "webrtc_fps",
+            "webrtc_bitrate",
+            "updated_at"
+          ],
+          "file": "server\\routes\\stream-config.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "stream_status",
+            "updated_at"
+          ],
+          "file": "server\\routes\\stream-config.ts"
+        },
+        {
+          "type": "INSERT",
+          "fields": [
+            "stream_method",
+            "admin_id",
+            "status",
+            "start_time"
+          ],
+          "file": "server\\stream-storage.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "active_method",
+            "updated_at"
+          ],
+          "file": "server\\stream-storage.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "stream_title",
+            "updated_at"
+          ],
+          "file": "server\\stream-storage.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "end_time",
+            "duration_seconds",
+            "status"
+          ],
+          "file": "server\\stream-storage.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "status",
+            "error_message"
+          ],
+          "file": "server\\stream-storage.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "viewer_count",
+            "total_views",
+            "updated_at"
+          ],
+          "file": "server\\stream-storage.ts"
+        },
+        {
+          "type": "UPDATE",
+          "fields": [
+            "show_stream"
+          ],
+          "file": "server\\stream-storage.ts"
+        }
+      ]
+    },
+    "player_bets": {
+      "files": [
+        "server\\routes.ts",
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "game_history": {
+      "files": [
+        "server\\routes.ts",
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "game_statistics": {
+      "files": [
+        "server\\routes.ts",
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "dealt_cards": {
+      "files": [
+        "server\\routes.ts",
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "admin_credentials": {
+      "files": [
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "game_sessions": {
+      "files": [
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "game_settings": {
+      "files": [
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "stream_settings": {
+      "files": [
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "daily_game_statistics": {
+      "files": [
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "monthly_game_statistics": {
+      "files": [
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "yearly_game_statistics": {
+      "files": [
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "user_referrals": {
+      "files": [
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "user_transactions": {
+      "files": [
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "payment_requests": {
+      "files": [
+        "server\\storage-supabase.ts"
+      ],
+      "operations": []
+    },
+    "stream_sessions": {
+      "files": [
+        "server\\stream-storage.ts"
+      ],
+      "operations": []
+    }
+  },
+  "rpcCalls": [],
+  "columns": {
+    "admin_requests.user_id": [
+      {
+        "file": "server\\admin-requests-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "admin_requests.status": [
+      {
+        "file": "server\\admin-requests-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "stream_config.active_method": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.stream_width": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.stream_height": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.show_stream": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.stream_title": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.rtmp_server_url": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.rtmp_stream_key": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.webrtc_resolution": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.webrtc_fps": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.webrtc_bitrate": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.updated_at": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.stream_status": [
+      {
+        "file": "server\\routes\\stream-config.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.id": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.user_id": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.game_id": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.round": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.side": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.amount": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.status": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.created_at": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.updated_at": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.card": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.position": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.is_winning_card": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.dealt_at": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.opening_card": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.winner": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.winning_card": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.total_cards": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.winning_round": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.FIX": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.total_bets": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.total_payouts": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.total_players": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.total_winnings": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.house_earnings": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.andar_bets_count": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.bahar_bets_count": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.andar_total_bet": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.bahar_total_bet": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.profit_loss": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.profit_loss_percentage": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.house_payout": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.game_duration": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.unique_players": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.date": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.total_games": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.total_revenue": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.peak_bets_hour": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.month_year": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.year": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.transaction_type": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.balance_before": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.balance_after": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.reference_id": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.description": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "users.balance": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.games_played": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.games_won": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.total_losses": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.phase": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.setting_value": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.total_bonus_earned": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.deposit_bonus_available": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.referral_bonus_available": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.original_deposit_amount": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.wagering_requirement": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.wagering_completed": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "users.bonus_locked": [
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\storage-supabase.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.stream_method": [
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "stream_config.admin_id": [
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "stream_config.status": [
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "INSERT"
+      },
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      },
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.start_time": [
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "INSERT"
+      }
+    ],
+    "stream_config.end_time": [
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.duration_seconds": [
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.error_message": [
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.viewer_count": [
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      }
+    ],
+    "stream_config.total_views": [
+      {
+        "file": "server\\stream-storage.ts",
+        "operation": "UPDATE"
+      }
+    ]
+  }
+}
