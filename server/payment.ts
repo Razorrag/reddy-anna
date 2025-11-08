@@ -310,8 +310,13 @@ export const applyDepositBonus = async (userId: string, depositAmount: number): 
       return false;
     }
     
-    // OPTIMIZED: Use cached wagering multiplier (default 0.3 = 30% of deposit)
-    // This is configurable: 0.3 = 30%, 1.0 = 100%, 2.0 = 200%
+    // ✅ FIX #2: WAGERING MULTIPLIER EXPLANATION
+    // Wagering requirement = DEPOSIT AMOUNT × multiplier (NOT bonus amount)
+    // Examples:
+    //   - 0.3 = User must wager 30% of their deposit (₹1000 deposit = ₹300 wagering)
+    //   - 1.0 = User must wager 100% of their deposit (₹1000 deposit = ₹1000 wagering)
+    //   - 3.0 = User must wager 3x their deposit (₹1000 deposit = ₹3000 wagering)
+    // Default: 0.3 (30% of deposit) - very user-friendly
     const wageringMultiplierStr = await settingsCache.get(
       'wagering_multiplier',
       () => storage.getGameSetting('wagering_multiplier')

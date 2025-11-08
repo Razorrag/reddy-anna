@@ -39,10 +39,10 @@ export function useAdminStats() {
       // Fetch multiple endpoints in parallel
       const [
         usersResponse,
-        analyticsResponse,
+        dailyAnalyticsResponse,
+        allTimeAnalyticsResponse,
         realtimeResponse,
-        paymentsResponse,
-        allUsersResponse
+        paymentsResponse
       ] = await Promise.all([
         apiClient.get('/admin/statistics', {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -58,6 +58,13 @@ export function useAdminStats() {
           return { success: false, data: null };
         }),
         
+        apiClient.get('/admin/analytics/all-time', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).catch((err) => {
+          console.error('❌ Failed to fetch all-time analytics:', err);
+          return { success: false, data: null };
+        }),
+        
         apiClient.get('/admin/realtime-stats', {
           headers: { 'Authorization': `Bearer ${token}` }
         }).catch((err) => {
@@ -70,49 +77,26 @@ export function useAdminStats() {
         }).catch((err) => {
           console.error('❌ Failed to fetch payment requests:', err);
           return { success: false, data: [] };
-        }),
-        
-        apiClient.get('/admin/users?limit=1000', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).catch((err) => {
-          console.error('❌ Failed to fetch users:', err);
-          return { success: false, data: { users: [] } };
         })
       ]);
 
       // Log which calls succeeded/failed
       const failures: string[] = [];
       if (!(usersResponse as any).success) failures.push('user statistics');
-      if (!(analyticsResponse as any).success) failures.push('daily analytics');
+      if (!(dailyAnalyticsResponse as any).success) failures.push('daily analytics');
+      if (!(allTimeAnalyticsResponse as any).success) failures.push('all-time analytics');
       if (!(realtimeResponse as any).success) failures.push('realtime stats');
       if (!(paymentsResponse as any).success) failures.push('payment requests');
-      if (!(allUsersResponse as any).success) failures.push('users list');
 
       if (failures.length > 0) {
         console.warn(`⚠️ Some admin stats failed to load: ${failures.join(', ')}`);
       }
 
       const userStats = (usersResponse as any).success ? (usersResponse as any).data : null;
-      const dailyAnalytics = (analyticsResponse as any).success ? (analyticsResponse as any).data : null;
+      const dailyAnalytics = (dailyAnalyticsResponse as any).success ? (dailyAnalyticsResponse as any).data : null;
+      const allTimeAnalytics = (allTimeAnalyticsResponse as any).success ? (allTimeAnalyticsResponse as any).data : null;
       const realtimeStats = (realtimeResponse as any).success ? (realtimeResponse as any).data : null;
       const paymentRequests = (paymentsResponse as any).success ? (paymentsResponse as any).data : [];
-      let allUsers: any[] = [];
-      if ((allUsersResponse as any).success) {
-        const responseBody = allUsersResponse as any;
-        if (Array.isArray(responseBody.users)) {
-          allUsers = responseBody.users;
-        } else if (responseBody.data?.users && Array.isArray(responseBody.data.users)) {
-          allUsers = responseBody.data.users;
-        } else if (Array.isArray(responseBody.data)) {
-          allUsers = responseBody.data;
-        }
-      }
-
-      console.log('🧮 Users array selected for calculation:', {
-        length: allUsers.length,
-        keys: allUsers.length > 0 ? Object.keys(allUsers[0]) : [],
-        rawResponseKeys: Object.keys(allUsersResponse as any ?? {})
-      });
 
       const pendingDeposits = Array.isArray(paymentRequests) 
         ? paymentRequests.filter((r: any) => r.request_type === 'deposit' && r.status === 'pending').length
@@ -121,52 +105,29 @@ export function useAdminStats() {
         ? paymentRequests.filter((r: any) => r.request_type === 'withdrawal' && r.status === 'pending').length
         : 0;
 
-      // 🔍 DEBUG: Log RAW user data received from backend
-      console.log('📥 Frontend received ALL users from backend:', {
-        totalUsers: allUsers.length,
-        allUsersData: allUsers.map((u: any) => ({
-          id: u.id,
-          totalWinnings: u.totalWinnings || u.total_winnings || 0,
-          totalLosses: u.totalLosses || u.total_losses || 0,
-          gamesPlayed: u.gamesPlayed || u.games_played || 0
-        }))
-      });
-
-      // Calculate financial statistics from all users
-      // ✅ FIX: Use snake_case field names from database
-      const totalWinnings = allUsers.reduce((sum: number, u: any) => {
-        // Try multiple field name formats
-        const winnings = u.totalWinnings ?? u.total_winnings ?? 0;
-        const parsedWinnings = typeof winnings === 'string' ? parseFloat(winnings) : (typeof winnings === 'number' ? winnings : 0);
-        const finalWinnings = isNaN(parsedWinnings) ? 0 : parsedWinnings;
-        console.log(`  User ${u.id}: adding ${finalWinnings} winnings (raw: ${winnings}, type: ${typeof winnings})`);
-        return sum + finalWinnings;
-      }, 0);
+      // ✅ FIX: Use backend-calculated financial stats from getUserStatistics
+      const totalWinnings = userStats?.totalWinnings || 0;
+      const totalLosses = userStats?.totalLosses || 0;
+      const netHouseProfit = userStats?.netHouseProfit || (totalLosses - totalWinnings);
       
-      const totalLosses = allUsers.reduce((sum: number, u: any) => {
-        // Try multiple field name formats
-        const losses = u.totalLosses ?? u.total_losses ?? 0;
-        const parsedLosses = typeof losses === 'string' ? parseFloat(losses) : (typeof losses === 'number' ? losses : 0);
-        const finalLosses = isNaN(parsedLosses) ? 0 : parsedLosses;
-        console.log(`  User ${u.id}: adding ${finalLosses} losses (raw: ${losses}, type: ${typeof losses})`);
-        return sum + finalLosses;
-      }, 0);
-      
-      const netHouseProfit = totalLosses - totalWinnings;
-      
-      console.log('🔢 Calculation breakdown:', {
-        totalWinningsCalculated: totalWinnings,
-        totalLossesCalculated: totalLosses,
-        formula: `${totalLosses} - ${totalWinnings} = ${netHouseProfit}`,
-        netHouseProfit
-      });
-
-      // 📊 DEBUG: Log profit/loss calculation
-      console.log('💰 Admin Stats - Financial Calculation RESULT:', {
-        totalUsers: allUsers.length,
-        totalWinnings,
-        totalLosses,
-        netHouseProfit
+      console.log('💰 Admin Stats - Financial Data:', {
+        source: 'Multiple APIs',
+        userStats: {
+          totalWinnings,
+          totalLosses,
+          netHouseProfit
+        },
+        allTimeAnalytics: {
+          totalGames: allTimeAnalytics?.totalGames || 0,
+          totalBets: allTimeAnalytics?.totalBets || 0,
+          totalPayouts: allTimeAnalytics?.totalPayouts || 0,
+          profitLoss: allTimeAnalytics?.profitLoss || 0
+        },
+        dailyAnalytics: {
+          totalGames: dailyAnalytics?.totalGames || 0,
+          totalBets: dailyAnalytics?.totalBets || 0,
+          profitLoss: dailyAnalytics?.profitLoss || 0
+        }
       });
 
       const combinedStats: AdminStats = {
@@ -176,14 +137,17 @@ export function useAdminStats() {
         bannedUsers: userStats?.bannedUsers || 0,
         activeGames: realtimeStats?.currentGame ? 1 : 0,
         totalGamesToday: realtimeStats?.todayGameCount || dailyAnalytics?.totalGames || 0,
-        totalRevenue: dailyAnalytics?.totalBets || 0,
-        todayRevenue: dailyAnalytics?.profitLoss || 0,
-        totalBets: dailyAnalytics?.totalBets || 0,
-        todayBets: dailyAnalytics?.totalBets || 0,
-        totalPayouts: dailyAnalytics?.totalPayouts || 0,
-        todayPayouts: dailyAnalytics?.totalPayouts || 0,
-        profitLoss: dailyAnalytics?.profitLoss || 0,
-        todayProfitLoss: dailyAnalytics?.profitLoss || 0,
+        
+        // ✅ FIX: Use ALL TIME stats for totals, daily stats for today
+        totalRevenue: allTimeAnalytics?.totalBets || 0,           // ALL TIME
+        todayRevenue: dailyAnalytics?.totalBets || 0,             // TODAY
+        totalBets: allTimeAnalytics?.totalBets || 0,              // ALL TIME
+        todayBets: dailyAnalytics?.totalBets || 0,                // TODAY
+        totalPayouts: allTimeAnalytics?.totalPayouts || 0,        // ALL TIME
+        todayPayouts: dailyAnalytics?.totalPayouts || 0,          // TODAY
+        profitLoss: allTimeAnalytics?.profitLoss || 0,            // ALL TIME
+        todayProfitLoss: dailyAnalytics?.profitLoss || 0,         // TODAY
+        
         pendingDeposits,
         pendingWithdrawals,
         activePlayers: realtimeStats?.currentGame?.totalPlayers || realtimeStats?.todayPlayers || 0,

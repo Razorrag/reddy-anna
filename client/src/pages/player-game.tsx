@@ -272,35 +272,29 @@ const PlayerGame: React.FC = () => {
     }
 
     try {
-      // Call the undo endpoint (now undos ALL bets)
+      // Call the undo endpoint
       const response = await apiClient.delete<{
         success: boolean;
         message?: string;
         data?: {
-          cancelledBets: Array<{
-            betId: string;
-            side: BetSide;
-            amount: number;
-            round: string;
-          }>;
           refundedAmount: number;
           newBalance: number;
+          round: number;
         };
         error?: string;
       }>('/user/undo-last-bet');
 
       if (response.success && response.data) {
-        const { refundedAmount, newBalance, cancelledBets } = response.data;
+        const { refundedAmount, newBalance, round } = response.data;
         
-        // Update balance
+        // Update balance immediately
         updateBalance(newBalance, 'api');
         
-        // ✅ FIX: Don't clear immediately - wait for WebSocket 'all_bets_cancelled' or 'user_bets_update'
-        // This prevents race condition where frontend clears before backend confirms
-        // The WebSocket handlers (all_bets_cancelled + user_bets_update) will handle the clearing
+        // Clear bets for the current round
+        clearRoundBets(round as 1 | 2);
         
         showNotification(
-          `All Round ${gameState.currentRound} bets (₹${refundedAmount.toLocaleString('en-IN')}) removed`,
+          `Round ${round} bets cancelled. ₹${refundedAmount.toLocaleString('en-IN')} refunded.`,
           'success'
         );
       } else {
@@ -313,9 +307,8 @@ const PlayerGame: React.FC = () => {
         errorMessage = 'Cannot undo - betting phase has ended';
       } else if (error.message?.includes('No active bets')) {
         errorMessage = `No bets in Round ${gameState.currentRound} to undo`;
-      } else if (error.message?.includes('Round')) {
-        // Extract the error message from server (already includes round number)
-        errorMessage = error.message;
+      } else if (error.message?.includes('mismatch')) {
+        errorMessage = 'Bet data mismatch. Please refresh the page.';
       }
       showNotification(errorMessage, 'warning');
     }

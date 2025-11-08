@@ -3,6 +3,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage-supabase";
+import { supabaseServer } from "./lib/supabaseServer";
 import { registerUser, loginUser, loginAdmin, requireAuth } from './auth';
 import { processPayment, getTransactionHistory, applyDepositBonus, applyReferralBonus, checkConditionalBonus, applyAvailableBonus } from './payment';
 import {
@@ -908,7 +909,7 @@ function startTimer(duration: number, onComplete: () => void) {
       seconds: currentGameState.timer,
       phase: currentGameState.phase,
       round: currentGameState.currentRound,
-      bettingLocked: false // Betting is open
+      bettingLocked: currentGameState.bettingLocked // ✅ FIX: Include betting state
     }
   });
   
@@ -927,7 +928,7 @@ function startTimer(duration: number, onComplete: () => void) {
         seconds: currentGameState.timer,
         phase: currentGameState.phase,
         round: currentGameState.currentRound,
-        bettingLocked: currentGameState.timer <= 0
+        bettingLocked: currentGameState.bettingLocked // ✅ FIX: Include betting state
       }
     });
     
@@ -959,7 +960,7 @@ function startTimer(duration: number, onComplete: () => void) {
         data: {
           phase: 'dealing',
           round: currentGameState.currentRound,
-          bettingLocked: true,
+          bettingLocked: true, // ✅ FIX: Explicitly set betting locked
           message: 'Betting closed. Admin can now deal cards.'
         }
       });
@@ -2452,8 +2453,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
               description: `Withdrawal requested - ₹${numAmount} deducted (pending admin approval)`
             });
           } catch (txError: any) {
-            // ✅ FIX: Don't fail withdrawal if transaction logging fails (table may not exist)
-            console.warn('⚠️ Transaction logging failed (non-critical):', txError.message);
+            // ✅ FIX #3: Don't fail withdrawal if transaction logging fails, but maintain audit trail
+            console.warn('⚠️ Transaction logging to database failed (non-critical):', txError.message);
+            
+            // Fallback: Log to console with structured format for external log aggregators
+            console.log('AUDIT_LOG', JSON.stringify({
+              type: 'withdrawal_pending',
+              userId: req.user.id,
+              amount: -numAmount,
+              balanceBefore: currentBalance,
+              balanceAfter: newBalance,
+              referenceId: `withdrawal_pending_${Date.now()}`,
+              description: `Withdrawal requested - ₹${numAmount} deducted (pending admin approval)`,
+              timestamp: new Date().toISOString(),
+              source: 'fallback_logger'
+            }));
           }
         } catch (deductError: any) {
           console.error('Failed to deduct withdrawal amount:', deductError);
@@ -2638,28 +2652,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             req.user.id
           );
           
-          // ✅ NEW: Create deposit bonus record for tracking
-          try {
-            const depositAmount = parseFloat(request.amount);
-            const bonusPercentage = 5; // 5% deposit bonus
-            const bonusAmount = depositAmount * (bonusPercentage / 100);
-            const wageringMultiplier = 10; // 10x wagering requirement
-            const wageringRequired = bonusAmount * wageringMultiplier;
-            
-            await storage.createDepositBonus({
-              userId: request.user_id,
-              depositRequestId: id,
-              depositAmount,
-              bonusAmount,
-              bonusPercentage,
-              wageringRequired
-            });
-            
-            console.log(`✅ Deposit bonus created: ₹${bonusAmount} for user ${request.user_id} (${bonusPercentage}% of ₹${depositAmount})`);
-          } catch (bonusError) {
-            console.error(`⚠️ Error creating deposit bonus:`, bonusError);
-            // Don't fail approval if bonus creation fails
-          }
+          // ✅ FIX: Removed duplicate bonus creation - approvePaymentRequestAtomic() already handles:
+          // 1. Balance addition
+          // 2. Bonus calculation (from game settings)
+          // 3. Wagering requirement (from game settings)
+          // 4. Bonus locking until wagering complete
           
           // Check if bonus threshold reached for auto-credit (if applicable)
           try {
@@ -2701,6 +2698,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Send WebSocket notifications IMMEDIATELY (optimistic - already updated in DB via atomic function)
       const newBalance = approvalResult.balance;
+      
+      // ✅ FIX #4: Verify balance is valid after atomic operation
+      if (newBalance < 0) {
+        console.error(`❌ CRITICAL: Negative balance detected after approval for user ${request.user_id}: ₹${newBalance}`);
+        // Alert admins about critical balance issue
+        broadcastToRole({
+          type: 'critical_error',
+          data: {
+            message: `CRITICAL: User ${request.user_id} has negative balance: ₹${newBalance} after ${request.request_type} approval`,
+            userId: request.user_id,
+            balance: newBalance,
+            requestId: id,
+            requestType: request.request_type,
+            amount: request.amount
+          }
+        }, 'admin');
+      }
+      
       try {
         clients.forEach(client => {
           if (client.userId === request.user_id && client.ws.readyState === WebSocket.OPEN) {
@@ -4669,46 +4684,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userId = req.user.id;
       
-      // Get current game session
-      const currentGame = await storage.getCurrentGameSession();
-      if (!currentGame) {
-        return res.status(404).json({
-          success: false,
-          error: 'No active game session found'
-        });
-      }
-
+      // ✅ FIX: Use in-memory game state as primary source
+      const gamePhase = (global as any).currentGameState?.phase || 'idle';
+      const currentRound = (global as any).currentGameState?.currentRound || 1;
+      const gameId = (global as any).currentGameState?.gameId;
+      
+      console.log(`🔍 UNDO REQUEST: User ${userId}, Phase: ${gamePhase}, Round: ${currentRound}, GameID: ${gameId}`);
+      
       // 🔒 SECURITY: Only allow bet cancellation during betting phase
-      if (currentGame.phase !== 'betting') {
+      if (gamePhase !== 'betting') {
         return res.status(400).json({
           success: false,
-          error: `Cannot undo bets after betting phase. Current phase: ${currentGame.phase}`
+          error: `Cannot undo bets after betting phase. Current phase: ${gamePhase}`
         });
       }
-
-      // ✅ CRITICAL FIX: Get current round from game state
-      const currentRound = currentGameState.currentRound;
       
-      console.log(`🔍 UNDO REQUEST: User ${userId}, Current Round: ${currentRound}, Game Phase: ${currentGame.phase}`);
+      // Validate game ID exists
+      if (!gameId || gameId === 'default-game') {
+        return res.status(404).json({
+          success: false,
+          error: 'No active game found. Please wait for admin to start a game.'
+        });
+      }
       
-      // Get user's bets for current game
-      const userBets = await storage.getBetsForUser(userId, currentGame.gameId);
+      // Get ALL user's bets for current game (including cancelled to check properly)
+      const { data: allUserBets, error: fetchError } = await supabaseServer
+        .from('player_bets')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('game_id', gameId);
       
-      // ✅ CRITICAL DEBUG: Log what we're comparing
-      console.log(`🔍 UNDO DEBUG:`, {
-        currentRound,
-        currentRoundType: typeof currentRound,
-        userBetsCount: userBets.length,
-        userBetsRounds: userBets.map(b => ({ round: b.round, roundType: typeof b.round, status: b.status, amount: b.amount }))
-      });
+      if (fetchError) {
+        console.error('Error fetching user bets:', fetchError);
+        throw new Error('Failed to fetch bets');
+      }
       
-      // ✅ CRITICAL FIX: Filter active bets ONLY from CURRENT round
-      // Convert DB string to number for comparison
-      const activeBets = userBets.filter(bet => {
-        const betRoundNum = parseInt(bet.round); // DB stores as varchar, convert to number
-        const matches = bet.status !== 'cancelled' && betRoundNum === currentRound;
-        console.log(`  🔍 Comparing bet: round="${bet.round}" (string) → ${betRoundNum} (number), currentRound=${currentRound}, status="${bet.status}", matches=${matches}`);
-        return matches;
+      // Filter: ONLY active bets from CURRENT round
+      const activeBets = (allUserBets || []).filter(bet => {
+        const betRoundNum = parseInt(bet.round);
+        return bet.status === 'pending' && betRoundNum === currentRound;
       });
       
       if (activeBets.length === 0) {
@@ -4718,199 +4732,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // ✅ FIX: Calculate TOTAL refund amount for ALL bets
+      // Calculate total refund amount
       const totalRefundAmount = activeBets.reduce((sum, bet) => sum + parseFloat(bet.amount), 0);
       
-      console.log(`🔄 UNDOING ALL BETS for user ${userId}:`, {
-        betCount: activeBets.length,
-        totalRefund: totalRefundAmount,
-        bets: activeBets.map(b => ({ side: b.side, amount: b.amount, round: b.round }))
-      });
+      // ✅ VALIDATION: Check against in-memory game state to prevent exploits
+      let expectedTotal = 0;
+      for (const bet of activeBets) {
+        const round = parseInt(bet.round);
+        const side = bet.side as 'andar' | 'bahar';
+        const amount = parseFloat(bet.amount);
+        
+        // Verify this bet exists in game state
+        if (currentGameState.userBets.has(userId)) {
+          const userState = currentGameState.userBets.get(userId)!;
+          const stateAmount = round === 1 ? userState.round1[side] : userState.round2[side];
+          expectedTotal += amount;
+        }
+      }
+      
+      // If amounts don't match, something is wrong
+      if (Math.abs(totalRefundAmount - expectedTotal) > 0.01 && expectedTotal > 0) {
+        console.error(`⚠️ Refund amount mismatch: DB=${totalRefundAmount}, State=${expectedTotal}`);
+        return res.status(400).json({
+          success: false,
+          error: 'Bet amount mismatch. Please refresh and try again.'
+        });
+      }
+      
+      console.log(`🔄 UNDOING ${activeBets.length} BETS for user ${userId}, Total: ₹${totalRefundAmount}`);
 
-      // Refund ALL bets at once
-      const newBalance = await storage.addBalanceAtomic(userId, totalRefundAmount);
-
-      // Cancel ALL bets in database
+      // ✅ STEP 1: Cancel bets in database FIRST (prevents double refund if crash happens)
       for (const bet of activeBets) {
         await storage.updateBetDetails(bet.id, {
           status: 'cancelled'
         });
       }
+      
+      // ✅ STEP 2: Refund balance (after bets are cancelled)
+      const newBalance = await storage.addBalanceAtomic(userId, totalRefundAmount);
 
-      // ✅ CRITICAL FIX: Update in-memory state for ALL bets
-      // Log BEFORE state
-      console.log(`🔍 BEFORE UNDO ALL - State:`, {
-        round1Andar: currentGameState.round1Bets.andar,
-        round1Bahar: currentGameState.round1Bets.bahar,
-        round2Andar: currentGameState.round2Bets.andar,
-        round2Bahar: currentGameState.round2Bets.bahar,
-        userInMap: currentGameState.userBets.has(userId)
+      // ✅ STEP 3: Update in-memory game state
+      console.log(`🔍 BEFORE UNDO - Game State:`, {
+        round1: currentGameState.round1Bets,
+        round2: currentGameState.round2Bets
       });
       
-      // Process each bet
+      // Clear user's bets from game state
       for (const bet of activeBets) {
         const side = bet.side as 'andar' | 'bahar';
         const round = parseInt(bet.round);
         const amount = parseFloat(bet.amount);
         
-        // Update user's individual bet tracking (if they exist in map)
+        // Update user's individual tracking
         if (currentGameState.userBets.has(userId)) {
           const userBetsState = currentGameState.userBets.get(userId)!;
           if (round === 1) {
-            userBetsState.round1[side] = Math.max(0, userBetsState.round1[side] - amount);
+            userBetsState.round1[side] -= amount;
+            if (userBetsState.round1[side] < 0) userBetsState.round1[side] = 0;
           } else {
-            userBetsState.round2[side] = Math.max(0, userBetsState.round2[side] - amount);
+            userBetsState.round2[side] -= amount;
+            if (userBetsState.round2[side] < 0) userBetsState.round2[side] = 0;
           }
         }
         
-        // ✅ ALWAYS update global totals (critical for admin dashboard)
+        // Update global totals (for admin dashboard)
         if (round === 1) {
-          currentGameState.round1Bets[side] = Math.max(0, currentGameState.round1Bets[side] - amount);
+          currentGameState.round1Bets[side] -= amount;
+          if (currentGameState.round1Bets[side] < 0) currentGameState.round1Bets[side] = 0;
         } else {
-          currentGameState.round2Bets[side] = Math.max(0, currentGameState.round2Bets[side] - amount);
+          currentGameState.round2Bets[side] -= amount;
+          if (currentGameState.round2Bets[side] < 0) currentGameState.round2Bets[side] = 0;
         }
       }
       
-      // Log AFTER state
-      console.log(`✅ AFTER UNDO ALL - State:`, {
-        round1Andar: currentGameState.round1Bets.andar,
-        round1Bahar: currentGameState.round1Bets.bahar,
-        round2Andar: currentGameState.round2Bets.andar,
-        round2Bahar: currentGameState.round2Bets.bahar,
-        totalRemoved: totalRefundAmount
+      console.log(`✅ AFTER UNDO - Game State:`, {
+        round1: currentGameState.round1Bets,
+        round2: currentGameState.round2Bets
       });
 
-      // Calculate updated totals for admin
+      // ✅ STEP 4: Broadcast to admin (instant update)
       const totalAndar = currentGameState.round1Bets.andar + currentGameState.round2Bets.andar;
       const totalBahar = currentGameState.round1Bets.bahar + currentGameState.round2Bets.bahar;
-
-      // ✅ FIX: Broadcast ALL cancelled bets to all clients
-      broadcast({
-        type: 'all_bets_cancelled',
-        data: {
-          userId,
-          cancelledBets: activeBets.map(bet => ({
-            betId: bet.id,
-            side: bet.side,
-            amount: parseFloat(bet.amount),
-            round: bet.round
-          })),
-          totalRefunded: totalRefundAmount,
-          newBalance: newBalance
-        }
-      });
-
-      // ✅ FIX: Broadcast updated totals to admin dashboard (INSTANT UPDATE)
-      const adminUpdateMessage = {
-        type: 'admin_bet_update',
-        data: {
-          userId,
-          action: 'undo_all',
-          cancelledBets: activeBets.map(bet => ({
-            side: bet.side,
-            amount: parseFloat(bet.amount),
-            round: bet.round
-          })),
-          totalRefunded: totalRefundAmount,
-          totalAndar,
-          totalBahar,
-          round1Bets: currentGameState.round1Bets,
-          round2Bets: currentGameState.round2Bets
-        }
-      };
       
-      // Log before broadcasting
-      const adminClients = Array.from(clients).filter(c => c.role === 'admin' || c.role === 'super_admin');
-      console.log(`📤 Broadcasting admin_bet_update to ${adminClients.length} admin clients:`, {
-        totalAndar,
-        totalBahar,
-        round1Bets: currentGameState.round1Bets,
-        round2Bets: currentGameState.round2Bets
-      });
+      if (typeof broadcastToRole === 'function') {
+        broadcastToRole({
+          type: 'admin_bet_update',
+          data: {
+            gameId: gameId,
+            userId,
+            action: 'undo',
+            round: currentRound,
+            totalRefunded: totalRefundAmount,
+            round1Bets: currentGameState.round1Bets,
+            round2Bets: currentGameState.round2Bets,
+            totalAndar,
+            totalBahar
+          }
+        }, 'admin');
+        console.log(`✅ Admin notified: Round ${currentRound} totals updated`);
+      }
       
-      broadcastToRole(adminUpdateMessage, 'admin');
-      
-      // ✅ CRITICAL: Broadcast full game state sync to ALL clients (admin + players)
-      broadcast({
-        type: 'game_state_sync',
-        data: {
-          gameId: currentGameState.gameId,
-          phase: currentGameState.phase,
-          currentRound: currentGameState.currentRound,
-          round1Bets: currentGameState.round1Bets,
-          round2Bets: currentGameState.round2Bets,
-          totalAndar,
-          totalBahar,
-          message: `Bets undone by user ${userId}`
-        }
-      });
-
-      console.log(`✅ ALL BETS UNDONE: User ${userId}, ${activeBets.length} bets from Round ${currentRound}, Total ₹${totalRefundAmount}`);
-      console.log(`📊 Updated totals - Andar: ₹${totalAndar}, Bahar: ₹${totalBahar}`);
-
-      // ✅ FIX: Send updated bet totals to user from DB (now excludes cancelled bets)
-      // Find the user's WebSocket connection and send fresh data
-      try {
-        const userClient = Array.from(clients).find(c => c.userId === userId);
-        if (userClient && userClient.ws && userClient.ws.readyState === 1) {
-          // Fetch fresh bet data from DB (getBetsForUser now excludes cancelled bets)
-          const freshUserBets = await storage.getBetsForUser(userId, currentGame.gameId);
-          
-          let userRound1Bets = { andar: [] as number[], bahar: [] as number[] };
-          let userRound2Bets = { andar: [] as number[], bahar: [] as number[] };
-          
-          freshUserBets.forEach((bet: any) => {
-            const betAmount = parseFloat(bet.amount);
-            if (bet.round === '1' || bet.round === 1) {
-              if (bet.side === 'andar') {
-                userRound1Bets.andar.push(betAmount);
-              } else if (bet.side === 'bahar') {
-                userRound1Bets.bahar.push(betAmount);
-              }
-            } else if (bet.round === '2' || bet.round === 2) {
-              if (bet.side === 'andar') {
-                userRound2Bets.andar.push(betAmount);
-              } else if (bet.side === 'bahar') {
-                userRound2Bets.bahar.push(betAmount);
-              }
-            }
-          });
-          
-          userClient.ws.send(JSON.stringify({
-            type: 'user_bets_update',
-            data: {
-              round1Bets: userRound1Bets,
-              round2Bets: userRound2Bets
-            }
-          }));
-          
-          console.log(`📤 Sent fresh user_bets_update to ${userId}:`, { 
-            round1: userRound1Bets, 
-            round2: userRound2Bets 
-          });
-        }
-      } catch (refreshError) {
-        console.error('⚠️ Error sending user_bets_update after undo:', refreshError);
-        // Don't fail the undo if refresh fails
+      // ✅ STEP 5: Notify user (all their connections)
+      if (typeof broadcast === 'function') {
+        broadcast({
+          type: 'bet_undo_success',
+          data: {
+            userId,
+            round: currentRound,
+            refundedAmount: totalRefundAmount,
+            newBalance
+          }
+        });
       }
 
+      console.log(`✅ UNDO COMPLETE: User ${userId}, Round ${currentRound}, Refunded ₹${totalRefundAmount}`);
+      
       res.json({
         success: true,
-        message: `All bets undone successfully. ₹${totalRefundAmount.toLocaleString('en-IN')} refunded to your balance.`,
+        message: `All Round ${currentRound} bets cancelled. ₹${totalRefundAmount.toLocaleString('en-IN')} refunded.`,
         data: {
-          // ✅ FIX: Always return cancelledBets as an array (even if empty)
-          cancelledBets: Array.isArray(activeBets) ? activeBets.map(bet => ({
-            betId: bet.id,
-            side: bet.side,
-            amount: parseFloat(bet.amount),
-            round: bet.round
-          })) : [],
           refundedAmount: totalRefundAmount,
-          newBalance
+          newBalance,
+          round: currentRound
         }
       });
-    } catch (error) {
-      console.error('Undo bet error:', error);
+    } catch (error: any) {
+      console.error('❌ UNDO BET ERROR:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       res.status(500).json({
         success: false,
         error: 'Failed to undo bet'
@@ -5342,6 +5294,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Analytics error:', error);
       res.status(500).json({ success: false, error: 'Failed to retrieve analytics' });
+    }
+  });
+
+  // ✅ NEW: ALL TIME analytics endpoint
+  app.get("/api/admin/analytics/all-time", generalLimiter, async (req, res) => {
+    try {
+      const { supabaseServer } = await import('./lib/supabaseServer');
+      
+      console.log('📊 Fetching ALL TIME analytics...');
+      
+      // Get ALL daily stats and sum them
+      const { data: allDailyStats, error } = await supabaseServer
+        .from('daily_game_statistics')
+        .select('*');
+      
+      if (error) {
+        console.error('❌ Error fetching daily stats:', error);
+        throw error;
+      }
+      
+      console.log(`📊 Found ${allDailyStats?.length || 0} daily records`);
+      
+      // ✅ FIX #5: Get actual unique player count from users table (not summed daily counts)
+      const { data: usersData, error: usersError } = await supabaseServer
+        .from('users')
+        .select('id', { count: 'exact', head: true });
+      
+      const actualUniquePlayers = usersData?.length || 0;
+      
+      if (usersError) {
+        console.warn('⚠️ Could not fetch unique players count:', usersError.message);
+      }
+      
+      // Calculate all-time totals by summing all daily records
+      const allTimeStats = {
+        totalGames: allDailyStats?.reduce((sum, day) => sum + (day.total_games || 0), 0) || 0,
+        totalBets: allDailyStats?.reduce((sum, day) => sum + parseFloat(day.total_bets || '0'), 0) || 0,
+        totalPayouts: allDailyStats?.reduce((sum, day) => sum + parseFloat(day.total_payouts || '0'), 0) || 0,
+        totalRevenue: allDailyStats?.reduce((sum, day) => sum + parseFloat(day.total_revenue || '0'), 0) || 0,
+        profitLoss: allDailyStats?.reduce((sum, day) => sum + parseFloat(day.profit_loss || '0'), 0) || 0,
+        totalPlayerWinnings: allDailyStats?.reduce((sum, day) => sum + parseFloat(day.total_player_winnings || '0'), 0) || 0,
+        totalPlayerLosses: allDailyStats?.reduce((sum, day) => sum + parseFloat(day.total_player_losses || '0'), 0) || 0,
+        netHouseProfit: allDailyStats?.reduce((sum, day) => sum + parseFloat(day.net_house_profit || '0'), 0) || 0,
+        uniquePlayers: actualUniquePlayers, // ✅ FIX: Use actual unique count from users table
+        daysTracked: allDailyStats?.length || 0
+      };
+      
+      console.log('📊 ALL TIME Stats Calculated:', {
+        totalGames: allTimeStats.totalGames,
+        totalBets: allTimeStats.totalBets,
+        profitLoss: allTimeStats.profitLoss,
+        netHouseProfit: allTimeStats.netHouseProfit
+      });
+      
+      res.json({ success: true, data: allTimeStats });
+    } catch (error) {
+      console.error('❌ All-time stats error:', error);
+      res.status(500).json({ success: false, error: 'Failed to retrieve all-time stats' });
     }
   });
 

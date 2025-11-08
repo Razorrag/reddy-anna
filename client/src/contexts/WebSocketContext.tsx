@@ -504,24 +504,24 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
         break;
 
-      case 'all_bets_cancelled':
-        // ✅ NEW: Handle ALL bets being cancelled at once
+      case 'bet_undo_success':
+        // Handle bet undo confirmation from server
         // Only process if it's for the current user
         if (data.data.userId && authState.user?.id && data.data.userId !== authState.user.id) {
-          console.log(`⚠️ Ignoring all_bets_cancelled for different user: ${data.data.userId} (current: ${authState.user.id})`);
+          console.log(`⚠️ Ignoring bet_undo_success for different user: ${data.data.userId} (current: ${authState.user.id})`);
           break;
         }
         
-        console.log('🔄 ALL BETS CANCELLED:', data.data);
+        console.log('✅ BET UNDO SUCCESS:', data.data);
         
         // Update balance if provided
         if (data.data.newBalance !== undefined && data.data.newBalance !== null) {
           updatePlayerWallet(data.data.newBalance);
-          // Dispatch balance event for other contexts to update immediately
+          // Dispatch balance event for other contexts
           const balanceEvent = new CustomEvent('balance-websocket-update', {
             detail: { 
               balance: data.data.newBalance, 
-              amount: data.data.totalRefunded, // Total refund amount
+              amount: data.data.refundedAmount,
               type: 'bet_refund', 
               timestamp: Date.now() 
             }
@@ -529,28 +529,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           window.dispatchEvent(balanceEvent);
         }
         
-        // ✅ FIX: Clear ALL bets for the current round at once
-        // Group bets by round and side, then clear each group
-        if (data.data.cancelledBets && Array.isArray(data.data.cancelledBets)) {
-          const betsByRoundAndSide = new Map<string, { round: 1 | 2; side: BetSide }>();
-          
-          for (const bet of data.data.cancelledBets) {
-            const round = parseInt(bet.round || '1') as 1 | 2;
-            const side = bet.side as BetSide;
-            const key = `${round}-${side}`;
-            betsByRoundAndSide.set(key, { round, side });
-          }
-          
-          // Clear each round/side combination
-          for (const { round, side } of betsByRoundAndSide.values()) {
-            clearRoundBets(round, side);
-          }
+        // Clear bets for the round
+        if (data.data.round) {
+          clearRoundBets(data.data.round as 1 | 2);
         }
-        
-        showNotification(
-          `All Round ${gameState.currentRound} bets (₹${data.data.totalRefunded?.toLocaleString('en-IN') || 0}) have been cancelled`,
-          'success'
-        );
         break;
 
       case 'bet_cancelled':

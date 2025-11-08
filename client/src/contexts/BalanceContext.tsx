@@ -159,7 +159,7 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [state.currentBalance, updateBalance, isAdmin]);
 
-  // Initialize balance from localStorage
+  // Initialize balance from localStorage and fetch fresh balance
   useEffect(() => {
     const userStr = localStorage.getItem('user');
     if (userStr) {
@@ -172,7 +172,15 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         console.error('Failed to parse user balance from localStorage:', error);
       }
     }
-  }, [updateBalance]);
+    
+    // ✅ FIX: Fetch fresh balance from API on mount (skip for admins)
+    if (!isAdmin) {
+      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      if (isLoggedIn) {
+        refreshBalance();
+      }
+    }
+  }, [updateBalance, refreshBalance, isAdmin]);
 
   // Listen for WebSocket balance updates
   useEffect(() => {

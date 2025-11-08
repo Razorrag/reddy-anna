@@ -520,6 +520,28 @@ export const getUserStatistics = async (userId?: string): Promise<UserManagement
         return sum + balance;
       }, 0);
       
+      // ✅ FIX: Calculate total winnings and losses from all users
+      const totalWinnings = allUsers.reduce((sum: number, u: any) => {
+        const winnings = u.total_winnings ?? u.totalWinnings ?? 0;
+        const parsed = typeof winnings === 'string' ? parseFloat(winnings) : (typeof winnings === 'number' ? winnings : 0);
+        return sum + (isNaN(parsed) ? 0 : parsed);
+      }, 0);
+      
+      const totalLosses = allUsers.reduce((sum: number, u: any) => {
+        const losses = u.total_losses ?? u.totalLosses ?? 0;
+        const parsed = typeof losses === 'string' ? parseFloat(losses) : (typeof losses === 'number' ? losses : 0);
+        return sum + (isNaN(parsed) ? 0 : parsed);
+      }, 0);
+      
+      // ✅ FIX: Calculate total games played
+      const totalGamesPlayed = allUsers.reduce((sum: number, u: any) => {
+        const games = u.games_played ?? u.gamesPlayed ?? 0;
+        return sum + (typeof games === 'number' ? games : parseInt(games) || 0);
+      }, 0);
+      
+      // Calculate net house profit (losses - winnings)
+      const netHouseProfit = totalLosses - totalWinnings;
+      
       // Calculate new users today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -540,6 +562,14 @@ export const getUserStatistics = async (userId?: string): Promise<UserManagement
       // Calculate average balance
       const averageBalance = totalUsers > 0 ? totalBalance / totalUsers : 0;
       
+      console.log('📊 getUserStatistics - Financial Summary:', {
+        totalUsers,
+        totalWinnings,
+        totalLosses,
+        netHouseProfit,
+        totalGamesPlayed
+      });
+      
       const statistics = {
         totalUsers,
         activeUsers,
@@ -548,7 +578,12 @@ export const getUserStatistics = async (userId?: string): Promise<UserManagement
         totalBalance,
         newUsersToday,
         newUsersThisMonth,
-        averageBalance
+        averageBalance,
+        // ✅ NEW: Add financial statistics
+        totalWinnings,
+        totalLosses,
+        netHouseProfit,
+        totalGamesPlayed
       };
 
       // ✅ FIX: Return 'data' instead of 'user' to match frontend expectations

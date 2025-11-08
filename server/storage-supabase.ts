@@ -120,6 +120,12 @@ export interface IStorage {
   createBet(bet: InsertBet): Promise<PlayerBet>;
   getBetsForGame(gameId: string): Promise<PlayerBet[]>;
   getBetsForUser(userId: string, gameId: string): Promise<PlayerBet[]>;
+  getBettingTotals(gameId: string): Promise<{
+    round1Bets: { andar: number; bahar: number };
+    round2Bets: { andar: number; bahar: number };
+    totalAndar: number;
+    totalBahar: number;
+  }>;
   updateBetStatus(betId: string, status: string): Promise<void>;
   updateBetStatusByGameUser(gameId: string, userId: string, side: string, status: string): Promise<void>;
   updateBetDetails(betId: string, updates: Partial<UpdateBet>): Promise<void>;
@@ -1065,14 +1071,30 @@ export class SupabaseStorage implements IStorage {
       const gamesPlayed = (user.games_played || 0) + 1;
       const gamesWon = won ? (user.games_won || 0) + 1 : (user.games_won || 0);
       
-      // For winnings/losses: track the profit/loss, not the payout
-      const profitLoss = payoutAmount - betAmount;
-      const totalWinnings = profitLoss > 0 
-        ? (parseFloat(user.total_winnings as any) || 0) + profitLoss 
-        : (parseFloat(user.total_winnings as any) || 0);
-      const totalLosses = profitLoss < 0 
-        ? (parseFloat(user.total_losses as any) || 0) + Math.abs(profitLoss)
-        : (parseFloat(user.total_losses as any) || 0);
+      // ✅ FIX: Track actual winnings and losses, not just profit/loss
+      const currentWinnings = parseFloat(user.total_winnings as any) || 0;
+      const currentLosses = parseFloat(user.total_losses as any) || 0;
+      
+      let newWinnings = currentWinnings;
+      let newLosses = currentLosses;
+      
+      if (payoutAmount > betAmount) {
+        // Player won - add NET PROFIT to winnings
+        const profit = payoutAmount - betAmount;
+        newWinnings = currentWinnings + profit;
+        console.log(`✅ User ${userId} WON: Bet ₹${betAmount}, Payout ₹${payoutAmount}, Profit ₹${profit}`);
+      } else if (payoutAmount < betAmount) {
+        // Player lost - add NET LOSS to losses
+        const loss = betAmount - payoutAmount;
+        newLosses = currentLosses + loss;
+        console.log(`❌ User ${userId} LOST: Bet ₹${betAmount}, Payout ₹${payoutAmount}, Loss ₹${loss}`);
+      } else {
+        // Refund (1:0 payout) - no change to winnings/losses
+        console.log(`🔄 User ${userId} REFUND: Bet ₹${betAmount}, Payout ₹${payoutAmount}, No change`);
+      }
+      
+      const totalWinnings = newWinnings;
+      const totalLosses = newLosses;
 
       // Update user statistics
       const { error } = await supabaseServer
@@ -1276,6 +1298,7 @@ export class SupabaseStorage implements IStorage {
     if (updates.winningCard !== undefined) dbUpdates.winning_card = updates.winningCard;
     if ((updates as any).winningRound !== undefined) dbUpdates.winning_round = (updates as any).winningRound;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if ((updates as any).ended_at !== undefined) dbUpdates.ended_at = (updates as any).ended_at;
 
     const { error } = await supabaseServer
       .from('game_sessions')
@@ -1402,14 +1425,41 @@ export class SupabaseStorage implements IStorage {
     return data;
   }
 
+  /**
+   * Get active bets for a game (excludes cancelled bets).
+   * Use this for game logic, payout calculations, and statistics.
+   * For audit trails or admin full view, use getAllBetsForGame() instead.
+   */
   async getBetsForGame(gameId: string): Promise<PlayerBet[]> {
     const { data, error } = await supabaseServer
       .from('player_bets')
       .select('*')
-      .eq('game_id', gameId);
+      .eq('game_id', gameId)
+      .neq('status', 'cancelled') // ✅ FIX: Exclude cancelled bets from game logic
+      .order('created_at', { ascending: true });
 
     if (error) {
       console.error('Error getting bets for game:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Get ALL bets for a game including cancelled ones.
+   * Use this ONLY for audit purposes, history display, or admin full view.
+   * For game logic and calculations, use getBetsForGame() instead.
+   */
+  async getAllBetsForGame(gameId: string): Promise<PlayerBet[]> {
+    const { data, error } = await supabaseServer
+      .from('player_bets')
+      .select('*')
+      .eq('game_id', gameId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error getting all bets for game:', error);
       return [];
     }
 
@@ -1603,6 +1653,53 @@ export class SupabaseStorage implements IStorage {
       andarCount: andarBets.length,
       baharCount: baharBets.length,
     };
+  }
+
+  /**
+   * Get current betting totals for a game (round-specific)
+   * Used after bet cancellation to update admin displays
+   */
+  async getBettingTotals(gameId: string): Promise<{
+    round1Bets: { andar: number; bahar: number };
+    round2Bets: { andar: number; bahar: number };
+    totalAndar: number;
+    totalBahar: number;
+  }> {
+    try {
+      // Query all active bets for this game
+      const { data: bets, error } = await supabaseServer
+        .from('player_bets')
+        .select('round, side, amount')
+        .eq('game_id', gameId)
+        .neq('status', 'cancelled'); // Exclude cancelled bets
+
+      if (error) throw error;
+
+      // Calculate totals
+      let round1Andar = 0, round1Bahar = 0;
+      let round2Andar = 0, round2Bahar = 0;
+
+      bets?.forEach(bet => {
+        const amount = Number(bet.amount);
+        if (bet.round === '1') {
+          if (bet.side === 'andar') round1Andar += amount;
+          else round1Bahar += amount;
+        } else if (bet.round === '2') {
+          if (bet.side === 'andar') round2Andar += amount;
+          else round2Bahar += amount;
+        }
+      });
+
+      return {
+        round1Bets: { andar: round1Andar, bahar: round1Bahar },
+        round2Bets: { andar: round2Andar, bahar: round2Bahar },
+        totalAndar: round1Andar + round2Andar,
+        totalBahar: round1Bahar + round2Bahar
+      };
+    } catch (error) {
+      console.error('Error getting betting totals:', error);
+      throw error;
+    }
   }
 
   // Card operations
@@ -2101,6 +2198,205 @@ export class SupabaseStorage implements IStorage {
         createdAt: gameSession?.created_at || gameData.bets[0]?.created_at
       };
     });
+  }
+  
+  // Analytics operations
+  /**
+   * Insert or update game statistics for a completed game
+   */
+  async upsertGameStatistics(gameId: string, stats: {
+    totalPlayers: number;
+    totalBets: number;
+    totalWinnings: number;
+    houseEarnings: number;
+    andarBetsCount: number;
+    baharBetsCount: number;
+    andarTotalBet: number;
+    baharTotalBet: number;
+    profitLoss: number;
+    profitLossPercentage: number;
+    housePayout: number;
+    gameDuration: number;
+    uniquePlayers: number;
+  }): Promise<void> {
+    try {
+      const { error } = await supabaseServer
+        .from('game_statistics')
+        .upsert({
+          game_id: gameId,
+          total_players: stats.totalPlayers,
+          total_bets: stats.totalBets,
+          total_winnings: stats.totalWinnings,
+          house_earnings: stats.houseEarnings,
+          andar_bets_count: stats.andarBetsCount,
+          bahar_bets_count: stats.baharBetsCount,
+          andar_total_bet: stats.andarTotalBet,
+          bahar_total_bet: stats.baharTotalBet,
+          profit_loss: stats.profitLoss,
+          profit_loss_percentage: stats.profitLossPercentage,
+          house_payout: stats.housePayout,
+          game_duration: stats.gameDuration,
+          unique_players: stats.uniquePlayers,
+          created_at: new Date().toISOString()
+        }, {
+          onConflict: 'game_id'
+        });
+
+      if (error) throw error;
+      console.log('✅ Game statistics updated for', gameId);
+    } catch (error) {
+      console.error('Error upserting game statistics:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update daily game statistics (upsert)
+   */
+  async updateDailyStatistics(date: string, gameStats: {
+    totalBets: number;
+    totalPayouts: number;
+    uniquePlayers: Set<string>;
+  }): Promise<void> {
+    try {
+      // Get existing record
+      const { data: existing } = await supabaseServer
+        .from('daily_game_statistics')
+        .select('*')
+        .eq('date', date)
+        .single();
+
+      const totalGames = ((existing as any)?.total_games || 0) + 1;
+      const totalBets = ((existing as any)?.total_bets || 0) + gameStats.totalBets;
+      const totalPayouts = ((existing as any)?.total_payouts || 0) + gameStats.totalPayouts;
+      const revenue = totalBets - totalPayouts;
+      const profitLoss = revenue;
+      const profitLossPercentage = totalBets > 0 ? (profitLoss / totalBets) * 100 : 0;
+      
+      // Merge unique players
+      const existingPlayers = new Set((existing as any)?.unique_players || []);
+      const allPlayers = new Set([...existingPlayers, ...gameStats.uniquePlayers]);
+
+      const { error } = await supabaseServer
+        .from('daily_game_statistics')
+        .upsert({
+          date,
+          total_games: totalGames,
+          total_bets: totalBets,
+          total_payouts: totalPayouts,
+          total_revenue: revenue,
+          profit_loss: profitLoss,
+          profit_loss_percentage: profitLossPercentage,
+          unique_players: allPlayers.size,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'date'
+        });
+
+      if (error) throw error;
+      console.log('✅ Daily statistics updated for', date);
+    } catch (error) {
+      console.error('Error updating daily statistics:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update monthly game statistics (upsert)
+   */
+  async updateMonthlyStatistics(monthYear: string, gameStats: {
+    totalBets: number;
+    totalPayouts: number;
+    uniquePlayers: Set<string>;
+  }): Promise<void> {
+    try {
+      const { data: existing } = await supabaseServer
+        .from('monthly_game_statistics')
+        .select('*')
+        .eq('month_year', monthYear)
+        .single();
+
+      const totalGames = ((existing as any)?.total_games || 0) + 1;
+      const totalBets = ((existing as any)?.total_bets || 0) + gameStats.totalBets;
+      const totalPayouts = ((existing as any)?.total_payouts || 0) + gameStats.totalPayouts;
+      const revenue = totalBets - totalPayouts;
+      const profitLoss = revenue;
+      const profitLossPercentage = totalBets > 0 ? (profitLoss / totalBets) * 100 : 0;
+      
+      const existingPlayers = new Set((existing as any)?.unique_players || []);
+      const allPlayers = new Set([...existingPlayers, ...gameStats.uniquePlayers]);
+
+      const { error } = await supabaseServer
+        .from('monthly_game_statistics')
+        .upsert({
+          month_year: monthYear,
+          total_games: totalGames,
+          total_bets: totalBets,
+          total_payouts: totalPayouts,
+          total_revenue: revenue,
+          profit_loss: profitLoss,
+          profit_loss_percentage: profitLossPercentage,
+          unique_players: allPlayers.size,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'month_year'
+        });
+
+      if (error) throw error;
+      console.log('✅ Monthly statistics updated for', monthYear);
+    } catch (error) {
+      console.error('Error updating monthly statistics:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update yearly game statistics (upsert)
+   */
+  async updateYearlyStatistics(year: number, gameStats: {
+    totalBets: number;
+    totalPayouts: number;
+    uniquePlayers: Set<string>;
+  }): Promise<void> {
+    try {
+      const { data: existing } = await supabaseServer
+        .from('yearly_game_statistics')
+        .select('*')
+        .eq('year', year)
+        .single();
+
+      const totalGames = ((existing as any)?.total_games || 0) + 1;
+      const totalBets = ((existing as any)?.total_bets || 0) + gameStats.totalBets;
+      const totalPayouts = ((existing as any)?.total_payouts || 0) + gameStats.totalPayouts;
+      const revenue = totalBets - totalPayouts;
+      const profitLoss = revenue;
+      const profitLossPercentage = totalBets > 0 ? (profitLoss / totalBets) * 100 : 0;
+      
+      const existingPlayers = new Set((existing as any)?.unique_players || []);
+      const allPlayers = new Set([...existingPlayers, ...gameStats.uniquePlayers]);
+
+      const { error } = await supabaseServer
+        .from('yearly_game_statistics')
+        .upsert({
+          year,
+          total_games: totalGames,
+          total_bets: totalBets,
+          total_payouts: totalPayouts,
+          total_revenue: revenue,
+          profit_loss: profitLoss,
+          profit_loss_percentage: profitLossPercentage,
+          unique_players: allPlayers.size,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'year'
+        });
+
+      if (error) throw error;
+      console.log('✅ Yearly statistics updated for', year);
+    } catch (error) {
+      console.error('Error updating yearly statistics:', error);
+      throw error;
+    }
   }
   
   // Settings operations

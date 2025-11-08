@@ -1,3 +1,10 @@
+/**
+ * ⚠️ DEPRECATED - DO NOT USE
+ * This file is NOT registered in routes.ts
+ * The undo endpoint is implemented directly in routes.ts (line 4660)
+ * This file is kept for reference only
+ */
+
 import { Request, Response } from 'express';
 import { storage } from '../storage-supabase';
 
@@ -28,7 +35,7 @@ export const getLastGameBets = async (req: Request, res: Response) => {
       return res.json({ success: true, bets: [] });
     }
 
-    const bets = await storage.getBetsForUser(userId, lastGame.game_id);
+    const bets = await storage.getBetsForUser(userId, lastGame.gameId);
     res.json({ success: true, bets });
   } catch (error) {
     console.error('Get last game bets error:', error);
@@ -63,8 +70,10 @@ export const undoLastBet = async (req: Request, res: Response) => {
       });
     }
 
+    const gameId = currentGame.gameId;
+
     // Get user's bets for current game
-    const userBets = await storage.getBetsForUser(userId, currentGame.game_id);
+    const userBets = await storage.getBetsForUser(userId, gameId);
     
     // Filter active bets (not cancelled)
     const activeBets = userBets.filter(bet => bet.status !== 'cancelled');
@@ -76,10 +85,10 @@ export const undoLastBet = async (req: Request, res: Response) => {
       });
     }
 
-    // Find the most recent bet (sort by created_at descending)
+    // Find the most recent bet (sort by createdAt descending)
     activeBets.sort((a, b) => {
-      const aTime = new Date(a.created_at || 0).getTime();
-      const bTime = new Date(b.created_at || 0).getTime();
+      const aTime = new Date(a.createdAt || 0).getTime();
+      const bTime = new Date(b.createdAt || 0).getTime();
       return bTime - aTime;
     });
 
@@ -109,6 +118,26 @@ export const undoLastBet = async (req: Request, res: Response) => {
         userBetsState.round2[side] -= betAmount;
         currentGameState.round2Bets[side] -= betAmount;
       }
+    }
+
+    // ✅ FIX: Get updated betting totals from database
+    const updatedTotals = await storage.getBettingTotals(gameId);
+
+    // ✅ FIX: Broadcast updated totals to admin clients
+    const broadcastToRole = (global as any).broadcastToRole;
+    if (typeof broadcastToRole === 'function') {
+      broadcastToRole({
+        type: 'admin_bet_update',
+        data: {
+          gameId,
+          round1Bets: updatedTotals.round1Bets,
+          round2Bets: updatedTotals.round2Bets,
+          totalAndar: updatedTotals.totalAndar,
+          totalBahar: updatedTotals.totalBahar,
+          reason: 'bet_undo'
+        }
+      }, 'admin');
+      console.log('✅ Admin bet totals updated after undo:', updatedTotals);
     }
 
     // Broadcast cancellation to all clients

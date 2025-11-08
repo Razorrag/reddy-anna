@@ -1,7 +1,9 @@
 import { X, Wallet, ArrowDownToLine, ArrowUpFromLine, Gift, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect } from "react";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useBalance } from "@/contexts/BalanceContext";
 import { apiClient } from "@/lib/api-client";
 
 interface WalletModalProps {
@@ -22,17 +24,24 @@ export function WalletModal({
   const [isLoading, setIsLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('UPI');
   const [upiId, setUpiId] = useState<string>('');
+  const [mobileNumber, setMobileNumber] = useState<string>(''); // ✅ FIX 2: Add mobile number state
   const [accountNumber, setAccountNumber] = useState<string>('');
   const [ifscCode, setIfscCode] = useState<string>('');
   const [accountName, setAccountName] = useState<string>('');
   const { state: userProfileState, claimBonus, fetchBonusInfo } = useUserProfile();
+  
+  // ✅ FIX: Use BalanceContext directly to avoid showing 0
+  const { balance: contextBalance, refreshBalance } = useBalance();
+  const displayBalance = contextBalance || userBalance || 0;
 
-  // Fetch bonus info when modal opens
+  // Fetch bonus info and refresh balance when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchBonusInfo();
+      // ✅ FIX: Refresh balance to ensure we have latest value
+      refreshBalance();
     }
-  }, [isOpen, fetchBonusInfo]);
+  }, [isOpen, fetchBonusInfo, refreshBalance]);
 
   // Listen for bonus updates
   useEffect(() => {
@@ -62,23 +71,31 @@ export function WalletModal({
 
     setIsLoading(true);
     try {
-      // Validate payment details
+      // ✅ FIX 4: Updated validation logic - accept mobile number OR UPI ID
       if (activeTab === 'withdraw') {
-        if (paymentMethod === 'UPI' && !upiId.trim()) {
-          alert('Please enter your UPI ID');
+        if ((paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') 
+            && !upiId.trim() && !mobileNumber.trim()) {
+          alert('Please enter your UPI ID or Mobile Number');
+          setIsLoading(false);
           return;
         }
         if (paymentMethod === 'Bank Transfer' && (!accountNumber.trim() || !ifscCode.trim() || !accountName.trim())) {
           alert('Please fill in all bank details');
+          setIsLoading(false);
           return;
         }
       }
 
-      // Prepare payment details
+      // ✅ FIX 5: Include mobile number in payment details
       const paymentDetails: any = {};
       if (activeTab === 'withdraw') {
         if (paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') {
-          paymentDetails.upiId = upiId;
+          if (mobileNumber.trim()) {
+            paymentDetails.mobileNumber = mobileNumber;
+          }
+          if (upiId.trim()) {
+            paymentDetails.upiId = upiId;
+          }
         } else if (paymentMethod === 'Bank Transfer') {
           paymentDetails.accountNumber = accountNumber;
           paymentDetails.ifscCode = ifscCode;
@@ -92,56 +109,65 @@ export function WalletModal({
         paymentMethod: paymentMethod,
         paymentDetails: paymentDetails,
         requestType: activeTab === 'deposit' ? 'deposit' : 'withdrawal' // ✅ FIX: Map 'withdraw' to 'withdrawal'
-      });
+      }) as any;
 
+      // ✅ FIX 6: Direct WhatsApp integration (no backend API)
       if (response.success) {
-        // Refresh bonus info after deposit request (will be applied when admin approves)
+        // Refresh bonus info after deposit request
         if (activeTab === 'deposit') {
-          // Fetch bonus info after a short delay to allow backend processing
           setTimeout(() => {
             fetchBonusInfo();
           }, 2000);
         }
         
-        // ✅ IMPROVED: Clear messaging about processing
+        // Construct WhatsApp message based on request type
+        const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '';
+        const adminNumber = adminWhatsApp.replace(/\D/g, '');
+        
+        let whatsappMessage = '';
+        
+        if (activeTab === 'deposit') {
+          // Simple deposit message as per requirement
+          whatsappMessage = `I want to deposit ₹${numAmount.toLocaleString('en-IN')}`;
+        } else {
+          // Detailed withdrawal message as per requirement
+          whatsappMessage = `Withdrawal Request\nAmount: ₹${numAmount.toLocaleString('en-IN')}\nPayment Mode: ${paymentMethod}\n`;
+          
+          if (paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') {
+            if (mobileNumber.trim()) {
+              whatsappMessage += `Mobile Number: ${mobileNumber}\n`;
+            }
+            if (upiId.trim()) {
+              whatsappMessage += `UPI ID: ${upiId}\n`;
+            }
+          } else if (paymentMethod === 'Bank Transfer') {
+            whatsappMessage += `Account Number: ${accountNumber}\n`;
+            whatsappMessage += `IFSC Code: ${ifscCode}\n`;
+            whatsappMessage += `Account Holder: ${accountName}\n`;
+          }
+          
+          whatsappMessage += `Request ID: ${response.requestId}`;
+        }
+        
+        // Construct WhatsApp deep link
+        const whatsappUrl = adminNumber 
+          ? `https://wa.me/${adminNumber}?text=${encodeURIComponent(whatsappMessage)}` 
+          : `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
+        
+        // Show success message
         const successMessage = activeTab === 'deposit'
-          ? `Deposit request submitted successfully!\n\nYour balance will be credited after admin approval.\nYou'll receive 5% bonus on approval!\n\nOpening WhatsApp to contact admin...`
-          : `Withdrawal request submitted successfully!\n\nYour balance will be deducted after admin approval.\nThis prevents errors and ensures security.\n\nOpening WhatsApp to contact admin...`;
+          ? `✅ Deposit request submitted!\n\n💰 Amount: ₹${numAmount.toLocaleString('en-IN')}\n🎁 You'll receive 5% bonus on approval!\n\nOpening WhatsApp to complete your request...` 
+          : `✅ Withdrawal request submitted!\n\n💰 Amount: ₹${numAmount.toLocaleString('en-IN')}\n⏳ Processing within 24 hours\n\nOpening WhatsApp to send payment details...`;
         
         alert(successMessage);
         
-        // CRITICAL FIX: Auto-open WhatsApp with pre-filled message including payment details
-        let detailsText = '';
-        if (activeTab === 'withdraw') {
-          if (paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') {
-            detailsText = `\nUPI ID: ${upiId}`;
-          } else if (paymentMethod === 'Bank Transfer') {
-            detailsText = `\nAccount: ${accountNumber}\nIFSC: ${ifscCode}\nName: ${accountName}`;
-          }
-        }
-
-        try {
-          const whatsappResponse = await apiClient.post('/whatsapp/send-request', {
-            userId: response.data.userId || 'unknown',
-            userPhone: response.data.userPhone || 'unknown',
-            requestType: activeTab.toUpperCase(),
-            message: `New ${activeTab} request for ₹${numAmount.toLocaleString('en-IN')}\nMethod: ${paymentMethod}${detailsText}\nRequest ID: ${response.requestId}`,
-            amount: numAmount,
-            isUrgent: false,
-            metadata: { requestId: response.requestId, paymentMethod, paymentDetails }
-          });
-
-          if (whatsappResponse.success && whatsappResponse.whatsappUrl) {
-            // Open WhatsApp in new tab
-            window.open(whatsappResponse.whatsappUrl, '_blank');
-          }
-        } catch (whatsappError) {
-          console.error('WhatsApp notification failed (non-critical):', whatsappError);
-          // Don't fail the request if WhatsApp fails
-        }
+        // Open WhatsApp with pre-filled message
+        window.open(whatsappUrl, '_blank');
         
+        // Clear form and close modal
         setAmount("");
         setUpiId('');
+        setMobileNumber('');
         setAccountNumber('');
         setIfscCode('');
         setAccountName('');
@@ -191,7 +217,7 @@ export function WalletModal({
           <div className="text-center">
             <div className="text-sm text-white/60 mb-2">Current Balance</div>
             <div className="text-4xl font-bold text-gold">
-              ₹{userBalance.toLocaleString('en-IN')}
+              ₹{displayBalance.toLocaleString('en-IN')}
             </div>
           </div>
         </div>
@@ -273,8 +299,9 @@ export function WalletModal({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-6">
+        {/* Content - Scrollable */}
+        <ScrollArea className="max-h-[60vh]">
+          <div className="p-6 space-y-6">
           {/* Amount Input */}
           <div>
             <label className="block text-sm text-white/80 mb-2">
@@ -293,7 +320,7 @@ export function WalletModal({
                 min="0"
               />
             </div>
-            {activeTab === 'withdraw' && amount && parseInt(amount) > userBalance && (
+            {activeTab === 'withdraw' && amount && parseInt(amount) > displayBalance && (
               <div className="text-red-400 text-sm mt-2">
                 Insufficient balance
               </div>
@@ -318,23 +345,25 @@ export function WalletModal({
             </div>
           </div>
 
-          {/* Payment Method Selection */}
-          <div>
-            <label className="block text-sm text-white/80 mb-2">
-              Payment Method
-            </label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-gold/60 transition-colors"
-            >
-              <option value="UPI">UPI</option>
-              <option value="PhonePe">PhonePe</option>
-              <option value="GPay">Google Pay</option>
-              <option value="Paytm">Paytm</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-            </select>
-          </div>
+          {/* ✅ FIX 1: Payment Method Selection - WITHDRAWAL ONLY */}
+          {activeTab === 'withdraw' && (
+            <div>
+              <label className="block text-sm text-white/80 mb-2">
+                Payment Method
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-gold/60 transition-colors"
+              >
+                <option value="UPI">UPI</option>
+                <option value="PhonePe">PhonePe</option>
+                <option value="GPay">Google Pay</option>
+                <option value="Paytm">Paytm</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+              </select>
+            </div>
+          )}
 
           {/* Payment Details (Withdrawal Only) */}
           {activeTab === 'withdraw' && (
@@ -343,19 +372,38 @@ export function WalletModal({
                 Payment Details
               </div>
               
+              {/* ✅ FIX 3: Add mobile number input field */}
               {(paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') && (
-                <div>
-                  <label className="block text-sm text-white/80 mb-2">
-                    UPI ID *
-                  </label>
-                  <input
-                    type="text"
-                    value={upiId}
-                    onChange={(e) => setUpiId(e.target.value)}
-                    placeholder="yourname@upi"
-                    className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gold/60 transition-colors"
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm text-white/80 mb-2">
+                      Mobile Number (for PhonePe/GPay/Paytm)
+                    </label>
+                    <input
+                      type="tel"
+                      value={mobileNumber}
+                      onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
+                      placeholder="9876543210"
+                      maxLength={10}
+                      className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gold/60 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-white/80 mb-2">
+                      UPI ID (Alternative)
+                    </label>
+                    <input
+                      type="text"
+                      value={upiId}
+                      onChange={(e) => setUpiId(e.target.value)}
+                      placeholder="yourname@upi"
+                      className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gold/60 transition-colors"
+                    />
+                    <p className="text-xs text-white/40 mt-1">
+                      Enter either mobile number OR UPI ID
+                    </p>
+                  </div>
+                </>
               )}
 
               {paymentMethod === 'Bank Transfer' && (
@@ -404,7 +452,7 @@ export function WalletModal({
           {/* Action Button */}
           <Button
             onClick={handleSubmit}
-            disabled={isLoading || !amount || parseInt(amount) <= 0 || (activeTab === 'withdraw' && parseInt(amount) > userBalance)}
+            disabled={isLoading || !amount || parseInt(amount) <= 0 || (activeTab === 'withdraw' && parseInt(amount) > displayBalance)}
             className={`w-full py-6 text-lg font-bold rounded-lg transition-all ${
               activeTab === 'deposit'
                 ? 'bg-green-500 hover:bg-green-600 text-white'
@@ -440,7 +488,7 @@ export function WalletModal({
               : 'Withdrawals are processed within 24 hours'
             }
           </div>
-        </div>
+        </ScrollArea>
       </div>
     </div>
   );

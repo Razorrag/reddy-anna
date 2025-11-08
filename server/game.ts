@@ -114,14 +114,28 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     // Determine result type
     const result = payout > 0 ? 'win' : (totalUserBets > 0 ? 'loss' : 'no_bet');
     
-    // Add to notification queue for WebSocket broadcasting
+    // Add to notification queue for payouts
     payoutNotifications.push({
       userId,
       payout,
-      betAmount: totalUserBets,
-      result
+      won: payout > 0,
+      bets: userBets
     });
+    
+    // ✅ FIX #8: Log each user's payout calculation
+    const totalBet = userBets.round1.andar + userBets.round1.bahar + 
+                     userBets.round2.andar + userBets.round2.bahar;
+    const netProfit = payout - totalBet;
+    
+    console.log(`User ${userId}:`);
+    console.log(`  Bets: R1 Andar=₹${userBets.round1.andar}, R1 Bahar=₹${userBets.round1.bahar}, R2 Andar=₹${userBets.round2.andar}, R2 Bahar=₹${userBets.round2.bahar}`);
+    console.log(`  Total Bet: ₹${totalBet}`);
+    console.log(`  Payout: ₹${payout}`);
+    console.log(`  Net: ${netProfit >= 0 ? '+' : ''}₹${netProfit} (${payout > 0 ? 'WON' : 'LOST'})`);
+    console.log('');
   }
+  
+  console.log('==================================================')
   
   // Calculate company profit/loss
   const companyProfitLoss = totalBetsAmount - totalPayoutsAmount;
@@ -480,11 +494,26 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
           throw new Error(`Missing required game data: openingCard=${!!gameState.openingCard}, winner=${!!winningSide}, winningCard=${!!winningCard}`);
         }
         
-        // ✅ NEW: Calculate per-round payout breakdown
+        // ✅ FIX: Calculate actual per-round bet totals
+        const round1Andar = allBets
+          .filter(bet => bet.round === '1' && bet.side === 'andar')
+          .reduce((sum, bet) => sum + Number(bet.amount), 0);
+        const round1Bahar = allBets
+          .filter(bet => bet.round === '1' && bet.side === 'bahar')
+          .reduce((sum, bet) => sum + Number(bet.amount), 0);
+        const round2Andar = allBets
+          .filter(bet => bet.round === '2' && bet.side === 'andar')
+          .reduce((sum, bet) => sum + Number(bet.amount), 0);
+        const round2Bahar = allBets
+          .filter(bet => bet.round === '2' && bet.side === 'bahar')
+          .reduce((sum, bet) => sum + Number(bet.amount), 0);
+        
         const roundPayouts = {
-          round1: { andar: 0, bahar: 0 },
-          round2: { andar: 0, bahar: 0 }
+          round1: { andar: round1Andar, bahar: round1Bahar },
+          round2: { andar: round2Andar, bahar: round2Bahar }
         };
+        
+        console.log('📊 Round-specific bet totals:', roundPayouts);
 
         // Simple distribution: all payouts go to winning side in winning round
         if (totalPayoutsAmount > 0) {

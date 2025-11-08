@@ -50,6 +50,26 @@ export async function handlePlayerBet(client: WSClient, data: any) {
 
   const { gameId, side, amount, round } = data;
 
+  // ✅ FIX: Validate gameId early - server is single source of truth
+  const currentGameState = (global as any).currentGameState;
+  if (!currentGameState || !currentGameState.gameId) {
+    sendError(ws, 'No active game session. Please wait for admin to start the game.');
+    return;
+  }
+
+  // ✅ FIX: Reject invalid gameIds from client
+  if (gameId && (gameId === 'default-game' || gameId === '')) {
+    sendError(ws, 'Invalid game ID. Please refresh the page.');
+    return;
+  }
+
+  // ✅ FIX: If client sends gameId, verify it matches server's gameId
+  if (gameId && gameId !== currentGameState.gameId) {
+    console.warn(`⚠️ Client sent stale gameId: ${gameId}, server has: ${currentGameState.gameId}`);
+    sendError(ws, 'Game session mismatch. Please refresh the page.');
+    return;
+  }
+
   // Validate required fields
   if (!side || !amount || !round) {
     sendError(ws, 'Missing required fields: side, amount, round');
@@ -232,28 +252,44 @@ export async function handlePlayerBet(client: WSClient, data: any) {
     }
 
     // ✅ FIX: Store bet in database with proper transaction handling
-    const gameIdToUse = gameId || (global as any).currentGameState?.gameId;
-    if (gameIdToUse && gameIdToUse !== 'default-game') {
+    // ✅ CRITICAL: Use ONLY server's gameId, never trust client
+    const gameIdToUse = (global as any).currentGameState?.gameId;
+    if (!gameIdToUse || gameIdToUse === 'default-game') {
+      // This should never happen due to earlier validation, but safety check
+      console.error('❌ CRITICAL: Invalid gameId at bet storage time');
+      sendError(ws, 'Invalid game session. Please refresh the page.');
+      // Refund the deducted balance
       try {
-        await storage.createBet({
-          userId: userId,
-          gameId: gameIdToUse,
-          side,
-          amount: amount,
-          round: round.toString(), // ✅ Convert to string only at DB boundary (DB uses varchar)
-          status: 'pending'
-        });
-        console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
-        
-        // ✅ NEW: Track wagering for deposit bonuses
-        try {
-          await storage.updateDepositBonusWagering(userId, amount);
-          console.log(`📊 Wagering tracked: ${userId} - ₹${amount} towards bonus unlock`);
-        } catch (wageringError) {
-          console.error('⚠️ Error tracking wagering:', wageringError);
-          // Don't fail bet if wagering tracking fails
-        }
-      } catch (error) {
+        await storage.addBalanceAtomic(userId, amount);
+      } catch (refundError) {
+        console.error('❌ Failed to refund balance:', refundError);
+      }
+      return;
+    }
+    
+    // Declare newBalance outside try block for use in bet confirmation
+    let finalBalance = newBalance;
+    
+    try {
+      await storage.createBet({
+        userId: userId,
+        gameId: gameIdToUse,
+        side,
+        amount: amount,
+        round: round.toString(), // ✅ Convert to string only at DB boundary (DB uses varchar)
+        status: 'pending'
+      });
+      console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
+      
+      // ✅ NEW: Track wagering for deposit bonuses
+      try {
+        await storage.updateDepositBonusWagering(userId, amount);
+        console.log(`📊 Wagering tracked: ${userId} - ₹${amount} towards bonus unlock`);
+      } catch (wageringError) {
+        console.error('⚠️ Error tracking wagering:', wageringError);
+        // Don't fail bet if wagering tracking fails
+      }
+    } catch (error) {
         console.error('❌ CRITICAL: Error storing bet in database:', error);
         
         // ✅ FIX: Rollback balance AND game state if bet storage fails
@@ -315,52 +351,6 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         // Send error to client - don't send confirmation
         sendError(ws, 'Bet could not be processed due to system error. Your balance has been refunded. Please try again.');
         return; // Exit function without sending confirmation
-      }
-    } else {
-      // ✅ FIX: If no valid gameId, rollback the bet
-      console.error(`❌ CRITICAL: Invalid gameId (${gameIdToUse}), rolling back bet`);
-      try {
-        // Rollback game state
-        if (round === 1) {
-          (global as any).currentGameState.addRound1Bet(side, -amount);
-          const userBets = (global as any).currentGameState.getUserBets(userId);
-          if (userBets) {
-            userBets.round1[side] -= amount;
-          }
-        } else if (round === 2) {
-          (global as any).currentGameState.addRound2Bet(side, -amount);
-          const userBets = (global as any).currentGameState.getUserBets(userId);
-          if (userBets) {
-            userBets.round2[side] -= amount;
-          }
-        }
-        
-        // Refund balance
-        const newBalance = await storage.addBalanceAtomic(userId, amount);
-        
-        // ✅ FIX: Create transaction record for refund
-        try {
-          await storage.addTransaction({
-            userId: userId,
-            transactionType: 'refund',
-            amount: amount,
-            balanceBefore: newBalance - amount,
-            balanceAfter: newBalance,
-            referenceId: `bet-refund-nogame-${Date.now()}`,
-            description: 'Bet refunded - no active game session'
-          });
-          console.log(`✅ Refund transaction recorded for ${userId}`);
-        } catch (txError) {
-          console.error('⚠️ Failed to record refund transaction:', txError);
-        }
-        
-        sendError(ws, 'No active game session. Your balance has been refunded.');
-        return;
-      } catch (rollbackError) {
-        console.error('❌ CRITICAL: Error during bet rollback:', rollbackError);
-        sendError(ws, 'Bet processing failed. Please contact support.');
-        return;
-      }
     }
 
     // ✅ FIX: Generate bet ID before storage attempt for consistency
@@ -929,6 +919,7 @@ export async function handleDealCard(client: WSClient, data: any) {
             data: {
               phase: 'betting',
               round: 2,
+              bettingLocked: false, // ✅ FIX: Betting is open for round 2
               message: 'Round 1 complete! Round 2 betting is now open.',
               timer: 0 // Will be set by timer
             }
@@ -958,6 +949,7 @@ export async function handleDealCard(client: WSClient, data: any) {
                 data: {
                   phase: 'dealing',
                   round: 2,
+                  bettingLocked: true, // ✅ FIX: Betting locked during dealing
                   message: 'Round 2 betting closed. Admin can deal second cards.'
                 }
               });
