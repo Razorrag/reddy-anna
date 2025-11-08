@@ -7,7 +7,7 @@
  * Clickable to show game details
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { X } from 'lucide-react';
 
@@ -34,6 +34,8 @@ const CardHistory: React.FC<CardHistoryProps> = ({
 }) => {
   const [recentResults, setRecentResults] = useState<GameResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [newGameIds, setNewGameIds] = useState<Set<string>>(new Set());
+  const previousGameIdsRef = useRef<Set<string>>(new Set());
   // ❌ REMOVED: Own modal state - now uses parent's GameHistoryModal
   // const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
   // const [gameDetails, setGameDetails] = useState<any>(null);
@@ -102,6 +104,26 @@ const CardHistory: React.FC<CardHistoryProps> = ({
           
           console.log('[CardHistory] Formatted results count:', formattedResults.length);
           console.log('[CardHistory] Formatted results:', formattedResults);
+          
+          // ✅ FIX: Detect new games for animation
+          const currentGameIds = new Set(formattedResults.map(r => r.gameId));
+          const previousGameIds = previousGameIdsRef.current;
+          const newGames = new Set<string>();
+          
+          currentGameIds.forEach(id => {
+            if (!previousGameIds.has(id)) {
+              newGames.add(id);
+            }
+          });
+          
+          if (newGames.size > 0) {
+            console.log('[CardHistory] New games detected:', Array.from(newGames));
+            setNewGameIds(newGames);
+            // Remove animation class after animation completes
+            setTimeout(() => setNewGameIds(new Set()), 1000);
+          }
+          
+          previousGameIdsRef.current = currentGameIds;
           setRecentResults(formattedResults);
         } else {
           console.log('[CardHistory] No games found or empty array');
@@ -162,6 +184,24 @@ const CardHistory: React.FC<CardHistoryProps> = ({
                 totalPayouts: game.totalPayouts || game.total_payouts
               }))
               .slice(0, 10);
+            
+            // ✅ FIX: Detect new games for animation
+            const currentGameIds = new Set(formattedResults.map(r => r.gameId));
+            const previousGameIds = previousGameIdsRef.current;
+            const newGames = new Set<string>();
+            
+            currentGameIds.forEach(id => {
+              if (!previousGameIds.has(id)) {
+                newGames.add(id);
+              }
+            });
+            
+            if (newGames.size > 0) {
+              setNewGameIds(newGames);
+              setTimeout(() => setNewGameIds(new Set()), 1000);
+            }
+            
+            previousGameIdsRef.current = currentGameIds;
             setRecentResults(formattedResults);
           }
         } catch (error) {
@@ -208,28 +248,35 @@ const CardHistory: React.FC<CardHistoryProps> = ({
         {loading ? (
           <div className="text-xs text-gray-500">Loading...</div>
         ) : (
-          <div className="flex gap-2 flex-row-reverse">
+          <div className="flex gap-2 flex-row-reverse overflow-hidden">
             {/* flex-row-reverse makes newest appear on right */}
             {recentResults.length > 0 ? (
-              recentResults.slice(0, 6).map((result, index) => (
-                <button
-                  key={result.gameId || index}
-                  onClick={() => handleGameClick(result)}
-                  className={`
-                    w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold
-                    transition-all duration-200
-                    shadow-lg
-                    cursor-pointer hover:scale-110 active:scale-95
-                    ${result.winner === 'andar' 
-                      ? 'bg-[#A52A2A] text-yellow-400 border-2 border-red-400 hover:border-red-300' 
-                      : 'bg-[#01073b] text-yellow-400 border-2 border-blue-400 hover:border-blue-300'
-                    }
-                  `}
-                  title={`Click to view game details | Opening: ${result.openingCard} | Winner: ${result.winner.toUpperCase()} | Round ${result.round}`}
-                >
-                  {getCardRank(result.openingCard)}
-                </button>
-              ))
+              recentResults.slice(0, 6).map((result, index) => {
+                const isNew = newGameIds.has(result.gameId);
+                return (
+                  <button
+                    key={result.gameId}
+                    onClick={() => handleGameClick(result)}
+                    className={`
+                      w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold
+                      shadow-lg
+                      cursor-pointer hover:scale-110 active:scale-95
+                      transition-all duration-300 ease-out
+                      ${isNew ? 'animate-slide-in-right' : ''}
+                      ${result.winner === 'andar' 
+                        ? 'bg-[#A52A2A] text-yellow-400 border-2 border-red-400 hover:border-red-300' 
+                        : 'bg-[#01073b] text-yellow-400 border-2 border-blue-400 hover:border-blue-300'
+                      }
+                    `}
+                    style={{
+                      animationDelay: isNew ? `${index * 50}ms` : '0ms'
+                    }}
+                    title={`Click to view game details | Opening: ${result.openingCard} | Winner: ${result.winner.toUpperCase()} | Round ${result.round}`}
+                  >
+                    {getCardRank(result.openingCard)}
+                  </button>
+                );
+              })
             ) : (
               <div className="text-xs text-gray-500">No history yet</div>
             )}
@@ -238,6 +285,28 @@ const CardHistory: React.FC<CardHistoryProps> = ({
       </div>
 
       {/* ✅ REMOVED: Modal UI - Now uses parent's GameHistoryModal instead */}
+      
+      {/* ✅ ADD: Inline styles for smooth animations */}
+      <style>{`
+        @keyframes slide-in-right {
+          0% {
+            transform: translateX(100%) scale(0.8);
+            opacity: 0;
+          }
+          60% {
+            transform: translateX(-5%) scale(1.05);
+            opacity: 1;
+          }
+          100% {
+            transform: translateX(0) scale(1);
+            opacity: 1;
+          }
+        }
+        
+        .animate-slide-in-right {
+          animation: slide-in-right 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+      `}</style>
     </div>
   );
 };
