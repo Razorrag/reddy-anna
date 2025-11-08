@@ -332,41 +332,73 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                   >
                     <div className="text-center">
                       {gameResult.result === 'refund' ? (
-                        // REFUND ONLY (Bahar R1 win)
+                        // REFUND ONLY (Bahar R1 win) - ENHANCED DISPLAY
                         <>
-                          <div className="text-lg font-bold text-blue-300 mb-1">Bet Refunded</div>
-                          <div className="text-3xl font-black text-white">
+                          <div className="text-xl font-black text-blue-300 mb-2 uppercase tracking-wider">
+                            💵 BET REFUNDED
+                          </div>
+                          {/* REFUND AMOUNT - Prominent */}
+                          <div className="text-5xl font-black text-white mb-2 drop-shadow-[0_0_20px_rgba(59,130,246,0.5)]">
                             ₹{gameResult.payoutAmount.toLocaleString('en-IN')}
                           </div>
-                          <div className="text-sm text-blue-200 mt-2">
-                            {gameResult.round === 1 ? 'Bahar Round 1: 1:0 (Refund Only)' : 'Bet Returned'}
+                          {/* EXPLANATION */}
+                          <div className="bg-blue-500/20 rounded-lg py-2 px-4 border-2 border-blue-400/50">
+                            <div className="text-sm text-blue-200">
+                              {gameResult.round === 1 ? 'Bahar Round 1: 1:0 Payout' : 'Your bet was returned'}
+                            </div>
+                            <div className="text-xs text-blue-300/70 mt-1">
+                              No profit, no loss
+                            </div>
                           </div>
                         </>
                       ) : gameResult.result === 'mixed' ? (
-                        // MIXED BETS (Bet on both sides)
+                        // MIXED BETS (Bet on both sides) - ENHANCED DISPLAY
                         <>
-                          <div className="text-lg font-bold text-white/90 mb-1">
-                            {gameResult.netProfit && gameResult.netProfit > 0 ? 'Net Profit' : 'Net Loss'}
+                          <div className="text-xl font-black text-white/90 mb-2 uppercase tracking-wider">
+                            {gameResult.netProfit && gameResult.netProfit > 0 ? '🎯 NET PROFIT' : '📊 NET LOSS'}
                           </div>
-                          <div className={`text-4xl font-black ${
+                          {/* NET RESULT - Most prominent */}
+                          <div className={`text-5xl font-black mb-2 drop-shadow-[0_0_20px_rgba(0,0,0,0.5)] ${
                             gameResult.netProfit && gameResult.netProfit > 0 ? 'text-green-300' : 'text-orange-300'
                           }`}>
                             {gameResult.netProfit && gameResult.netProfit > 0 ? '+' : ''}
                             ₹{Math.abs(gameResult.netProfit || 0).toLocaleString('en-IN')}
                           </div>
-                          <div className="text-sm text-white/70 mt-2">
-                            Payout: ₹{gameResult.payoutAmount.toLocaleString('en-IN')} | Bet: ₹{gameResult.totalBetAmount.toLocaleString('en-IN')}
+                          {/* BREAKDOWN - Clear details */}
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="bg-green-500/20 rounded-lg p-2 border border-green-500/30">
+                              <div className="text-xs text-green-200">Payout</div>
+                              <div className="text-lg font-bold text-white">₹{gameResult.payoutAmount.toLocaleString('en-IN')}</div>
+                            </div>
+                            <div className="bg-red-500/20 rounded-lg p-2 border border-red-500/30">
+                              <div className="text-xs text-red-200">Total Bet</div>
+                              <div className="text-lg font-bold text-white">₹{gameResult.totalBetAmount.toLocaleString('en-IN')}</div>
+                            </div>
+                          </div>
+                          <div className="text-xs text-white/50 mt-2">
+                            You bet on both Andar & Bahar
                           </div>
                         </>
                       ) : (
-                        // PURE WIN
+                        // PURE WIN - ENHANCED DISPLAY
                         <>
-                          <div className="text-lg font-bold text-yellow-300 mb-1">You Won</div>
-                          <div className="text-4xl font-black text-white">
+                          <div className="text-xl font-black text-yellow-300 mb-2 uppercase tracking-wider">
+                            🏆 YOU WON!
+                          </div>
+                          {/* TOTAL PAYOUT - Most prominent */}
+                          <div className="text-5xl font-black text-white mb-2 drop-shadow-[0_0_20px_rgba(255,215,0,0.5)]">
                             ₹{gameResult.payoutAmount.toLocaleString('en-IN')}
                           </div>
-                          <div className="text-sm text-yellow-200 mt-2">
-                            Net Profit: +₹{(gameResult.netProfit || 0).toLocaleString('en-IN')}
+                          {/* NET PROFIT - Clear and visible */}
+                          <div className="bg-gradient-to-r from-green-500/30 to-yellow-500/30 rounded-lg py-2 px-4 border-2 border-yellow-400/50">
+                            <div className="text-xs text-yellow-200 mb-0.5">Your Profit</div>
+                            <div className="text-2xl font-black text-green-300">
+                              +₹{(gameResult.netProfit || 0).toLocaleString('en-IN')}
+                            </div>
+                          </div>
+                          {/* BET AMOUNT - For reference */}
+                          <div className="text-xs text-yellow-200/70 mt-2">
+                            Your Bet: ₹{gameResult.totalBetAmount.toLocaleString('en-IN')}
                           </div>
                         </>
                       )}

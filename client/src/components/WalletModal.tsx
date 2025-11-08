@@ -120,39 +120,50 @@ export function WalletModal({
           }, 2000);
         }
         
-        // Construct WhatsApp message based on request type
-        const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '';
-        const adminNumber = adminWhatsApp.replace(/\D/g, '');
+        // ✅ FIX: Construct WhatsApp deep link to open admin chat directly
+        // Get admin WhatsApp number from env or use default
+        const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '918686886632'; // Default admin number
+        const adminNumber = adminWhatsApp.replace(/\D/g, ''); // Remove all non-digits
         
         let whatsappMessage = '';
         
         if (activeTab === 'deposit') {
-          // Simple deposit message as per requirement
-          whatsappMessage = `I want to deposit ₹${numAmount.toLocaleString('en-IN')}`;
+          // Simple deposit message
+          whatsappMessage = `Hello! I want to deposit ₹${numAmount.toLocaleString('en-IN')} to my account.`;
         } else {
-          // Detailed withdrawal message as per requirement
-          whatsappMessage = `Withdrawal Request\nAmount: ₹${numAmount.toLocaleString('en-IN')}\nPayment Mode: ${paymentMethod}\n`;
+          // Detailed withdrawal message
+          whatsappMessage = `Hello! I want to withdraw ₹${numAmount.toLocaleString('en-IN')}.\n\n`;
+          whatsappMessage += `Payment Details:\n`;
+          whatsappMessage += `Mode: ${paymentMethod}\n`;
           
           if (paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') {
             if (mobileNumber.trim()) {
-              whatsappMessage += `Mobile Number: ${mobileNumber}\n`;
+              whatsappMessage += `Mobile: ${mobileNumber}\n`;
             }
             if (upiId.trim()) {
               whatsappMessage += `UPI ID: ${upiId}\n`;
             }
           } else if (paymentMethod === 'Bank Transfer') {
-            whatsappMessage += `Account Number: ${accountNumber}\n`;
-            whatsappMessage += `IFSC Code: ${ifscCode}\n`;
-            whatsappMessage += `Account Holder: ${accountName}\n`;
+            whatsappMessage += `Account: ${accountNumber}\n`;
+            whatsappMessage += `IFSC: ${ifscCode}\n`;
+            whatsappMessage += `Name: ${accountName}\n`;
           }
           
-          whatsappMessage += `Request ID: ${response.requestId}`;
+          whatsappMessage += `\nRequest ID: ${response.requestId}`;
         }
         
-        // Construct WhatsApp deep link
-        const whatsappUrl = adminNumber 
-          ? `https://wa.me/${adminNumber}?text=${encodeURIComponent(whatsappMessage)}` 
-          : `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
+        // ✅ CRITICAL FIX: Properly encode the message for WhatsApp URL
+        // Use encodeURIComponent for proper URL encoding
+        const encodedMessage = encodeURIComponent(whatsappMessage);
+        
+        // Construct WhatsApp deep link - this will open the specific admin chat
+        const whatsappUrl = `https://wa.me/${adminNumber}?text=${encodedMessage}`;
+        
+        console.log('📱 Opening WhatsApp:', {
+          adminNumber,
+          messageLength: whatsappMessage.length,
+          url: whatsappUrl
+        });
         
         // Show success message
         const successMessage = activeTab === 'deposit'
@@ -161,8 +172,22 @@ export function WalletModal({
         
         alert(successMessage);
         
-        // Open WhatsApp with pre-filled message
-        window.open(whatsappUrl, '_blank');
+        // ✅ FIX: Open WhatsApp with pre-filled message
+        // Try multiple methods to ensure it works on all devices
+        try {
+          // Method 1: Direct window.open (works on most browsers)
+          const opened = window.open(whatsappUrl, '_blank');
+          
+          // Method 2: If popup blocked, try location.href
+          if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+            console.log('⚠️ Popup blocked, trying location.href');
+            window.location.href = whatsappUrl;
+          }
+        } catch (error) {
+          console.error('❌ Error opening WhatsApp:', error);
+          // Fallback: Try location.href
+          window.location.href = whatsappUrl;
+        }
         
         // Clear form and close modal
         setAmount("");

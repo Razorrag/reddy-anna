@@ -445,7 +445,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
         
         console.log('Bet confirmed:', data.data);
-        showNotification(`Bet placed: ₹${data.data.amount} on ${data.data.side}`, 'success');
+        // ❌ REMOVED: Redundant notification - User already sees bet in UI and balance update
+        // showNotification(`Bet placed: ₹${data.data.amount} on ${data.data.side}`, 'success');
         
         // Immediately update balance from WebSocket (highest priority)
         const betBalance = data.data.newBalance;
@@ -565,8 +566,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         const cancelledSide = data.data.side as BetSide;
         removeLastBet(cancelledRound, cancelledSide);
         
+        // ✅ KEEP: Important notification - User needs to know bet was cancelled
         showNotification(
-          `Bet of ₹${data.data.amount?.toLocaleString('en-IN') || 0} on ${data.data.side?.toUpperCase() || ''} has been cancelled`,
+          `Bet cancelled: ₹${data.data.amount?.toLocaleString('en-IN') || 0} on ${data.data.side?.toUpperCase() || ''}`,
           'info'
         );
         break;
@@ -704,7 +706,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         setPhase(phase);
         setCurrentRound(round);
         setCountdown(timer);
-        showNotification(`Opening card: ${parsed.display} - Round ${round} betting started!`, 'success');
+        // ❌ REMOVED: Redundant notification - Opening card is visible in UI, timer shows betting started
+        // showNotification(`Opening card: ${parsed.display} - Round ${round} betting started!`, 'success');
         break;
       }
 
@@ -839,7 +842,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'game_reset': {
         const { message } = (data as GameResetMessage).data;
         resetGame();
-        showNotification(message || 'Game reset', 'info');
+        // ❌ REMOVED: Redundant notification - Game reset is visible in UI state change
+        // showNotification(message || 'Game reset', 'info');
+        console.log('🔄 Game reset:', message);
         break;
       }
 
@@ -852,7 +857,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         setSelectedOpeningCard(null);
         setWinner(null);
         setWinningCard(null);
-        showNotification(message || 'Game completed. Ready for new game!', 'info');
+        // ❌ REMOVED: Redundant notification - UI already shows game is ready
+        // showNotification(message || 'Game completed. Ready for new game!', 'info');
+        console.log('🔄 Game return to opening:', message);
         break;
       }
 
@@ -871,8 +878,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           setBettingLocked(isBettingLocked);
         }
         
+        // ❌ REMOVED: Redundant phase change notifications - UI already reflects phase changes
+        // if (message) {
+        //   showNotification(message, 'info');
+        // }
         if (message) {
-          showNotification(message, 'info');
+          console.log('🔄 Phase change:', message);
         }
         break;
       }

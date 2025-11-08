@@ -579,6 +579,30 @@ export const requireAuth = async (req: any, res: any, next: any) => {
   }
 };
 
+// 👑 REQUIRE ADMIN MIDDLEWARE
+export const requireAdmin = (req: any, res: any, next: any) => {
+  // First check if user is authenticated
+  if (!req.user) {
+    console.log('❌ No user found in request');
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Authentication required' 
+    });
+  }
+  
+  // Check if user has admin role
+  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+    console.log(`❌ Access denied. Required: admin, User role: ${req.user.role}`);
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Admin access required' 
+    });
+  }
+  
+  console.log('✅ Admin authorization passed:', req.user.id);
+  return next();
+};
+
 // 👑 REQUIRE ROLE MIDDLEWARE
 export const requireRole = (roles: string[]) => {
   return (req: any, res: any, next: any) => {

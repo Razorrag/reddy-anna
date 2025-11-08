@@ -4,7 +4,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage-supabase";
 import { supabaseServer } from "./lib/supabaseServer";
-import { registerUser, loginUser, loginAdmin, requireAuth } from './auth';
+import { registerUser, loginUser, loginAdmin, requireAuth, requireAdmin } from './auth';
 import { processPayment, getTransactionHistory, applyDepositBonus, applyReferralBonus, checkConditionalBonus, applyAvailableBonus } from './payment';
 import {
   updateSiteContent,
@@ -139,6 +139,7 @@ import {
 //   getPendingAdminRequests,
 //   updateRequestStatus
 // } from './whatsapp-service';
+import rateLimit from 'express-rate-limit';
 import { 
   authLimiter, 
   generalLimiter, 
@@ -2804,15 +2805,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const newBalance = await storage.addBalanceAtomic(request.user_id, request.amount);
           console.log(`💰 Withdrawal rejected - refund issued: User ${request.user_id}, Amount: ₹${request.amount}, New Balance: ₹${newBalance}`);
           
-          // Create transaction record for refund
+          // ✅ CRITICAL: Create transaction record with payment_request_id link
           await storage.addTransaction({
             userId: request.user_id,
-            transactionType: 'withdrawal_refund',
+            transactionType: 'refund',
             amount: request.amount,
             balanceBefore: newBalance - request.amount,
             balanceAfter: newBalance,
             referenceId: `withdrawal_refund_${id}`,
-            description: `Withdrawal request rejected - ₹${request.amount} refunded to balance`
+            description: `Withdrawal request rejected - ₹${request.amount} refunded to balance`,
+            paymentRequestId: id
           });
           
           // Send WebSocket notification to user about refund
@@ -2857,14 +2859,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Update the payment request status to rejected
+      // Update the payment request status to rejected (with audit trail)
       if (!req.user) {
         return res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
       }
-      await storage.updatePaymentRequest(id, 'rejected', req.user.id);
+      const previousStatus = request.status;
+      await storage.updatePaymentRequest(id, 'rejected', req.user.id, previousStatus);
       
       // Audit log
       if (req.user) {
@@ -3123,6 +3126,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         success: false,
         error: 'Transaction history retrieval failed'
+      });
+    }
+  });
+
+  // ✅ NEW: User Payment Requests Route (for payment history)
+  app.get("/api/user/payment-requests", generalLimiter, async (req, res) => {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ 
+          success: false, 
+          error: 'Authentication required' 
+        });
+      }
+      
+      const userId = req.user.id;
+      const { status, type, limit = 50, offset = 0 } = req.query as any;
+      
+      // Get user's payment requests with filters
+      const requests = await storage.getPaymentRequestsByUser(userId);
+      
+      // Apply filters
+      let filteredRequests = requests;
+      
+      if (status && status !== 'all') {
+        filteredRequests = filteredRequests.filter(r => r.status === status);
+      }
+      
+      if (type && type !== 'all') {
+        filteredRequests = filteredRequests.filter(r => r.request_type === type);
+      }
+      
+      // Apply pagination
+      const total = filteredRequests.length;
+      const paginatedRequests = filteredRequests.slice(
+        parseInt(offset as string),
+        parseInt(offset as string) + parseInt(limit as string)
+      );
+      
+      res.json({
+        success: true,
+        data: paginatedRequests,
+        total,
+        hasMore: (parseInt(offset as string) + parseInt(limit as string)) < total
+      });
+    } catch (error) {
+      console.error('User payment requests error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch payment requests'
       });
     }
   });
@@ -4421,7 +4473,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/bets/:betId", generalLimiter, async (req, res) => {
+  // ✅ FIX: Add authentication and admin authorization
+  app.patch("/api/admin/bets/:betId", requireAuth, requireAdmin, generalLimiter, async (req, res) => {
     try {
       const { betId } = req.params;
       const { side, amount, round } = req.body;
@@ -4438,6 +4491,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({
           success: false,
           error: 'Invalid amount. Must be a positive number'
+        });
+      }
+      
+      // ✅ FIX: Add maximum bet amount validation
+      const MAX_BET_AMOUNT = 1000000; // ₹10 lakh
+      if (amount > MAX_BET_AMOUNT) {
+        return res.status(400).json({
+          success: false,
+          error: `Bet amount cannot exceed ₹${MAX_BET_AMOUNT.toLocaleString('en-IN')}`
         });
       }
       
@@ -4466,13 +4528,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // ✅ NEW: Allow editing during betting and dealing phases (until winner is announced)
-      if (game.phase === 'complete') {
+      // ✅ IMPROVED: Allow editing during betting and dealing phases only
+      const allowedPhases = ['betting', 'dealing'];
+      if (!allowedPhases.includes(game.phase)) {
+        console.log(`❌ Bet modification denied - Game phase: ${game.phase}`);
         return res.status(400).json({
           success: false,
-          error: `Cannot modify bets after game completes. Current phase: ${game.phase}`
+          error: `Cannot modify bets during ${game.phase} phase. Allowed phases: ${allowedPhases.join(', ')}`
         });
       }
+      
+      console.log(`✅ Bet modification allowed - Game phase: ${game.phase}`);
       
       // Update the bet in database
       await storage.updateBetDetails(betId, {
@@ -4481,7 +4547,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         round: round.toString()
       });
       
-      // Update the current game state in memory
+      // ✅ IMPROVED: Update the current game state in memory with validation
       const userId = currentBet.userId;
       if (currentGameState.userBets.has(userId)) {
         const userBets = currentGameState.userBets.get(userId)!;
@@ -4492,11 +4558,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const oldAmount = parseFloat(currentBet.amount);
         
         if (oldRound === 1) {
-          userBets.round1[oldSide] -= oldAmount;
-          currentGameState.round1Bets[oldSide] -= oldAmount;
+          userBets.round1[oldSide] = Math.max(0, userBets.round1[oldSide] - oldAmount);
+          currentGameState.round1Bets[oldSide] = Math.max(0, currentGameState.round1Bets[oldSide] - oldAmount);
         } else {
-          userBets.round2[oldSide] -= oldAmount;
-          currentGameState.round2Bets[oldSide] -= oldAmount;
+          userBets.round2[oldSide] = Math.max(0, userBets.round2[oldSide] - oldAmount);
+          currentGameState.round2Bets[oldSide] = Math.max(0, currentGameState.round2Bets[oldSide] - oldAmount);
         }
         
         // Add to new side
@@ -4511,9 +4577,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userBets.round2[newSide] += newAmount;
           currentGameState.round2Bets[newSide] += newAmount;
         }
+        
+        console.log(`✅ In-memory state updated for user ${userId}`);
+      } else {
+        console.warn(`⚠️ User ${userId} not found in currentGameState.userBets, skipping in-memory update`);
+        // Database is still updated, which is the source of truth
       }
       
-      // Broadcast update to all clients
+      // ✅ FIX: Broadcast update to all clients with safe req.user access
       broadcast({
         type: 'admin_bet_update',
         data: {
@@ -4524,8 +4595,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           oldAmount: parseFloat(currentBet.amount),
           newAmount: amount,
           round: round.toString(),
-          updatedBy: req.user!.id
+          updatedBy: req.user?.id || 'unknown',
+          timestamp: Date.now()
         }
+      });
+      
+      console.log(`✅ Bet updated successfully:`, {
+        betId,
+        userId,
+        oldSide: currentBet.side,
+        newSide: side,
+        oldAmount: parseFloat(currentBet.amount),
+        newAmount: amount,
+        round: round.toString(),
+        updatedBy: req.user?.id
       });
       
       res.json({
@@ -4541,11 +4624,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           round: round.toString()
         }
       });
-    } catch (error) {
-      console.error('Update bet error:', error);
+    } catch (error: any) {
+      console.error('❌ Update bet error:', {
+        betId: req.params.betId,
+        error: error.message,
+        stack: error.stack,
+        body: req.body,
+        user: req.user?.id
+      });
       res.status(500).json({
         success: false,
-        error: 'Failed to update bet'
+        error: error.message || 'Failed to update bet'
       });
     }
   });
@@ -4671,8 +4760,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ✅ FIX: Add stricter rate limiting for bet undo to prevent abuse
+  const undoBetLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 3, // Max 3 undos per minute
+    message: 'Too many undo requests. Please wait before trying again.',
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  
   // Player-facing undo last bet endpoint
-  app.delete("/api/user/undo-last-bet", generalLimiter, async (req, res) => {
+  app.delete("/api/user/undo-last-bet", undoBetLimiter, async (req, res) => {
     try {
       // Require authentication
       if (!req.user || !req.user.id) {
@@ -4871,7 +4969,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete/Cancel bet endpoint (Admin only)
-  app.delete("/api/admin/bets/:betId", generalLimiter, async (req, res) => {
+  // ✅ FIX: Add authentication and admin authorization
+  app.delete("/api/admin/bets/:betId", requireAuth, requireAdmin, generalLimiter, async (req, res) => {
     try {
       const { betId } = req.params;
       
@@ -4935,7 +5034,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           side: currentBet.side,
           amount: betAmount,
           round: currentBet.round,
-          cancelledBy: req.user!.id
+          cancelledBy: req.user?.id || 'unknown'  // ✅ FIX: Safe access
         }
       });
       

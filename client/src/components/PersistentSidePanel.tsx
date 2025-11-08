@@ -11,9 +11,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGameState } from '../contexts/GameStateContext';
-import LiveBetMonitoring from './LiveBetMonitoring';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { Button } from './ui/button';
 
 interface PersistentSidePanelProps {
   className?: string;
@@ -21,7 +18,6 @@ interface PersistentSidePanelProps {
 
 const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '' }) => {
   const { gameState, updateRoundBets } = useGameState();
-  const [showBetMonitoring, setShowBetMonitoring] = useState(true);
   const [, forceUpdate] = useState({});
   
   // ✅ FIX: Listen for admin_bet_update events to force re-render
@@ -247,23 +243,8 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
         </div>
       )}
 
-      {/* Live Bet Monitoring - Collapsible */}
-      <div className="mt-4">
-        <Button
-          onClick={() => setShowBetMonitoring(!showBetMonitoring)}
-          variant="outline"
-          className="w-full border-gold/30 text-gold hover:bg-gold/10 mb-2"
-        >
-          {showBetMonitoring ? <ChevronUp className="w-4 h-4 mr-2" /> : <ChevronDown className="w-4 h-4 mr-2" />}
-          {showBetMonitoring ? 'Hide' : 'Show'} Player Bets
-        </Button>
-        
-        {showBetMonitoring && (
-          <div className="max-h-[600px] overflow-y-auto">
-            <LiveBetMonitoring />
-          </div>
-        )}
-      </div>
+      {/* ✅ FIX: LiveBetMonitoring removed - should only be on main admin dashboard */}
+      {/* This panel now shows ONLY game stats: timer, bets, cards */}
     </div>
   );
 };

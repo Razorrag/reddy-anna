@@ -3184,6 +3184,15 @@ export class SupabaseStorage implements IStorage {
       return; // No referral code used
     }
 
+    // ✅ FIX #1: Check minimum deposit threshold
+    const minDepositForReferral = await this.getGameSetting('min_deposit_for_referral') || '500';
+    const minDeposit = parseFloat(minDepositForReferral);
+    
+    if (depositAmount < minDeposit) {
+      console.log(`❌ Deposit amount ₹${depositAmount} is below minimum ₹${minDeposit} for referral bonus`);
+      return;
+    }
+
     // Find referrer
     const { data: referrerData, error: referrerError } = await supabaseServer
       .from('users')
@@ -3196,7 +3205,7 @@ export class SupabaseStorage implements IStorage {
       return;
     }
 
-    // Check if referral bonus already applied
+    // ✅ FIX #2: Check if referral bonus already applied
     const { data: existingReferral } = await supabaseServer
       .from('user_referrals')
       .select('*')
@@ -3204,7 +3213,50 @@ export class SupabaseStorage implements IStorage {
       .single();
 
     if (existingReferral) {
+      console.log(`❌ Referral bonus already applied for user ${userId}`);
       return; // Bonus already applied
+    }
+    
+    // ✅ FIX #3: Ensure this is the FIRST deposit only
+    const { data: previousDeposits, error: depositError } = await supabaseServer
+      .from('payment_requests')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('request_type', 'deposit')
+      .eq('status', 'approved');
+    
+    if (depositError) {
+      console.error('Error checking previous deposits:', depositError);
+      return;
+    }
+    
+    if (previousDeposits && previousDeposits.length > 1) {
+      console.log(`❌ User ${userId} has already made ${previousDeposits.length} deposits. Referral bonus only on first deposit.`);
+      return;
+    }
+    
+    // ✅ FIX #4: Check referrer's monthly referral limit
+    const maxReferralsPerMonth = await this.getGameSetting('max_referrals_per_month') || '50';
+    const maxReferrals = parseInt(maxReferralsPerMonth);
+    
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    
+    const { data: monthlyReferrals, error: referralError } = await supabaseServer
+      .from('user_referrals')
+      .select('id')
+      .eq('referrer_user_id', referrerData.id)
+      .gte('created_at', startOfMonth.toISOString());
+    
+    if (referralError) {
+      console.error('Error checking monthly referrals:', referralError);
+      return;
+    }
+    
+    if (monthlyReferrals && monthlyReferrals.length >= maxReferrals) {
+      console.log(`❌ Referrer ${referrerData.id} has reached monthly limit of ${maxReferrals} referrals`);
+      return;
     }
 
     // Get referral bonus percentage
@@ -3450,6 +3502,7 @@ export class SupabaseStorage implements IStorage {
     balanceAfter: number;
     referenceId?: string;
     description?: string;
+    paymentRequestId?: string; // ✅ NEW: Link to payment request
   }): Promise<void> {
     // Get current balance if not provided
     if (transaction.balanceBefore === 0 && transaction.balanceAfter === 0) {
@@ -3471,6 +3524,7 @@ export class SupabaseStorage implements IStorage {
         balance_after: transaction.balanceAfter,
         reference_id: transaction.referenceId,
         description: transaction.description,
+        payment_request_id: transaction.paymentRequestId || null, // ✅ NEW: Link to payment request
         created_at: new Date().toISOString()
       });
 
@@ -4141,11 +4195,42 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
-  async updatePaymentRequest(requestId: string, status: string, adminId?: string): Promise<void> {
+  /**
+   * Log audit trail for payment request status changes
+   */
+  async logRequestAudit(data: {
+    requestId: string;
+    adminId?: string;
+    action: string;
+    previousStatus: string;
+    newStatus: string;
+    notes?: string;
+  }): Promise<void> {
+    try {
+      await supabaseServer
+        .from('request_audit')
+        .insert({
+          request_id: data.requestId,
+          admin_id: data.adminId || null,
+          action: data.action,
+          previous_status: data.previousStatus,
+          new_status: data.newStatus,
+          notes: data.notes || null,
+          created_at: new Date()
+        });
+      
+      console.log(`✅ Audit trail logged: ${data.action} - ${data.previousStatus} → ${data.newStatus}`);
+    } catch (error) {
+      console.error('⚠️ Failed to log audit trail (non-critical):', error);
+      // Don't fail the operation if audit logging fails
+    }
+  }
+
+  async updatePaymentRequest(requestId: string, status: string, adminId?: string, previousStatus?: string): Promise<void> {
     const updates: any = { 
-      status
-      // ✅ FIX: Only update essential columns that exist in the table
-      // Table has: id, user_id, request_type, amount, payment_method, status, admin_id, admin_notes, created_at, updated_at
+      status,
+      processed_at: new Date(),
+      processed_by: adminId || null
     };
     
     if (adminId) {
@@ -4162,6 +4247,17 @@ export class SupabaseStorage implements IStorage {
       throw new Error('Failed to update payment request');
     }
     
+    // Log audit trail
+    if (previousStatus && previousStatus !== status) {
+      await this.logRequestAudit({
+        requestId,
+        adminId: adminId || undefined,
+        action: status === 'approved' ? 'approve' : status === 'rejected' ? 'reject' : 'update',
+        previousStatus,
+        newStatus: status
+      });
+    }
+    
     console.log(`✅ Payment request updated: ${requestId}, status: ${status}`);
   }
 
@@ -4173,16 +4269,37 @@ export class SupabaseStorage implements IStorage {
     }
 
     const requestType = paymentRequest.request_type || paymentRequest.type;
+    const previousStatus = paymentRequest.status;
     
     // Use database transaction to ensure atomic operation
     try {
+      // Get user balance before operation
+      const user = await this.getUser(userId);
+      const balanceBefore = user ? parseFloat(user.balance) : 0;
+      
       // Update the payment request status
-      await this.updatePaymentRequest(requestId, 'approved', adminId);
+      await this.updatePaymentRequest(requestId, 'approved', adminId, previousStatus);
 
       // ✅ FIX: Handle deposits and withdrawals with atomic operations
       if (requestType === 'deposit') {
         // For deposits: use atomic operation to add balance
-        await this.addBalanceAtomic(userId, amount);
+        const newBalance = await this.addBalanceAtomic(userId, amount);
+        
+        // ✅ CRITICAL: Log transaction with payment_request_id link
+        try {
+          await this.addTransaction({
+            userId,
+            transactionType: 'deposit',
+            amount: amount,
+            balanceBefore: balanceBefore,
+            balanceAfter: newBalance,
+            referenceId: `deposit_approved_${requestId}`,
+            description: `Deposit approved by admin - ₹${amount}`,
+            paymentRequestId: requestId
+          });
+        } catch (txError: any) {
+          console.warn('⚠️ Transaction logging failed (non-critical):', txError.message);
+        }
         
         // ✅ FIX: Apply deposit bonus when admin approves deposit
         try {
@@ -4195,22 +4312,19 @@ export class SupabaseStorage implements IStorage {
         }
       } else if (requestType === 'withdrawal') {
         // ✅ CRITICAL FIX: Balance already deducted on request submission
-        // No need to deduct again - just log approval (optional)
+        // No need to deduct again - just log approval
         try {
-          const user = await this.getUser(userId);
-          const currentBalance = user ? parseFloat(user.balance) : 0;
-          
           await this.addTransaction({
             userId,
-            transactionType: 'withdrawal_approved',
+            transactionType: 'withdrawal',
             amount: -amount,
-            balanceBefore: currentBalance,
-            balanceAfter: currentBalance,
+            balanceBefore: balanceBefore,
+            balanceAfter: balanceBefore, // Balance unchanged (already deducted)
             referenceId: `withdrawal_approved_${requestId}`,
-            description: `Withdrawal approved by admin - ₹${amount} (balance already deducted on request)`
+            description: `Withdrawal approved by admin - ₹${amount} (balance already deducted on request)`,
+            paymentRequestId: requestId
           });
         } catch (txError: any) {
-          // ✅ FIX: Don't fail approval if transaction logging fails (table may not exist)
           console.warn('⚠️ Transaction logging failed (non-critical):', txError.message);
         }
         

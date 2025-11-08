@@ -9,7 +9,15 @@ import {
   RefreshCw,
   Download,
   ChevronLeft,
-  Gift
+  Gift,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CreditCard,
+  Smartphone,
+  Building2,
+  CheckCircle2,
+  Clock,
+  XCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,6 +60,18 @@ const Profile: React.FC = () => {
   const [loadingPaymentRequests, setLoadingPaymentRequests] = useState(false);
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'deposit' | 'withdrawal'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  
+  // Deposit/Withdrawal form state
+  const [showDepositForm, setShowDepositForm] = useState(false);
+  const [showWithdrawForm, setShowWithdrawForm] = useState(false);
+  const [transactionAmount, setTransactionAmount] = useState('');
+  const [paymentMethodSelected, setPaymentMethodSelected] = useState('UPI');
+  const [upiId, setUpiId] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [ifscCode, setIfscCode] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [submittingTransaction, setSubmittingTransaction] = useState(false);
   
   // WhatsApp deeplink helper
   const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '';
@@ -304,53 +324,63 @@ const Profile: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900">
-      {/* Header */}
+      {/* Header - Mobile Optimized */}
       <div className="bg-black/50 border-b border-gold/30">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center gap-4">
-            <Avatar className="w-16 h-16">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Avatar className="w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0">
               <AvatarImage src={profileState.user?.profilePicture} alt={user?.username || 'User'} />
-              <AvatarFallback className="bg-gold/20 text-gold text-xl font-semibold">
+              <AvatarFallback className="bg-gold/20 text-gold text-lg sm:text-xl font-semibold">
                 {user?.username?.slice(0, 2).toUpperCase() || '??'}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gold">{user?.full_name || user?.phone}</h1>
-              <p className="text-white/80">{user?.phone}</p>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg sm:text-2xl font-bold text-gold truncate">{user?.full_name || user?.phone}</h1>
+              <p className="text-sm sm:text-base text-white/80 truncate">{user?.phone}</p>
             </div>
             <Button
               onClick={() => window.history.back()}
               variant="outline"
-              className="border-gold/30 text-gold hover:bg-gold/10"
+              size="sm"
+              className="border-gold/30 text-gold hover:bg-gold/10 flex-shrink-0"
             >
-              <ChevronLeft className="w-4 h-4 mr-2" />
-              Back
+              <ChevronLeft className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Back</span>
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5 bg-black/50 border-gold/30">
-            <TabsTrigger value="profile" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
-              Profile
-            </TabsTrigger>
-            <TabsTrigger value="transactions" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
-              Transactions
-            </TabsTrigger>
-            <TabsTrigger value="game-history" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
-              Game History
-            </TabsTrigger>
-            <TabsTrigger value="bonuses" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
-              <Gift className="w-4 h-4 mr-1 inline" />
-              Bonuses
-            </TabsTrigger>
-            <TabsTrigger value="referral" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10">
-              Referral
-            </TabsTrigger>
-          </TabsList>
+      {/* Main Content - Mobile Optimized */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-4 sm:py-6 md:py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+          {/* Mobile: Scrollable horizontal tabs with indicators */}
+          <div className="relative overflow-x-auto -mx-4 sm:mx-0">
+            {/* Left scroll indicator */}
+            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-violet-900 to-transparent pointer-events-none sm:hidden z-10" />
+            
+            <TabsList className="inline-flex sm:grid w-auto sm:w-full min-w-full sm:min-w-0 grid-cols-5 bg-black/50 border-gold/30 px-4 sm:px-0">
+              {/* Right scroll indicator */}
+              <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-violet-900 to-transparent pointer-events-none sm:hidden z-10" />
+              <TabsTrigger value="profile" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10 whitespace-nowrap text-base sm:text-base px-4 sm:px-4 min-h-[44px]">
+                Profile
+              </TabsTrigger>
+              <TabsTrigger value="transactions" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10 whitespace-nowrap text-base sm:text-base px-4 sm:px-4 min-h-[44px]">
+                Transactions
+              </TabsTrigger>
+              <TabsTrigger value="game-history" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10 whitespace-nowrap text-base sm:text-base px-4 sm:px-4 min-h-[44px]">
+                Game History
+              </TabsTrigger>
+              <TabsTrigger value="bonuses" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10 whitespace-nowrap text-base sm:text-base px-4 sm:px-4 min-h-[44px]">
+                <Gift className="w-3 h-3 sm:w-4 sm:h-4 mr-1 inline" />
+                <span className="hidden xs:inline">Bonuses</span>
+                <span className="xs:hidden">Bonus</span>
+              </TabsTrigger>
+              <TabsTrigger value="referral" className="text-white hover:text-gold data-[state=active]:text-gold data-[state=active]:bg-gold/10 whitespace-nowrap text-base sm:text-base px-4 sm:px-4 min-h-[44px]">
+                Referral
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Profile Tab - Simplified */}
           <TabsContent value="profile" className="space-y-6">
@@ -457,6 +487,490 @@ const Profile: React.FC = () => {
 
           {/* Transactions Tab */}
           <TabsContent value="transactions" className="space-y-6">
+            {/* Quick Actions - Deposit & Withdraw */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/30 hover:border-green-500/50 transition-all cursor-pointer"
+                onClick={() => {
+                  setShowDepositForm(true);
+                  setShowWithdrawForm(false);
+                  setTransactionAmount('');
+                }}>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                      <ArrowDownToLine className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg sm:text-xl font-bold text-green-400 mb-1">Deposit Money</h3>
+                      <p className="text-white/60 text-xs sm:text-sm">Add funds to your wallet instantly</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-red-500/10 to-red-500/5 border-red-500/30 hover:border-red-500/50 transition-all cursor-pointer"
+                onClick={() => {
+                  setShowWithdrawForm(true);
+                  setShowDepositForm(false);
+                  setTransactionAmount('');
+                }}>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                      <ArrowUpFromLine className="w-6 h-6 sm:w-8 sm:h-8 text-red-400" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg sm:text-xl font-bold text-red-400 mb-1">Withdraw Money</h3>
+                      <p className="text-white/60 text-xs sm:text-sm">Transfer funds to your account</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Deposit Form */}
+            {showDepositForm && (
+              <Card className="bg-black/50 border-green-500/30">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-green-400 flex items-center gap-2">
+                      <ArrowDownToLine className="w-5 h-5" />
+                      Deposit Money
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowDepositForm(false);
+                        setTransactionAmount('');
+                      }}
+                      className="text-white/60 hover:text-white"
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Amount Input */}
+                  <div>
+                    <Label className="text-white/80 mb-2">Enter Amount</Label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-green-400 font-bold text-lg">₹</span>
+                      <Input
+                        type="number"
+                        value={transactionAmount}
+                        onChange={(e) => setTransactionAmount(e.target.value)}
+                        placeholder="0"
+                        className="bg-black/50 border-green-500/30 text-white text-lg font-semibold pl-10 focus:border-green-500/60"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Amount Buttons */}
+                  <div>
+                    <Label className="text-white/80 mb-3">Quick Select</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[1000, 5000, 10000, 25000, 50000, 100000].map((value) => (
+                        <Button
+                          key={value}
+                          onClick={() => setTransactionAmount(value.toString())}
+                          variant="outline"
+                          className="border-green-500/30 text-green-400 hover:bg-green-500/20"
+                        >
+                          ₹{(value / 1000).toFixed(0)}K
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Deposit Info */}
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <Gift className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm text-white/80">
+                        <p className="font-semibold text-green-400 mb-1">🎁 Get 5% Bonus!</p>
+                        <p className="text-white/60">You'll receive a 5% deposit bonus on approval. Bonus can be claimed after meeting wagering requirements.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <Button
+                    onClick={async () => {
+                      const numAmount = parseInt(transactionAmount);
+                      if (isNaN(numAmount) || numAmount <= 0) {
+                        showNotification('Please enter a valid amount', 'error');
+                        return;
+                      }
+
+                      setSubmittingTransaction(true);
+                      try {
+                        const response = await apiClient.post('/payment-requests', {
+                          amount: numAmount,
+                          paymentMethod: 'UPI',
+                          paymentDetails: {},
+                          requestType: 'deposit'
+                        }) as any;
+
+                        if (response.success) {
+                          const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '918686886632';
+                          const adminNumber = adminWhatsApp.replace(/\D/g, '');
+                          const whatsappMessage = `Hello! I want to deposit ₹${numAmount.toLocaleString('en-IN')} to my account.`;
+                          const encodedMessage = encodeURIComponent(whatsappMessage);
+                          const whatsappUrl = `https://wa.me/${adminNumber}?text=${encodedMessage}`;
+
+                          showNotification(`✅ Deposit request submitted! Amount: ₹${numAmount.toLocaleString('en-IN')}`, 'success');
+                          
+                          try {
+                            const opened = window.open(whatsappUrl, '_blank');
+                            if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+                              window.location.href = whatsappUrl;
+                            }
+                          } catch (error) {
+                            window.location.href = whatsappUrl;
+                          }
+
+                          setTransactionAmount('');
+                          setShowDepositForm(false);
+                          fetchPaymentRequests();
+                        } else {
+                          showNotification(`Failed to submit deposit request: ${response.error || 'Unknown error'}`, 'error');
+                        }
+                      } catch (error: any) {
+                        console.error('Deposit request failed:', error);
+                        showNotification(`Failed to submit deposit request: ${error.message || 'Unknown error'}`, 'error');
+                      } finally {
+                        setSubmittingTransaction(false);
+                      }
+                    }}
+                    disabled={submittingTransaction || !transactionAmount || parseInt(transactionAmount) <= 0}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg font-bold"
+                  >
+                    {submittingTransaction ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownToLine className="w-5 h-5 mr-2" />
+                        Request Deposit ₹{transactionAmount || '0'}
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="text-center text-xs text-white/50">
+                    Deposits are instant and secure. You'll be redirected to WhatsApp to complete your request.
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Withdraw Form */}
+            {showWithdrawForm && (
+              <Card className="bg-black/50 border-red-500/30">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-red-400 flex items-center gap-2">
+                      <ArrowUpFromLine className="w-5 h-5" />
+                      Withdraw Money
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowWithdrawForm(false);
+                        setTransactionAmount('');
+                        setUpiId('');
+                        setMobileNumber('');
+                        setAccountNumber('');
+                        setIfscCode('');
+                        setAccountName('');
+                      }}
+                      className="text-white/60 hover:text-white"
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Current Balance Display */}
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                    <div className="text-center">
+                      <div className="text-sm text-white/60 mb-1">Available Balance</div>
+                      <div className="text-3xl font-bold text-red-400">₹{balance.toLocaleString('en-IN')}</div>
+                    </div>
+                  </div>
+
+                  {/* Amount Input */}
+                  <div>
+                    <Label className="text-white/80 mb-2">Enter Amount</Label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-red-400 font-bold text-lg">₹</span>
+                      <Input
+                        type="number"
+                        value={transactionAmount}
+                        onChange={(e) => setTransactionAmount(e.target.value)}
+                        placeholder="0"
+                        className="bg-black/50 border-red-500/30 text-white text-lg font-semibold pl-10 focus:border-red-500/60"
+                        min="0"
+                      />
+                    </div>
+                    {transactionAmount && parseInt(transactionAmount) > balance && (
+                      <div className="text-red-400 text-sm mt-2 flex items-center gap-1">
+                        <XCircle className="w-4 h-4" />
+                        Insufficient balance
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quick Amount Buttons */}
+                  <div>
+                    <Label className="text-white/80 mb-3">Quick Select</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[1000, 5000, 10000, 25000, 50000, 100000].map((value) => (
+                        <Button
+                          key={value}
+                          onClick={() => setTransactionAmount(value.toString())}
+                          variant="outline"
+                          disabled={value > balance}
+                          className="border-red-500/30 text-red-400 hover:bg-red-500/20 disabled:opacity-30"
+                        >
+                          ₹{(value / 1000).toFixed(0)}K
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Payment Method Selection */}
+                  <div>
+                    <Label className="text-white/80 mb-2">Payment Method</Label>
+                    <Select value={paymentMethodSelected} onValueChange={setPaymentMethodSelected}>
+                      <SelectTrigger className="bg-black/50 border-red-500/30 text-white focus:border-red-500/60">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-black border-red-500/30">
+                        <SelectItem value="UPI" className="text-white hover:bg-red-500/20">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" />
+                            UPI
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="PhonePe" className="text-white hover:bg-red-500/20">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" />
+                            PhonePe
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="GPay" className="text-white hover:bg-red-500/20">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" />
+                            Google Pay
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Paytm" className="text-white hover:bg-red-500/20">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" />
+                            Paytm
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Bank Transfer" className="text-white hover:bg-red-500/20">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4" />
+                            Bank Transfer
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Payment Details */}
+                  <div className="border border-red-500/20 rounded-lg p-4 bg-black/30 space-y-4">
+                    <div className="text-sm text-red-400 font-semibold mb-3">Payment Details</div>
+                    
+                    {(paymentMethodSelected === 'UPI' || paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') && (
+                      <>
+                        <div>
+                          <Label className="text-white/80 mb-2">Mobile Number (for PhonePe/GPay/Paytm)</Label>
+                          <Input
+                            type="tel"
+                            value={mobileNumber}
+                            onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
+                            placeholder="9876543210"
+                            maxLength={10}
+                            className="bg-black/50 border-red-500/30 text-white focus:border-red-500/60"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white/80 mb-2">UPI ID (Alternative)</Label>
+                          <Input
+                            type="text"
+                            value={upiId}
+                            onChange={(e) => setUpiId(e.target.value)}
+                            placeholder="yourname@upi"
+                            className="bg-black/50 border-red-500/30 text-white focus:border-red-500/60"
+                          />
+                          <p className="text-xs text-white/40 mt-1">Enter either mobile number OR UPI ID</p>
+                        </div>
+                      </>
+                    )}
+
+                    {paymentMethodSelected === 'Bank Transfer' && (
+                      <>
+                        <div>
+                          <Label className="text-white/80 mb-2">Account Number *</Label>
+                          <Input
+                            type="text"
+                            value={accountNumber}
+                            onChange={(e) => setAccountNumber(e.target.value)}
+                            placeholder="1234567890"
+                            className="bg-black/50 border-red-500/30 text-white focus:border-red-500/60"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white/80 mb-2">IFSC Code *</Label>
+                          <Input
+                            type="text"
+                            value={ifscCode}
+                            onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                            placeholder="SBIN0001234"
+                            className="bg-black/50 border-red-500/30 text-white focus:border-red-500/60"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white/80 mb-2">Account Holder Name *</Label>
+                          <Input
+                            type="text"
+                            value={accountName}
+                            onChange={(e) => setAccountName(e.target.value)}
+                            placeholder="John Doe"
+                            className="bg-black/50 border-red-500/30 text-white focus:border-red-500/60"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Submit Button */}
+                  <Button
+                    onClick={async () => {
+                      const numAmount = parseInt(transactionAmount);
+                      if (isNaN(numAmount) || numAmount <= 0) {
+                        showNotification('Please enter a valid amount', 'error');
+                        return;
+                      }
+
+                      if (numAmount > balance) {
+                        showNotification('Insufficient balance', 'error');
+                        return;
+                      }
+
+                      // Validate payment details
+                      if ((paymentMethodSelected === 'UPI' || paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') 
+                          && !upiId.trim() && !mobileNumber.trim()) {
+                        showNotification('Please enter your UPI ID or Mobile Number', 'error');
+                        return;
+                      }
+                      if (paymentMethodSelected === 'Bank Transfer' && (!accountNumber.trim() || !ifscCode.trim() || !accountName.trim())) {
+                        showNotification('Please fill in all bank details', 'error');
+                        return;
+                      }
+
+                      setSubmittingTransaction(true);
+                      try {
+                        const paymentDetails: any = {};
+                        if (paymentMethodSelected === 'UPI' || paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') {
+                          if (mobileNumber.trim()) paymentDetails.mobileNumber = mobileNumber;
+                          if (upiId.trim()) paymentDetails.upiId = upiId;
+                        } else if (paymentMethodSelected === 'Bank Transfer') {
+                          paymentDetails.accountNumber = accountNumber;
+                          paymentDetails.ifscCode = ifscCode;
+                          paymentDetails.accountName = accountName;
+                        }
+
+                        const response = await apiClient.post('/payment-requests', {
+                          amount: numAmount,
+                          paymentMethod: paymentMethodSelected,
+                          paymentDetails: paymentDetails,
+                          requestType: 'withdrawal'
+                        }) as any;
+
+                        if (response.success) {
+                          const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '918686886632';
+                          const adminNumber = adminWhatsApp.replace(/\D/g, '');
+                          
+                          let whatsappMessage = `Hello! I want to withdraw ₹${numAmount.toLocaleString('en-IN')}.\n\n`;
+                          whatsappMessage += `Payment Details:\n`;
+                          whatsappMessage += `Mode: ${paymentMethodSelected}\n`;
+                          
+                          if (paymentMethodSelected === 'UPI' || paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') {
+                            if (mobileNumber.trim()) whatsappMessage += `Mobile: ${mobileNumber}\n`;
+                            if (upiId.trim()) whatsappMessage += `UPI ID: ${upiId}\n`;
+                          } else if (paymentMethodSelected === 'Bank Transfer') {
+                            whatsappMessage += `Account: ${accountNumber}\n`;
+                            whatsappMessage += `IFSC: ${ifscCode}\n`;
+                            whatsappMessage += `Name: ${accountName}\n`;
+                          }
+                          
+                          whatsappMessage += `\nRequest ID: ${response.requestId}`;
+                          
+                          const encodedMessage = encodeURIComponent(whatsappMessage);
+                          const whatsappUrl = `https://wa.me/${adminNumber}?text=${encodedMessage}`;
+
+                          showNotification(`✅ Withdrawal request submitted! Amount: ₹${numAmount.toLocaleString('en-IN')}`, 'success');
+                          
+                          try {
+                            const opened = window.open(whatsappUrl, '_blank');
+                            if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+                              window.location.href = whatsappUrl;
+                            }
+                          } catch (error) {
+                            window.location.href = whatsappUrl;
+                          }
+
+                          setTransactionAmount('');
+                          setUpiId('');
+                          setMobileNumber('');
+                          setAccountNumber('');
+                          setIfscCode('');
+                          setAccountName('');
+                          setShowWithdrawForm(false);
+                          fetchPaymentRequests();
+                        } else {
+                          showNotification(`Failed to submit withdrawal request: ${response.error || 'Unknown error'}`, 'error');
+                        }
+                      } catch (error: any) {
+                        console.error('Withdrawal request failed:', error);
+                        showNotification(`Failed to submit withdrawal request: ${error.message || 'Unknown error'}`, 'error');
+                      } finally {
+                        setSubmittingTransaction(false);
+                      }
+                    }}
+                    disabled={submittingTransaction || !transactionAmount || parseInt(transactionAmount) <= 0 || parseInt(transactionAmount) > balance}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white py-6 text-lg font-bold"
+                  >
+                    {submittingTransaction ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <ArrowUpFromLine className="w-5 h-5 mr-2" />
+                        Request Withdraw ₹{transactionAmount || '0'}
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="text-center text-xs text-white/50">
+                    Withdrawals are processed within 24 hours. You'll be redirected to WhatsApp to send payment details.
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Transaction History */}
             <Card className="bg-black/50 border-gold/30">
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -489,28 +1003,28 @@ const Profile: React.FC = () => {
                 ) : (
                   <div className="space-y-3">
                     {profileState.transactions.map((transaction) => (
-                      <div key={transaction.id} className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-gold/10">
-                        <div className="flex items-center gap-4">
-                          <div className={`w-3 h-3 rounded-full ${
+                      <div key={transaction.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-black/30 rounded-lg border border-gold/10 gap-3 sm:gap-0">
+                        <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                          <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full flex-shrink-0 ${
                             transaction.type === 'deposit' ? 'bg-green-400' :
                             transaction.type === 'withdrawal' ? 'bg-red-400' :
                             transaction.type === 'win' ? 'bg-blue-400' :
                             'bg-gray-400'
                           }`} />
-                          <div>
-                            <div className="text-white font-medium capitalize">{transaction.type}</div>
-                            <div className="text-white/60 text-sm">{transaction.description}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium capitalize text-sm sm:text-base">{transaction.type}</div>
+                            <div className="text-white/60 text-xs sm:text-sm truncate">{transaction.description}</div>
                             <div className="text-white/40 text-xs">{formatDate(transaction.createdAt)}</div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className={`font-bold text-lg ${
+                        <div className="text-left sm:text-right w-full sm:w-auto">
+                          <div className={`font-bold text-base sm:text-lg ${
                             transaction.type === 'deposit' || transaction.type === 'win' ? 'text-green-400' : 'text-red-400'
                           }`}>
                             {transaction.type === 'deposit' || transaction.type === 'win' ? '+' : '-'}
                             {formatCurrency(transaction.amount)}
                           </div>
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className="text-xs mt-1">
                             {transaction.status}
                           </Badge>
                         </div>
@@ -552,14 +1066,14 @@ const Profile: React.FC = () => {
                     </Button>
                   </div>
                   
-                  {/* Filters */}
-                  <div className="flex flex-wrap gap-3">
-                    <div className="flex gap-2">
+                  {/* Filters - Mobile Optimized with Touch Targets */}
+                  <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant={paymentFilter === 'all' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setPaymentFilter('all')}
-                        className={paymentFilter === 'all' ? 'bg-gold text-black' : 'border-gold/30 text-gold hover:bg-gold/10'}
+                        className={`min-h-[44px] px-4 text-sm sm:text-base ${paymentFilter === 'all' ? 'bg-gold text-black' : 'border-gold/30 text-gold hover:bg-gold/10'}`}
                       >
                         All
                       </Button>
@@ -567,7 +1081,7 @@ const Profile: React.FC = () => {
                         variant={paymentFilter === 'deposit' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setPaymentFilter('deposit')}
-                        className={paymentFilter === 'deposit' ? 'bg-green-600 text-white' : 'border-green-400/30 text-green-400 hover:bg-green-400/10'}
+                        className={`min-h-[44px] px-4 text-sm sm:text-base ${paymentFilter === 'deposit' ? 'bg-green-600 text-white' : 'border-green-400/30 text-green-400 hover:bg-green-400/10'}`}
                       >
                         Deposits
                       </Button>
@@ -575,18 +1089,18 @@ const Profile: React.FC = () => {
                         variant={paymentFilter === 'withdrawal' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setPaymentFilter('withdrawal')}
-                        className={paymentFilter === 'withdrawal' ? 'bg-red-600 text-white' : 'border-red-400/30 text-red-400 hover:bg-red-400/10'}
+                        className={`min-h-[44px] px-4 text-sm sm:text-base ${paymentFilter === 'withdrawal' ? 'bg-red-600 text-white' : 'border-red-400/30 text-red-400 hover:bg-red-400/10'}`}
                       >
                         Withdrawals
                       </Button>
                     </div>
                     
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant={statusFilter === 'all' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setStatusFilter('all')}
-                        className={statusFilter === 'all' ? 'bg-gold text-black' : 'border-gold/30 text-gold hover:bg-gold/10'}
+                        className={`min-h-[44px] px-4 text-sm sm:text-base ${statusFilter === 'all' ? 'bg-gold text-black' : 'border-gold/30 text-gold hover:bg-gold/10'}`}
                       >
                         All Status
                       </Button>
@@ -594,7 +1108,7 @@ const Profile: React.FC = () => {
                         variant={statusFilter === 'pending' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setStatusFilter('pending')}
-                        className={statusFilter === 'pending' ? 'bg-yellow-600 text-white' : 'border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10'}
+                        className={`min-h-[44px] px-4 text-sm sm:text-base ${statusFilter === 'pending' ? 'bg-yellow-600 text-white' : 'border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10'}`}
                       >
                         Pending
                       </Button>
@@ -602,7 +1116,7 @@ const Profile: React.FC = () => {
                         variant={statusFilter === 'approved' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setStatusFilter('approved')}
-                        className={statusFilter === 'approved' ? 'bg-green-600 text-white' : 'border-green-400/30 text-green-400 hover:bg-green-400/10'}
+                        className={`min-h-[44px] px-4 text-sm sm:text-base ${statusFilter === 'approved' ? 'bg-green-600 text-white' : 'border-green-400/30 text-green-400 hover:bg-green-400/10'}`}
                       >
                         Approved
                       </Button>
@@ -610,7 +1124,7 @@ const Profile: React.FC = () => {
                         variant={statusFilter === 'rejected' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setStatusFilter('rejected')}
-                        className={statusFilter === 'rejected' ? 'bg-red-600 text-white' : 'border-red-400/30 text-red-400 hover:bg-red-400/10'}
+                        className={`min-h-[44px] px-4 text-sm sm:text-base ${statusFilter === 'rejected' ? 'bg-red-600 text-white' : 'border-red-400/30 text-red-400 hover:bg-red-400/10'}`}
                       >
                         Rejected
                       </Button>
@@ -645,30 +1159,30 @@ const Profile: React.FC = () => {
                   
                   return (
                     <div className="space-y-6">
-                      {/* Summary Cards */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
-                          <div className="text-green-400 text-sm mb-1">Total Deposits</div>
-                          <div className="text-2xl font-bold text-green-400">
+                      {/* Summary Cards - Mobile Optimized */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="p-4 sm:p-5 bg-green-500/10 border border-green-500/30 rounded-lg">
+                          <div className="text-green-400 text-sm sm:text-base mb-2">Total Deposits</div>
+                          <div className="text-lg sm:text-xl md:text-2xl font-bold text-green-400">
                             {formatCurrency(deposits.filter(d => d.status === 'approved' || d.status === 'completed').reduce((sum, d) => sum + safeParseAmount(d.amount), 0))}
                           </div>
-                          <div className="text-green-400/60 text-xs mt-1">{deposits.filter(d => d.status === 'approved' || d.status === 'completed').length} approved</div>
+                          <div className="text-green-400/60 text-xs sm:text-sm mt-1">{deposits.filter(d => d.status === 'approved' || d.status === 'completed').length} approved</div>
                         </div>
                         
-                        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-                          <div className="text-red-400 text-sm mb-1">Total Withdrawals</div>
-                          <div className="text-2xl font-bold text-red-400">
+                        <div className="p-4 sm:p-5 bg-red-500/10 border border-red-500/30 rounded-lg">
+                          <div className="text-red-400 text-sm sm:text-base mb-2">Total Withdrawals</div>
+                          <div className="text-lg sm:text-xl md:text-2xl font-bold text-red-400">
                             {formatCurrency(withdrawals.filter(w => w.status === 'approved' || w.status === 'completed').reduce((sum, w) => sum + safeParseAmount(w.amount), 0))}
                           </div>
-                          <div className="text-red-400/60 text-xs mt-1">{withdrawals.filter(w => w.status === 'approved' || w.status === 'completed').length} approved</div>
+                          <div className="text-red-400/60 text-xs sm:text-sm mt-1">{withdrawals.filter(w => w.status === 'approved' || w.status === 'completed').length} approved</div>
                         </div>
                         
-                        <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                          <div className="text-yellow-400 text-sm mb-1">Pending Requests</div>
-                          <div className="text-2xl font-bold text-yellow-400">
+                        <div className="p-4 sm:p-5 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                          <div className="text-yellow-400 text-sm sm:text-base mb-2">Pending Requests</div>
+                          <div className="text-lg sm:text-xl md:text-2xl font-bold text-yellow-400">
                             {filteredRequests.filter(r => r.status === 'pending').length}
                           </div>
-                          <div className="text-yellow-400/60 text-xs mt-1">{formatCurrency(filteredRequests.filter(r => r.status === 'pending').reduce((sum, r) => sum + safeParseAmount(r.amount), 0))}</div>
+                          <div className="text-yellow-400/60 text-xs sm:text-sm mt-1">{formatCurrency(filteredRequests.filter(r => r.status === 'pending').reduce((sum, r) => sum + safeParseAmount(r.amount), 0))}</div>
                         </div>
                       </div>
                       
@@ -681,26 +1195,26 @@ const Profile: React.FC = () => {
                           const isRejected = request.status === 'rejected';
                           
                           return (
-                            <div key={request.id} className={`p-4 rounded-lg border ${
+                            <div key={request.id} className={`p-3 sm:p-4 rounded-lg border ${
                               isDeposit ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'
                             }`}>
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex items-start gap-4 flex-1">
+                              <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+                                <div className="flex items-start gap-3 sm:gap-4 flex-1 w-full sm:w-auto">
                                   {/* Icon */}
-                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
                                     isDeposit ? 'bg-green-500/20' : 'bg-red-500/20'
                                   }`}>
                                     {isDeposit ? (
-                                      <TrendingUp className="w-6 h-6 text-green-400" />
+                                      <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-400" />
                                     ) : (
-                                      <TrendingDown className="w-6 h-6 text-red-400" />
+                                      <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-red-400" />
                                     )}
                                   </div>
                                   
                                   {/* Details */}
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-1">
-                                      <h4 className={`text-lg font-semibold ${
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
+                                      <h4 className={`text-base sm:text-lg font-semibold ${
                                         isDeposit ? 'text-green-400' : 'text-red-400'
                                       }`}>
                                         {isDeposit ? '📥 Deposit' : '📤 Withdrawal'}
@@ -717,9 +1231,9 @@ const Profile: React.FC = () => {
                                       </Badge>
                                     </div>
                                     
-                                    <div className="text-white/90 text-sm space-y-1">
-                                      <div className="flex items-center gap-2">
-                                        <Wallet className="w-4 h-4 text-white/40" />
+                                    <div className="text-white/90 text-xs sm:text-sm space-y-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <Wallet className="w-3 h-3 sm:w-4 sm:h-4 text-white/40 flex-shrink-0" />
                                         <span className="text-white/60">Amount:</span>
                                         <span className="font-bold text-white">{formatCurrency(safeParseAmount(request.amount))}</span>
                                       </div>
@@ -750,8 +1264,8 @@ const Profile: React.FC = () => {
                                 </div>
                                 
                                 {/* Amount Badge */}
-                                <div className="text-right">
-                                  <div className={`text-2xl font-bold ${
+                                <div className="text-right sm:ml-4 w-full sm:w-auto">
+                                  <div className={`text-xl sm:text-2xl font-bold ${
                                     isDeposit ? 'text-green-400' : 'text-red-400'
                                   }`}>
                                     {isDeposit ? '+' : '-'}{formatCurrency(safeParseAmount(request.amount))}
@@ -803,29 +1317,29 @@ const Profile: React.FC = () => {
                 ) : (
                   <div className="space-y-3">
                     {profileState.gameHistory.map((game) => (
-                      <div key={game.id} className="p-4 bg-black/30 rounded-lg border border-gold/10">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className={`w-3 h-3 rounded-full ${
+                      <div key={game.id} className="p-3 sm:p-4 bg-black/30 rounded-lg border border-gold/10">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+                          <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                            <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full flex-shrink-0 ${
                               game.result === 'win' ? 'bg-green-400' : game.result === 'loss' ? 'bg-red-400' : 'bg-gray-400'
                             }`} />
-                            <div>
-                              <div className="text-white font-medium">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-white font-medium text-sm sm:text-base">
                                 Game #{game.gameId.slice(-6)} - {game.winner ? game.winner.toUpperCase() : 'IN PROGRESS'} {game.winner ? 'Won' : ''}
                               </div>
-                              <div className="text-white/60 text-sm">
+                              <div className="text-white/60 text-xs sm:text-sm">
                                 Opening Card: {game.openingCard || 'N/A'} | Your Bet: {game.yourBet ? `${game.yourBet.side?.toUpperCase() || 'N/A'} ₹${game.yourBet.amount}` : game.yourTotalBet > 0 ? `Total: ₹${game.yourTotalBet}` : 'No bet'}
                               </div>
                               <div className="text-white/40 text-xs">{formatDate(game.createdAt)}</div>
                             </div>
                           </div>
-                          <div className="text-right">
+                          <div className="text-left sm:text-right w-full sm:w-auto">
                             {game.result === 'win' ? (
                               <>
-                                <div className="text-green-400 font-bold text-lg">
+                                <div className="text-green-400 font-bold text-base sm:text-lg">
                                   +{formatCurrency(game.yourNetProfit)}
                                 </div>
-                                <div className="text-green-400/70 text-sm">
+                                <div className="text-green-400/70 text-xs sm:text-sm">
                                   Won: {formatCurrency(game.yourTotalPayout)}
                                 </div>
                                 <div className="text-white/50 text-xs">
@@ -837,10 +1351,10 @@ const Profile: React.FC = () => {
                               </>
                             ) : game.result === 'loss' ? (
                               <>
-                                <div className="text-red-400 font-bold text-lg">
+                                <div className="text-red-400 font-bold text-base sm:text-lg">
                                   -{formatCurrency(game.yourTotalBet)}
                                 </div>
-                                <div className="text-red-400/70 text-sm">
+                                <div className="text-red-400/70 text-xs sm:text-sm">
                                   Lost: {formatCurrency(game.yourTotalBet)}
                                 </div>
                                 <div className="text-white/50 text-xs">
@@ -852,10 +1366,10 @@ const Profile: React.FC = () => {
                               </>
                             ) : (
                               <>
-                                <div className="text-gray-400 font-bold text-lg">
+                                <div className="text-gray-400 font-bold text-base sm:text-lg">
                                   {formatCurrency(0)}
                                 </div>
-                                <div className="text-gray-400/70 text-sm">
+                                <div className="text-gray-400/70 text-xs sm:text-sm">
                                   No Result
                                 </div>
                               </>

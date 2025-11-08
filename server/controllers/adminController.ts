@@ -125,26 +125,31 @@ export const rejectPaymentRequest = async (req: Request, res: Response) => {
       });
     }
     
+    // Get user balance before refund (for transaction logging)
+    const user = await storage.getUser(request.user_id);
+    const balanceBefore = user ? parseFloat(user.balance) : 0;
+    
     // If withdrawal, refund the amount
     if (request.request_type === 'withdrawal') {
       try {
         const amount = parseFloat(request.amount);
-        await storage.addBalanceAtomic(request.user_id, amount);
+        const newBalance = await storage.addBalanceAtomic(request.user_id, amount);
         console.log(`💰 Refunded withdrawal amount: User ${request.user_id}, Amount: ₹${amount}`);
         
-        // Create transaction record for audit trail (optional - don't fail if table doesn't exist)
+        // ✅ CRITICAL: Create transaction record with payment_request_id link
         try {
           await storage.addTransaction({
             userId: request.user_id,
-            transactionType: 'withdrawal_rejected_refund',
+            transactionType: 'refund',
             amount: amount,
-            balanceBefore: 0, // We don't track this for refunds
-            balanceAfter: 0,
+            balanceBefore: balanceBefore,
+            balanceAfter: newBalance,
             referenceId: `withdrawal_rejected_${requestId}`,
-            description: `Withdrawal rejected - ₹${amount} refunded. Reason: ${reason || 'No reason provided'}`
+            description: `Withdrawal rejected - ₹${amount} refunded. Reason: ${reason || 'No reason provided'}`,
+            paymentRequestId: requestId
           });
         } catch (txError: any) {
-          // ✅ FIX: Don't fail rejection if transaction logging fails (table may not exist)
+          // ✅ FIX: Don't fail rejection if transaction logging fails
           console.warn('⚠️ Transaction logging failed (non-critical):', txError.message);
         }
       } catch (refundError) {
@@ -156,8 +161,9 @@ export const rejectPaymentRequest = async (req: Request, res: Response) => {
       }
     }
     
-    // Update the request status to rejected
-    await storage.updatePaymentRequest(requestId, 'rejected', req.user.id);
+    // Update the request status to rejected (with audit trail)
+    const previousStatus = request.status;
+    await storage.updatePaymentRequest(requestId, 'rejected', req.user.id, previousStatus);
     
     res.json({
       success: true,
