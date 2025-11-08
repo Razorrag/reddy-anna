@@ -863,6 +863,27 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         break;
       }
 
+      case 'start_round_2': {
+        // ✅ FIX: Handle Round 2 start with proper timer initialization
+        const { phase, round, timer, bettingLocked, round1Bets, message } = (data as any).data;
+        console.log(`🔄 ROUND 2 START: Timer=${timer}s, Phase=${phase}, BettingLocked=${bettingLocked}`);
+        
+        setPhase(phase);
+        setCurrentRound(round);
+        setBettingLocked(bettingLocked || false);
+        
+        // ✅ CRITICAL: Set timer from server (not 0)
+        if (timer !== undefined && timer > 0) {
+          setCountdownTimer(timer);
+          console.log(`✅ Round 2 timer initialized: ${timer}s`);
+        }
+        
+        if (message) {
+          console.log('🔄 Round 2 message:', message);
+        }
+        break;
+      }
+
       case 'phase_change': {
         const { phase, round, message, bettingLocked } = (data as PhaseChangeMessage).data;
         setPhase(phase);

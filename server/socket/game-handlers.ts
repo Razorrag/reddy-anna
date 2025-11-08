@@ -883,6 +883,12 @@ export async function handleDealCard(client: WSClient, data: any) {
     
     console.log(`🎯 Card dealt - Round: ${finalRound}, Total: ${totalCards}, Winner: ${isWinningCard}`);
     
+    // ✅ FIX: Calculate if round is complete inline
+    const isRoundComplete = (
+      (finalRound === 1 && andarCount === 1 && baharCount === 1) ||
+      (finalRound === 2 && andarCount === 2 && baharCount === 2)
+    );
+    
     if (isWinningCard) {
       // ✅ FIX: Game ends with winner regardless of round
       (global as any).currentGameState.winner = data.side === 'andar' ? 'andar' : 'bahar';
@@ -923,9 +929,9 @@ export async function handleDealCard(client: WSClient, data: any) {
         // Don't throw - game should still be marked as complete
         return;
       }
-    } else if (isRoundComplete && currentRound < 3) {
+    } else if (isRoundComplete && finalRound < 3) {
       // ✅ FIX: Round 1 or 2 complete without winner - move to next round
-      if (currentRound === 1) {
+      if (finalRound === 1) {
         // Go to round 2
         (global as any).currentGameState.currentRound = 2;
         (global as any).currentGameState.phase = 'betting';
@@ -938,24 +944,31 @@ export async function handleDealCard(client: WSClient, data: any) {
           );
         }
 
-        if (typeof (global as any).broadcast !== 'undefined') {
-          (global as any).broadcast({
-            type: 'phase_change',
-            data: {
-              phase: 'betting',
-              round: 2,
-              bettingLocked: false, // ✅ FIX: Betting is open for round 2
-              message: 'Round 1 complete! Round 2 betting is now open.',
-              timer: 0 // Will be set by timer
-            }
-          });
-        }
-
-        // ✅ FIX: Start timer for round 2 betting - use same timer duration as round 1
+        // ✅ CRITICAL FIX: Get timer duration BEFORE broadcasting
+        // This ensures frontend receives correct timer value immediately
         const { storage } = await import('../storage-supabase');
         const timerSetting = await storage.getGameSetting('betting_timer_duration') || '30';
         const timerDuration = parseInt(timerSetting) || 30;
         
+        console.log(`🔄 TRANSITIONING TO ROUND 2 with ${timerDuration}s timer`);
+
+        // ✅ FIX: Broadcast with CORRECT timer value (not 0)
+        if (typeof (global as any).broadcast !== 'undefined') {
+          (global as any).broadcast({
+            type: 'start_round_2',
+            data: {
+              gameId: (global as any).currentGameState.gameId,
+              phase: 'betting',
+              round: 2,
+              bettingLocked: false,
+              timer: timerDuration, // ✅ CORRECT VALUE
+              round1Bets: (global as any).currentGameState.round1Bets,
+              message: 'Round 2 betting started!'
+            }
+          });
+        }
+
+        // ✅ FIX: Start timer for round 2 betting
         if (typeof (global as any).startTimer === 'function') {
           (global as any).startTimer(timerDuration, () => {
             (global as any).currentGameState.phase = 'dealing';
@@ -984,8 +997,8 @@ export async function handleDealCard(client: WSClient, data: any) {
           console.error('⚠️ startTimer function not available');
         }
 
-        console.log('🔄 MOVED TO ROUND 2');
-      } else if (currentRound === 2) {
+        console.log('✅ MOVED TO ROUND 2 - Timer started');
+      } else if (finalRound === 2) {
         // ✅ FIX: Move to Round 3 (Continuous Draw) if no winner in 2 rounds
         (global as any).currentGameState.currentRound = 3;
         (global as any).currentGameState.phase = 'dealing';
