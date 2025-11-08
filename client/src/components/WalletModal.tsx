@@ -210,12 +210,12 @@ export function WalletModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
       onClick={onClose}
       data-testid="wallet-modal"
     >
       <div 
-        className="legacy-panel rounded-xl max-w-md w-full overflow-hidden shadow-2xl shadow-gold/20"
+        className="legacy-panel rounded-xl max-w-md w-full shadow-2xl shadow-gold/20 my-8 max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -325,7 +325,7 @@ export function WalletModal({
         </div>
 
         {/* Content - Scrollable */}
-        <ScrollArea className="max-h-[60vh]">
+        <div className="overflow-y-auto flex-1">
           <div className="p-6 space-y-6">
           {/* Amount Input */}
           <div>
@@ -514,7 +514,7 @@ export function WalletModal({
             }
           </div>
           </div>
-        </ScrollArea>
+        </div>
       </div>
     </div>
   );

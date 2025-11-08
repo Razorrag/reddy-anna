@@ -47,7 +47,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const [showResult, setShowResult] = useState(false);
 
   // Embedded stream URL - runs independently, never interrupted
-  const STREAM_URL = 'https://screen-sharing-web.onrender.com/viewer.html';
+  const STREAM_URL = 'https://live-streaming-frontend.onrender.com/';
 
   // Log component mount
   useEffect(() => {
