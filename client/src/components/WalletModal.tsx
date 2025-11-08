@@ -488,6 +488,7 @@ export function WalletModal({
               : 'Withdrawals are processed within 24 hours'
             }
           </div>
+          </div>
         </ScrollArea>
       </div>
     </div>
