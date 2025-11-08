@@ -817,14 +817,19 @@ export async function handleDealCard(client: WSClient, data: any) {
       );
     }
 
-    // ✅ CRITICAL FIX: Check if we need to transition to Round 3 BEFORE checking for winner
+    // ✅ CRITICAL FIX: Use total card count to determine round transition
     // This ensures the 5th card (first card of Round 3) uses Round 3 payout logic
     const currentRound = (global as any).currentGameState.currentRound;
-    const isRoundComplete = (global as any).currentGameState.isRoundComplete();
+    const andarCount = (global as any).currentGameState.andarCards.length;
+    const baharCount = (global as any).currentGameState.baharCards.length;
+    const totalCards = andarCount + baharCount;
     
-    // ✅ FIX: If Round 2 just completed (4 cards dealt), transition to Round 3 NOW
-    if (currentRound === 2 && isRoundComplete) {
-      console.log('🔄 TRANSITIONING TO ROUND 3 BEFORE CHECKING WINNER');
+    console.log(`📊 Card dealt: Round ${currentRound}, Total cards: ${totalCards} (Andar: ${andarCount}, Bahar: ${baharCount})`);
+    
+    // Round 2 complete when exactly 4 cards dealt (2 Andar + 2 Bahar)
+    // Round 3 starts on 5th card and continues until winner
+    if (totalCards === 4 && currentRound === 2) {
+      console.log('🔄 TRANSITIONING TO ROUND 3 AFTER 4TH CARD');
       (global as any).currentGameState.currentRound = 3;
       (global as any).currentGameState.phase = 'dealing';
       (global as any).currentGameState.bettingLocked = true;
@@ -851,12 +856,32 @@ export async function handleDealCard(client: WSClient, data: any) {
       }
       
       console.log('✅ MOVED TO ROUND 3 (BEFORE WINNER CHECK)');
+    } else if (totalCards >= 5 && currentRound !== 3) {
+      // Safety check: If we somehow have 5+ cards but not in Round 3, force transition
+      console.error(`❌ CRITICAL: ${totalCards} cards dealt but still in Round ${currentRound}! Force transition to Round 3.`);
+      (global as any).currentGameState.currentRound = 3;
+      (global as any).currentGameState.phase = 'dealing';
+      (global as any).currentGameState.bettingLocked = true;
+      
+      // Broadcast emergency round 3 transition
+      if (typeof (global as any).broadcast !== 'undefined') {
+        (global as any).broadcast({
+          type: 'start_final_draw',
+          data: {
+            gameId: (global as any).currentGameState.gameId,
+            round: 3,
+            round1Bets: (global as any).currentGameState.round1Bets,
+            round2Bets: (global as any).currentGameState.round2Bets,
+            message: 'Round 3: Continuous draw started! (Emergency transition)'
+          }
+        });
+      }
     }
     
     // Re-read currentRound after potential transition
     const finalRound = (global as any).currentGameState.currentRound;
     
-    console.log(`🎯 Card dealt - Round: ${finalRound}, Complete: ${isRoundComplete}, Winner: ${isWinningCard}`);
+    console.log(`🎯 Card dealt - Round: ${finalRound}, Total: ${totalCards}, Winner: ${isWinningCard}`);
     
     if (isWinningCard) {
       // ✅ FIX: Game ends with winner regardless of round

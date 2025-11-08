@@ -528,9 +528,12 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
   }, [gameState.playerWallet]);
 
-  // Add periodic balance refresh - only for player users, not admins
+  // ❌ REMOVED: Duplicate periodic balance refresh
+  // BalanceContext already has a 30-second interval for balance refresh
+  // This was causing double API calls and UI jumping
+  // Keeping this commented for reference:
+  /*
   useEffect(() => {
-    // Skip periodic balance refresh for admin users
     if (gameState.userRole === 'admin') {
       console.log('ℹ️ Skipping periodic balance refresh for admin user');
       return;
@@ -540,10 +543,11 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (auth.isAuthenticated && !gameState.isGameActive) {
         await refreshBalanceFromAPI();
       }
-    }, 30000); // 30 seconds
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [auth.isAuthenticated, gameState.isGameActive, gameState.userRole, refreshBalanceFromAPI]);
+  */
 
   // Dispatchers for all actions
   const setGameId = (id: string) => {

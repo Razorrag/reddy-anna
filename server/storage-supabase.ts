@@ -4144,49 +4144,100 @@ export class SupabaseStorage implements IStorage {
     endDate?: Date;
   }): Promise<any[]> {
     try {
+      console.log('🔍 getAllPaymentRequests called with filters:', JSON.stringify(filters, null, 2));
+      
       let query = supabaseServer
         .from('payment_requests')
         .select(`
           *,
-          user:users!payment_requests_user_id_fkey(phone, full_name, id)
+          users(phone, full_name, id)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false});
+      
+      console.log('📊 Base query created for payment_requests table');
 
       if (filters?.status && filters.status !== 'all') {
+        console.log(`🔍 Filtering by status: ${filters.status}`);
         query = query.eq('status', filters.status);
+      } else {
+        console.log('🔍 No status filter (showing all statuses)');
       }
       
       if (filters?.type && filters.type !== 'all') {
+        console.log(`🔍 Filtering by type: ${filters.type}`);
         query = query.eq('request_type', filters.type);
+      } else {
+        console.log('🔍 No type filter (showing all types)');
       }
       
       if (filters?.startDate) {
+        console.log(`🔍 Filtering from date: ${filters.startDate.toISOString()}`);
         query = query.gte('created_at', filters.startDate.toISOString());
       }
       
       if (filters?.endDate) {
+        console.log(`🔍 Filtering to date: ${filters.endDate.toISOString()}`);
         query = query.lte('created_at', filters.endDate.toISOString());
       }
       
       if (filters?.limit) {
         const offset = filters.offset || 0;
+        console.log(`🔍 Limit: ${filters.limit}, Offset: ${offset}`);
         query = query.range(offset, offset + filters.limit - 1);
       }
 
+      console.log('🚀 Executing query...');
       const { data, error } = await query;
+      console.log(`📊 Query completed. Error: ${error ? 'YES' : 'NO'}, Data count: ${data?.length || 0}`);
       
       if (error) {
-        console.error('Error fetching all payment requests:', error);
+        console.error('❌ Error fetching all payment requests:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         return [];
       }
+      
+      if (!data || data.length === 0) {
+        console.warn('⚠️ Query succeeded but returned NO DATA');
+        console.warn('This could mean:');
+        console.warn('  1. No requests in database');
+        console.warn('  2. Filters too restrictive');
+        console.warn('  3. Foreign key join failed');
+        return [];
+      }
+      
+      console.log(`✅ Query returned ${data.length} requests`);
+      console.log('📊 Sample request (first):', {
+        id: data[0].id,
+        user_id: data[0].user_id,
+        status: data[0].status,
+        amount: data[0].amount,
+        request_type: data[0].request_type,
+        has_users_data: !!data[0].users,
+        users_phone: data[0].users?.phone,
+        users_full_name: data[0].users?.full_name
+      });
       
       // Flatten the nested user data
       const flattenedData = (data || []).map((req: any) => ({
         ...req,
-        phone: req.user?.phone || req.phone || 'N/A',
-        full_name: req.user?.full_name || req.full_name || 'Unknown User',
-        user: undefined // Remove nested object
+        phone: req.users?.phone || req.user?.phone || req.phone || 'N/A',
+        full_name: req.users?.full_name || req.user?.full_name || req.full_name || 'Unknown User',
+        user: undefined, // Remove nested object
+        users: undefined // Remove nested object
       }));
+      
+      console.log(`✅ Returning ${flattenedData.length} flattened requests`);
+      console.log('📊 Sample flattened request:', {
+        id: flattenedData[0].id,
+        phone: flattenedData[0].phone,
+        full_name: flattenedData[0].full_name,
+        status: flattenedData[0].status
+      });
       
       return flattenedData;
     } catch (err: any) {

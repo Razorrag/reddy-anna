@@ -41,7 +41,8 @@ export function WalletModal({
       // ✅ FIX: Refresh balance to ensure we have latest value
       refreshBalance();
     }
-  }, [isOpen, fetchBonusInfo, refreshBalance]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);  // ← Only depend on isOpen to prevent loop
 
   // Listen for bonus updates
   useEffect(() => {

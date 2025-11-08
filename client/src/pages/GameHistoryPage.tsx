@@ -122,7 +122,8 @@ const GameHistoryPage: React.FC = () => {
 
   useEffect(() => {
     fetchHistory();
-  }, [filters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.dateFrom, filters.dateTo, filters.minProfit, filters.maxProfit, filters.sortBy, filters.sortOrder, filters.page, filters.limit]);  // ← Depend on individual values, not object
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({

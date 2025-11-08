@@ -143,7 +143,8 @@ const Profile: React.FC = () => {
         fetchTransactions(false);
       }
     }
-  }, [activeTab, user, fetchTransactions, profileState.transactions.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, user, profileState.transactions.length]);  // ← Remove fetchTransactions to prevent loop
 
   // Fetch game history when game-history tab is active
   useEffect(() => {
@@ -152,7 +153,8 @@ const Profile: React.FC = () => {
         fetchGameHistory(false);
       }
     }
-  }, [activeTab, user, fetchGameHistory, profileState.gameHistory.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, user, profileState.gameHistory.length]);  // ← Remove fetchGameHistory to prevent loop
 
   // Fetch bonus data when bonuses tab is active
   useEffect(() => {

@@ -180,7 +180,8 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         refreshBalance();
       }
     }
-  }, [updateBalance, refreshBalance, isAdmin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);  // ← Only depend on isAdmin to prevent infinite loop
 
   // Listen for WebSocket balance updates
   useEffect(() => {
@@ -225,7 +226,8 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
       window.removeEventListener('refresh-balance', handleRefreshBalance as EventListener);
     };
-  }, [updateBalance, refreshBalance, isAdmin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);  // ← Only depend on isAdmin to prevent infinite loop
 
   // Periodic balance refresh (skip for admin users)
   useEffect(() => {
@@ -241,7 +243,8 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [refreshBalance, state.isLoading, isAdmin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.isLoading, isAdmin]);  // ← Remove refreshBalance to prevent interval recreation
 
   const value: BalanceContextType = {
     balance: state.currentBalance,

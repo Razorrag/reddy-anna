@@ -72,7 +72,8 @@ const PlayerGame: React.FC = () => {
     if (!isNaN(balanceAsNumber) && balanceAsNumber !== userBalance) {
       setUserBalance(balanceAsNumber);
     }
-  }, [balance, userBalance]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [balance]);  // ← Only depend on balance, not userBalance to prevent loop
 
   // Listen for balance updates
   useEffect(() => {

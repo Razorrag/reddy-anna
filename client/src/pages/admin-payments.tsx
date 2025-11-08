@@ -39,10 +39,14 @@ export default function AdminPayments() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [justUpdated, setJustUpdated] = useState(false);
 
   const fetchPendingRequests = async () => {
     try {
       setLoadingRequests(true);
+      setError(null); // Clear previous errors
       const response = await apiClient.get('/admin/payment-requests/pending') as { success?: boolean; data?: PaymentRequest[] };
       
       // Handle both response formats
@@ -63,15 +67,21 @@ export default function AdminPayments() {
         }));
         setPaymentRequests(formattedRequests);
       } else {
-        console.error('API returned error:', response);
+        setError('Failed to load payment requests');
         setPaymentRequests([]);
       }
     } catch (error: any) {
       console.error('Failed to fetch payment requests:', error);
-      // Show user-friendly error message
+      
+      // Set user-friendly error message
       if (error.message?.includes('table') || error.message?.includes('does not exist')) {
-        console.warn('⚠️ payment_requests table may not exist. Please run the database migration.');
+        setError('Database table missing. Please contact system administrator.');
+      } else if (error.message?.includes('Network')) {
+        setError('Network error. Please check your connection.');
+      } else {
+        setError('Failed to load payment requests. Please try again.');
       }
+      
       setPaymentRequests([]);
     } finally {
       setLoadingRequests(false);
@@ -81,17 +91,38 @@ export default function AdminPayments() {
 
   const fetchHistory = async () => {
     try {
+      console.log('🔍 fetchHistory called');
+      console.log('📊 Current filters:', { statusFilter, typeFilter });
+      
       setLoadingRequests(true);
+      setError(null); // Clear previous errors
       const params = new URLSearchParams({
         status: statusFilter,
         type: typeFilter,
         limit: '100',
         offset: '0'
       });
+      
+      console.log('🚀 Fetching history from API:', `/admin/payment-requests/history?${params}`);
       const response = await apiClient.get(`/admin/payment-requests/history?${params}`) as { success?: boolean; data?: PaymentRequest[] };
+      console.log('📊 API Response:', { success: response.success, dataLength: response.data?.length });
       
       if (response.success !== false) {
         const requests = response.data || [];
+        console.log(`✅ Received ${requests.length} requests from API`);
+        
+        if (requests.length > 0) {
+          console.log('📊 Sample request (first):', {
+            id: requests[0].id,
+            status: requests[0].status,
+            amount: requests[0].amount,
+            phone: requests[0].phone,
+            full_name: requests[0].full_name
+          });
+        } else {
+          console.warn('⚠️ API returned empty array');
+        }
+        
         const formattedRequests = requests.map((req: any) => ({
           id: req.id,
           user_id: req.user_id,
@@ -106,12 +137,25 @@ export default function AdminPayments() {
           admin_id: req.admin_id,
           admin_notes: req.admin_notes
         }));
+        
+        console.log(`✅ Formatted ${formattedRequests.length} requests`);
         setPaymentRequests(formattedRequests);
       } else {
+        console.error('❌ API returned success=false');
         setPaymentRequests([]);
       }
     } catch (error: any) {
       console.error('Failed to fetch payment history:', error);
+      
+      // Set user-friendly error message
+      if (error.message?.includes('table') || error.message?.includes('does not exist')) {
+        setError('Database table missing. Please contact system administrator.');
+      } else if (error.message?.includes('Network')) {
+        setError('Network error. Please check your connection.');
+      } else {
+        setError('Failed to load payment history. Please try again.');
+      }
+      
       setPaymentRequests([]);
     } finally {
       setLoadingRequests(false);
@@ -140,6 +184,10 @@ export default function AdminPayments() {
       const msg: any = (evt as CustomEvent).detail;
       if (!msg || msg.type !== 'admin_notification') return;
       if (msg.event === 'new_request' || msg.event === 'payment_request_created' || msg.event === 'request_status_update' || msg.event === 'request_processed') {
+        // Show visual feedback
+        setJustUpdated(true);
+        setTimeout(() => setJustUpdated(false), 2000);
+        
         if (activeTab === 'pending') {
           fetchPendingRequests();
         } else {
@@ -247,16 +295,67 @@ export default function AdminPayments() {
     const matchesType = typeFilter === 'all' || request.request_type === typeFilter;
     return matchesSearch && matchesStatus && matchesType;
   });
+  
+  // Debug logging for filtering
+  React.useEffect(() => {
+    console.log('🔍 Filtering results:', {
+      totalRequests: paymentRequests.length,
+      filteredCount: filteredRequests.length,
+      searchTerm,
+      statusFilter,
+      typeFilter
+    });
+  }, [paymentRequests, filteredRequests, searchTerm, statusFilter, typeFilter]);
+
+  // ✅ FIX: Calculate stats for TODAY only, not all time
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const totalDeposits = paymentRequests
-    .filter(r => r.request_type === 'deposit' && r.status === 'approved')
+    .filter(r => {
+      const createdDate = new Date(r.created_at);
+      return r.request_type === 'deposit' && 
+             r.status === 'approved' &&
+             createdDate >= todayStart;
+    })
     .reduce((sum, r) => sum + r.amount, 0);
 
   const totalWithdrawals = paymentRequests
-    .filter(r => r.request_type === 'withdrawal' && r.status === 'approved')
+    .filter(r => {
+      const createdDate = new Date(r.created_at);
+      return r.request_type === 'withdrawal' && 
+             r.status === 'approved' &&
+             createdDate >= todayStart;
+    })
     .reduce((sum, r) => sum + r.amount, 0);
+  
+  // Debug logging for stats
+  React.useEffect(() => {
+    if (paymentRequests.length > 0) {
+      console.log('📊 Stats calculation:', {
+        totalRequests: paymentRequests.length,
+        approvedDeposits: paymentRequests.filter(r => r.request_type === 'deposit' && r.status === 'approved').length,
+        approvedWithdrawals: paymentRequests.filter(r => r.request_type === 'withdrawal' && r.status === 'approved').length,
+        totalDeposits,
+        totalWithdrawals
+      });
+    }
+  }, [paymentRequests, totalDeposits, totalWithdrawals]);
 
-  const pendingRequests = paymentRequests.filter(r => r.status === 'pending').length;
+  // ✅ FIX: Use separate pending count state (updated via API)
+  useEffect(() => {
+    const fetchPendingCount = async () => {
+      try {
+        const response = await apiClient.get('/admin/payment-requests/pending') as { success?: boolean; data?: PaymentRequest[] };
+        if (response.success !== false && response.data) {
+          setPendingCount(response.data.length);
+        }
+      } catch (error) {
+        console.error('Failed to fetch pending count:', error);
+      }
+    };
+    fetchPendingCount();
+  }, [paymentRequests]); // Refresh when list changes
 
   return (
     <AdminLayout>
@@ -281,6 +380,11 @@ export default function AdminPayments() {
               <div className="text-sm text-purple-300 bg-purple-900/30 px-3 py-2 rounded-lg border border-purple-400/30">
                 Auto-refreshes every 10s
               </div>
+              {justUpdated && (
+                <div className="text-sm text-green-400 bg-green-900/30 px-3 py-2 rounded-lg border border-green-400/30 animate-pulse">
+                  ✓ Updated
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -296,7 +400,7 @@ export default function AdminPayments() {
                 : 'border-purple-400/30 text-purple-200 hover:bg-purple-400/10'}
             >
               <Clock className="w-4 h-4 mr-2" />
-              Pending ({pendingRequests})
+              Pending ({pendingCount})
             </Button>
             <Button
               variant={activeTab === 'history' ? 'default' : 'outline'}
@@ -323,10 +427,16 @@ export default function AdminPayments() {
                 <ArrowDownLeft className="h-4 w-4 text-green-400" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-400">{formatCurrency(totalDeposits)}</div>
-                <p className="text-xs text-purple-300">
-                  Approved today
-                </p>
+                {loadingRequests ? (
+                  <div className="h-8 bg-purple-900/30 animate-pulse rounded"></div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold text-green-400">{formatCurrency(totalDeposits)}</div>
+                    <p className="text-xs text-purple-300">
+                      Approved today ({now.toLocaleDateString('en-IN')})
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -336,10 +446,16 @@ export default function AdminPayments() {
                 <ArrowUpRight className="h-4 w-4 text-red-400" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-400">{formatCurrency(totalWithdrawals)}</div>
-                <p className="text-xs text-purple-300">
-                  Approved today
-                </p>
+                {loadingRequests ? (
+                  <div className="h-8 bg-purple-900/30 animate-pulse rounded"></div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold text-red-400">{formatCurrency(totalWithdrawals)}</div>
+                    <p className="text-xs text-purple-300">
+                      Approved today ({now.toLocaleDateString('en-IN')})
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -349,10 +465,16 @@ export default function AdminPayments() {
                 <Clock className="h-4 w-4 text-yellow-400" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-yellow-400">{pendingRequests}</div>
-                <p className="text-xs text-purple-300">
-                  Awaiting approval
-                </p>
+                {loadingRequests ? (
+                  <div className="h-8 bg-purple-900/30 animate-pulse rounded"></div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold text-yellow-400">{pendingCount}</div>
+                    <p className="text-xs text-purple-300">
+                      Awaiting approval (live count)
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -408,6 +530,23 @@ export default function AdminPayments() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {error && (
+                <div className="mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <XCircle className="w-5 h-5" />
+                    <span className="font-semibold">Error</span>
+                  </div>
+                  <p className="text-red-300 mt-2">{error}</p>
+                  <Button 
+                    size="sm"
+                    variant="outline" 
+                    className="border-red-500/30 text-red-400 hover:bg-red-500/10 mt-3"
+                    onClick={() => activeTab === 'pending' ? fetchPendingRequests() : fetchHistory()}
+                  >
+                    Try Again
+                  </Button>
+                </div>
+              )}
               <div className="space-y-4">
                 {loadingRequests ? (
                   <div className="text-center py-12">
@@ -542,7 +681,31 @@ ${request.updated_at ? `Updated: ${new Date(request.updated_at).toLocaleString('
               {!loadingRequests && filteredRequests.length === 0 && (
                 <div className="text-center py-12">
                   <CreditCard className="w-16 h-16 text-gold/30 mx-auto mb-4" />
-                  <p className="text-white/60">No payment requests found matching your criteria.</p>
+                  {paymentRequests.length === 0 ? (
+                    <>
+                      <p className="text-white/60 mb-2">No payment requests found</p>
+                      <p className="text-white/40 text-sm">
+                        {activeTab === 'pending' 
+                          ? 'No pending requests at the moment' 
+                          : 'No requests match your filters'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-white/60 mb-2">No requests match your filters</p>
+                      <Button 
+                        variant="outline" 
+                        className="border-gold/30 text-gold hover:bg-gold/10 mt-4"
+                        onClick={() => {
+                          setSearchTerm('');
+                          setStatusFilter('all');
+                          setTypeFilter('all');
+                        }}
+                      >
+                        Clear Filters
+                      </Button>
+                    </>
+                  )}
                 </div>
               )}
             </CardContent>
