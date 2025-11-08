@@ -257,6 +257,7 @@ export interface IStorage {
     type: 'deposit' | 'withdrawal';
     amount: number;
     paymentMethod: string;
+    paymentDetails?: string | null;
     status: 'pending' | 'approved' | 'rejected' | 'completed';
     adminNotes?: string;
   }): Promise<any>;
@@ -1420,7 +1421,8 @@ export class SupabaseStorage implements IStorage {
       .from('player_bets')
       .select('*')
       .eq('user_id', userId)
-      .eq('game_id', gameId);
+      .eq('game_id', gameId)
+      .neq('status', 'cancelled'); // ✅ FIX: Exclude cancelled bets from user's bet display
 
     if (error) {
       console.error('Error getting bets for user:', error);
@@ -1776,6 +1778,10 @@ export class SupabaseStorage implements IStorage {
         winning_round: roundValue, // ✅ FIX: Use extracted round value
         total_bets: (history as any).totalBets || 0,
         total_payouts: (history as any).totalPayouts || 0,
+        round_payouts: (history as any).roundPayouts || { // ✅ NEW: Add round payouts
+          round1: { andar: 0, bahar: 0 },
+          round2: { andar: 0, bahar: 0 }
+        },
         created_at: new Date()
       })
       .select()
@@ -3605,6 +3611,7 @@ export class SupabaseStorage implements IStorage {
     type: 'deposit' | 'withdrawal';
     amount: number;
     paymentMethod: string;
+    paymentDetails?: string | null;
     status: 'pending' | 'approved' | 'rejected' | 'completed';
     adminNotes?: string;
   }): Promise<any> {
@@ -3618,6 +3625,7 @@ export class SupabaseStorage implements IStorage {
       request_type: request.type,
       amount: request.amount,
       payment_method: request.paymentMethod,
+      payment_details: request.paymentDetails || null,
       status: request.status,
       admin_notes: request.adminNotes || null,
       created_at: now,

@@ -861,11 +861,33 @@ function shouldBufferEvent(eventType: string): boolean {
 
 export function broadcastToRole(message: any, role: 'player' | 'admin') {
   const messageStr = JSON.stringify({...message, timestamp: Date.now()});
+  let sentCount = 0;
+  let skippedCount = 0;
+  
   clients.forEach(client => {
-    if (client.role === role && client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(messageStr);
+    // Check for both 'admin' and 'super_admin' roles
+    const isAdminRole = role === 'admin' && (client.role === 'admin' || client.role === 'super_admin');
+    const isPlayerRole = role === 'player' && client.role === 'player';
+    
+    if ((isAdminRole || isPlayerRole) && client.ws.readyState === WebSocket.OPEN) {
+      try {
+        client.ws.send(messageStr);
+        sentCount++;
+        console.log(`✅ Sent ${message.type} to ${client.role} client ${client.userId}`);
+      } catch (error) {
+        console.error(`❌ Error sending ${message.type} to ${client.userId}:`, error);
+      }
+    } else {
+      skippedCount++;
+      if (client.role !== role) {
+        console.log(`⏭️ Skipped ${client.userId} (role: ${client.role}, expected: ${role})`);
+      } else if (client.ws.readyState !== WebSocket.OPEN) {
+        console.log(`⏭️ Skipped ${client.userId} (WebSocket not open: ${client.ws.readyState})`);
+      }
     }
   });
+  
+  console.log(`📊 broadcastToRole(${message.type}, ${role}): Sent to ${sentCount}, Skipped ${skippedCount}, Total clients: ${clients.size}`);
 }
 
 // Timer management
@@ -1185,10 +1207,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               // Enhanced client object with additional properties
               const nowMs = Date.now();
+              const clientRole = decoded.role || 'player';
               const newClient: WSClient = {
                 ws,
                 userId: decoded.id,
-                role: decoded.role || 'player',
+                role: clientRole,
                 wallet: parseFloat(user.balance as string) || 0,
                 authenticatedAt: nowMs,
                 lastActivity: nowMs,
@@ -1203,8 +1226,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               webrtcClientId = `ws-${decoded.id}-${Date.now()}`;
               webrtcSignaling.registerClient(ws, webrtcClientId, decoded.role || 'player');
               
-              console.log(`[WS] Client ${client.userId} added to active clients. Total: ${clients.size}`);
+              console.log(`[WS] Client ${client.userId} added to active clients. Role: ${clientRole}, Total: ${clients.size}`);
               console.log(`[WebRTC] Client registered with signaling: ${webrtcClientId}`);
+              
+              // Log admin connections
+              if (clientRole === 'admin' || clientRole === 'super_admin') {
+                console.log(`✅ Admin client connected: ${client.userId} (${clientRole})`);
+              }
                
               // Get current game state for this user
               const gameStateForUser = await getCurrentGameStateForUser(client.userId);
@@ -2223,7 +2251,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Admin Routes
   app.use("/api/admin", adminUserRoutes);
-  app.use("/api/user", userRoutes);
+  // ✅ REMOVED: Old user routes moved inline below for better control
+  // app.use("/api/user", userRoutes);
 
   app.get("/api/game-settings", async (req, res) => {
     try {
@@ -2337,7 +2366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Payment Request Routes (New: Request → Approval Workflow) - REQUIRED FOR ALL USER PAYMENTS
   app.post("/api/payment-requests", paymentLimiter, async (req, res) => {
     try {
-      const { amount, paymentMethod, requestType } = req.body;
+      const { amount, paymentMethod, requestType, paymentDetails } = req.body;
       
       // Validate required fields
       if (!amount || !paymentMethod || !requestType) {
@@ -2441,6 +2470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: requestType,
         amount: numAmount,
         paymentMethod: typeof paymentMethod === 'string' ? paymentMethod : JSON.stringify(paymentMethod),
+        paymentDetails: paymentDetails ? JSON.stringify(paymentDetails) : null,
         status: 'pending'
       });
       
@@ -4610,6 +4640,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ✅ User balance endpoint (moved from routes/user.ts)
+  app.get("/api/user/balance", requireAuth, generalLimiter, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const balance = await storage.getUserBalance(userId);
+      res.json({ success: true, balance });
+    } catch (error) {
+      console.error('Get user balance error:', error);
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
   // Player-facing undo last bet endpoint
   app.delete("/api/user/undo-last-bet", generalLimiter, async (req, res) => {
     try {
@@ -4646,14 +4692,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔍 UNDO REQUEST: User ${userId}, Current Round: ${currentRound}, Game Phase: ${currentGame.phase}`);
       
       // Get user's bets for current game
-      const userBets = await storage.getBetsForUser(userId, currentGame.game_id);
+      const userBets = await storage.getBetsForUser(userId, currentGame.gameId);
+      
+      // ✅ CRITICAL DEBUG: Log what we're comparing
+      console.log(`🔍 UNDO DEBUG:`, {
+        currentRound,
+        currentRoundType: typeof currentRound,
+        userBetsCount: userBets.length,
+        userBetsRounds: userBets.map(b => ({ round: b.round, roundType: typeof b.round, status: b.status, amount: b.amount }))
+      });
       
       // ✅ CRITICAL FIX: Filter active bets ONLY from CURRENT round
-      // Cannot undo previous round bets once that round is over
-      const activeBets = userBets.filter(bet => 
-        bet.status !== 'cancelled' && 
-        parseInt(bet.round) === currentRound
-      );
+      // Convert DB string to number for comparison
+      const activeBets = userBets.filter(bet => {
+        const betRoundNum = parseInt(bet.round); // DB stores as varchar, convert to number
+        const matches = bet.status !== 'cancelled' && betRoundNum === currentRound;
+        console.log(`  🔍 Comparing bet: round="${bet.round}" (string) → ${betRoundNum} (number), currentRound=${currentRound}, status="${bet.status}", matches=${matches}`);
+        return matches;
+      });
       
       if (activeBets.length === 0) {
         return res.status(404).json({
@@ -4745,7 +4801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // ✅ FIX: Broadcast updated totals to admin dashboard (INSTANT UPDATE)
-      broadcastToRole({
+      const adminUpdateMessage = {
         type: 'admin_bet_update',
         data: {
           userId,
@@ -4761,7 +4817,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           round1Bets: currentGameState.round1Bets,
           round2Bets: currentGameState.round2Bets
         }
-      }, 'admin');
+      };
+      
+      // Log before broadcasting
+      const adminClients = Array.from(clients).filter(c => c.role === 'admin' || c.role === 'super_admin');
+      console.log(`📤 Broadcasting admin_bet_update to ${adminClients.length} admin clients:`, {
+        totalAndar,
+        totalBahar,
+        round1Bets: currentGameState.round1Bets,
+        round2Bets: currentGameState.round2Bets
+      });
+      
+      broadcastToRole(adminUpdateMessage, 'admin');
       
       // ✅ CRITICAL: Broadcast full game state sync to ALL clients (admin + players)
       broadcast({
@@ -4781,16 +4848,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`✅ ALL BETS UNDONE: User ${userId}, ${activeBets.length} bets from Round ${currentRound}, Total ₹${totalRefundAmount}`);
       console.log(`📊 Updated totals - Andar: ₹${totalAndar}, Bahar: ₹${totalBahar}`);
 
+      // ✅ FIX: Send updated bet totals to user from DB (now excludes cancelled bets)
+      // Find the user's WebSocket connection and send fresh data
+      try {
+        const userClient = Array.from(clients).find(c => c.userId === userId);
+        if (userClient && userClient.ws && userClient.ws.readyState === 1) {
+          // Fetch fresh bet data from DB (getBetsForUser now excludes cancelled bets)
+          const freshUserBets = await storage.getBetsForUser(userId, currentGame.gameId);
+          
+          let userRound1Bets = { andar: [] as number[], bahar: [] as number[] };
+          let userRound2Bets = { andar: [] as number[], bahar: [] as number[] };
+          
+          freshUserBets.forEach((bet: any) => {
+            const betAmount = parseFloat(bet.amount);
+            if (bet.round === '1' || bet.round === 1) {
+              if (bet.side === 'andar') {
+                userRound1Bets.andar.push(betAmount);
+              } else if (bet.side === 'bahar') {
+                userRound1Bets.bahar.push(betAmount);
+              }
+            } else if (bet.round === '2' || bet.round === 2) {
+              if (bet.side === 'andar') {
+                userRound2Bets.andar.push(betAmount);
+              } else if (bet.side === 'bahar') {
+                userRound2Bets.bahar.push(betAmount);
+              }
+            }
+          });
+          
+          userClient.ws.send(JSON.stringify({
+            type: 'user_bets_update',
+            data: {
+              round1Bets: userRound1Bets,
+              round2Bets: userRound2Bets
+            }
+          }));
+          
+          console.log(`📤 Sent fresh user_bets_update to ${userId}:`, { 
+            round1: userRound1Bets, 
+            round2: userRound2Bets 
+          });
+        }
+      } catch (refreshError) {
+        console.error('⚠️ Error sending user_bets_update after undo:', refreshError);
+        // Don't fail the undo if refresh fails
+      }
+
       res.json({
         success: true,
         message: `All bets undone successfully. ₹${totalRefundAmount.toLocaleString('en-IN')} refunded to your balance.`,
         data: {
-          cancelledBets: activeBets.map(bet => ({
+          // ✅ FIX: Always return cancelledBets as an array (even if empty)
+          cancelledBets: Array.isArray(activeBets) ? activeBets.map(bet => ({
             betId: bet.id,
             side: bet.side,
             amount: parseFloat(bet.amount),
             round: bet.round
-          })),
+          })) : [],
           refundedAmount: totalRefundAmount,
           newBalance
         }

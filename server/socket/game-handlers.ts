@@ -66,6 +66,12 @@ export async function handlePlayerBet(client: WSClient, data: any) {
     return;
   }
 
+  // ✅ FIX: Validate round is a number
+  if (typeof round !== 'number' || round < 1 || round > 2) {
+    sendError(ws, 'round must be a number (1 or 2)');
+    return;
+  }
+
   // ✅ FIX: Validate bet amount against MIN_BET and MAX_BET limits
   const { storage } = await import('../storage-supabase');
   let minBet = 1000; // Default
@@ -87,11 +93,6 @@ export async function handlePlayerBet(client: WSClient, data: any) {
   
   if (amount > maxBet) {
     sendError(ws, `Maximum bet amount is ₹${maxBet}`);
-    return;
-  }
-
-  if (typeof round !== 'string') {
-    sendError(ws, 'round must be a string');
     return;
   }
 
@@ -128,10 +129,9 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       return;
     }
 
-    // Validate round
-    const roundNum = parseInt(round);
-    if (roundNum !== currentGameState.currentRound) {
-      sendError(ws, `Invalid round. Expected: ${currentGameState.currentRound}, got: ${roundNum}`);
+    // ✅ FIX: Validate round matches currentRound (both numbers now)
+    if (round !== currentGameState.currentRound) {
+      sendError(ws, `Invalid round. Expected: ${currentGameState.currentRound}, got: ${round}`);
       return;
     }
 
@@ -195,7 +195,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
     }
 
     // ✅ FIX: Add bet to current game state using proper methods (only after successful balance deduction)
-    if (roundNum === 1) {
+    if (round === 1) {
       if ((global as any).currentGameState?.userBets?.get) {
         // Log BEFORE for debugging
         const beforeTotal = (global as any).currentGameState.round1Bets[side];
@@ -212,7 +212,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         const afterTotal = (global as any).currentGameState.round1Bets[side];
         console.log(`✅ AFTER BET - Round 1 ${side}:`, { globalTotal: afterTotal, added: amount, calculation: `${beforeTotal} + ${amount} = ${afterTotal}` });
       }
-    } else if (roundNum === 2) {
+    } else if (round === 2) {
       if ((global as any).currentGameState?.userBets?.get) {
         // Log BEFORE for debugging
         const beforeTotal = (global as any).currentGameState.round2Bets[side];
@@ -240,7 +240,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
           gameId: gameIdToUse,
           side,
           amount: amount,
-          round: round.toString(),
+          round: round.toString(), // ✅ Convert to string only at DB boundary (DB uses varchar)
           status: 'pending'
         });
         console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
@@ -259,13 +259,13 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         // ✅ FIX: Rollback balance AND game state if bet storage fails
         try {
           // Rollback game state bet
-          if (roundNum === 1) {
+          if (round === 1) {
             (global as any).currentGameState.addRound1Bet(side, -amount); // Subtract the bet
             const userBets = (global as any).currentGameState.getUserBets(userId);
             if (userBets) {
               userBets.round1[side] -= amount;
             }
-          } else if (roundNum === 2) {
+          } else if (round === 2) {
             (global as any).currentGameState.addRound2Bet(side, -amount); // Subtract the bet
             const userBets = (global as any).currentGameState.getUserBets(userId);
             if (userBets) {
@@ -302,7 +302,7 @@ export async function handlePlayerBet(client: WSClient, data: any) {
                 userId,
                 side,
                 amount,
-                round: roundNum,
+                round,
                 reason: 'Storage error - bet cancelled and refunded'
               }
             });
@@ -321,13 +321,13 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       console.error(`❌ CRITICAL: Invalid gameId (${gameIdToUse}), rolling back bet`);
       try {
         // Rollback game state
-        if (roundNum === 1) {
+        if (round === 1) {
           (global as any).currentGameState.addRound1Bet(side, -amount);
           const userBets = (global as any).currentGameState.getUserBets(userId);
           if (userBets) {
             userBets.round1[side] -= amount;
           }
-        } else if (roundNum === 2) {
+        } else if (round === 2) {
           (global as any).currentGameState.addRound2Bet(side, -amount);
           const userBets = (global as any).currentGameState.getUserBets(userId);
           if (userBets) {

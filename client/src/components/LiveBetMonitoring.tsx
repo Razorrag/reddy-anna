@@ -54,6 +54,7 @@ const LiveBetMonitoring: React.FC = () => {
   const [editingPlayer, setEditingPlayer] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // ✅ FIX: Force re-render key
   const { showNotification } = useNotification();
   const { gameState } = useGameState();
 
@@ -61,13 +62,17 @@ const LiveBetMonitoring: React.FC = () => {
   const fetchLiveBets = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Fetching live bets from API...');
       const response = await apiClient.get('/admin/bets/live-grouped') as any;
       if (response.success && response.data) {
+        console.log(`📊 Fetched ${response.data.length} players' bets:`, response.data);
         setPlayerBets(response.data);
-        console.log(`📊 Fetched ${response.data.length} players' bets`);
+        setRefreshKey(k => k + 1); // ✅ FIX: Force component re-render
+      } else {
+        console.warn('⚠️ API returned no data:', response);
       }
     } catch (error) {
-      console.error('Failed to fetch live bets:', error);
+      console.error('❌ Failed to fetch live bets:', error);
       showNotification('Failed to load live bets', 'error');
     } finally {
       setLoading(false);
@@ -83,12 +88,18 @@ const LiveBetMonitoring: React.FC = () => {
 
   // Listen for WebSocket bet updates
   useEffect(() => {
-    const handleBetUpdate = () => {
+    const handleBetUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('📨 LiveBetMonitoring received admin_bet_update:', customEvent.detail);
       fetchLiveBets();
     };
 
+    console.log('✅ LiveBetMonitoring: Registered admin_bet_update listener');
     window.addEventListener('admin_bet_update', handleBetUpdate);
-    return () => window.removeEventListener('admin_bet_update', handleBetUpdate);
+    return () => {
+      console.log('🔌 LiveBetMonitoring: Unregistered admin_bet_update listener');
+      window.removeEventListener('admin_bet_update', handleBetUpdate);
+    };
   }, []);
 
   const startEdit = (player: PlayerBet, round: number) => {

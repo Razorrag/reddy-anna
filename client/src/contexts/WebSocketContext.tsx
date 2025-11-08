@@ -485,13 +485,23 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           timestamp: data.data.timestamp || Date.now()
         };
         
-        const newBets = {
-          ...currentBets,
-          [data.data.side]: [...normalizedCurrentBets, betInfo],
-        };
+        // ✅ CRITICAL FIX: Check for duplicate betId before adding (prevents accumulation bug)
+        const existingBetIndex = normalizedCurrentBets.findIndex(
+          (b: any) => b.betId === betInfo.betId
+        );
         
-        console.log('📊 Updated bets:', newBets);
-        updatePlayerRoundBets(data.data.round as any, newBets);
+        if (existingBetIndex === -1) {
+          // Only add if bet doesn't exist
+          const newBets = {
+            ...currentBets,
+            [data.data.side]: [...normalizedCurrentBets, betInfo],
+          };
+          
+          console.log('📊 Updated bets:', newBets);
+          updatePlayerRoundBets(data.data.round as any, newBets);
+        } else {
+          console.log('⚠️ Duplicate bet_confirmed ignored:', betInfo.betId);
+        }
         break;
 
       case 'all_bets_cancelled':
@@ -581,7 +591,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       case 'sync_game_state':
       case 'game_state':
-      case 'game:state': {
+      case 'game:state':
+      case 'game_state_sync': {
         const gameStateData = (data as any).data;
         
         // Handle null/undefined game state gracefully
@@ -641,8 +652,22 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         // Do NOT use them for player bets - only use playerRound1Bets/playerRound2Bets
         // Total bets are only for admin displays, not for player buttons
         if (totalBets) updateTotalBets(totalBets);
-        // REMOVED: if (round1Bets) updateTotalBets(round1Bets); - total bets should not be sent to players
-        // REMOVED: if (round2Bets) updateTotalBets(round2Bets); - total bets should not be sent to players
+        // ✅ FIX: Update round bets for admin dashboard (game_state_sync includes these)
+        // Create new objects to ensure React detects the change
+        if (round1Bets) {
+          const newRound1Bets = {
+            andar: round1Bets.andar || 0,
+            bahar: round1Bets.bahar || 0
+          };
+          updateRoundBets(1, newRound1Bets);
+        }
+        if (round2Bets) {
+          const newRound2Bets = {
+            andar: round2Bets.andar || 0,
+            bahar: round2Bets.bahar || 0
+          };
+          updateRoundBets(2, newRound2Bets);
+        }
         // Ensure arrays are properly formatted when initializing from userBets
         if (userBets) {
           const r1Bets = {
@@ -974,12 +999,25 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'admin_bet_update': {
         const betData = (data as any).data;
         
+        console.log('📨 Received admin_bet_update:', betData);
+        
         // ✅ FIX: Update GameState context with new bet totals so admin dashboard displays them
+        // Create new objects to ensure React detects the change
         if (betData.round1Bets) {
-          updateRoundBets(1, betData.round1Bets);
+          const round1Bets = {
+            andar: betData.round1Bets.andar || 0,
+            bahar: betData.round1Bets.bahar || 0
+          };
+          console.log('🔄 Updating round1Bets:', round1Bets);
+          updateRoundBets(1, round1Bets);
         }
         if (betData.round2Bets) {
-          updateRoundBets(2, betData.round2Bets);
+          const round2Bets = {
+            andar: betData.round2Bets.andar || 0,
+            bahar: betData.round2Bets.bahar || 0
+          };
+          console.log('🔄 Updating round2Bets:', round2Bets);
+          updateRoundBets(2, round2Bets);
         }
         
         // Also dispatch event for other components that may listen
@@ -988,12 +1026,21 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         });
         window.dispatchEvent(event);
         
-        console.log('✅ Admin bet totals updated:', {
+        console.log('✅ Admin bet totals updated via WebSocket:', {
           round1: betData.round1Bets,
           round2: betData.round2Bets,
           totalAndar: betData.totalAndar,
           totalBahar: betData.totalBahar
         });
+        
+        // ✅ CRITICAL: Force a re-render by dispatching a custom event
+        // This ensures admin components update even if React doesn't detect the change
+        window.dispatchEvent(new CustomEvent('gameStateUpdated', {
+          detail: {
+            round1Bets: betData.round1Bets,
+            round2Bets: betData.round2Bets
+          }
+        }));
         break;
       }
 
@@ -1442,7 +1489,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           gameId: gameState.gameId,
           side,
           amount,
-          round: String(gameState.currentRound),
+          round: gameState.currentRound, // ✅ FIX: Send as number, not string
         }
       });
     } catch (error) {

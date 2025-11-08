@@ -3,7 +3,6 @@ import { Link } from 'wouter';
 import { 
   User, 
   ChevronDown, 
-  Wallet, 
   History, 
   Settings, 
   LogOut,
@@ -167,19 +166,6 @@ export const UserProfileButton: React.FC<UserProfileButtonProps> = ({ className 
                 Game Dashboard
               </Button>
             </Link>
-
-            {/* Wallet */}
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 text-white hover:bg-gold/10 hover:text-gold"
-              onClick={() => {
-                // This will open wallet modal - to be implemented
-                setIsDropdownOpen(false);
-              }}
-            >
-              <Wallet className="w-4 h-4" />
-              Add Funds
-            </Button>
 
             {/* Withdraw */}
             <Button

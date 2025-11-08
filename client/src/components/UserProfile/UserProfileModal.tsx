@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Wallet, TrendingUp, TrendingDown, Gamepad2, History, CreditCard, UserPlus, Eye, ExternalLink } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, Gamepad2, History, CreditCard, UserPlus, Eye, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,9 +13,8 @@ interface UserProfileModalProps {
 }
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose }) => {
-  const { state: profileState, fetchAnalytics, deposit, withdraw } = useUserProfile();
+  const { state: profileState, fetchAnalytics, withdraw } = useUserProfile();
   const [showWalletModal, setShowWalletModal] = useState(false);
-  const [walletMode, setWalletMode] = useState<'deposit' | 'withdraw'>('deposit');
 
   useEffect(() => {
     if (isOpen && !profileState.analytics) {
@@ -25,11 +24,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
 
   const formatCurrency = (amount: number) => {
     return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  const handleDeposit = (amount: number) => {
-    deposit(amount, 'upi');
-    setShowWalletModal(false);
   };
 
   const handleWithdraw = (amount: number) => {
@@ -213,15 +207,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
             {/* Quick Actions */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-gold">Quick Actions</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Button
-                  onClick={() => openWalletModal('deposit')}
-                  className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
-                >
-                  <Wallet className="w-4 h-4" />
-                  Add Funds
-                </Button>
-
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <Button
                   onClick={() => openWalletModal('withdraw')}
                   className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-2"
@@ -317,7 +303,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
         userBalance={analytics?.currentBalance || 0}
-        onDeposit={handleDeposit}
         onWithdraw={handleWithdraw}
       />
     </>

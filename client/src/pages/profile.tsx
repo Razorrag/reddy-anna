@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import { useBalance } from '@/contexts/BalanceContext';
@@ -41,7 +41,8 @@ const Profile: React.FC = () => {
     fetchGameHistory,
     updateProfile,
     fetchReferralData,
-    claimBonus
+    claimBonus,
+    fetchUserProfile  // ✅ ADDED: Profile data fetcher
   } = useUserProfile();
   const { balance, refreshBalance } = useBalance();
   const { showNotification } = useNotification();
@@ -87,6 +88,14 @@ const Profile: React.FC = () => {
     country: ''
   });
 
+  // ✅ FIX: Fetch profile data on page mount (cached for 1 hour)
+  useEffect(() => {
+    if (user && !profileState.user && !profileState.loading) {
+      console.log('📥 Profile page: Fetching user profile data');
+      fetchUserProfile();
+    }
+  }, [user, profileState.user, profileState.loading]); // ✅ FIX: Removed fetchUserProfile from dependencies to prevent infinite loops
+
   // Parse URL parameters for tab selection
   useEffect(() => {
     const params = new URLSearchParams(location.split('?')[1]);
@@ -97,12 +106,15 @@ const Profile: React.FC = () => {
     }
   }, [location]);
 
-  // Fetch referral data when referral tab is active
+  // ✅ FIX: Fetch referral data when referral tab is active (cached for 24 hours)
   useEffect(() => {
     if (activeTab === 'referral' && user) {
-      fetchReferralData();
+      // Only fetch if not already loaded (cache will be checked inside fetchReferralData)
+      if (!profileState.referralData) {
+        fetchReferralData();
+      }
     }
-  }, [activeTab, user, fetchReferralData]);
+  }, [activeTab, user]); // ✅ FIX: Removed fetchReferralData from dependencies to prevent infinite loops
 
   // Fetch transactions when transactions tab is active
   useEffect(() => {

@@ -9,7 +9,7 @@
  * without flashing black screens or transition animations during round changes.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useGameState } from '../../contexts/GameStateContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -19,12 +19,53 @@ import CardDealingPanel from './CardDealingPanel';
 import { Home } from 'lucide-react';
 
 const AdminGamePanelSimplified: React.FC = () => {
-  const { gameState } = useGameState();
+  const { gameState, updateRoundBets } = useGameState();
   const { sendWebSocketMessage } = useWebSocket();
   const { showNotification } = useNotification();
   
   const [isResetting, setIsResetting] = useState(false);
   const [, setLocation] = useLocation();
+  const [, forceUpdate] = useState({});
+  
+  // ✅ FIX: Listen for admin_bet_update events to force re-render
+  useEffect(() => {
+    const handleAdminBetUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const betData = customEvent.detail;
+      
+      console.log('📨 AdminGamePanel: Received admin_bet_update event:', betData);
+      
+      // Update round bets if provided
+      if (betData?.round1Bets) {
+        updateRoundBets(1, {
+          andar: betData.round1Bets.andar || 0,
+          bahar: betData.round1Bets.bahar || 0
+        });
+      }
+      if (betData?.round2Bets) {
+        updateRoundBets(2, {
+          andar: betData.round2Bets.andar || 0,
+          bahar: betData.round2Bets.bahar || 0
+        });
+      }
+      
+      // Force re-render
+      forceUpdate({});
+    };
+    
+    const handleGameStateUpdate = () => {
+      console.log('🔄 AdminGamePanel: GameState updated, forcing re-render');
+      forceUpdate({});
+    };
+    
+    window.addEventListener('admin_bet_update', handleAdminBetUpdate);
+    window.addEventListener('gameStateUpdated', handleGameStateUpdate);
+    
+    return () => {
+      window.removeEventListener('admin_bet_update', handleAdminBetUpdate);
+      window.removeEventListener('gameStateUpdated', handleGameStateUpdate);
+    };
+  }, [updateRoundBets]);
   
   const handleResetGame = async () => {
     if (!window.confirm('🔄 Reset the entire game? This will clear all bets and restart.')) {

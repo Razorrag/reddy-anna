@@ -220,9 +220,21 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
       return { ...state, userRole: action.payload };
     case 'UPDATE_ROUND_BETS':
       if (action.payload.round === 1) {
-        return { ...state, round1Bets: action.payload.bets };
+        // ✅ FIX: Create new object to ensure React detects the change
+        const newRound1Bets = {
+          andar: action.payload.bets.andar || 0,
+          bahar: action.payload.bets.bahar || 0
+        };
+        console.log('🔄 GameState: Updating round1Bets from', state.round1Bets, 'to', newRound1Bets);
+        return { ...state, round1Bets: newRound1Bets };
       } else if (action.payload.round === 2) {
-        return { ...state, round2Bets: action.payload.bets };
+        // ✅ FIX: Create new object to ensure React detects the change
+        const newRound2Bets = {
+          andar: action.payload.bets.andar || 0,
+          bahar: action.payload.bets.bahar || 0
+        };
+        console.log('🔄 GameState: Updating round2Bets from', state.round2Bets, 'to', newRound2Bets);
+        return { ...state, round2Bets: newRound2Bets };
       }
       return state;
     case 'SET_WINNING_CARD':

@@ -30,7 +30,7 @@ interface WhatsAppResponse {
 
 const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
-  const { gameState, updatePlayerWallet, removeLastBet } = useGameState();
+  const { gameState, updatePlayerWallet, removeLastBet, clearRoundBets } = useGameState();
   const { placeBet: placeBetWebSocket, connectionStatus } = useWebSocket();
   const { balance, updateBalance } = useBalance();
 
@@ -52,6 +52,7 @@ const PlayerGame: React.FC = () => {
   const [userBalance, setUserBalance] = useState(user?.balance || 0); // Use user's balance from AuthContext
   const [showChipSelector, setShowChipSelector] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedGameId, setSelectedGameId] = useState<string | undefined>(undefined); // ✅ NEW: For pre-selecting game
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showRoundNotification, setShowRoundNotification] = useState(false);
   const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
@@ -257,18 +258,16 @@ const PlayerGame: React.FC = () => {
       return;
     }
 
-    // Check if user has any bets to undo
-    const hasRound1Bets = (
-      (Array.isArray(gameState.playerRound1Bets.andar) && gameState.playerRound1Bets.andar.length > 0) ||
-      (Array.isArray(gameState.playerRound1Bets.bahar) && gameState.playerRound1Bets.bahar.length > 0)
-    );
-    const hasRound2Bets = (
-      (Array.isArray(gameState.playerRound2Bets.andar) && gameState.playerRound2Bets.andar.length > 0) ||
-      (Array.isArray(gameState.playerRound2Bets.bahar) && gameState.playerRound2Bets.bahar.length > 0)
+    // Check if user has any bets to undo for current round
+    const currentRound = gameState.currentRound;
+    const currentRoundBets = currentRound === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
+    const hasBets = (
+      (Array.isArray(currentRoundBets.andar) && currentRoundBets.andar.length > 0) ||
+      (Array.isArray(currentRoundBets.bahar) && currentRoundBets.bahar.length > 0)
     );
 
-    if (!hasRound1Bets && !hasRound2Bets) {
-      showNotification('No bets to undo', 'info');
+    if (!hasBets) {
+      showNotification(`No bets in Round ${currentRound} to undo`, 'info');
       return;
     }
 
@@ -296,11 +295,9 @@ const PlayerGame: React.FC = () => {
         // Update balance
         updateBalance(newBalance, 'api');
         
-        // ✅ FIX: Remove ALL bets from local state
-        for (const bet of cancelledBets) {
-          const roundNum = parseInt(bet.round) as 1 | 2;
-          removeLastBet(roundNum, bet.side);
-        }
+        // ✅ FIX: Don't clear immediately - wait for WebSocket 'all_bets_cancelled' or 'user_bets_update'
+        // This prevents race condition where frontend clears before backend confirms
+        // The WebSocket handlers (all_bets_cancelled + user_bets_update) will handle the clearing
         
         showNotification(
           `All Round ${gameState.currentRound} bets (₹${refundedAmount.toLocaleString('en-IN')}) removed`,
@@ -322,7 +319,7 @@ const PlayerGame: React.FC = () => {
       }
       showNotification(errorMessage, 'warning');
     }
-  }, [gameState, showNotification, updateBalance, removeLastBet]);
+  }, [gameState, showNotification, updateBalance, clearRoundBets]);
 
   // Handle rebet
   const handleRebet = useCallback(async () => {
@@ -351,8 +348,16 @@ const PlayerGame: React.FC = () => {
 
 
 
-  // Handle history click
+  // Handle history click - Open modal without pre-selection
   const handleHistoryClick = useCallback(() => {
+    setSelectedGameId(undefined); // Clear any pre-selection
+    setShowHistoryModal(true);
+  }, []);
+
+  // ✅ NEW: Handle game circle click - Open modal with specific game pre-selected
+  const handleGameClick = useCallback((gameId: string) => {
+    console.log('Opening history modal with game:', gameId);
+    setSelectedGameId(gameId);
     setShowHistoryModal(true);
   }, []);
 
@@ -469,7 +474,6 @@ const PlayerGame: React.FC = () => {
       {(!shouldShowAuthLoading && !shouldShowWsLoading) && (
       <div className="relative top-0">
         <MobileGameLayout
-
           gameState={gameState}
           user={userData}
           userBalance={userBalance || 0}
@@ -483,6 +487,7 @@ const PlayerGame: React.FC = () => {
           onRebet={handleRebet}
           onWalletClick={handleWalletClick}
           onHistoryClick={handleHistoryClick}
+          onGameClick={handleGameClick} // ✅ NEW: Pass handler for card circle clicks
           onShowChipSelector={handleShowChipSelector}
           showChipSelector={showChipSelector}
           isPlacingBet={isPlacingBet}
@@ -493,7 +498,11 @@ const PlayerGame: React.FC = () => {
       {/* Game History Modal */}
       <GameHistoryModal
         isOpen={showHistoryModal}
-        onClose={() => setShowHistoryModal(false)}
+        onClose={() => {
+          setShowHistoryModal(false);
+          setSelectedGameId(undefined); // ✅ Clear selection when closing
+        }}
+        selectedGameId={selectedGameId} // ✅ NEW: Pre-select specific game
       />
 
       {/* Wallet Modal */}

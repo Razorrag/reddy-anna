@@ -20,6 +20,11 @@ export function WalletModal({
   const [amount, setAmount] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
   const [isLoading, setIsLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<string>('UPI');
+  const [upiId, setUpiId] = useState<string>('');
+  const [accountNumber, setAccountNumber] = useState<string>('');
+  const [ifscCode, setIfscCode] = useState<string>('');
+  const [accountName, setAccountName] = useState<string>('');
   const { state: userProfileState, claimBonus, fetchBonusInfo } = useUserProfile();
 
   // Fetch bonus info when modal opens
@@ -57,10 +62,35 @@ export function WalletModal({
 
     setIsLoading(true);
     try {
+      // Validate payment details
+      if (activeTab === 'withdraw') {
+        if (paymentMethod === 'UPI' && !upiId.trim()) {
+          alert('Please enter your UPI ID');
+          return;
+        }
+        if (paymentMethod === 'Bank Transfer' && (!accountNumber.trim() || !ifscCode.trim() || !accountName.trim())) {
+          alert('Please fill in all bank details');
+          return;
+        }
+      }
+
+      // Prepare payment details
+      const paymentDetails: any = {};
+      if (activeTab === 'withdraw') {
+        if (paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') {
+          paymentDetails.upiId = upiId;
+        } else if (paymentMethod === 'Bank Transfer') {
+          paymentDetails.accountNumber = accountNumber;
+          paymentDetails.ifscCode = ifscCode;
+          paymentDetails.accountName = accountName;
+        }
+      }
+
       // Create payment request instead of direct balance update
       const response = await apiClient.post('/payment-requests', {
         amount: numAmount,
-        paymentMethod: activeTab === 'deposit' ? 'UPI' : 'Bank Transfer', // Default method
+        paymentMethod: paymentMethod,
+        paymentDetails: paymentDetails,
         requestType: activeTab === 'deposit' ? 'deposit' : 'withdrawal' // ✅ FIX: Map 'withdraw' to 'withdrawal'
       });
 
@@ -80,16 +110,25 @@ export function WalletModal({
         
         alert(successMessage);
         
-        // CRITICAL FIX: Auto-open WhatsApp with pre-filled message
+        // CRITICAL FIX: Auto-open WhatsApp with pre-filled message including payment details
+        let detailsText = '';
+        if (activeTab === 'withdraw') {
+          if (paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') {
+            detailsText = `\nUPI ID: ${upiId}`;
+          } else if (paymentMethod === 'Bank Transfer') {
+            detailsText = `\nAccount: ${accountNumber}\nIFSC: ${ifscCode}\nName: ${accountName}`;
+          }
+        }
+
         try {
           const whatsappResponse = await apiClient.post('/whatsapp/send-request', {
             userId: response.data.userId || 'unknown',
             userPhone: response.data.userPhone || 'unknown',
             requestType: activeTab.toUpperCase(),
-            message: `New ${activeTab} request for ₹${numAmount.toLocaleString('en-IN')}. Request ID: ${response.requestId}`,
+            message: `New ${activeTab} request for ₹${numAmount.toLocaleString('en-IN')}\nMethod: ${paymentMethod}${detailsText}\nRequest ID: ${response.requestId}`,
             amount: numAmount,
             isUrgent: false,
-            metadata: { requestId: response.requestId }
+            metadata: { requestId: response.requestId, paymentMethod, paymentDetails }
           });
 
           if (whatsappResponse.success && whatsappResponse.whatsappUrl) {
@@ -102,6 +141,10 @@ export function WalletModal({
         }
         
         setAmount("");
+        setUpiId('');
+        setAccountNumber('');
+        setIfscCode('');
+        setAccountName('');
         onClose();
       } else {
         alert(`Failed to submit ${activeTab} request: ${response.error || 'Unknown error'}`);
@@ -274,6 +317,89 @@ export function WalletModal({
               ))}
             </div>
           </div>
+
+          {/* Payment Method Selection */}
+          <div>
+            <label className="block text-sm text-white/80 mb-2">
+              Payment Method
+            </label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-gold/60 transition-colors"
+            >
+              <option value="UPI">UPI</option>
+              <option value="PhonePe">PhonePe</option>
+              <option value="GPay">Google Pay</option>
+              <option value="Paytm">Paytm</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+            </select>
+          </div>
+
+          {/* Payment Details (Withdrawal Only) */}
+          {activeTab === 'withdraw' && (
+            <div className="space-y-4 border border-gold/20 rounded-lg p-4 bg-black/30">
+              <div className="text-sm text-gold font-semibold mb-3">
+                Payment Details
+              </div>
+              
+              {(paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') && (
+                <div>
+                  <label className="block text-sm text-white/80 mb-2">
+                    UPI ID *
+                  </label>
+                  <input
+                    type="text"
+                    value={upiId}
+                    onChange={(e) => setUpiId(e.target.value)}
+                    placeholder="yourname@upi"
+                    className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gold/60 transition-colors"
+                  />
+                </div>
+              )}
+
+              {paymentMethod === 'Bank Transfer' && (
+                <>
+                  <div>
+                    <label className="block text-sm text-white/80 mb-2">
+                      Account Number *
+                    </label>
+                    <input
+                      type="text"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      placeholder="1234567890"
+                      className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gold/60 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-white/80 mb-2">
+                      IFSC Code *
+                    </label>
+                    <input
+                      type="text"
+                      value={ifscCode}
+                      onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                      placeholder="SBIN0001234"
+                      className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gold/60 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-white/80 mb-2">
+                      Account Holder Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={accountName}
+                      onChange={(e) => setAccountName(e.target.value)}
+                      placeholder="John Doe"
+                      className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gold/60 transition-colors"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Action Button */}
           <Button

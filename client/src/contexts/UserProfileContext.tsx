@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import { apiClient } from '@/lib/api-client';
 
 interface WhatsAppResponse {
@@ -250,13 +250,42 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [state, dispatch] = useReducer(userProfileReducer, initialState);
 
   // API functions
-  const fetchUserProfile = async () => {
+  const fetchUserProfile = useCallback(async () => {
     try {
+      // ✅ FIX: Cache user profile for 1 hour to prevent flooding
+      const CACHE_KEY = 'user_profile_cache';
+      const CACHE_TIMESTAMP_KEY = 'user_profile_cache_timestamp';
+      const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+      
+      // Check cache first
+      const cachedData = localStorage.getItem(CACHE_KEY);
+      const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+      
+      if (cachedData && cacheTimestamp) {
+        const timestamp = parseInt(cacheTimestamp, 10);
+        const now = Date.now();
+        const age = now - timestamp;
+        
+        // If cache is less than 1 hour old, use it
+        if (age < CACHE_DURATION) {
+          console.log('📦 Using cached user profile (age:', Math.round(age / 1000 / 60), 'minutes)');
+          const parsedData = JSON.parse(cachedData);
+          dispatch({ type: 'SET_USER', payload: parsedData });
+          return;
+        } else {
+          console.log('⏰ User profile cache expired, fetching fresh data');
+        }
+      }
+      
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
       
+      console.log('🔄 Fetching user profile from API');
       const response = await apiClient.get('/user/profile') as any;
       if (response.success && response.user) {
+        // Cache the data
+        localStorage.setItem(CACHE_KEY, JSON.stringify(response.user));
+        localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
         dispatch({ type: 'SET_USER', payload: response.user });
       }
     } catch (error: any) {
@@ -264,7 +293,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  };
+  }, []);
 
   const fetchAnalytics = async () => {
     try {
@@ -281,7 +310,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   };
 
-  const fetchBonusInfo = async () => {
+  const fetchBonusInfo = useCallback(async () => {
     // Skip bonus info fetch for admin users (admins don't have bonuses)
     const userStr = localStorage.getItem('user');
     if (userStr) {
@@ -304,29 +333,65 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       console.error('Failed to fetch bonus info:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to fetch bonus information' });
     }
-  };
+  }, []);
 
-  const fetchReferralData = async () => {
+  const fetchReferralData = useCallback(async (forceRefresh = false) => {
     try {
+      // ✅ FIX: Cache referral data for 24 hours to prevent flooding
+      const CACHE_KEY = 'referral_data_cache';
+      const CACHE_TIMESTAMP_KEY = 'referral_data_cache_timestamp';
+      const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+      
+      // Check cache first
+      if (!forceRefresh) {
+        const cachedData = localStorage.getItem(CACHE_KEY);
+        const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+        
+        if (cachedData && cacheTimestamp) {
+          const timestamp = parseInt(cacheTimestamp, 10);
+          const now = Date.now();
+          const age = now - timestamp;
+          
+          // If cache is less than 24 hours old, use it
+          if (age < CACHE_DURATION) {
+            console.log('📦 Using cached referral data (age:', Math.round(age / 1000 / 60), 'minutes)');
+            const parsedData = JSON.parse(cachedData);
+            dispatch({ type: 'SET_REFERRAL_DATA', payload: parsedData });
+            return;
+          } else {
+            console.log('⏰ Referral data cache expired, fetching fresh data');
+          }
+        }
+      }
+      
+      // Fetch fresh data
+      console.log('🔄 Fetching referral data from API');
       const response = await apiClient.get('/user/referral-data') as any;
       if (response.success && response.data) {
+        // Cache the data
+        localStorage.setItem(CACHE_KEY, JSON.stringify(response.data));
+        localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
         dispatch({ type: 'SET_REFERRAL_DATA', payload: response.data });
       }
     } catch (error: any) {
       // ✅ FIX: Suppress error gracefully - referral feature is optional
       // Database schema issue: missing foreign key relationship
       console.warn('Referral feature not available (database schema incomplete)');
+      const fallbackData = { 
+        totalReferrals: 0, 
+        totalReferralEarnings: 0, 
+        referredUsers: [] 
+      };
+      // Cache fallback data to prevent repeated failed requests
+      localStorage.setItem('referral_data_cache', JSON.stringify(fallbackData));
+      localStorage.setItem('referral_data_cache_timestamp', Date.now().toString());
       dispatch({ 
         type: 'SET_REFERRAL_DATA', 
-        payload: { 
-          totalReferrals: 0, 
-          totalReferralEarnings: 0, 
-          referredUsers: [] 
-        } 
+        payload: fallbackData
       });
       // Don't dispatch error - this is non-critical
     }
-  };
+  }, []); // ✅ FIX: useCallback with empty deps to prevent infinite loops
 
   const fetchTransactions = async (append = false) => {
     try {
@@ -560,9 +625,11 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
           if (userData.role === 'player') {
             console.log('✅ Initializing player profile data (lazy load)');
             // Fetch only essential data - others will load when tabs are opened
+            // ✅ FIX: These functions now have caching built-in, so they won't flood the API
             await fetchUserProfile();
             await fetchBonusInfo();
             // Don't fetch transactions/history/analytics until user navigates to those tabs
+            // Don't fetch referral data until user opens referral tab (cached for 24 hours)
           } else {
             console.log('ℹ️ Skipping profile data fetch for admin user');
           }
@@ -573,7 +640,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     };
     
     initializeData();
-  }, []);
+  }, [fetchUserProfile, fetchBonusInfo]); // ✅ FIX: Added dependencies since functions are now stable with useCallback
 
   // Listen for balance updates
   useEffect(() => {

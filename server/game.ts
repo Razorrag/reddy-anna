@@ -480,6 +480,39 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
           throw new Error(`Missing required game data: openingCard=${!!gameState.openingCard}, winner=${!!winningSide}, winningCard=${!!winningCard}`);
         }
         
+        // ✅ NEW: Calculate per-round payout breakdown
+        const roundPayouts = {
+          round1: { andar: 0, bahar: 0 },
+          round2: { andar: 0, bahar: 0 }
+        };
+
+        // Simple distribution: all payouts go to winning side in winning round
+        if (totalPayoutsAmount > 0) {
+          if (gameState.currentRound === 1) {
+            if (winningSide === 'andar') {
+              roundPayouts.round1.andar = totalPayoutsAmount;
+            } else {
+              roundPayouts.round1.bahar = totalPayoutsAmount;
+            }
+          } else if (gameState.currentRound === 2) {
+            if (winningSide === 'andar') {
+              roundPayouts.round2.andar = totalPayoutsAmount;
+            } else {
+              roundPayouts.round2.bahar = totalPayoutsAmount;
+            }
+          }
+        }
+
+        console.log('📊 Calculated round payouts:', {
+          round1Andar: roundPayouts.round1.andar.toFixed(2),
+          round1Bahar: roundPayouts.round1.bahar.toFixed(2),
+          round2Andar: roundPayouts.round2.andar.toFixed(2),
+          round2Bahar: roundPayouts.round2.bahar.toFixed(2),
+          total: (roundPayouts.round1.andar + roundPayouts.round1.bahar + 
+                  roundPayouts.round2.andar + roundPayouts.round2.bahar).toFixed(2),
+          expectedTotal: totalPayoutsAmount.toFixed(2)
+        });
+
         // Prepare history data
         const historyData = {
           gameId: gameState.gameId,
@@ -490,6 +523,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
           round: gameState.currentRound, // ✅ CRITICAL FIX: Changed from 'winningRound' to 'round' to match storage layer
           totalBets: totalBetsAmount,
           totalPayouts: totalPayoutsAmount,
+          roundPayouts: roundPayouts, // ✅ NEW: Add round breakdown
           createdAt: new Date().toISOString()
         };
         

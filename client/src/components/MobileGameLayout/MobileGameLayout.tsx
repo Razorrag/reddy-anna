@@ -30,6 +30,7 @@ interface MobileGameLayoutProps {
   onRebet: () => void;
   onWalletClick: () => void;
   onHistoryClick: () => void;
+  onGameClick?: (gameId: string) => void; // ✅ NEW: Open history modal with specific game
   onShowChipSelector: () => void;
   showChipSelector: boolean;
   isPlacingBet: boolean;
@@ -49,6 +50,7 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
   onRebet,
   onWalletClick,
   onHistoryClick,
+  onGameClick, // ✅ NEW
   onShowChipSelector,
   showChipSelector,
   isPlacingBet
@@ -106,6 +108,7 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
         <CardHistory
           gameState={gameState}
           onHistoryClick={onHistoryClick}
+          onGameClick={onGameClick} // ✅ NEW: Opens history modal with specific game
           className="px-4 py-1"
         />
 

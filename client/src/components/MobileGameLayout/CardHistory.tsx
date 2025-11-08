@@ -23,18 +23,21 @@ interface GameResult {
 
 interface CardHistoryProps {
   gameState?: any; // Keep for compatibility (optional, not used)
-  onHistoryClick?: () => void; // Keep for compatibility (optional, not used)
+  onHistoryClick?: () => void; // ✅ CHANGED: Opens main history modal
+  onGameClick?: (gameId: string) => void; // ✅ NEW: Opens main history modal with specific game pre-selected
   className?: string;
 }
 
 const CardHistory: React.FC<CardHistoryProps> = ({
+  onGameClick,
   className = ''
 }) => {
   const [recentResults, setRecentResults] = useState<GameResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
-  const [gameDetails, setGameDetails] = useState<any>(null);
-  const [loadingDetails, setLoadingDetails] = useState(false);
+  // ❌ REMOVED: Own modal state - now uses parent's GameHistoryModal
+  // const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
+  // const [gameDetails, setGameDetails] = useState<any>(null);
+  // const [loadingDetails, setLoadingDetails] = useState(false);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -190,29 +193,12 @@ const CardHistory: React.FC<CardHistoryProps> = ({
     return rank || '?';
   };
 
-  // Handle clicking on a game circle
-  const handleGameClick = async (game: GameResult) => {
-    console.log('[CardHistory] Game clicked:', game);
-    setSelectedGame(game);
-    setLoadingDetails(true);
-    
-    try {
-      // Fetch detailed game history including all rounds
-      const response = await apiClient.get(`/api/game/history/${game.gameId}`);
-      console.log('[CardHistory] Game details:', response);
-      setGameDetails(response);
-    } catch (error) {
-      console.error('[CardHistory] Failed to load game details:', error);
-      setGameDetails(null);
-    } finally {
-      setLoadingDetails(false);
+  // ✅ SIMPLIFIED: Just call parent callback to open main GameHistoryModal
+  const handleGameClick = (game: GameResult) => {
+    console.log('[CardHistory] Game clicked, opening main history modal:', game.gameId);
+    if (onGameClick) {
+      onGameClick(game.gameId);
     }
-  };
-
-  // Close modal
-  const closeModal = () => {
-    setSelectedGame(null);
-    setGameDetails(null);
   };
 
   return (
@@ -251,121 +237,7 @@ const CardHistory: React.FC<CardHistoryProps> = ({
         )}
       </div>
 
-      {/* Game Details Modal */}
-      {selectedGame && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={closeModal}>
-          <div className="bg-gradient-to-br from-gray-900 to-black border-2 border-gold/30 rounded-lg max-w-md w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-gray-900 to-black border-b border-gold/30 p-4 flex justify-between items-center">
-              <h3 className="text-gold font-bold text-lg">Game Details</h3>
-              <button onClick={closeModal} className="text-white/60 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-4 space-y-4">
-              {loadingDetails ? (
-                <div className="text-center py-8 text-white/60">Loading game details...</div>
-              ) : (
-                <>
-                  {/* Game Info */}
-                  <div className="bg-black/30 rounded-lg p-4 border border-gold/20">
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <div className="text-white/60">Opening Card</div>
-                        <div className="text-yellow-400 font-bold text-xl">{selectedGame.openingCard}</div>
-                      </div>
-                      <div>
-                        <div className="text-white/60">Winner</div>
-                        <div className={`font-bold text-xl ${
-                          selectedGame.winner === 'andar' ? 'text-red-400' : 'text-blue-400'
-                        }`}>
-                          {selectedGame.winner.toUpperCase()}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-white/60">Winning Round</div>
-                        <div className="text-white font-bold">Round {selectedGame.round}</div>
-                      </div>
-                      <div>
-                        <div className="text-white/60">Game ID</div>
-                        <div className="text-white/80 text-xs font-mono">{selectedGame.gameId.slice(-8)}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Round History */}
-                  {gameDetails && gameDetails.rounds && gameDetails.rounds.length > 0 && (
-                    <div className="bg-black/30 rounded-lg p-4 border border-gold/20">
-                      <h4 className="text-gold font-semibold mb-3">Round History</h4>
-                      <div className="space-y-2">
-                        {gameDetails.rounds.map((round: any, index: number) => (
-                          <div key={index} className="bg-black/40 rounded p-3 border border-white/10">
-                            <div className="flex justify-between items-center mb-2">
-                              <span className="text-white font-semibold">Round {round.round || index + 1}</span>
-                              <span className={`text-sm font-bold ${
-                                round.winner === 'andar' ? 'text-red-400' : 'text-blue-400'
-                              }`}>
-                                {round.winner ? round.winner.toUpperCase() : 'In Progress'}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div>
-                                <span className="text-white/60">Andar Bets:</span>
-                                <span className="text-white ml-1">₹{round.andarBets || 0}</span>
-                              </div>
-                              <div>
-                                <span className="text-white/60">Bahar Bets:</span>
-                                <span className="text-white ml-1">₹{round.baharBets || 0}</span>
-                              </div>
-                              <div>
-                                <span className="text-white/60">Andar Payout:</span>
-                                <span className="text-green-400 ml-1">₹{round.andarPayout || 0}</span>
-                              </div>
-                              <div>
-                                <span className="text-white/60">Bahar Payout:</span>
-                                <span className="text-green-400 ml-1">₹{round.baharPayout || 0}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Total Stats */}
-                  {gameDetails && (
-                    <div className="bg-black/30 rounded-lg p-4 border border-gold/20">
-                      <h4 className="text-gold font-semibold mb-3">Game Totals</h4>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <div className="text-white/60">Total Bets</div>
-                          <div className="text-white font-bold">₹{gameDetails.totalBets || selectedGame.totalBets || 0}</div>
-                        </div>
-                        <div>
-                          <div className="text-white/60">Total Payouts</div>
-                          <div className="text-green-400 font-bold">₹{gameDetails.totalPayouts || selectedGame.totalPayouts || 0}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="sticky bottom-0 bg-gradient-to-r from-gray-900 to-black border-t border-gold/30 p-4">
-              <button
-                onClick={closeModal}
-                className="w-full bg-gold/20 hover:bg-gold/30 text-gold font-semibold py-2 px-4 rounded-lg transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ✅ REMOVED: Modal UI - Now uses parent's GameHistoryModal instead */}
     </div>
   );
 };

@@ -9,7 +9,7 @@
  * - complete: Winner announcement
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameState } from '../contexts/GameStateContext';
 import LiveBetMonitoring from './LiveBetMonitoring';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -20,8 +20,49 @@ interface PersistentSidePanelProps {
 }
 
 const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '' }) => {
-  const { gameState } = useGameState();
+  const { gameState, updateRoundBets } = useGameState();
   const [showBetMonitoring, setShowBetMonitoring] = useState(true);
+  const [, forceUpdate] = useState({});
+  
+  // ✅ FIX: Listen for admin_bet_update events to force re-render
+  useEffect(() => {
+    const handleAdminBetUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const betData = customEvent.detail;
+      
+      console.log('📨 PersistentSidePanel: Received admin_bet_update event:', betData);
+      
+      // Update round bets if provided
+      if (betData?.round1Bets) {
+        updateRoundBets(1, {
+          andar: betData.round1Bets.andar || 0,
+          bahar: betData.round1Bets.bahar || 0
+        });
+      }
+      if (betData?.round2Bets) {
+        updateRoundBets(2, {
+          andar: betData.round2Bets.andar || 0,
+          bahar: betData.round2Bets.bahar || 0
+        });
+      }
+      
+      // Force re-render
+      forceUpdate({});
+    };
+    
+    const handleGameStateUpdate = () => {
+      console.log('🔄 PersistentSidePanel: GameState updated, forcing re-render');
+      forceUpdate({});
+    };
+    
+    window.addEventListener('admin_bet_update', handleAdminBetUpdate);
+    window.addEventListener('gameStateUpdated', handleGameStateUpdate);
+    
+    return () => {
+      window.removeEventListener('admin_bet_update', handleAdminBetUpdate);
+      window.removeEventListener('gameStateUpdated', handleGameStateUpdate);
+    };
+  }, [updateRoundBets]);
 
   // Calculate betting percentages for current round
   const currentRoundBets = gameState.currentRound === 1 ? gameState.round1Bets : gameState.round2Bets;

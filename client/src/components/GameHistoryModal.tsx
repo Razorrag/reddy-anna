@@ -37,9 +37,10 @@ interface GameHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   history?: EnhancedGameHistoryEntry[];
+  selectedGameId?: string; // ✅ NEW: Pre-select a specific game by ID
 }
 
-export function GameHistoryModal({ isOpen, onClose, history: propHistory }: GameHistoryModalProps) {
+export function GameHistoryModal({ isOpen, onClose, history: propHistory, selectedGameId }: GameHistoryModalProps) {
   const [history, setHistory] = useState<EnhancedGameHistoryEntry[]>(propHistory || []);
   const [loading, setLoading] = useState(false);
   const [selectedRound, setSelectedRound] = useState<EnhancedGameHistoryEntry | null>(null);
@@ -53,7 +54,13 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
     if (isOpen) {
       if (propHistory && propHistory.length > 0) {
         setHistory(propHistory);
-        setSelectedRound(null); // Reset to default view (last game)
+        // ✅ NEW: Pre-select game if selectedGameId is provided
+        if (selectedGameId) {
+          const gameToSelect = propHistory.find(g => g.gameId === selectedGameId);
+          setSelectedRound(gameToSelect || null);
+        } else {
+          setSelectedRound(null); // Reset to default view (last game)
+        }
       } else {
         fetchHistory();
       }
@@ -61,7 +68,7 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
       // ✅ REMOVED AUTO-REFRESH: WebSocket provides real-time updates
       // No interval needed - prevents page jumping and unnecessary API calls
     }
-  }, [isOpen, propHistory]);
+  }, [isOpen, propHistory, selectedGameId]);
 
   // Listen for real-time game history updates via WebSocket
   useEffect(() => {
@@ -97,7 +104,15 @@ export function GameHistoryModal({ isOpen, onClose, history: propHistory }: Game
       
       console.log('Parsed game history count:', games.length);
       setHistory(games);
-      setSelectedRound(null); // Reset to default view (last game)
+      
+      // ✅ NEW: Pre-select game if selectedGameId is provided
+      if (selectedGameId) {
+        const gameToSelect = games.find(g => g.gameId === selectedGameId);
+        setSelectedRound(gameToSelect || null);
+        console.log('📌 Pre-selected game:', gameToSelect?.gameId);
+      } else {
+        setSelectedRound(null); // Reset to default view (last game)
+      }
     } catch (error) {
       console.error('Failed to fetch game history:', error);
       
