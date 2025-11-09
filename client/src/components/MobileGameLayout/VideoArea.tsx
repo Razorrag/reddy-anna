@@ -46,12 +46,27 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const [gameResult, setGameResult] = useState<GameCompleteResult | null>(null);
   const [showResult, setShowResult] = useState(false);
 
-  // Embedded stream URL - runs independently, never interrupted
-  const STREAM_URL = 'https://live-streaming-frontend.onrender.com/';
+  // Stream configuration from backend
+  const [streamConfig, setStreamConfig] = useState<any>(null);
+  const [streamLoading, setStreamLoading] = useState(true);
 
-  // Log component mount
+  // Load stream configuration
   useEffect(() => {
-    console.log('🎥 VideoArea: Mounted with embedded stream');
+    const loadStreamConfig = async () => {
+      try {
+        const response = await fetch('/api/stream/simple-config');
+        const data = await response.json();
+        if (data.success && data.data) {
+          setStreamConfig(data.data);
+          console.log('🎥 VideoArea: Stream config loaded:', data.data);
+        }
+      } catch (error) {
+        console.error('Failed to load stream config:', error);
+      } finally {
+        setStreamLoading(false);
+      }
+    };
+    loadStreamConfig();
   }, []);
 
   // Handle pulse effect when less than 5 seconds
@@ -99,34 +114,45 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           }
         }
         
-        setGameResult({
+        const celebrationData = {
           winner: detail.winner,
           winningCard: detail.winningCard || gameState.winningCard,
           payoutAmount,
           totalBetAmount,
           result: resultType,
           round: detail.round || gameState.currentRound,
-          playerBets: detail.playerBets,
           netProfit,
+          playerBets: detail.playerBets,
           isRefundOnly
-        });
+        };
+        
+        console.log('🎊 SETTING GAME RESULT:', celebrationData);
+        console.log('💰 Payout Amount:', payoutAmount);
+        console.log('💵 Total Bet:', totalBetAmount);
+        console.log('💚 Net Profit:', netProfit);
+        console.log('🎯 Result Type:', resultType);
+        
+        setGameResult(celebrationData);
         setShowResult(true);
         console.log('✅ CELEBRATION TRIGGERED - showResult set to TRUE');
-        console.log('✅ Game Result:', { winner: detail.winner, round: detail.round || gameState.currentRound, resultType });
         
-        // Auto-hide after appropriate duration
-        const duration = resultType === 'no_bet' ? 2500 : 5000;
+        // Auto-hide after longer duration to ensure user sees it
+        const duration = resultType === 'no_bet' ? 3000 : 8000; // Increased from 5000 to 8000
+        console.log(`⏰ Celebration will hide after ${duration}ms`);
         setTimeout(() => {
           console.log('⏰ HIDING CELEBRATION after', duration, 'ms');
           setShowResult(false);
-          setTimeout(() => setGameResult(null), 500);
+          setTimeout(() => {
+            console.log('🧹 CLEARING GAME RESULT');
+            setGameResult(null);
+          }, 500);
         }, duration);
       }
     };
 
     window.addEventListener('game-complete-celebration', handleGameComplete as EventListener);
     return () => window.removeEventListener('game-complete-celebration', handleGameComplete as EventListener);
-  }, [gameState.phase, gameState.winningCard, gameState.currentRound]);
+  }, []); // ✅ FIXED: Empty deps to prevent duplicate listeners
 
   // ❌ DISABLED: This was causing celebrations to hide immediately
   // The phase can change before the celebration renders, causing it to never show
@@ -158,18 +184,41 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return Math.max(0, (maxTime - localTimer) / maxTime);
   };
 
-  return (
-    <div className={`relative bg-black overflow-hidden ${className}`}>
-      {/* Embedded Video Stream - Runs independently in background, never interrupted */}
-      <div className="absolute inset-0">
+  // Render video based on stream type
+  const renderStream = () => {
+    if (streamLoading) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading stream...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!streamConfig || !streamConfig.isActive || !streamConfig.streamUrl) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+          <div className="text-center px-6">
+            <div className="text-6xl mb-4">🎥</div>
+            <p className="text-gray-400 text-lg">Stream not configured</p>
+            <p className="text-gray-600 text-sm mt-2">Admin needs to set up stream URL</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (streamConfig.streamType === 'iframe') {
+      return (
         <iframe
-          src={STREAM_URL}
+          src={streamConfig.streamUrl}
           className="w-full h-full border-0"
-          allow="autoplay; fullscreen; picture-in-picture"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           style={{
             position: 'absolute',
-            top: '-80px',
+            top: 0,
             left: 0,
             width: '100%',
             height: 'calc(100% + 160px)',
@@ -180,6 +229,38 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           }}
           title="Live Game Stream"
         />
+      );
+    } else if (streamConfig.streamType === 'video') {
+      return (
+        <video
+          src={streamConfig.streamUrl}
+          className="w-full h-full object-cover"
+          autoPlay={streamConfig.autoplay}
+          muted={streamConfig.muted}
+          controls={streamConfig.controls}
+          loop
+          playsInline
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            zIndex: 1
+          }}
+        />
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <div className={`relative bg-black overflow-hidden ${className}`}>
+      {/* Embedded Video Stream - Runs independently in background, never interrupted */}
+      <div className="absolute inset-0">
+        {renderStream()}
 
         {/* Overlay Gradient for better text visibility */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" style={{ zIndex: 2 }} />
@@ -385,20 +466,29 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                           <div className="text-xl font-black text-yellow-300 mb-2 uppercase tracking-wider">
                             🏆 YOU WON!
                           </div>
-                          {/* TOTAL PAYOUT - Most prominent */}
-                          <div className="text-5xl font-black text-white mb-2 drop-shadow-[0_0_20px_rgba(255,215,0,0.5)]">
-                            ₹{gameResult.payoutAmount.toLocaleString('en-IN')}
+                          {/* YOUR WIN AMOUNT - Most prominent (what user actually won) */}
+                          <div className="text-6xl font-black text-green-300 mb-3 drop-shadow-[0_0_20px_rgba(74,222,128,0.6)] animate-pulse">
+                            +₹{(gameResult.netProfit || 0).toLocaleString('en-IN')}
                           </div>
-                          {/* NET PROFIT - Clear and visible */}
-                          <div className="bg-gradient-to-r from-green-500/30 to-yellow-500/30 rounded-lg py-2 px-4 border-2 border-yellow-400/50">
-                            <div className="text-xs text-yellow-200 mb-0.5">Your Profit</div>
-                            <div className="text-2xl font-black text-green-300">
-                              +₹{(gameResult.netProfit || 0).toLocaleString('en-IN')}
+                          <div className="text-sm text-green-200/80 mb-3 font-semibold">
+                            Your Win Amount
+                          </div>
+                          
+                          {/* BREAKDOWN - Clear details */}
+                          <div className="bg-black/40 rounded-lg p-3 space-y-2 border border-yellow-400/30">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-gray-300">Total Payout:</span>
+                              <span className="text-sm font-bold text-white">₹{gameResult.payoutAmount.toLocaleString('en-IN')}</span>
                             </div>
-                          </div>
-                          {/* BET AMOUNT - For reference */}
-                          <div className="text-xs text-yellow-200/70 mt-2">
-                            Your Bet: ₹{gameResult.totalBetAmount.toLocaleString('en-IN')}
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-gray-300">Your Bet:</span>
+                              <span className="text-sm font-bold text-red-300">-₹{gameResult.totalBetAmount.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="h-px bg-yellow-400/30"></div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm font-bold text-yellow-200">Net Profit:</span>
+                              <span className="text-lg font-black text-green-300">+₹{(gameResult.netProfit || 0).toLocaleString('en-IN')}</span>
+                            </div>
                           </div>
                         </>
                       )}

@@ -152,6 +152,7 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
                   ? 'BAHAR WON!' 
                   : 'BABA WON!'}
               </h1>
+              {/* ✅ LOGIC: Round 1-2 Bahar = BABA WON (refund), Round 3+ Bahar = BAHAR WON (1:1 payout) */}
               <div className="text-4xl font-bold text-white mb-2">
                 {typeof winningCard === 'string' ? winningCard : winningCard?.display}
               </div>

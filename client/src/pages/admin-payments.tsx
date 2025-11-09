@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +42,7 @@ export default function AdminPayments() {
   const [error, setError] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [justUpdated, setJustUpdated] = useState(false);
+  const [statsData, setStatsData] = useState({ totalDeposits: 0, totalWithdrawals: 0 });
 
   const fetchPendingRequests = async () => {
     try {
@@ -177,6 +178,9 @@ export default function AdminPayments() {
       } else {
         fetchHistory();
       }
+      // Also refresh stats and pending count
+      fetchStats();
+      fetchPendingCount();
     }, 10000);
     
     // Real-time refresh on admin notifications
@@ -193,6 +197,9 @@ export default function AdminPayments() {
         } else {
           fetchHistory();
         }
+        // Also refresh stats and pending count
+        fetchStats();
+        fetchPendingCount();
       }
     };
     window.addEventListener('admin_notification', handleAdminNotification as EventListener);
@@ -244,12 +251,14 @@ export default function AdminPayments() {
       // Show success message
       alert(`✅ ${requestType} approved successfully. New balance will be reflected immediately.`);
       
-      // Refresh the request list
+      // Refresh the request list and stats
       if (activeTab === 'pending') {
         await fetchPendingRequests();
       } else {
         await fetchHistory();
       }
+      await fetchStats();
+      await fetchPendingCount();
     } catch (error: any) {
       console.error('Failed to approve request:', error);
       alert(`❌ Failed to approve: ${error.message || 'Unknown error'}`);
@@ -273,12 +282,14 @@ export default function AdminPayments() {
       // Show success message
       alert(`✅ ${requestType} rejected successfully.`);
       
-      // Refresh the request list
+      // Refresh the request list and stats
       if (activeTab === 'pending') {
         await fetchPendingRequests();
       } else {
         await fetchHistory();
       }
+      await fetchStats();
+      await fetchPendingCount();
     } catch (error: any) {
       console.error('Failed to reject request:', error);
       alert(`❌ Failed to reject: ${error.message || 'Unknown error'}`);
@@ -307,55 +318,62 @@ export default function AdminPayments() {
     });
   }, [paymentRequests, filteredRequests, searchTerm, statusFilter, typeFilter]);
 
-  // ✅ FIX: Calculate stats for TODAY only, not all time
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // ✅ FIX: Fetch stats separately from ALL approved requests (not just current tab)
+  const fetchStats = async () => {
+    try {
+      // Fetch ALL approved requests for today's stats
+      const response = await apiClient.get('/admin/payment-requests/history?status=approved&limit=1000') as { success?: boolean; data?: PaymentRequest[] };
+      
+      if (response.success !== false && response.data) {
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        const allApprovedRequests = response.data;
+        
+        const totalDeposits = allApprovedRequests
+          .filter(r => {
+            const createdDate = new Date(r.created_at);
+            return r.request_type === 'deposit' && createdDate >= todayStart;
+          })
+          .reduce((sum, r) => sum + r.amount, 0);
 
-  const totalDeposits = paymentRequests
-    .filter(r => {
-      const createdDate = new Date(r.created_at);
-      return r.request_type === 'deposit' && 
-             r.status === 'approved' &&
-             createdDate >= todayStart;
-    })
-    .reduce((sum, r) => sum + r.amount, 0);
-
-  const totalWithdrawals = paymentRequests
-    .filter(r => {
-      const createdDate = new Date(r.created_at);
-      return r.request_type === 'withdrawal' && 
-             r.status === 'approved' &&
-             createdDate >= todayStart;
-    })
-    .reduce((sum, r) => sum + r.amount, 0);
-  
-  // Debug logging for stats
-  React.useEffect(() => {
-    if (paymentRequests.length > 0) {
-      console.log('📊 Stats calculation:', {
-        totalRequests: paymentRequests.length,
-        approvedDeposits: paymentRequests.filter(r => r.request_type === 'deposit' && r.status === 'approved').length,
-        approvedWithdrawals: paymentRequests.filter(r => r.request_type === 'withdrawal' && r.status === 'approved').length,
-        totalDeposits,
-        totalWithdrawals
-      });
-    }
-  }, [paymentRequests, totalDeposits, totalWithdrawals]);
-
-  // ✅ FIX: Use separate pending count state (updated via API)
-  useEffect(() => {
-    const fetchPendingCount = async () => {
-      try {
-        const response = await apiClient.get('/admin/payment-requests/pending') as { success?: boolean; data?: PaymentRequest[] };
-        if (response.success !== false && response.data) {
-          setPendingCount(response.data.length);
-        }
-      } catch (error) {
-        console.error('Failed to fetch pending count:', error);
+        const totalWithdrawals = allApprovedRequests
+          .filter(r => {
+            const createdDate = new Date(r.created_at);
+            return r.request_type === 'withdrawal' && createdDate >= todayStart;
+          })
+          .reduce((sum, r) => sum + r.amount, 0);
+        
+        setStatsData({ totalDeposits, totalWithdrawals });
+        
+        console.log('📊 Stats calculated:', {
+          totalApprovedRequests: allApprovedRequests.length,
+          todayDeposits: totalDeposits,
+          todayWithdrawals: totalWithdrawals
+        });
       }
-    };
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    }
+  };
+
+  // ✅ FIX: Fetch pending count separately
+  const fetchPendingCount = async () => {
+    try {
+      const response = await apiClient.get('/admin/payment-requests/pending') as { success?: boolean; data?: PaymentRequest[] };
+      if (response.success !== false && response.data) {
+        setPendingCount(response.data.length);
+      }
+    } catch (error) {
+      console.error('Failed to fetch pending count:', error);
+    }
+  };
+
+  // ✅ FIX: Fetch stats on mount and when requests change
+  useEffect(() => {
+    fetchStats();
     fetchPendingCount();
-  }, [paymentRequests]); // Refresh when list changes
+  }, [activeTab]); // Refresh when tab changes
 
   return (
     <AdminLayout>
@@ -431,7 +449,7 @@ export default function AdminPayments() {
                   <div className="h-8 bg-purple-900/30 animate-pulse rounded"></div>
                 ) : (
                   <>
-                    <div className="text-2xl font-bold text-green-400">{formatCurrency(totalDeposits)}</div>
+                    <div className="text-2xl font-bold text-green-400">{formatCurrency(statsData.totalDeposits)}</div>
                     <p className="text-xs text-purple-300">
                       Approved today ({now.toLocaleDateString('en-IN')})
                     </p>
@@ -450,7 +468,7 @@ export default function AdminPayments() {
                   <div className="h-8 bg-purple-900/30 animate-pulse rounded"></div>
                 ) : (
                   <>
-                    <div className="text-2xl font-bold text-red-400">{formatCurrency(totalWithdrawals)}</div>
+                    <div className="text-2xl font-bold text-red-400">{formatCurrency(statsData.totalWithdrawals)}</div>
                     <p className="text-xs text-purple-300">
                       Approved today ({now.toLocaleDateString('en-IN')})
                     </p>

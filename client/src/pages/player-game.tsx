@@ -281,21 +281,23 @@ const PlayerGame: React.FC = () => {
           refundedAmount: number;
           newBalance: number;
           round: number;
+          side: string;
         };
         error?: string;
       }>('/user/undo-last-bet');
 
       if (response.success && response.data) {
-        const { refundedAmount, newBalance, round } = response.data;
+        const { refundedAmount, newBalance } = response.data;
         
-        // Update balance immediately
+        // Update balance
         updateBalance(newBalance, 'api');
         
-        // Clear bets for the current round
-        clearRoundBets(round as 1 | 2);
+        // ✅ FIX: DON'T remove bet here - WebSocket 'bet_undo_success' event will handle it
+        // This prevents double removal (once from API, once from WebSocket)
+        // The WebSocket handler in WebSocketContext.tsx line 535 will call removeLastBet()
         
         showNotification(
-          `Round ${round} bets cancelled. ₹${refundedAmount.toLocaleString('en-IN')} refunded.`,
+          `Bet undone! ₹${refundedAmount?.toLocaleString('en-IN')} refunded`,
           'success'
         );
       } else {

@@ -175,6 +175,9 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   console.log(`🔄 Starting payout processing for ${payoutArray.length} payouts...`);
   console.log(`📊 Payout summary: ${winningBetIds.length} winning bets, ${losingBetIds.length} losing bets`);
   
+  // ✅ FIX: Move payoutStartTime outside try block so it's accessible at line 969
+  const payoutStartTime = Date.now();
+  
   try {
     console.log(`💾 Calling storage.applyPayoutsAndupdateBets with:`, {
       payoutsCount: payoutArray.length,
@@ -182,8 +185,6 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       losingBetsCount: losingBetIds.length,
       totalPayoutAmount: payoutArray.reduce((sum, p) => sum + p.amount, 0)
     });
-    
-    const payoutStartTime = Date.now();
     await storage.applyPayoutsAndupdateBets(
       payoutArray.map(p => ({ userId: p.userId, amount: p.amount })),
       winningBetIds,
@@ -485,13 +486,27 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   
   // ✅ FIX: STEP 3: Broadcast game completion to ALL clients (not just admins)
   // Use broadcast instead of broadcastToRole to ensure all clients receive the message
+  
+  // ✅ CRITICAL FIX: Use gameState.currentRound which is already correctly set by game-handlers.ts
+  // The round transition logic in game-handlers.ts (lines 831-862) ensures:
+  // - Round 1: Cards 1-3 (opening + 1B + 1A)
+  // - Round 2: Card 4 (2nd B or 2nd A)
+  // - Round 3: Card 5+ (after 4th card, transitions to Round 3)
+  // So gameState.currentRound is the authoritative source
+  const actualRound = gameState.currentRound;
+  const andarCount = gameState.andarCards.length;
+  const baharCount = gameState.baharCards.length;
+  const totalCards = andarCount + baharCount + 1; // +1 for opening card
+  
+  console.log(`🎯 Game complete - Cards: ${totalCards} (${andarCount}A + ${baharCount}B + 1 opening), Round: ${actualRound}`);
+  
   if (typeof (global as any).broadcast === 'function') {
     (global as any).broadcast({
       type: 'game_complete',
       data: {
         winner: winningSide,
         winningCard: winningCard,
-        round: gameState.currentRound,
+        round: actualRound, // ← FIXED: Use calculated round, not gameState.currentRound
         totalBets: totalBetsAmount,
         totalPayouts: totalPayoutsAmount,
         message: `${winningSide.toUpperCase()} wins with ${winningCard}!`
@@ -504,7 +519,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       data: {
         winner: winningSide,
         winningCard: winningCard,
-        round: gameState.currentRound,
+        round: actualRound, // ← FIXED: Use calculated round here too
         totalBets: totalBetsAmount,
         totalPayouts: totalPayoutsAmount,
         message: `${winningSide.toUpperCase()} wins with ${winningCard}!`
@@ -523,8 +538,8 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   // STEP 4: Save game history to database with comprehensive analytics (ASYNC - NON-BLOCKING)
   // ✅ CRITICAL: This runs in background and doesn't block player notifications
   const saveGameDataAsync = async () => {
+  const historyStartTime = Date.now(); // ← FIXED: Moved outside if block
   if (gameState.gameId && gameState.gameId !== 'default-game') {
-    const historyStartTime = Date.now();
     // ✅ FIX: Add retry logic for game history save
     const maxRetries = 3;
     let historySaveSuccess = false;

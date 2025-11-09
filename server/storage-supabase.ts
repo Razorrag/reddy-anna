@@ -2520,9 +2520,11 @@ export class SupabaseStorage implements IStorage {
 
   // Analytics methods implementation
   async saveGameStatistics(stats: Omit<GameStatistics, 'id' | 'createdAt'>): Promise<GameStatistics> {
+    // ✅ FIX: Use upsert instead of insert to handle retries gracefully
+    // This prevents duplicate key errors when retry logic is used
     const { data, error } = await supabaseServer
       .from('game_statistics')
-      .insert({
+      .upsert({
         game_id: stats.gameId,
         total_players: stats.totalPlayers,
         total_bets: stats.totalBets,
@@ -2538,6 +2540,8 @@ export class SupabaseStorage implements IStorage {
         game_duration: stats.gameDuration || 0,
         unique_players: stats.uniquePlayers || 0,
         created_at: new Date()
+      }, {
+        onConflict: 'game_id' // Update if game_id already exists
       })
       .select()
       .single();

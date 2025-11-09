@@ -530,9 +530,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           window.dispatchEvent(balanceEvent);
         }
         
-        // Clear bets for the round
-        if (data.data.round) {
-          clearRoundBets(data.data.round as 1 | 2);
+        // Remove only the last bet (not all bets)
+        if (data.data.round && data.data.side) {
+          removeLastBet(data.data.round as 1 | 2, data.data.side as 'andar' | 'bahar');
         }
         break;
 
@@ -786,6 +786,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         setPhase('complete');
         setWinner(winner);
         
+        // ✅ FIX: Update currentRound from server's round value for correct celebration display
+        if (round) {
+          setCurrentRound(round as any);
+          console.log(`✅ Updated currentRound to ${round} from server for celebration`);
+        }
+        
         // ✅ FIX: Extract and set winningCard - parse if it's a string, use as-is if it's already a Card object
         try {
           if (winningCard) {
@@ -831,7 +837,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             localWinAmount,
             totalBetAmount,
             result,
-            round: gameState.currentRound,
+            round: data.data.round || gameState.currentRound, // ← FIXED: Use server's round number first
             playerBets // Include bet breakdown for mixed bet detection
           }
         });

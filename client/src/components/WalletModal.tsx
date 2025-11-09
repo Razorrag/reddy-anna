@@ -271,27 +271,6 @@ export function WalletModal({
                 </div>
               </div>
             </div>
-            
-            {/* Claim Bonus Button */}
-            <div className="mt-3 text-center">
-              <Button
-                onClick={async () => {
-                  const result = await claimBonus();
-                  if (result.success) {
-                    // Success feedback could be added here
-                    console.log('Bonus claimed successfully');
-                  } else {
-                    // Error feedback could be added here
-                    console.error('Failed to claim bonus:', result.error);
-                  }
-                }}
-                disabled={userProfileState.loading || userProfileState.bonusInfo.totalBonus === 0}
-                className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Gift className="w-4 h-4 mr-2" />
-                Claim ₹{userProfileState.bonusInfo.totalBonus.toLocaleString('en-IN')} Bonus
-              </Button>
-            </div>
           </div>
         )}
 

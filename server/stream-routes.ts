@@ -3,6 +3,8 @@
  * 
  * RESTful API endpoints for managing dual streaming (RTMP and WebRTC)
  * Handles configuration, status updates, and session management
+ * 
+ * NEW: Simple stream configuration for iframe/video embeds
  */
 
 import express, { Router } from 'express';
@@ -10,6 +12,7 @@ import { streamStorage } from './stream-storage';
 import { requireAuth } from './auth';
 import { validateAdminAccess } from './security'; // Import from central security
 import jwt from 'jsonwebtoken';
+import { supabaseServer } from './lib/supabaseServer';
 
 const router: Router = express.Router();
 
@@ -585,6 +588,174 @@ router.post('/webrtc/ice-candidate', requireAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to handle ICE candidate'
+    });
+  }
+});
+
+/**
+ * ========================================
+ * NEW SIMPLE STREAM CONFIGURATION ENDPOINTS
+ * ========================================
+ */
+
+/**
+ * GET /api/stream/simple-config
+ * Get simple stream configuration (iframe/video URL)
+ * Public endpoint - accessible to all users
+ */
+router.get('/simple-config', optionalAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabaseServer
+      .from('simple_stream_config')
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
+      console.error('❌ Error fetching simple stream config:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch stream configuration'
+      });
+    }
+
+    // Return default config if none exists
+    if (!data) {
+      return res.json({
+        success: true,
+        data: {
+          streamUrl: '',
+          streamType: 'iframe',
+          isActive: false,
+          streamTitle: 'Live Game Stream',
+          autoplay: true,
+          muted: true,
+          controls: false
+        }
+      });
+    }
+
+    // Map snake_case to camelCase
+    const config = {
+      streamUrl: data.stream_url || '',
+      streamType: data.stream_type || 'iframe',
+      isActive: data.is_active || false,
+      streamTitle: data.stream_title || 'Live Game Stream',
+      autoplay: data.autoplay !== false,
+      muted: data.muted !== false,
+      controls: data.controls || false
+    };
+
+    res.json({
+      success: true,
+      data: config
+    });
+  } catch (error) {
+    console.error('❌ Error in simple-config GET:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch stream configuration'
+    });
+  }
+});
+
+/**
+ * POST /api/stream/simple-config
+ * Save simple stream configuration (Admin only)
+ */
+router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res) => {
+  try {
+    const { streamUrl, streamType, isActive, streamTitle, autoplay, muted, controls } = req.body;
+
+    // Validate required fields
+    if (!streamUrl || !streamType) {
+      return res.status(400).json({
+        success: false,
+        error: 'streamUrl and streamType are required'
+      });
+    }
+
+    // Validate streamType
+    if (!['iframe', 'video', 'custom'].includes(streamType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid streamType. Must be: iframe, video, or custom'
+      });
+    }
+
+    // Check if config exists
+    const { data: existing } = await supabaseServer
+      .from('simple_stream_config')
+      .select('id')
+      .limit(1)
+      .single();
+
+    const configData = {
+      stream_url: streamUrl,
+      stream_type: streamType,
+      is_active: isActive !== false,
+      stream_title: streamTitle || 'Live Game Stream',
+      autoplay: autoplay !== false,
+      muted: muted !== false,
+      controls: controls || false,
+      updated_at: new Date().toISOString()
+    };
+
+    let result;
+    if (existing) {
+      // Update existing config
+      const { data, error } = await supabaseServer
+        .from('simple_stream_config')
+        .update(configData)
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error updating simple stream config:', error);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to update stream configuration'
+        });
+      }
+      result = data;
+    } else {
+      // Insert new config
+      const { data, error } = await supabaseServer
+        .from('simple_stream_config')
+        .insert({
+          ...configData,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error inserting simple stream config:', error);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to save stream configuration'
+        });
+      }
+      result = data;
+    }
+
+    console.log('✅ Simple stream config saved:', {
+      streamType,
+      isActive,
+      url: streamUrl.substring(0, 50) + '...'
+    });
+
+    res.json({
+      success: true,
+      message: 'Stream configuration saved successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('❌ Error in simple-config POST:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save stream configuration'
     });
   }
 });

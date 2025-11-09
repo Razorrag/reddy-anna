@@ -62,13 +62,21 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
 
   // Calculate betting percentages for current round
   const currentRoundBets = gameState.currentRound === 1 ? gameState.round1Bets : gameState.round2Bets;
-  const totalCurrentBets = currentRoundBets.andar + currentRoundBets.bahar;
-  const currentAndarPercentage = totalCurrentBets > 0 ? (currentRoundBets.andar / totalCurrentBets) * 100 : 50;
-  const currentBaharPercentage = totalCurrentBets > 0 ? (currentRoundBets.bahar / totalCurrentBets) * 100 : 50;
+  
+  // ✅ FIX: Ensure we're working with numbers, not arrays
+  const currentAndarBet = typeof currentRoundBets.andar === 'number' ? currentRoundBets.andar : 0;
+  const currentBaharBet = typeof currentRoundBets.bahar === 'number' ? currentRoundBets.bahar : 0;
+  const totalCurrentBets = currentAndarBet + currentBaharBet;
+  const currentAndarPercentage = totalCurrentBets > 0 ? (currentAndarBet / totalCurrentBets) * 100 : 50;
+  const currentBaharPercentage = totalCurrentBets > 0 ? (currentBaharBet / totalCurrentBets) * 100 : 50;
 
   // Calculate total cumulative bets
-  const totalCumulativeAndar = gameState.round1Bets.andar + gameState.round2Bets.andar;
-  const totalCumulativeBahar = gameState.round1Bets.bahar + gameState.round2Bets.bahar;
+  const round1Andar = typeof gameState.round1Bets.andar === 'number' ? gameState.round1Bets.andar : 0;
+  const round1Bahar = typeof gameState.round1Bets.bahar === 'number' ? gameState.round1Bets.bahar : 0;
+  const round2Andar = typeof gameState.round2Bets.andar === 'number' ? gameState.round2Bets.andar : 0;
+  const round2Bahar = typeof gameState.round2Bets.bahar === 'number' ? gameState.round2Bets.bahar : 0;
+  const totalCumulativeAndar = round1Andar + round2Andar;
+  const totalCumulativeBahar = round1Bahar + round2Bahar;
 
   // Get phase-specific display text
   const getPhaseDisplay = () => {
@@ -144,7 +152,7 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
         <div className="bg-red-900/40 rounded-lg p-4 border-2 border-red-500/70 transition-all duration-300 hover:border-red-400 shadow-lg">
           <div className="text-sm font-bold text-red-200 mb-2 uppercase tracking-wide">ANDAR BETS</div>
           <div className="text-3xl font-bold text-red-300">
-            ₹{currentRoundBets.andar.toLocaleString('en-IN')}
+            ₹{currentAndarBet.toLocaleString('en-IN')}
           </div>
           <div className="text-sm text-red-100 mt-2">
             Round {gameState.currentRound}: <span className="font-bold text-white">{currentAndarPercentage.toFixed(1)}%</span>
@@ -153,7 +161,7 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
             Cumulative: <span className="font-semibold text-white">₹{totalCumulativeAndar.toLocaleString('en-IN')}</span>
           </div>
           {/* LOW BET INDICATOR */}
-          {totalCurrentBets > 0 && currentRoundBets.andar < currentRoundBets.bahar && (
+          {totalCurrentBets > 0 && currentAndarBet < currentBaharBet && (
             <div className="mt-2 px-2 py-1 bg-yellow-500/20 border border-yellow-500 rounded text-xs font-bold text-yellow-300 text-center animate-pulse">
               ⚠️ LOW BET
             </div>
@@ -164,7 +172,7 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
         <div className="bg-blue-900/40 rounded-lg p-4 border-2 border-blue-500/70 transition-all duration-300 hover:border-blue-400 shadow-lg">
           <div className="text-sm font-bold text-blue-200 mb-2 uppercase tracking-wide">BAHAR BETS</div>
           <div className="text-3xl font-bold text-blue-300">
-            ₹{currentRoundBets.bahar.toLocaleString('en-IN')}
+            ₹{currentBaharBet.toLocaleString('en-IN')}
           </div>
           <div className="text-sm text-blue-100 mt-2">
             Round {gameState.currentRound}: <span className="font-bold text-white">{currentBaharPercentage.toFixed(1)}%</span>
@@ -173,7 +181,7 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
             Cumulative: <span className="font-semibold text-white">₹{totalCumulativeBahar.toLocaleString('en-IN')}</span>
           </div>
           {/* LOW BET INDICATOR */}
-          {totalCurrentBets > 0 && currentRoundBets.bahar < currentRoundBets.andar && (
+          {totalCurrentBets > 0 && currentBaharBet < currentAndarBet && (
             <div className="mt-2 px-2 py-1 bg-yellow-500/20 border border-yellow-500 rounded text-xs font-bold text-yellow-300 text-center animate-pulse">
               ⚠️ LOW BET
             </div>
@@ -187,11 +195,11 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-red-400">Andar:</span>
-                <span className="text-white ml-1">₹{gameState.round1Bets.andar.toLocaleString('en-IN')}</span>
+                <span className="text-white ml-1">₹{round1Andar.toLocaleString('en-IN')}</span>
               </div>
               <div>
                 <span className="text-blue-400">Bahar:</span>
-                <span className="text-white ml-1">₹{gameState.round1Bets.bahar.toLocaleString('en-IN')}</span>
+                <span className="text-white ml-1">₹{round1Bahar.toLocaleString('en-IN')}</span>
               </div>
             </div>
           </div>
@@ -220,28 +228,8 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
         </div>
       </div>
 
-      {/* Winner Display - Only when complete */}
-      {gameState.phase === 'complete' && gameState.gameWinner && (
-        <div className={`rounded-lg border-2 p-4 text-center animate-bounce ${
-          gameState.gameWinner === 'andar'
-            ? 'bg-red-900/30 border-red-500'
-            : 'bg-blue-900/30 border-blue-500'
-        }`}>
-          <div className="text-3xl mb-2">🎉</div>
-          <div className={`text-2xl font-bold ${
-            gameState.gameWinner === 'andar' ? 'text-red-400' : 'text-blue-400'
-          }`}>
-            {gameState.gameWinner.toUpperCase()} WINS!
-          </div>
-          {gameState.winningCard && (
-            <div className="text-sm text-gray-300 mt-2">
-              {typeof gameState.winningCard === 'string' 
-                ? gameState.winningCard 
-                : gameState.winningCard?.display || 'Unknown'}
-            </div>
-          )}
-        </div>
-      )}
+      {/* ✅ FIX: Winner Display REMOVED - AdminGamePanel already shows celebration */}
+      {/* PersistentSidePanel should only show: timer, bets, cards - NOT winner */}
 
       {/* ✅ FIX: LiveBetMonitoring removed - should only be on main admin dashboard */}
       {/* This panel now shows ONLY game stats: timer, bets, cards */}

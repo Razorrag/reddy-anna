@@ -9,7 +9,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '@/lib/api-client';
-import { X } from 'lucide-react';
 
 interface GameResult {
   winner: string;
@@ -28,7 +27,7 @@ interface CardHistoryProps {
   className?: string;
 }
 
-const CardHistory: React.FC<CardHistoryProps> = ({
+const CardHistory: React.FC<CardHistoryProps> = React.memo(({
   onGameClick,
   className = ''
 }) => {
@@ -36,6 +35,7 @@ const CardHistory: React.FC<CardHistoryProps> = ({
   const [loading, setLoading] = useState(false);
   const [newGameIds, setNewGameIds] = useState<Set<string>>(new Set());
   const previousGameIdsRef = useRef<Set<string>>(new Set());
+  const lastFetchTimeRef = useRef<number>(0);
   // ❌ REMOVED: Own modal state - now uses parent's GameHistoryModal
   // const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
   // const [gameDetails, setGameDetails] = useState<any>(null);
@@ -43,6 +43,14 @@ const CardHistory: React.FC<CardHistoryProps> = ({
 
   useEffect(() => {
     const fetchHistory = async () => {
+      // ✅ FIX: Debounce fetches - minimum 2 seconds between fetches
+      const now = Date.now();
+      if (now - lastFetchTimeRef.current < 2000) {
+        console.log('[CardHistory] Fetch debounced, too soon since last fetch');
+        return;
+      }
+      lastFetchTimeRef.current = now;
+      
       setLoading(true);
       try {
         console.log('[CardHistory] Fetching game history...');
@@ -105,11 +113,22 @@ const CardHistory: React.FC<CardHistoryProps> = ({
           console.log('[CardHistory] Formatted results count:', formattedResults.length);
           console.log('[CardHistory] Formatted results:', formattedResults);
           
-          // ✅ FIX: Detect new games for animation
+          // ✅ FIX: Only update if data actually changed
           const currentGameIds = new Set(formattedResults.map(r => r.gameId));
           const previousGameIds = previousGameIdsRef.current;
-          const newGames = new Set<string>();
           
+          // Check if game IDs are different
+          const hasChanges = 
+            currentGameIds.size !== previousGameIds.size ||
+            Array.from(currentGameIds).some(id => !previousGameIds.has(id));
+          
+          if (!hasChanges) {
+            console.log('[CardHistory] No changes detected, skipping update');
+            return;
+          }
+          
+          // Detect new games for animation
+          const newGames = new Set<string>();
           currentGameIds.forEach(id => {
             if (!previousGameIds.has(id)) {
               newGames.add(id);
@@ -141,16 +160,21 @@ const CardHistory: React.FC<CardHistoryProps> = ({
 
     fetchHistory();
     
-    // Refresh every 30 seconds as fallback (real-time updates handle most cases)
-    const interval = setInterval(fetchHistory, 30000);
-    
-    return () => clearInterval(interval);
+    // ❌ REMOVED: 30-second polling causes UI jumping
+    // Real-time WebSocket updates handle all new games
+    // No need for polling interval
   }, []);
 
   // Listen for real-time game history updates via WebSocket
   useEffect(() => {
     const handleGameHistoryUpdate = (event: CustomEvent) => {
       console.log('[CardHistory] Real-time update received:', event.detail);
+      
+      // ✅ FIX: Debounce rapid updates to prevent multiple fetches
+      if (loading) {
+        console.log('[CardHistory] Already loading, skipping duplicate fetch');
+        return;
+      }
       // Refresh history when new game completes
       // We need to fetch again since we don't have access to fetchHistory here
       // Trigger a re-render by calling the fetch in a separate effect
@@ -185,11 +209,22 @@ const CardHistory: React.FC<CardHistoryProps> = ({
               }))
               .slice(0, 10);
             
-            // ✅ FIX: Detect new games for animation
+            // ✅ FIX: Only update if data actually changed
             const currentGameIds = new Set(formattedResults.map(r => r.gameId));
             const previousGameIds = previousGameIdsRef.current;
-            const newGames = new Set<string>();
             
+            // Check if game IDs are different
+            const hasChanges = 
+              currentGameIds.size !== previousGameIds.size ||
+              Array.from(currentGameIds).some(id => !previousGameIds.has(id));
+            
+            if (!hasChanges) {
+              console.log('[CardHistory] WebSocket update: No changes detected, skipping');
+              return;
+            }
+            
+            // Detect new games for animation
+            const newGames = new Set<string>();
             currentGameIds.forEach(id => {
               if (!previousGameIds.has(id)) {
                 newGames.add(id);
@@ -309,6 +344,8 @@ const CardHistory: React.FC<CardHistoryProps> = ({
       `}</style>
     </div>
   );
-};
+});
 
 export default CardHistory;
+
+// ✅ Memoization prevents unnecessary re-renders from parent

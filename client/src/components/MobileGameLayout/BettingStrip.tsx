@@ -153,23 +153,37 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                     ? gameState.playerRound1Bets.andar 
                     : [];
                   const r1AndarTotal = r1Andar.reduce((sum: number, bet: any) => {
-                    // ✅ FIX: Handle both number and object, with fallback to prevent NaN
-                    const amount = typeof bet === 'number' 
-                      ? bet 
-                      : (bet?.amount ?? 0);  // Use nullish coalescing for safety
-                    return sum + (isNaN(amount) ? 0 : amount);
+                    // ✅ FIX: Handle both number and object, with strict validation
+                    let amount = 0;
+                    if (typeof bet === 'number') {
+                      amount = bet;
+                    } else if (typeof bet === 'object' && bet !== null && 'amount' in bet) {
+                      amount = typeof bet.amount === 'number' ? bet.amount : 0;
+                    }
+                    const validAmount = typeof amount === 'number' && !isNaN(amount) && amount >= 0 ? amount : 0;
+                    return sum + validAmount;
                   }, 0);
+                  
+                  console.log(`🎯 ANDAR Button - R1 Bets:`, r1Andar);
+                  console.log(`🎯 ANDAR Button - R1 Total: ₹${r1AndarTotal}`);
                   
                   // Calculate total bet amount for Round 2 Andar
                   const r2Andar = Array.isArray(gameState.playerRound2Bets.andar) 
                     ? gameState.playerRound2Bets.andar 
                     : [];
                   const r2AndarTotal = r2Andar.reduce((sum: number, bet: any) => {
-                    const amount = typeof bet === 'number' 
-                      ? bet 
-                      : (bet?.amount ?? 0);
-                    return sum + (isNaN(amount) ? 0 : amount);
+                    let amount = 0;
+                    if (typeof bet === 'number') {
+                      amount = bet;
+                    } else if (typeof bet === 'object' && bet !== null && 'amount' in bet) {
+                      amount = typeof bet.amount === 'number' ? bet.amount : 0;
+                    }
+                    const validAmount = typeof amount === 'number' && !isNaN(amount) && amount >= 0 ? amount : 0;
+                    return sum + validAmount;
                   }, 0);
+                  
+                  console.log(`🎯 ANDAR Button - R2 Bets:`, r2Andar);
+                  console.log(`🎯 ANDAR Button - R2 Total: ₹${r2AndarTotal}`);
                   
                   return (
                     <>
@@ -302,10 +316,14 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                     ? gameState.playerRound1Bets.bahar 
                     : [];
                   const r1BaharTotal = r1Bahar.reduce((sum: number, bet: any) => {
-                    const amount = typeof bet === 'number' 
-                      ? bet 
-                      : (bet?.amount ?? 0);
-                    return sum + (isNaN(amount) ? 0 : amount);
+                    let amount = 0;
+                    if (typeof bet === 'number') {
+                      amount = bet;
+                    } else if (typeof bet === 'object' && bet !== null && 'amount' in bet) {
+                      amount = typeof bet.amount === 'number' ? bet.amount : 0;
+                    }
+                    const validAmount = typeof amount === 'number' && !isNaN(amount) && amount >= 0 ? amount : 0;
+                    return sum + validAmount;
                   }, 0);
                   
                   // Calculate total bet amount for Round 2 Bahar
@@ -313,10 +331,14 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                     ? gameState.playerRound2Bets.bahar 
                     : [];
                   const r2BaharTotal = r2Bahar.reduce((sum: number, bet: any) => {
-                    const amount = typeof bet === 'number' 
-                      ? bet 
-                      : (bet?.amount ?? 0);
-                    return sum + (isNaN(amount) ? 0 : amount);
+                    let amount = 0;
+                    if (typeof bet === 'number') {
+                      amount = bet;
+                    } else if (typeof bet === 'object' && bet !== null && 'amount' in bet) {
+                      amount = typeof bet.amount === 'number' ? bet.amount : 0;
+                    }
+                    const validAmount = typeof amount === 'number' && !isNaN(amount) && amount >= 0 ? amount : 0;
+                    return sum + validAmount;
                   }, 0);
                   
                   return (

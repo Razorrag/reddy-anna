@@ -586,6 +586,42 @@ const Profile: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Payment Method Selection */}
+                  <div>
+                    <Label className="text-white/80 mb-2">Payment Method</Label>
+                    <Select value={paymentMethodSelected} onValueChange={setPaymentMethodSelected}>
+                      <SelectTrigger className="bg-black/50 border-green-500/30 text-white focus:border-green-500/60">
+                        <SelectValue placeholder="Select payment method" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-green-500/30 z-[9999]">
+                        <SelectItem value="UPI" className="text-white hover:bg-green-500/20 cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" />
+                            UPI
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Paytm" className="text-white hover:bg-green-500/20 cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" />
+                            Paytm
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="PhonePe" className="text-white hover:bg-green-500/20 cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" />
+                            PhonePe
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="Bank Transfer" className="text-white hover:bg-green-500/20 cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4" />
+                            Bank Transfer
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   {/* Deposit Info */}
                   <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
                     <div className="flex items-start gap-3">
@@ -610,7 +646,7 @@ const Profile: React.FC = () => {
                       try {
                         const response = await apiClient.post('/payment-requests', {
                           amount: numAmount,
-                          paymentMethod: 'UPI',
+                          paymentMethod: paymentMethodSelected,
                           paymentDetails: {},
                           requestType: 'deposit'
                         }) as any;
@@ -618,7 +654,7 @@ const Profile: React.FC = () => {
                         if (response.success) {
                           const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '918686886632';
                           const adminNumber = adminWhatsApp.replace(/\D/g, '');
-                          const whatsappMessage = `Hello! I want to deposit ₹${numAmount.toLocaleString('en-IN')} to my account.`;
+                          const whatsappMessage = `Hello! I want to deposit ₹${numAmount.toLocaleString('en-IN')} using ${paymentMethodSelected}.`;
                           const encodedMessage = encodeURIComponent(whatsappMessage);
                           const whatsappUrl = `https://wa.me/${adminNumber}?text=${encodedMessage}`;
 

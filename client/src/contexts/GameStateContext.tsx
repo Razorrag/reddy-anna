@@ -255,11 +255,24 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
       return state;
     case 'REMOVE_LAST_BET': {
       const { round, side } = action.payload;
+      console.log(`🔍 REMOVE_LAST_BET - Round: ${round}, Side: ${side}`);
+      
       if (round === 1) {
         const currentBets = state.playerRound1Bets[side];
         const betArray = Array.isArray(currentBets) ? toBetInfoArray(currentBets) : [];
-        if (betArray.length === 0) return state;
+        console.log(`📊 Round 1 ${side} - Current bets:`, betArray);
+        console.log(`📊 Current bet amounts:`, betArray.map(b => b.amount));
+        
+        if (betArray.length === 0) {
+          console.log('⚠️ No bets to remove!');
+          return state;
+        }
+        
         const newBetArray = betArray.slice(0, -1); // Remove last bet
+        console.log(`✅ After undo - New bets:`, newBetArray);
+        console.log(`✅ New bet amounts:`, newBetArray.map(b => b.amount));
+        console.log(`✅ New total: ₹${newBetArray.reduce((sum, b) => sum + b.amount, 0)}`);
+        
         return {
           ...state,
           playerRound1Bets: {
@@ -270,8 +283,19 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
       } else if (round === 2) {
         const currentBets = state.playerRound2Bets[side];
         const betArray = Array.isArray(currentBets) ? toBetInfoArray(currentBets) : [];
-        if (betArray.length === 0) return state;
+        console.log(`📊 Round 2 ${side} - Current bets:`, betArray);
+        console.log(`📊 Current bet amounts:`, betArray.map(b => b.amount));
+        
+        if (betArray.length === 0) {
+          console.log('⚠️ No bets to remove!');
+          return state;
+        }
+        
         const newBetArray = betArray.slice(0, -1); // Remove last bet
+        console.log(`✅ After undo - New bets:`, newBetArray);
+        console.log(`✅ New bet amounts:`, newBetArray.map(b => b.amount));
+        console.log(`✅ New total: ₹${newBetArray.reduce((sum, b) => sum + b.amount, 0)}`);
+        
         return {
           ...state,
           playerRound2Bets: {
