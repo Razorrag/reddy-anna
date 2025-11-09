@@ -50,7 +50,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const [streamConfig, setStreamConfig] = useState<any>(null);
   const [streamLoading, setStreamLoading] = useState(true);
 
-  // Load stream configuration
+  // Load stream configuration with auto-refresh
   useEffect(() => {
     const loadStreamConfig = async () => {
       try {
@@ -60,19 +60,73 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         console.log('🔍 VideoArea: API Response:', data);
         
         if (data.success && data.data) {
-          setStreamConfig(data.data);
+          // ✅ Fix mixed content: Match protocol to avoid blocking
+          let streamUrl = data.data.streamUrl;
+          if (streamUrl) {
+            // ✅ Convert Google Drive URLs to embed format
+            if (streamUrl.includes('drive.google.com')) {
+              console.log('🔍 Detected Google Drive URL, converting to embed format...');
+              
+              // Handle different Google Drive URL formats
+              // Format 1: https://drive.google.com/file/d/FILE_ID/view
+              // Format 2: https://drive.google.com/open?id=FILE_ID
+              // Convert to: https://drive.google.com/file/d/FILE_ID/preview
+              
+              let fileId = null;
+              
+              // Extract file ID from /file/d/FILE_ID/ format
+              const fileMatch = streamUrl.match(/\/file\/d\/([^\/]+)/);
+              if (fileMatch) {
+                fileId = fileMatch[1];
+              }
+              
+              // Extract file ID from ?id=FILE_ID format
+              const idMatch = streamUrl.match(/[?&]id=([^&]+)/);
+              if (idMatch) {
+                fileId = idMatch[1];
+              }
+              
+              if (fileId) {
+                streamUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+                console.log('✅ Converted Google Drive URL to:', streamUrl);
+              } else {
+                console.warn('⚠️ Could not extract Google Drive file ID from URL');
+              }
+            }
+            
+            const currentProtocol = window.location.protocol; // 'http:' or 'https:'
+            
+            // ✅ CRITICAL: If site is HTTP, downgrade HTTPS URLs to HTTP to avoid blocking
+            if (currentProtocol === 'http:' && streamUrl.startsWith('https://')) {
+              console.log('⚠️ Site is HTTP but stream URL is HTTPS, downgrading to HTTP...');
+              streamUrl = streamUrl.replace('https://', 'http://');
+              console.log('🔄 Downgraded stream URL to:', streamUrl);
+            }
+            // If site is HTTPS but stream URL is HTTP, try to upgrade to HTTPS
+            else if (currentProtocol === 'https:' && streamUrl.startsWith('http://')) {
+              console.log('⚠️ Site is HTTPS but stream URL is HTTP, attempting to upgrade...');
+              streamUrl = streamUrl.replace('http://', 'https://');
+              console.log('🔄 Upgraded stream URL to:', streamUrl);
+            }
+          }
+          
+          setStreamConfig({
+            ...data.data,
+            streamUrl: streamUrl
+          });
+          
           console.log('🎥 VideoArea: Stream config loaded:', {
-            streamUrl: data.data.streamUrl,
+            streamUrl: streamUrl,
             streamType: data.data.streamType,
             isActive: data.data.isActive,
-            hasUrl: !!data.data.streamUrl
+            hasUrl: !!streamUrl
           });
           
           // Debug: Check why stream might not show
           if (!data.data.isActive) {
             console.warn('⚠️ Stream is NOT ACTIVE! Toggle "Stream Active" in admin settings.');
           }
-          if (!data.data.streamUrl) {
+          if (!streamUrl) {
             console.warn('⚠️ Stream URL is EMPTY! Enter a URL in admin settings.');
           }
         } else {
@@ -84,7 +138,18 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         setStreamLoading(false);
       }
     };
+    
+    // Load immediately
     loadStreamConfig();
+    
+    // ✅ Auto-refresh every 30 seconds to pick up stream changes without page refresh
+    const refreshInterval = setInterval(() => {
+      console.log('🔄 Auto-refreshing stream config...');
+      loadStreamConfig();
+    }, 30000); // 30 seconds
+    
+    // Cleanup interval on unmount
+    return () => clearInterval(refreshInterval);
   }, []);
 
   // Handle pulse effect when less than 5 seconds
@@ -275,6 +340,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           className="w-full h-full border-0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
+          // ✅ Allow mixed content and cross-origin
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
+          referrerPolicy="no-referrer-when-downgrade"
           style={{
             position: 'absolute',
             top: 0,
