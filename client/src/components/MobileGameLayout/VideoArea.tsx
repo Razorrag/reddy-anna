@@ -54,14 +54,32 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   useEffect(() => {
     const loadStreamConfig = async () => {
       try {
+        console.log('🔍 VideoArea: Fetching stream config from /api/stream/simple-config...');
         const response = await fetch('/api/stream/simple-config');
         const data = await response.json();
+        console.log('🔍 VideoArea: API Response:', data);
+        
         if (data.success && data.data) {
           setStreamConfig(data.data);
-          console.log('🎥 VideoArea: Stream config loaded:', data.data);
+          console.log('🎥 VideoArea: Stream config loaded:', {
+            streamUrl: data.data.streamUrl,
+            streamType: data.data.streamType,
+            isActive: data.data.isActive,
+            hasUrl: !!data.data.streamUrl
+          });
+          
+          // Debug: Check why stream might not show
+          if (!data.data.isActive) {
+            console.warn('⚠️ Stream is NOT ACTIVE! Toggle "Stream Active" in admin settings.');
+          }
+          if (!data.data.streamUrl) {
+            console.warn('⚠️ Stream URL is EMPTY! Enter a URL in admin settings.');
+          }
+        } else {
+          console.warn('⚠️ No stream config data received');
         }
       } catch (error) {
-        console.error('Failed to load stream config:', error);
+        console.error('❌ Failed to load stream config:', error);
       } finally {
         setStreamLoading(false);
       }
@@ -187,6 +205,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // Render video based on stream type
   const renderStream = () => {
     if (streamLoading) {
+      console.log('🔄 VideoArea: Still loading stream config...');
       return (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
           <div className="text-center">
@@ -198,46 +217,42 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     }
 
     if (!streamConfig || !streamConfig.isActive || !streamConfig.streamUrl) {
+      console.log('❌ VideoArea: Stream NOT showing because:', {
+        hasConfig: !!streamConfig,
+        isActive: streamConfig?.isActive,
+        hasUrl: !!streamConfig?.streamUrl,
+        streamConfig
+      });
       return (
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black">
           <div className="text-center px-6">
             <div className="text-6xl mb-4">🎥</div>
             <p className="text-gray-400 text-lg">Stream not configured</p>
-            <p className="text-gray-600 text-sm mt-2">Admin needs to set up stream URL</p>
+            <p className="text-gray-600 text-sm mt-2">
+              {!streamConfig && 'No config loaded'}
+              {streamConfig && !streamConfig.isActive && 'Stream is not active - Toggle ON in admin settings'}
+              {streamConfig && streamConfig.isActive && !streamConfig.streamUrl && 'Stream URL is empty'}
+            </p>
           </div>
         </div>
       );
     }
 
-    if (streamConfig.streamType === 'iframe') {
-      return (
-        <iframe
-          src={streamConfig.streamUrl}
-          className="w-full h-full border-0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: 'calc(100% + 160px)',
-            border: 'none',
-            zIndex: 1,
-            transform: 'scale(1.2)',
-            transformOrigin: 'center center'
-          }}
-          title="Live Game Stream"
-        />
-      );
-    } else if (streamConfig.streamType === 'video') {
+    // Auto-detect stream type based on URL if not explicitly set
+    const url = streamConfig.streamUrl.toLowerCase();
+    const isVideoFile = url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.ogg') || url.endsWith('.m3u8');
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const shouldUseVideo = streamConfig.streamType === 'video' || (isVideoFile && !isYouTube);
+    
+    if (shouldUseVideo) {
+      console.log('✅ VideoArea: Rendering VIDEO stream:', streamConfig.streamUrl);
       return (
         <video
           src={streamConfig.streamUrl}
           className="w-full h-full object-cover"
-          autoPlay={streamConfig.autoplay}
-          muted={streamConfig.muted}
-          controls={streamConfig.controls}
+          autoPlay={streamConfig.autoplay !== false}
+          muted={streamConfig.muted !== false}
+          controls={streamConfig.controls || false}
           loop
           playsInline
           style={{
@@ -251,9 +266,28 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           }}
         />
       );
+    } else {
+      // Use iframe for everything else (YouTube, custom players, RTMP players, etc.)
+      console.log('✅ VideoArea: Rendering IFRAME stream:', streamConfig.streamUrl);
+      return (
+        <iframe
+          src={streamConfig.streamUrl}
+          className="w-full h-full border-0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            zIndex: 1
+          }}
+          title="Live Game Stream"
+        />
+      );
     }
-
-    return null;
   };
 
   return (
