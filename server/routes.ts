@@ -1997,7 +1997,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       '/api/auth/register',
       '/api/auth/refresh',
       '/api/auth/logout',
-      '/api/stream/config'
+      '/api/stream/config',
+      '/api/stream/simple-config'  // ✅ Allow public access to simple stream config
     ];
     
     // Log all API requests for debugging

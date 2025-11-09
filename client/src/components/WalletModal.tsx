@@ -72,36 +72,32 @@ export function WalletModal({
 
     setIsLoading(true);
     try {
-      // ✅ FIX 4: Updated validation logic - accept mobile number OR UPI ID
-      if (activeTab === 'withdraw') {
-        if ((paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') 
-            && !upiId.trim() && !mobileNumber.trim()) {
-          alert('Please enter your UPI ID or Mobile Number');
-          setIsLoading(false);
-          return;
-        }
-        if (paymentMethod === 'Bank Transfer' && (!accountNumber.trim() || !ifscCode.trim() || !accountName.trim())) {
-          alert('Please fill in all bank details');
-          setIsLoading(false);
-          return;
-        }
+      // ✅ FIX 4: Updated validation logic - require payment details for BOTH deposit and withdrawal
+      if ((paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') 
+          && !upiId.trim() && !mobileNumber.trim()) {
+        alert('Please enter your UPI ID or Mobile Number');
+        setIsLoading(false);
+        return;
+      }
+      if (paymentMethod === 'Bank Transfer' && (!accountNumber.trim() || !ifscCode.trim() || !accountName.trim())) {
+        alert('Please fill in all bank details');
+        setIsLoading(false);
+        return;
       }
 
-      // ✅ FIX 5: Include mobile number in payment details
+      // ✅ FIX 5: Include payment details for both deposit and withdrawal
       const paymentDetails: any = {};
-      if (activeTab === 'withdraw') {
-        if (paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') {
-          if (mobileNumber.trim()) {
-            paymentDetails.mobileNumber = mobileNumber;
-          }
-          if (upiId.trim()) {
-            paymentDetails.upiId = upiId;
-          }
-        } else if (paymentMethod === 'Bank Transfer') {
-          paymentDetails.accountNumber = accountNumber;
-          paymentDetails.ifscCode = ifscCode;
-          paymentDetails.accountName = accountName;
+      if (paymentMethod === 'UPI' || paymentMethod === 'PhonePe' || paymentMethod === 'GPay' || paymentMethod === 'Paytm') {
+        if (mobileNumber.trim()) {
+          paymentDetails.mobileNumber = mobileNumber;
         }
+        if (upiId.trim()) {
+          paymentDetails.upiId = upiId;
+        }
+      } else if (paymentMethod === 'Bank Transfer') {
+        paymentDetails.accountNumber = accountNumber;
+        paymentDetails.ifscCode = ifscCode;
+        paymentDetails.accountName = accountName;
       }
 
       // Create payment request instead of direct balance update
@@ -350,28 +346,26 @@ export function WalletModal({
             </div>
           </div>
 
-          {/* ✅ FIX 1: Payment Method Selection - WITHDRAWAL ONLY */}
-          {activeTab === 'withdraw' && (
-            <div>
-              <label className="block text-sm text-white/80 mb-2">
-                Payment Method
-              </label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-gold/60 transition-colors"
-              >
-                <option value="UPI">UPI</option>
-                <option value="PhonePe">PhonePe</option>
-                <option value="GPay">Google Pay</option>
-                <option value="Paytm">Paytm</option>
-                <option value="Bank Transfer">Bank Transfer</option>
-              </select>
-            </div>
-          )}
+          {/* ✅ FIX 1: Payment Method Selection - FOR BOTH DEPOSIT AND WITHDRAWAL */}
+          <div>
+            <label className="block text-sm text-white/80 mb-2">
+              Payment Method
+            </label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="w-full bg-black/50 border border-gold/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-gold/60 transition-colors"
+            >
+              <option value="UPI">UPI</option>
+              <option value="PhonePe">PhonePe</option>
+              <option value="GPay">Google Pay</option>
+              <option value="Paytm">Paytm</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+            </select>
+          </div>
 
-          {/* Payment Details (Withdrawal Only) */}
-          {activeTab === 'withdraw' && (
+          {/* Payment Details (For Both Deposit and Withdrawal) */}
+          {(activeTab === 'deposit' || activeTab === 'withdraw') && (
             <div className="space-y-4 border border-gold/20 rounded-lg p-4 bg-black/30">
               <div className="text-sm text-gold font-semibold mb-3">
                 Payment Details

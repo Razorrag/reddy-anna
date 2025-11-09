@@ -660,12 +660,39 @@ router.get('/simple-config', optionalAuth, async (req, res) => {
 });
 
 /**
+ * Helper function to convert YouTube watch URLs to embed URLs
+ */
+function convertYouTubeUrl(url: string): string {
+  try {
+    // Check if it's a YouTube watch URL
+    if (url.includes('youtube.com/watch?v=')) {
+      const videoId = url.split('v=')[1]?.split('&')[0];
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}`;
+      }
+    }
+    // Check if it's a youtu.be short URL
+    if (url.includes('youtu.be/')) {
+      const videoId = url.split('youtu.be/')[1]?.split('?')[0];
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}`;
+      }
+    }
+    // Return original URL if not YouTube or already in embed format
+    return url;
+  } catch (error) {
+    console.error('Error converting YouTube URL:', error);
+    return url;
+  }
+}
+
+/**
  * POST /api/stream/simple-config
  * Save simple stream configuration (Admin only)
  */
 router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res) => {
   try {
-    const { streamUrl, streamType, isActive, streamTitle, autoplay, muted, controls } = req.body;
+    let { streamUrl, streamType, isActive, streamTitle, autoplay, muted, controls } = req.body;
 
     // Validate required fields
     if (!streamUrl || !streamType) {
@@ -674,6 +701,10 @@ router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res)
         error: 'streamUrl and streamType are required'
       });
     }
+
+    // ✅ Auto-convert YouTube watch URLs to embed URLs
+    streamUrl = convertYouTubeUrl(streamUrl);
+    console.log('🔄 Stream URL after conversion:', streamUrl);
 
     // Validate streamType
     if (!['iframe', 'video', 'custom'].includes(streamType)) {
