@@ -4963,6 +4963,479 @@ export class SupabaseStorage implements IStorage {
       lifetimeEarnings: parseFloat(data.lifetime_earnings || '0')
     };
   }
+
+  /**
+   * Get total users count
+   */
+  async getTotalUsersCount(): Promise<number> {
+    const { count, error } = await supabaseServer
+      .from('users')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      console.error('Error getting total users count:', error);
+      return 0;
+    }
+
+    return count || 0;
+  }
+
+  /**
+   * Get active users count (users who have played at least one game)
+   */
+  async getActiveUsersCount(): Promise<number> {
+    const { count, error } = await supabaseServer
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .gt('games_played', 0);
+
+    if (error) {
+      console.error('Error getting active users count:', error);
+      return 0;
+    }
+
+    return count || 0;
+  }
+
+  /**
+   * Get all-time statistics from daily_game_statistics
+   */
+  async getAllTimeStatistics(): Promise<any> {
+    const { data, error } = await supabaseServer
+      .from('daily_game_statistics')
+      .select('*');
+
+    if (error) {
+      console.error('Error getting all-time statistics:', error);
+      return {
+        totalGames: 0,
+        totalBets: 0,
+        totalPayouts: 0,
+        profitLoss: 0,
+        netHouseProfit: 0
+      };
+    }
+
+    if (!data || data.length === 0) {
+      return {
+        totalGames: 0,
+        totalBets: 0,
+        totalPayouts: 0,
+        profitLoss: 0,
+        netHouseProfit: 0
+      };
+    }
+
+    // Sum all daily statistics
+    const totals = data.reduce((acc: any, row: any) => {
+      return {
+        totalGames: acc.totalGames + parseInt(row.total_games || '0'),
+        totalBets: acc.totalBets + parseFloat(row.total_bets || '0'),
+        totalPayouts: acc.totalPayouts + parseFloat(row.total_payouts || '0'),
+        profitLoss: acc.profitLoss + parseFloat(row.profit_loss || '0'),
+        netHouseProfit: acc.netHouseProfit + parseFloat(row.net_house_profit || '0')
+      };
+    }, {
+      totalGames: 0,
+      totalBets: 0,
+      totalPayouts: 0,
+      profitLoss: 0,
+      netHouseProfit: 0
+    });
+
+    return totals;
+  }
+
+  /**
+   * Get today's statistics from daily_game_statistics
+   */
+  async getDailyStatistics(): Promise<any> {
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data, error } = await supabaseServer
+      .from('daily_game_statistics')
+      .select('*')
+      .eq('date', today)
+      .single();
+
+    if (error || !data) {
+      return {
+        totalGames: 0,
+        totalBets: 0,
+        totalPayouts: 0,
+        profitLoss: 0,
+        netHouseProfit: 0,
+        totalPlayerWinnings: 0,
+        totalPlayerLosses: 0
+      };
+    }
+
+    return {
+      totalGames: parseInt(data.total_games || '0'),
+      totalBets: parseFloat(data.total_bets || '0'),
+      totalPayouts: parseFloat(data.total_payouts || '0'),
+      profitLoss: parseFloat(data.profit_loss || '0'),
+      netHouseProfit: parseFloat(data.net_house_profit || '0'),
+      totalPlayerWinnings: parseFloat(data.total_player_winnings || '0'),
+      totalPlayerLosses: parseFloat(data.total_player_losses || '0')
+    };
+  }
+
+  /**
+   * Get current month's statistics from monthly_game_statistics
+   */
+  async getMonthlyStatistics(): Promise<any> {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    const { data, error } = await supabaseServer
+      .from('monthly_game_statistics')
+      .select('*')
+      .eq('year', year)
+      .eq('month', month)
+      .single();
+
+    if (error || !data) {
+      return {
+        totalGames: 0,
+        totalBets: 0,
+        totalPayouts: 0,
+        profitLoss: 0,
+        netHouseProfit: 0,
+        totalPlayerWinnings: 0,
+        totalPlayerLosses: 0
+      };
+    }
+
+    return {
+      totalGames: parseInt(data.total_games || '0'),
+      totalBets: parseFloat(data.total_bets || '0'),
+      totalPayouts: parseFloat(data.total_payouts || '0'),
+      profitLoss: parseFloat(data.profit_loss || '0'),
+      netHouseProfit: parseFloat(data.net_house_profit || '0'),
+      totalPlayerWinnings: parseFloat(data.total_player_winnings || '0'),
+      totalPlayerLosses: parseFloat(data.total_player_losses || '0')
+    };
+  }
+
+  /**
+   * Get current year's statistics from yearly_game_statistics
+   */
+  async getYearlyStatistics(): Promise<any> {
+    const year = new Date().getFullYear();
+
+    const { data, error } = await supabaseServer
+      .from('yearly_game_statistics')
+      .select('*')
+      .eq('year', year)
+      .single();
+
+    if (error || !data) {
+      return {
+        totalGames: 0,
+        totalBets: 0,
+        totalPayouts: 0,
+        profitLoss: 0,
+        netHouseProfit: 0,
+        totalPlayerWinnings: 0,
+        totalPlayerLosses: 0
+      };
+    }
+
+    return {
+      totalGames: parseInt(data.total_games || '0'),
+      totalBets: parseFloat(data.total_bets || '0'),
+      totalPayouts: parseFloat(data.total_payouts || '0'),
+      profitLoss: parseFloat(data.profit_loss || '0'),
+      netHouseProfit: parseFloat(data.net_house_profit || '0'),
+      totalPlayerWinnings: parseFloat(data.total_player_winnings || '0'),
+      totalPlayerLosses: parseFloat(data.total_player_losses || '0')
+    };
+  }
+
+  /**
+   * Get all bonus transactions with user details (admin)
+   */
+  async getAllBonusTransactions(): Promise<any[]> {
+    const { data, error } = await supabaseServer
+      .from('bonus_transactions')
+      .select(`
+        *,
+        users (
+          id,
+          phone,
+          full_name
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error getting all bonus transactions:', error);
+      return [];
+    }
+
+    return (data || []).map((tx: any) => ({
+      id: tx.id,
+      userId: tx.user_id,
+      username: tx.users?.phone || 'Unknown',
+      type: tx.bonus_type,
+      amount: parseFloat(tx.amount || '0'),
+      status: tx.action,
+      timestamp: tx.created_at,
+      description: tx.description,
+      relatedAmount: parseFloat(tx.related_amount || '0')
+    }));
+  }
+
+  /**
+   * Get all referral data with user details (admin)
+   */
+  async getAllReferralData(): Promise<any[]> {
+    const { data, error } = await supabaseServer
+      .from('user_referrals')
+      .select(`
+        *,
+        referrer:users!user_referrals_referrer_user_id_fkey (
+          id,
+          phone,
+          full_name
+        ),
+        referred:users!user_referrals_referred_user_id_fkey (
+          id,
+          phone,
+          full_name
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error getting all referral data:', error);
+      return [];
+    }
+
+    return (data || []).map((ref: any) => ({
+      id: ref.id,
+      referrerId: ref.referrer_user_id,
+      referrerUsername: ref.referrer?.phone || 'Unknown',
+      referredId: ref.referred_user_id,
+      referredUsername: ref.referred?.phone || 'Unknown',
+      depositAmount: parseFloat(ref.deposit_amount || '0'),
+      bonusAmount: parseFloat(ref.bonus_amount || '0'),
+      status: ref.status,
+      createdAt: ref.created_at,
+      bonusAppliedAt: ref.bonus_applied_at
+    }));
+  }
+
+  /**
+   * Get per-player bonus analytics (admin)
+   */
+  async getPlayerBonusAnalytics(): Promise<any[]> {
+    // Get all users with their bonus data
+    const { data: users, error: usersError } = await supabaseServer
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (usersError || !users) {
+      console.error('Error getting users for bonus analytics:', error);
+      return [];
+    }
+
+    const analytics = await Promise.all(users.map(async (user: any) => {
+      // Get deposit bonuses
+      const depositBonuses = await this.getDepositBonuses(user.id);
+      const referralBonuses = await this.getReferralBonuses(user.id);
+      const bonusTransactions = await this.getBonusTransactions(user.id, { limit: 5, offset: 0 });
+
+      const totalDepositBonusReceived = depositBonuses
+        .filter((b: any) => b.status === 'credited')
+        .reduce((sum: number, b: any) => sum + parseFloat(b.bonus_amount || '0'), 0);
+
+      const totalReferralBonusReceived = referralBonuses
+        .filter((b: any) => b.status === 'credited')
+        .reduce((sum: number, b: any) => sum + parseFloat(b.bonus_amount || '0'), 0);
+
+      return {
+        userId: user.id,
+        username: user.phone,
+        phone: user.phone,
+        fullName: user.full_name,
+        currentDepositBonus: parseFloat(user.deposit_bonus_available || '0'),
+        currentReferralBonus: parseFloat(user.referral_bonus_available || '0'),
+        currentTotalPending: parseFloat(user.deposit_bonus_available || '0') + parseFloat(user.referral_bonus_available || '0'),
+        totalDepositBonusReceived,
+        totalReferralBonusReceived,
+        totalBonusApplied: parseFloat(user.total_bonus_earned || '0'),
+        totalBonusEarned: parseFloat(user.total_bonus_earned || '0'),
+        depositBonusCount: depositBonuses.length,
+        referralBonusCount: referralBonuses.length,
+        totalBonusTransactions: bonusTransactions.length,
+        firstBonusDate: depositBonuses[0]?.created_at || null,
+        lastBonusDate: bonusTransactions[0]?.created_at || null,
+        userCreatedAt: user.created_at,
+        recentTransactions: bonusTransactions.slice(0, 5).map((tx: any) => ({
+          id: tx.id,
+          amount: parseFloat(tx.amount || '0'),
+          type: tx.bonus_type,
+          description: tx.description,
+          timestamp: tx.created_at,
+          status: tx.action
+        }))
+      };
+    }));
+
+    return analytics;
+  }
+
+  /**
+   * Get bonus settings
+   */
+  async getBonusSettings(): Promise<any> {
+    // Fetch all bonus-related settings from key-value table
+    const { data, error } = await supabaseServer
+      .from('game_settings')
+      .select('*')
+      .in('setting_key', [
+        'deposit_bonus_percent',
+        'referral_bonus_percent',
+        'conditional_bonus_threshold',
+        'bonus_claim_threshold',
+        'admin_whatsapp_number'
+      ]);
+
+    if (error) {
+      console.error('Error fetching bonus settings:', error);
+    }
+
+    // Convert array of key-value pairs to object
+    const settings: any = {
+      depositBonusPercent: 5,
+      referralBonusPercent: 1,
+      conditionalBonusThreshold: 1000,
+      bonusClaimThreshold: 100,
+      adminWhatsappNumber: ''
+    };
+
+    if (data) {
+      data.forEach((row: any) => {
+        switch (row.setting_key) {
+          case 'deposit_bonus_percent':
+            settings.depositBonusPercent = parseFloat(row.setting_value || '5');
+            break;
+          case 'referral_bonus_percent':
+            settings.referralBonusPercent = parseFloat(row.setting_value || '1');
+            break;
+          case 'conditional_bonus_threshold':
+            settings.conditionalBonusThreshold = parseFloat(row.setting_value || '1000');
+            break;
+          case 'bonus_claim_threshold':
+            settings.bonusClaimThreshold = parseFloat(row.setting_value || '100');
+            break;
+          case 'admin_whatsapp_number':
+            settings.adminWhatsappNumber = row.setting_value || '';
+            break;
+        }
+      });
+    }
+
+    return settings;
+  }
+
+  /**
+   * Update bonus settings
+   */
+  async updateBonusSettings(settings: any): Promise<void> {
+    // Update each setting individually in key-value table
+    const updates = [
+      { key: 'deposit_bonus_percent', value: String(settings.depositBonusPercent) },
+      { key: 'referral_bonus_percent', value: String(settings.referralBonusPercent) },
+      { key: 'conditional_bonus_threshold', value: String(settings.conditionalBonusThreshold) },
+      { key: 'bonus_claim_threshold', value: String(settings.bonusClaimThreshold) },
+      { key: 'admin_whatsapp_number', value: String(settings.adminWhatsappNumber || '') }
+    ];
+
+    for (const update of updates) {
+      // Try to update existing setting
+      const { error: updateError } = await supabaseServer
+        .from('game_settings')
+        .update({
+          setting_value: update.value,
+          updated_at: new Date()
+        })
+        .eq('setting_key', update.key);
+
+      // If update didn't affect any rows, insert new setting
+      if (updateError) {
+        const { error: insertError } = await supabaseServer
+          .from('game_settings')
+          .insert({
+            setting_key: update.key,
+            setting_value: update.value,
+            description: `Bonus setting: ${update.key}`
+          });
+
+        if (insertError) {
+          console.error(`Error upserting setting ${update.key}:`, insertError);
+          throw new Error(`Failed to update setting: ${update.key}`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Claim bonus and add to main balance
+   */
+  async claimBonus(userId: string): Promise<any> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    const depositBonus = parseFloat(user.deposit_bonus_available || '0');
+    const referralBonus = parseFloat(user.referral_bonus_available || '0');
+    const totalBonus = depositBonus + referralBonus;
+
+    if (totalBonus <= 0) {
+      return { success: false, error: 'No bonus available to claim' };
+    }
+
+    // Add bonus to main balance
+    const currentBalance = parseFloat(user.balance || '0');
+    const newBalance = currentBalance + totalBonus;
+
+    const { error: updateError } = await supabaseServer
+      .from('users')
+      .update({
+        balance: newBalance,
+        deposit_bonus_available: 0,
+        referral_bonus_available: 0,
+        total_bonus_earned: parseFloat(user.total_bonus_earned || '0') + totalBonus
+      })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('Error claiming bonus:', updateError);
+      return { success: false, error: 'Failed to claim bonus' };
+    }
+
+    // Create transaction records
+    await this.addTransaction({
+      userId,
+      transactionType: 'bonus_applied',
+      amount: totalBonus,
+      balanceBefore: currentBalance,
+      balanceAfter: newBalance,
+      description: `Bonus claimed: ₹${totalBonus}`
+    });
+
+    return {
+      success: true,
+      claimedAmount: totalBonus,
+      newBalance
+    };
+  }
 }
 
 // Export a singleton instance for use throughout the application

@@ -177,3 +177,33 @@ export const rejectPaymentRequest = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getPaymentRequestHistory = async (req: Request, res: Response) => {
+  try {
+    const { status, type, limit = '100', offset = '0', startDate, endDate } = req.query;
+    
+    const filters: any = {
+      limit: parseInt(limit as string),
+      offset: parseInt(offset as string)
+    };
+    
+    if (status && status !== 'all') filters.status = status;
+    if (type && type !== 'all') filters.type = type;
+    if (startDate) filters.startDate = new Date(startDate as string);
+    if (endDate) filters.endDate = new Date(endDate as string);
+    
+    const requests = await storage.getAllPaymentRequests(filters);
+    
+    res.json({
+      success: true,
+      data: requests,
+      total: requests.length
+    });
+  } catch (error) {
+    console.error('Payment request history retrieval error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve payment request history'
+    });
+  }
+};

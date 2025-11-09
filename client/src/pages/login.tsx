@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, User, AlertCircle, Shield } from "lucide-react";
+import { Eye, EyeOff, User, AlertCircle, MessageCircle } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -118,6 +118,21 @@ export default function Login() {
     }));
   };
 
+  const handleForgotPassword = () => {
+    // Admin WhatsApp number - can be configured via environment variable
+    const adminWhatsApp = import.meta.env.VITE_ADMIN_WHATSAPP || "919876543210"; // Default admin number
+    const userPhone = formData.phone || "your_phone_number";
+    
+    // Create pre-filled WhatsApp message
+    const message = encodeURIComponent(
+      `Hello Admin,\n\nI need help resetting my password.\n\nMy Phone Number: ${userPhone}\n\nPlease help me reset my password.\n\nThank you!`
+    );
+    
+    // Open WhatsApp with pre-filled message
+    const whatsappUrl = `https://wa.me/${adminWhatsApp}?text=${message}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
       {/* Background Elements */}
@@ -162,9 +177,20 @@ export default function Login() {
 
             {/* Password Field */}
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-gold font-semibold">
-                Password
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-gold font-semibold">
+                  Password
+                </Label>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="text-gold hover:text-gold-light text-sm p-0 h-auto font-normal"
+                  onClick={handleForgotPassword}
+                >
+                  <MessageCircle className="w-3 h-3 mr-1" />
+                  Forgot Password?
+                </Button>
+              </div>
               <div className="relative">
                 <Input
                   id="password"
@@ -190,6 +216,9 @@ export default function Login() {
                   )}
                 </Button>
               </div>
+              <p className="text-xs text-purple-300/70 mt-1">
+                Click "Forgot Password?" to contact admin via WhatsApp
+              </p>
             </div>
 
             {/* Error Message */}

@@ -43,6 +43,8 @@ export default function AdminPayments() {
   const [pendingCount, setPendingCount] = useState(0);
   const [justUpdated, setJustUpdated] = useState(false);
   const [statsData, setStatsData] = useState({ totalDeposits: 0, totalWithdrawals: 0 });
+  
+  const now = new Date();
 
   const fetchPendingRequests = async () => {
     try {
@@ -325,7 +327,6 @@ export default function AdminPayments() {
       const response = await apiClient.get('/admin/payment-requests/history?status=approved&limit=1000') as { success?: boolean; data?: PaymentRequest[] };
       
       if (response.success !== false && response.data) {
-        const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
         const allApprovedRequests = response.data;

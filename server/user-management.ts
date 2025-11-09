@@ -475,6 +475,41 @@ export const updateUserBalance = async (
   }
 };
 
+export const resetUserPassword = async (
+  userId: string,
+  newPassword: string,
+  adminId: string
+): Promise<UserManagementResponse> => {
+  try {
+    // Validate password
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters long' };
+    }
+
+    // Get user to verify they exist
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password in database
+    await storage.updateUser(userId, { password_hash: hashedPassword });
+
+    console.log(`Admin ${adminId} reset password for user ${userId} (${user.phone})`);
+
+    return {
+      success: true,
+      message: `Password reset successfully for user ${user.full_name} (${user.phone})`
+    };
+  } catch (error) {
+    console.error('Reset user password error:', error);
+    return { success: false, error: 'Failed to reset password' };
+  }
+};
+
 export const getUserStatistics = async (userId?: string): Promise<UserManagementResponse> => {
   try {
     if (userId) {

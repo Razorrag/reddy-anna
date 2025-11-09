@@ -15,6 +15,8 @@ import {
 
   updateUserBalance,
 
+  resetUserPassword,
+
 } from '../user-management';
 
 import {
@@ -27,7 +29,29 @@ import {
 
     getGameHistory,
 
+    getPaymentRequestHistory,
+
   } from '../controllers/adminController';
+
+import {
+
+    getAdminStatistics,
+
+    getAdminAnalytics,
+
+    getAdminAllTimeAnalytics,
+
+    getAdminBonusTransactions,
+
+    getAdminReferralData,
+
+    getAdminPlayerBonusAnalytics,
+
+    getAdminBonusSettings,
+
+    updateAdminBonusSettings
+
+  } from '../controllers/adminAnalyticsController';
 
 import { validateAdminAccess } from '../security';
 
@@ -213,15 +237,81 @@ router.patch('/users/:userId/balance', async (req, res) => {
 
 
 
+router.patch('/users/:userId/password', async (req, res) => {
+
+  try {
+
+    const { userId } = req.params;
+
+    const { newPassword } = req.body;
+
+    const adminId = req.user?.id;
+
+    if (!adminId) {
+
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    }
+
+    if (!newPassword) {
+
+      return res.status(400).json({ success: false, error: 'New password is required' });
+
+    }
+
+    const result = await resetUserPassword(userId, newPassword, adminId);
+
+    if (result.success) {
+
+      res.json(result);
+
+    } else {
+
+      res.status(400).json(result);
+
+    }
+
+  } catch (error) {
+
+    res.status(500).json({ success: false, error: 'Internal server error' });
+
+  }
+
+});
+
+
+
 // Payment request routes
 
 router.get('/payment-requests/pending', getPendingPaymentRequests);
+
+router.get('/payment-requests/history', getPaymentRequestHistory);
 
 router.patch('/payment-requests/:requestId/approve', approvePaymentRequest);
 
 router.patch('/payment-requests/:requestId/reject', rejectPaymentRequest);
 
 router.get('/game-history', getGameHistory);
+
+// Analytics routes
+
+router.get('/statistics', getAdminStatistics);
+
+router.get('/analytics', getAdminAnalytics);
+
+router.get('/analytics/all-time', getAdminAllTimeAnalytics);
+
+// Bonus routes
+
+router.get('/bonus-transactions', getAdminBonusTransactions);
+
+router.get('/referral-data', getAdminReferralData);
+
+router.get('/player-bonus-analytics', getAdminPlayerBonusAnalytics);
+
+router.get('/bonus-settings', getAdminBonusSettings);
+
+router.put('/bonus-settings', updateAdminBonusSettings);
 
 
 

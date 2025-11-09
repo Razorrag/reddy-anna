@@ -177,6 +177,16 @@ export const exportUserData = async (filters: UserAdminFilters = {}): Promise<an
   }
 };
 
+export const resetUserPassword = async (userId: string, newPassword: string): Promise<UserResponse> => {
+  try {
+    const response = await apiClient.patch<UserResponse>(`/admin/users/${userId}/password`, { newPassword });
+    return response;
+  } catch (error) {
+    console.error('Failed to reset password:', error);
+    return { success: false, error: 'Failed to reset password' };
+  }
+};
+
 // Helper function to format currency
 export const formatCurrency = (amount: number): string => {
   return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

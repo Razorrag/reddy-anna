@@ -15,7 +15,8 @@ import {
   Activity,
   RefreshCw,
   Loader2,
-  UserPlus
+  UserPlus,
+  Key
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -27,11 +28,13 @@ import {
   formatMobileNumber,
   type UserAdminFilters,
   type UserBalanceUpdate,
-  createUserManually
+  createUserManually,
+  resetUserPassword
 } from "@/services/userAdminService";
 import { type AdminUser } from "@/types/game";
 import UserBalanceModal from "@/components/UserBalanceModal";
 import UserDetailsModal from "@/components/UserDetailsModal";
+import UserPasswordModal from "@/components/UserPasswordModal";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "@/components/AdminLayout";
 
@@ -44,6 +47,7 @@ export default function UserAdmin() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   
   // State for user creation
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -137,6 +141,31 @@ export default function UserAdmin() {
       toast({
         title: "Error",
         description: "Failed to update status",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Handle password reset
+  const handlePasswordReset = async (userId: string, newPassword: string) => {
+    try {
+      const response = await resetUserPassword(userId, newPassword);
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: response.message || "Password reset successfully"
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: response.error || "Failed to reset password",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to reset password",
         variant: "destructive"
       });
     }
@@ -662,6 +691,18 @@ export default function UserAdmin() {
                         <CreditCard className="w-4 h-4 mr-1" />
                         Update Balance
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setPasswordModalOpen(true);
+                        }}
+                      >
+                        <Key className="w-4 h-4 mr-1" />
+                        Change Password
+                      </Button>
                       {user.status !== 'active' && (
                         <Button
                           size="sm"
@@ -732,6 +773,16 @@ export default function UserAdmin() {
           onClose={() => setDetailsModalOpen(false)}
           user={selectedUser}
         />
+
+        {/* User Password Modal */}
+        {selectedUser && (
+          <UserPasswordModal
+            isOpen={passwordModalOpen}
+            onClose={() => setPasswordModalOpen(false)}
+            user={selectedUser}
+            onResetPassword={handlePasswordReset}
+          />
+        )}
       </div>
     </AdminLayout>
   );
