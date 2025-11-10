@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Settings, DollarSign, Percent, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import apiClient from "@/lib/api-client";
+import { apiClient } from "@/lib/api-client";
 import AdminLayout from "@/components/AdminLayout";
 
 interface GameSettingsResponse {
@@ -167,6 +167,12 @@ export default function BackendSettingsPage() {
                 <CardDescription className="text-gray-400">
                   Configure deposit and referral bonus percentages
                 </CardDescription>
+                <div className="mt-3 p-3 bg-blue-500/10 border border-blue-400/30 rounded-lg">
+                  <p className="text-sm text-blue-200">
+                    ℹ️ <strong>Primary Configuration:</strong> This is the canonical source for bonus settings. 
+                    Changes sync with Admin Bonus page automatically.
+                  </p>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>

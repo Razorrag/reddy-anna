@@ -38,6 +38,12 @@ import UserPasswordModal from "@/components/UserPasswordModal";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "@/components/AdminLayout";
 
+// Helper to safely display numeric stats - shows "N/A" for missing values instead of misleading 0
+const displayStat = (value: number | null | undefined, formatter?: (val: number) => string): string => {
+  if (value === null || value === undefined) return 'N/A';
+  return formatter ? formatter(value) : String(value);
+};
+
 export default function UserAdmin() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -630,12 +636,12 @@ export default function UserAdmin() {
                         </div>
                         <div>
                           <span className="text-purple-300">Games Played:</span>
-                          <span className="text-white ml-2 font-semibold">{user.gamesPlayed}</span>
+                          <span className="text-white ml-2 font-semibold">{displayStat(user.gamesPlayed)}</span>
                         </div>
                         <div>
                           <span className="text-purple-300">Win Rate:</span>
                           <span className="text-green-400 ml-2 font-semibold">
-                            {user.gamesPlayed && user.gamesPlayed > 0 ? Math.round(((user.gamesWon || 0) / user.gamesPlayed) * 100) : 0}%
+                            {user.gamesPlayed && user.gamesPlayed > 0 ? Math.round(((user.gamesWon || 0) / user.gamesPlayed) * 100) + '%' : 'N/A'}
                           </span>
                         </div>
                       </div>
@@ -646,22 +652,22 @@ export default function UserAdmin() {
                         <div>
                           <span className="text-purple-300">Total Winnings:</span>
                           <span className="text-green-400 ml-2 font-semibold">
-                            {formatCurrency(user.totalWinnings || 0)}
+                            {user.totalWinnings !== null && user.totalWinnings !== undefined ? formatCurrency(user.totalWinnings) : 'N/A'}
                           </span>
                         </div>
                         <div>
                           <span className="text-purple-300">Total Losses:</span>
                           <span className="text-red-400 ml-2 font-semibold">
-                            {formatCurrency(user.totalLosses || 0)}
+                            {user.totalLosses !== null && user.totalLosses !== undefined ? formatCurrency(user.totalLosses) : 'N/A'}
                           </span>
                         </div>
                         <div>
                           <span className="text-purple-300">Net Profit/Loss:</span>
                           <span className={cn(
                             "ml-2 font-semibold",
-                            ((user.totalWinnings || 0) - (user.totalLosses || 0)) >= 0 ? "text-green-400" : "text-red-400"
+                            (user.totalWinnings !== null && user.totalLosses !== null) && ((user.totalWinnings - user.totalLosses) >= 0) ? "text-green-400" : "text-red-400"
                           )}>
-                            {formatCurrency((user.totalWinnings || 0) - (user.totalLosses || 0))}
+                            {(user.totalWinnings !== null && user.totalWinnings !== undefined && user.totalLosses !== null && user.totalLosses !== undefined) ? formatCurrency(user.totalWinnings - user.totalLosses) : 'N/A'}
                           </span>
                         </div>
                       </div>

@@ -4291,6 +4291,158 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin Bonus Action Endpoints
+  // Apply a pending bonus (credit it to user's balance)
+  app.post("/api/admin/bonus-transactions/:id/apply", generalLimiter, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get the bonus transaction
+      const allTransactions = await storage.getAllBonusTransactions({ limit: 10000, offset: 0 });
+      const transaction = allTransactions.find((t: any) => t.id === id);
+      
+      if (!transaction) {
+        return res.status(404).json({
+          success: false,
+          error: 'Bonus transaction not found'
+        });
+      }
+      
+      if (transaction.action === 'credited' || transaction.action === 'applied') {
+        return res.status(400).json({
+          success: false,
+          error: 'Bonus already applied'
+        });
+      }
+      
+      // Determine bonus type and apply accordingly
+      if (transaction.bonus_type === 'deposit_bonus') {
+        // Credit deposit bonus
+        await storage.creditDepositBonus(transaction.bonus_source_id, transaction.user_id);
+      } else if (transaction.bonus_type === 'referral_bonus') {
+        // Credit referral bonus
+        await storage.creditReferralBonus(transaction.bonus_source_id, transaction.user_id);
+      } else {
+        // Generic bonus application - add to balance directly
+        await storage.addBalanceAtomic(transaction.user_id, parseFloat(transaction.amount));
+        await storage.logBonusTransaction(
+          transaction.user_id,
+          transaction.bonus_type,
+          transaction.bonus_source_id,
+          parseFloat(transaction.amount),
+          'credited',
+          `Admin manually applied ${transaction.bonus_type}`
+        );
+      }
+      
+      res.json({
+        success: true,
+        message: 'Bonus applied successfully'
+      });
+    } catch (error) {
+      console.error('Apply bonus error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to apply bonus'
+      });
+    }
+  });
+
+  // Reject a pending bonus
+  app.post("/api/admin/bonus-transactions/:id/reject", generalLimiter, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      
+      // Get the bonus transaction
+      const allTransactions = await storage.getAllBonusTransactions({ limit: 10000, offset: 0 });
+      const transaction = allTransactions.find((t: any) => t.id === id);
+      
+      if (!transaction) {
+        return res.status(404).json({
+          success: false,
+          error: 'Bonus transaction not found'
+        });
+      }
+      
+      if (transaction.action === 'credited' || transaction.action === 'applied') {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot reject already applied bonus'
+        });
+      }
+      
+      // Mark as rejected based on bonus type
+      if (transaction.bonus_type === 'deposit_bonus' && transaction.bonus_source_id) {
+        // Expire the deposit bonus
+        await storage.expireDepositBonus(transaction.bonus_source_id, reason || 'Admin rejected');
+      } else if (transaction.bonus_type === 'referral_bonus' && transaction.bonus_source_id) {
+        // Expire the referral bonus
+        await storage.expireReferralBonus(transaction.bonus_source_id, reason || 'Admin rejected');
+      }
+      
+      // Log rejection
+      await storage.logBonusTransaction(
+        transaction.user_id,
+        transaction.bonus_type,
+        transaction.bonus_source_id,
+        0,
+        'rejected',
+        reason || 'Admin rejected bonus'
+      );
+      
+      res.json({
+        success: true,
+        message: 'Bonus rejected successfully'
+      });
+    } catch (error) {
+      console.error('Reject bonus error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to reject bonus'
+      });
+    }
+  });
+
+  // Process a referral bonus (approve and credit)
+  app.post("/api/admin/referrals/:id/process", generalLimiter, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get referral data
+      const allReferrals = await storage.getAllReferralData({ limit: 10000, offset: 0 });
+      const referral = allReferrals.find((r: any) => r.id === id);
+      
+      if (!referral) {
+        return res.status(404).json({
+          success: false,
+          error: 'Referral not found'
+        });
+      }
+      
+      if (referral.status === 'completed') {
+        return res.status(400).json({
+          success: false,
+          error: 'Referral bonus already processed'
+        });
+      }
+      
+      // Credit the referral bonus
+      await storage.creditReferralBonus(referral.id, referral.referrer_user_id);
+      
+      res.json({
+        success: true,
+        message: 'Referral bonus processed successfully'
+      });
+    } catch (error) {
+      console.error('Process referral error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to process referral bonus'
+      });
+    }
+  });
+
   // Game Settings Endpoints
   app.get("/api/admin/game-settings", generalLimiter, async (req, res) => {
     try {

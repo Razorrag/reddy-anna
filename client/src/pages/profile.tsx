@@ -28,6 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
+import { getPaymentWhatsAppNumber, createWhatsAppUrl } from '@/lib/whatsapp-helper';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import { useBalance } from '@/contexts/BalanceContext';
 import { WalletModal } from '@/components/WalletModal';
@@ -41,7 +42,7 @@ import {
 } from '@/components/Bonus';
 
 const Profile: React.FC = () => {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user, logout } = useAuth();
   const {
     state: profileState,
@@ -193,7 +194,7 @@ const Profile: React.FC = () => {
     
     try {
       setLoadingPaymentRequests(true);
-      const response = await apiClient.get('/payment-requests') as any;
+      const response = await apiClient.get('/api/payment-requests') as any;
       if (response.success && response.data) {
         setPaymentRequests(response.data);
       }
@@ -314,10 +315,17 @@ const Profile: React.FC = () => {
     };
   }, [activeTab, fetchPaymentRequests, refreshBalance, fetchTransactions, showNotification]);
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!user) {
+      setLocation('/login');
+    }
+  }, [user, setLocation]);
+
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center">
-        <div className="text-white text-xl">Please login to view your profile</div>
+        <div className="text-white text-xl">Redirecting to login...</div>
       </div>
     );
   }
@@ -644,7 +652,7 @@ const Profile: React.FC = () => {
 
                       setSubmittingTransaction(true);
                       try {
-                        const response = await apiClient.post('/payment-requests', {
+                        const response = await apiClient.post('/api/payment-requests', {
                           amount: numAmount,
                           paymentMethod: paymentMethodSelected,
                           paymentDetails: {},
@@ -652,11 +660,9 @@ const Profile: React.FC = () => {
                         }) as any;
 
                         if (response.success) {
-                          const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '918686886632';
-                          const adminNumber = adminWhatsApp.replace(/\D/g, '');
+                          const adminNumber = getPaymentWhatsAppNumber();
                           const whatsappMessage = `Hello! I want to deposit ₹${numAmount.toLocaleString('en-IN')} using ${paymentMethodSelected}.`;
-                          const encodedMessage = encodeURIComponent(whatsappMessage);
-                          const whatsappUrl = `https://wa.me/${adminNumber}?text=${encodedMessage}`;
+                          const whatsappUrl = createWhatsAppUrl(adminNumber, whatsappMessage);
 
                           showNotification(`✅ Deposit request submitted! Amount: ₹${numAmount.toLocaleString('en-IN')}`, 'success');
                           
@@ -927,7 +933,7 @@ const Profile: React.FC = () => {
                           paymentDetails.accountName = accountName;
                         }
 
-                        const response = await apiClient.post('/payment-requests', {
+                        const response = await apiClient.post('/api/payment-requests', {
                           amount: numAmount,
                           paymentMethod: paymentMethodSelected,
                           paymentDetails: paymentDetails,
@@ -935,8 +941,7 @@ const Profile: React.FC = () => {
                         }) as any;
 
                         if (response.success) {
-                          const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '918686886632';
-                          const adminNumber = adminWhatsApp.replace(/\D/g, '');
+                          const adminNumber = getPaymentWhatsAppNumber();
                           
                           let whatsappMessage = `Hello! I want to withdraw ₹${numAmount.toLocaleString('en-IN')}.\n\n`;
                           whatsappMessage += `Payment Details:\n`;
@@ -953,8 +958,7 @@ const Profile: React.FC = () => {
                           
                           whatsappMessage += `\nRequest ID: ${response.requestId}`;
                           
-                          const encodedMessage = encodeURIComponent(whatsappMessage);
-                          const whatsappUrl = `https://wa.me/${adminNumber}?text=${encodedMessage}`;
+                          const whatsappUrl = createWhatsAppUrl(adminNumber, whatsappMessage);
 
                           showNotification(`✅ Withdrawal request submitted! Amount: ₹${numAmount.toLocaleString('en-IN')}`, 'success');
                           

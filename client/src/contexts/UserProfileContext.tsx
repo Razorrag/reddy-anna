@@ -422,14 +422,88 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (!append) dispatch({ type: 'SET_LOADING', payload: true });
       
       const { offset, limit } = state.pagination.gameHistory;
-      const response = await apiClient.get(`/user/game-history?limit=${limit}&offset=${append ? offset : 0}&result=all`) as any;
+      // Fix 1: Use correct endpoint /api/user/game-history
+      const response = await apiClient.get(`/api/user/game-history?limit=${limit}&offset=${append ? offset : 0}&result=all`) as any;
       
-      if (response.success && response.data) {
+      // Fix 2: Parse correct response shape (response.data.data.games)
+      const api = response?.data || response;
+      const container = api?.data || {};
+      const gamesRaw = container.games || [];
+      const hasMore = Boolean(container.hasMore);
+      
+      // Fix 3: Normalize each game entry with defensive fallbacks
+      const mappedGames: GameHistoryEntry[] = gamesRaw.map((g: any) => {
+        // Compute yourTotalBet: trust backend, fallback to sum of bets
+        const yourTotalBet = Number(
+          g.yourTotalBet ??
+          g.totalBet ??
+          (Array.isArray(g.yourBets)
+            ? g.yourBets.reduce((s: number, b: any) => s + Number(b.amount || 0), 0)
+            : 0)
+        );
+
+        // Compute yourTotalPayout: trust backend, fallback to sum of actual_payout
+        const yourTotalPayout = Number(
+          g.yourTotalPayout ??
+          g.payout ??
+          (Array.isArray(g.yourBets)
+            ? g.yourBets.reduce((s: number, b: any) => s + Number(b.payout || b.actual_payout || 0), 0)
+            : 0)
+        );
+
+        // Compute yourNetProfit: trust backend, fallback to calculation
+        const yourNetProfit = Number(
+          g.yourNetProfit ??
+          (yourTotalPayout - yourTotalBet)
+        );
+
+        // Compute result: trust backend, fallback to logic
+        let result = g.result;
+        if (!result) {
+          if (yourTotalBet === 0 && yourTotalPayout === 0) {
+            result = 'no_bet';
+          } else if (yourNetProfit > 0) {
+            result = 'win';
+          } else if (yourNetProfit < 0) {
+            result = 'loss';
+          } else {
+            result = 'no_bet';
+          }
+        }
+
+        return {
+          id: String(g.id || g.gameId),
+          gameId: String(g.gameId),
+          openingCard: g.openingCard || '',
+          winner: g.winner || 'andar',
+          yourBet: g.yourBet || null,
+          yourBets: Array.isArray(g.yourBets)
+            ? g.yourBets.map((b: any) => ({
+                id: String(b.id),
+                side: b.side,
+                amount: Number(b.amount),
+                round: Number(b.round),
+                payout: Number(b.payout ?? b.actual_payout ?? 0),
+                status: String(b.status || '')
+              }))
+            : [],
+          yourTotalBet,
+          yourTotalPayout,
+          yourNetProfit,
+          result,
+          payout: yourTotalPayout,
+          totalCards: Number(g.totalCards ?? (g.dealtCards?.length ?? 0)),
+          round: Number(g.round || g.winningRound || 1),
+          createdAt: g.createdAt ? new Date(g.createdAt) : new Date()
+        };
+      });
+      
+      if (response.success || api.success) {
         dispatch({
           type: 'SET_GAME_HISTORY',
           payload: {
-            games: response.data.games || [],
-            hasMore: response.data.hasMore || false,
+            games: mappedGames,
+            hasMore,
             append
           }
         });
@@ -464,7 +538,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       dispatch({ type: 'SET_LOADING', payload: true });
       
       // Create payment request instead of direct balance processing
-      const response = await apiClient.post('/payment-requests', {
+      const response = await apiClient.post('/api/payment-requests', {
         amount,
         paymentMethod: { type: method },
         requestType: 'deposit'
@@ -522,7 +596,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post('/payment-requests', {
+      const response = await apiClient.post('/api/payment-requests', {
         amount,
         paymentMethod: { type: method },
         requestType: 'withdrawal'
@@ -683,14 +757,27 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
     };
 
+    // Handle bonus updates from WebSocket
+    const handleBonusUpdate = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('🎁 Bonus update received:', customEvent.detail);
+      // Refresh bonus info and analytics when bonus changes
+      await Promise.all([
+        fetchBonusInfo(),
+        fetchAnalytics()
+      ]);
+    };
+
     window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
     window.addEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+    window.addEventListener('bonus_update', handleBonusUpdate as EventListener);
     
     return () => {
       window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
       window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+      window.removeEventListener('bonus_update', handleBonusUpdate as EventListener);
     };
-  }, [state.analytics]);
+  }, [state.analytics, fetchBonusInfo, fetchAnalytics]);
 
   // Enhance refreshData to include balance refresh
   const enhancedRefreshData = async () => {

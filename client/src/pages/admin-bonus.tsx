@@ -301,6 +301,82 @@ export default function AdminBonus() {
     showNotification('Data refreshed successfully', 'success');
   };
 
+  // Apply a bonus transaction
+  const handleApplyBonus = async (transactionId: string) => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.post<{ success: boolean; message?: string; error?: string }>(
+        `/admin/bonus-transactions/${transactionId}/apply`
+      );
+      if (response.success) {
+        showNotification('Bonus applied successfully', 'success');
+        // Refresh data
+        await Promise.all([
+          fetchBonusTransactions(),
+          fetchPlayerAnalytics()
+        ]);
+      } else {
+        showNotification(response.error || 'Failed to apply bonus', 'error');
+      }
+    } catch (error: any) {
+      console.error('Failed to apply bonus:', error);
+      showNotification(error.message || 'Failed to apply bonus', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Reject a bonus transaction
+  const handleRejectBonus = async (transactionId: string, reason?: string) => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.post<{ success: boolean; message?: string; error?: string }>(
+        `/admin/bonus-transactions/${transactionId}/reject`,
+        { reason: reason || 'Admin rejected' }
+      );
+      if (response.success) {
+        showNotification('Bonus rejected successfully', 'success');
+        // Refresh data
+        await Promise.all([
+          fetchBonusTransactions(),
+          fetchPlayerAnalytics()
+        ]);
+      } else {
+        showNotification(response.error || 'Failed to reject bonus', 'error');
+      }
+    } catch (error: any) {
+      console.error('Failed to reject bonus:', error);
+      showNotification(error.message || 'Failed to reject bonus', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Process a referral bonus
+  const handleProcessReferral = async (referralId: string) => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.post<{ success: boolean; message?: string; error?: string }>(
+        `/admin/referrals/${referralId}/process`
+      );
+      if (response.success) {
+        showNotification('Referral bonus processed successfully', 'success');
+        // Refresh data
+        await Promise.all([
+          fetchReferralData(),
+          fetchPlayerAnalytics()
+        ]);
+      } else {
+        showNotification(response.error || 'Failed to process referral bonus', 'error');
+      }
+    } catch (error: any) {
+      console.error('Failed to process referral:', error);
+      showNotification(error.message || 'Failed to process referral bonus', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 p-4">
@@ -312,9 +388,14 @@ export default function AdminBonus() {
               <p className="text-gray-300">Manage deposit bonuses, referral bonuses, and system settings</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10">
+              <Button 
+                variant="outline" 
+                className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10"
+                disabled
+                title="Export functionality coming soon"
+              >
                 <Download className="w-4 h-4 mr-2" />
-                Export Data
+                Export Data (Coming Soon)
               </Button>
               <Button 
                 variant="outline" 
@@ -395,13 +476,19 @@ export default function AdminBonus() {
             {/* Bonus Settings */}
             <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle className="text-purple-200 flex items-center gap-2">
+                <CardTitle className="text-purple-100 flex items-center gap-2">
                   <Settings className="w-5 h-5" />
                   Bonus Settings
                 </CardTitle>
                 <CardDescription className="text-purple-300">
                   Configure bonus percentages and thresholds
                 </CardDescription>
+                <div className="mt-3 p-3 bg-blue-500/10 border border-blue-400/30 rounded-lg">
+                  <p className="text-sm text-blue-200">
+                    ℹ️ <strong>Note:</strong> Bonus percentages (Deposit & Referral) are also managed in <strong>Backend Settings</strong>. 
+                    Changes here will sync with game settings. For comprehensive configuration, use Backend Settings page.
+                  </p>
+                </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -590,6 +677,8 @@ export default function AdminBonus() {
                             <Button
                               size="sm"
                               className="bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() => handleApplyBonus(transaction.id)}
+                              disabled={isLoading}
                             >
                               <CheckCircle className="w-4 h-4 mr-1" />
                               Apply Bonus
@@ -598,6 +687,8 @@ export default function AdminBonus() {
                               size="sm"
                               variant="outline"
                               className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                              onClick={() => handleRejectBonus(transaction.id)}
+                              disabled={isLoading}
                             >
                               <XCircle className="w-4 h-4 mr-1" />
                               Reject
@@ -608,6 +699,8 @@ export default function AdminBonus() {
                           size="sm"
                           variant="outline"
                           className="border-purple-400/30 text-purple-300 hover:bg-purple-400/10"
+                          disabled
+                          title="Detailed view coming soon"
                         >
                           View Details
                         </Button>
@@ -693,6 +786,8 @@ export default function AdminBonus() {
                           <Button
                             size="sm"
                             className="bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() => handleProcessReferral(referral.id)}
+                            disabled={isLoading}
                           >
                             <CheckCircle className="w-4 h-4 mr-1" />
                             Process Bonus
@@ -702,6 +797,8 @@ export default function AdminBonus() {
                           size="sm"
                           variant="outline"
                           className="border-purple-400/30 text-purple-300 hover:bg-purple-400/10"
+                          disabled
+                          title="Detailed view coming soon"
                         >
                           View Details
                         </Button>
