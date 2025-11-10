@@ -207,3 +207,20 @@ export const getPaymentRequestHistory = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getPaymentsSummary = async (req: Request, res: Response) => {
+  try {
+    const summary = await storage.getPaymentsSummary();
+    
+    res.json({
+      success: true,
+      data: summary
+    });
+  } catch (error) {
+    console.error('Payments summary retrieval error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve payments summary'
+    });
+  }
+};

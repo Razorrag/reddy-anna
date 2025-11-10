@@ -4294,8 +4294,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Game Settings Endpoints
   app.get("/api/admin/game-settings", generalLimiter, async (req, res) => {
     try {
-      const result = await getGameSettings();
-      res.json(result);
+      // Get both game and system settings
+      const gameResult = await getGameSettings();
+      const systemResult = await getSystemSettings();
+      
+      if (!gameResult.success || !systemResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to get settings'
+        });
+      }
+      
+      // Map internal field names to frontend expected names
+      const mappedContent = {
+        // Game settings (map internal names to FE names)
+        minBet: gameResult.content.minBetAmount,
+        maxBet: gameResult.content.maxBetAmount,
+        bettingTimerDuration: gameResult.content.bettingTimerDuration,
+        depositBonusPercent: gameResult.content.default_deposit_bonus_percent,
+        referralBonusPercent: gameResult.content.referral_bonus_percent,
+        conditionalBonusThreshold: gameResult.content.conditional_bonus_threshold,
+        
+        // System settings (maintenance flags)
+        maintenanceMode: systemResult.content.maintenanceMode || false,
+        maintenanceMessage: systemResult.content.maintenanceMessage || ''
+      };
+      
+      res.json({
+        success: true,
+        content: mappedContent
+      });
     } catch (error) {
       console.error('Get game settings error:', error);
       res.status(500).json({
@@ -4307,14 +4335,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/admin/game-settings", generalLimiter, async (req, res) => {
     try {
-      const settings = req.body;
-      const result = await updateGameSettings(settings, req.user!.id);
+      // Extract frontend field names
+      const {
+        minBet,
+        maxBet,
+        bettingTimerDuration,
+        depositBonusPercent,
+        referralBonusPercent,
+        conditionalBonusThreshold,
+        maintenanceMode,
+        maintenanceMessage
+      } = req.body;
       
-      if (result.success) {
-        auditLogger('game_settings_updated', req.user!.id, settings);
+      // Translate to internal game settings schema
+      const gameSettingsPayload: any = {};
+      if (minBet !== undefined) gameSettingsPayload.minBetAmount = minBet;
+      if (maxBet !== undefined) gameSettingsPayload.maxBetAmount = maxBet;
+      if (bettingTimerDuration !== undefined) gameSettingsPayload.bettingTimerDuration = bettingTimerDuration;
+      if (depositBonusPercent !== undefined) gameSettingsPayload.default_deposit_bonus_percent = depositBonusPercent;
+      if (referralBonusPercent !== undefined) gameSettingsPayload.referral_bonus_percent = referralBonusPercent;
+      if (conditionalBonusThreshold !== undefined) gameSettingsPayload.conditional_bonus_threshold = conditionalBonusThreshold;
+      
+      // Update game settings if any game-related fields present
+      let gameResult = { success: true };
+      if (Object.keys(gameSettingsPayload).length > 0) {
+        gameResult = await updateGameSettings(gameSettingsPayload, req.user!.id);
+        if (!gameResult.success) {
+          return res.json(gameResult);
+        }
       }
       
-      res.json(result);
+      // Update system settings (maintenance flags) if present
+      let systemResult = { success: true };
+      const systemSettingsPayload: any = {};
+      if (maintenanceMode !== undefined) systemSettingsPayload.maintenanceMode = maintenanceMode;
+      if (maintenanceMessage !== undefined) systemSettingsPayload.maintenanceMessage = maintenanceMessage;
+      
+      if (Object.keys(systemSettingsPayload).length > 0) {
+        systemResult = await updateSystemSettings(systemSettingsPayload, req.user!.id);
+        if (!systemResult.success) {
+          return res.json(systemResult);
+        }
+      }
+      
+      // Log audit trail
+      if (gameResult.success && systemResult.success) {
+        auditLogger('game_settings_updated', req.user!.id, req.body);
+      }
+      
+      res.json({
+        success: true,
+        message: 'Settings updated successfully'
+      });
     } catch (error) {
       console.error('Update game settings error:', error);
       res.status(500).json({

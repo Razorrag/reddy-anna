@@ -295,6 +295,16 @@ export interface IStorage {
   getReferralBonuses(userId: string, filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
   getBonusTransactions(userId: string, filters?: { limit?: number; offset?: number }): Promise<any[]>;
   
+  // Payment Summary Method
+  getPaymentsSummary(): Promise<{
+    approvedDepositsToday: number;
+    approvedWithdrawalsToday: number;
+    pendingDeposits: number;
+    pendingWithdrawals: number;
+    approvedDepositsCount: number;
+    approvedWithdrawalsCount: number;
+  }>;
+  
   // Payment History Method
   getAllPaymentRequests(filters?: {
     status?: string;
@@ -1974,7 +1984,29 @@ export class SupabaseStorage implements IStorage {
     const enhancedHistory = historyData.map((history: any) => {
       const stats = statsMap.get(history.game_id);
       const cards = cardsMap.get(history.game_id) || [];
-      
+
+      // Derive totals from either game_statistics or game_history row
+      const totalBets = stats
+        ? parseFloat(stats.total_bets || '0')
+        : (parseFloat(history.total_bets || '0') || 0);
+
+      const totalPayouts = stats
+        ? parseFloat(stats.total_winnings || '0')
+        : (parseFloat(history.total_payouts || '0') || 0);
+
+      const andarTotalBet = stats ? parseFloat(stats.andar_total_bet || '0') : 0;
+      const baharTotalBet = stats ? parseFloat(stats.bahar_total_bet || '0') : 0;
+
+      const andarBetsCount = stats ? (stats.andar_bets_count || 0) : 0;
+      const baharBetsCount = stats ? (stats.bahar_bets_count || 0) : 0;
+      const totalPlayers = stats ? (stats.total_players || 0) : 0;
+
+      // House profit/loss for this game
+      const profitLoss = totalBets - totalPayouts;
+      const profitLossPercentage = totalBets > 0
+        ? (profitLoss / totalBets) * 100
+        : 0;
+
       return {
         id: history.id,
         gameId: history.game_id,
@@ -1982,9 +2014,9 @@ export class SupabaseStorage implements IStorage {
         winner: history.winner,
         winningCard: history.winning_card,
         totalCards: history.total_cards,
-        round: history.winning_round || 1, // Use winning_round from database
+        round: history.winning_round || 1,
         createdAt: history.created_at,
-        // Include dealt cards
+        // Dealt cards for UI
         dealtCards: cards.map((c: any) => ({
           id: c.id,
           card: c.card,
@@ -1993,14 +2025,18 @@ export class SupabaseStorage implements IStorage {
           isWinningCard: c.is_winning_card,
           createdAt: c.created_at
         })),
-        // Statistics data (with defaults if not available)
-        totalBets: stats ? parseFloat(stats.total_bets || '0') : (parseFloat(history.total_bets || '0') || 0),
-        andarTotalBet: stats ? parseFloat(stats.andar_total_bet || '0') : 0,
-        baharTotalBet: stats ? parseFloat(stats.bahar_total_bet || '0') : 0,
-        totalWinnings: stats ? parseFloat(stats.total_winnings || '0') : (parseFloat(history.total_payouts || '0') || 0),
-        andarBetsCount: stats ? (stats.andar_bets_count || 0) : 0,
-        baharBetsCount: stats ? (stats.bahar_bets_count || 0) : 0,
-        totalPlayers: stats ? (stats.total_players || 0) : 0,
+        // Aggregated metrics
+        totalBets,
+        totalPayouts,
+        andarTotalBet,
+        baharTotalBet,
+        totalWinnings: totalPayouts,
+        andarBetsCount,
+        baharBetsCount,
+        totalPlayers,
+        // Canonical house P/L for admin game-history UI
+        profitLoss,
+        profitLossPercentage,
       };
     });
 
@@ -2273,9 +2309,11 @@ export class SupabaseStorage implements IStorage {
       const profitLoss = revenue;
       const profitLossPercentage = totalBets > 0 ? (profitLoss / totalBets) * 100 : 0;
       
-      // Merge unique players
-      const existingPlayers = new Set((existing as any)?.unique_players || []);
-      const allPlayers = new Set([...existingPlayers, ...gameStats.uniquePlayers]);
+      // Merge unique players without spread to avoid TS downlevelIteration issues
+      const existingPlayers = new Set<string>((existing as any)?.unique_players || []);
+      const allPlayers = new Set<string>();
+      existingPlayers.forEach((p) => allPlayers.add(p));
+      gameStats.uniquePlayers.forEach((p) => allPlayers.add(p));
 
       const { error } = await supabaseServer
         .from('daily_game_statistics')
@@ -2323,8 +2361,10 @@ export class SupabaseStorage implements IStorage {
       const profitLoss = revenue;
       const profitLossPercentage = totalBets > 0 ? (profitLoss / totalBets) * 100 : 0;
       
-      const existingPlayers = new Set((existing as any)?.unique_players || []);
-      const allPlayers = new Set([...existingPlayers, ...gameStats.uniquePlayers]);
+      const existingPlayers = new Set<string>((existing as any)?.unique_players || []);
+      const allPlayers = new Set<string>();
+      existingPlayers.forEach((p) => allPlayers.add(p));
+      gameStats.uniquePlayers.forEach((p) => allPlayers.add(p));
 
       const { error } = await supabaseServer
         .from('monthly_game_statistics')
@@ -2372,8 +2412,10 @@ export class SupabaseStorage implements IStorage {
       const profitLoss = revenue;
       const profitLossPercentage = totalBets > 0 ? (profitLoss / totalBets) * 100 : 0;
       
-      const existingPlayers = new Set((existing as any)?.unique_players || []);
-      const allPlayers = new Set([...existingPlayers, ...gameStats.uniquePlayers]);
+      const existingPlayers = new Set<string>((existing as any)?.unique_players || []);
+      const allPlayers = new Set<string>();
+      existingPlayers.forEach((p) => allPlayers.add(p));
+      gameStats.uniquePlayers.forEach((p) => allPlayers.add(p));
 
       const { error } = await supabaseServer
         .from('yearly_game_statistics')
@@ -3716,7 +3758,7 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
-  async getAllBonusTransactions(filters: { status?: string; type?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
+  async getAllBonusTransactionsLegacy(filters: { status?: string; type?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
     try {
       const { status, type, limit = 100, offset = 0 } = filters;
       
@@ -3782,7 +3824,7 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
-  async getAllReferralData(filters: { status?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
+  async getAllReferralDataLegacy(filters: { status?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
     try {
       const { status, limit = 100, offset = 0 } = filters;
       
@@ -3827,7 +3869,7 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
-  async getPlayerBonusAnalytics(filters: { userId?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
+  async getPlayerBonusAnalyticsLegacy(filters: { userId?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
     try {
       const { userId, limit = 1000, offset = 0 } = filters;
       
@@ -4247,6 +4289,111 @@ export class SupabaseStorage implements IStorage {
     } catch (err: any) {
       console.error('Exception in getAllPaymentRequests:', err);
       return [];
+    }
+  }
+
+  /**
+   * Get payments summary for admin dashboard
+   * Returns approved deposits/withdrawals for today and pending counts
+   */
+  async getPaymentsSummary(): Promise<{
+    approvedDepositsToday: number;
+    approvedWithdrawalsToday: number;
+    pendingDeposits: number;
+    pendingWithdrawals: number;
+    approvedDepositsCount: number;
+    approvedWithdrawalsCount: number;
+  }> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get approved deposits today
+      const { data: approvedDeposits, error: depositsError } = await supabaseServer
+        .from('payment_requests')
+        .select('amount')
+        .eq('request_type', 'deposit')
+        .in('status', ['approved', 'completed'])
+        .gte('processed_at', `${today}T00:00:00`)
+        .lte('processed_at', `${today}T23:59:59`);
+      
+      if (depositsError) {
+        console.error('Error fetching approved deposits:', depositsError);
+      }
+      
+      // Get approved withdrawals today
+      const { data: approvedWithdrawals, error: withdrawalsError } = await supabaseServer
+        .from('payment_requests')
+        .select('amount')
+        .eq('request_type', 'withdrawal')
+        .in('status', ['approved', 'completed'])
+        .gte('processed_at', `${today}T00:00:00`)
+        .lte('processed_at', `${today}T23:59:59`);
+      
+      if (withdrawalsError) {
+        console.error('Error fetching approved withdrawals:', withdrawalsError);
+      }
+      
+      // Get pending counts
+      const { data: pendingDeposits, error: pendingDepositsError } = await supabaseServer
+        .from('payment_requests')
+        .select('amount')
+        .eq('request_type', 'deposit')
+        .eq('status', 'pending');
+      
+      const { data: pendingWithdrawals, error: pendingWithdrawalsError } = await supabaseServer
+        .from('payment_requests')
+        .select('amount')
+        .eq('request_type', 'withdrawal')
+        .eq('status', 'pending');
+      
+      // Calculate totals
+      const approvedDepositsTotal = (approvedDeposits || []).reduce(
+        (sum, req) => sum + parseFloat(req.amount || '0'), 
+        0
+      );
+      
+      const approvedWithdrawalsTotal = (approvedWithdrawals || []).reduce(
+        (sum, req) => sum + parseFloat(req.amount || '0'), 
+        0
+      );
+      
+      const pendingDepositsTotal = (pendingDeposits || []).reduce(
+        (sum, req) => sum + parseFloat(req.amount || '0'), 
+        0
+      );
+      
+      const pendingWithdrawalsTotal = (pendingWithdrawals || []).reduce(
+        (sum, req) => sum + parseFloat(req.amount || '0'), 
+        0
+      );
+      
+      console.log('💰 Payments Summary:', {
+        approvedDepositsToday: approvedDepositsTotal,
+        approvedDepositsCount: approvedDeposits?.length || 0,
+        approvedWithdrawalsToday: approvedWithdrawalsTotal,
+        approvedWithdrawalsCount: approvedWithdrawals?.length || 0,
+        pendingDeposits: pendingDepositsTotal,
+        pendingWithdrawals: pendingWithdrawalsTotal
+      });
+      
+      return {
+        approvedDepositsToday: approvedDepositsTotal,
+        approvedWithdrawalsToday: approvedWithdrawalsTotal,
+        pendingDeposits: pendingDepositsTotal,
+        pendingWithdrawals: pendingWithdrawalsTotal,
+        approvedDepositsCount: approvedDeposits?.length || 0,
+        approvedWithdrawalsCount: approvedWithdrawals?.length || 0
+      };
+    } catch (error) {
+      console.error('Error getting payments summary:', error);
+      return {
+        approvedDepositsToday: 0,
+        approvedWithdrawalsToday: 0,
+        pendingDeposits: 0,
+        pendingWithdrawals: 0,
+        approvedDepositsCount: 0,
+        approvedWithdrawalsCount: 0
+      };
     }
   }
 
@@ -5239,7 +5386,7 @@ export class SupabaseStorage implements IStorage {
       .order('created_at', { ascending: false });
 
     if (usersError || !users) {
-      console.error('Error getting users for bonus analytics:', error);
+      console.error('Error getting users for bonus analytics:', usersError);
       return [];
     }
 
@@ -5290,15 +5437,24 @@ export class SupabaseStorage implements IStorage {
   }
 
   /**
-   * Get bonus settings
+   * Get bonus settings (admin + user)
+   *
+   * Normalizes values from `game_settings` into the flat shape used by:
+   * - Admin bonus settings page
+   * - Bonus calculation logic
    */
-  async getBonusSettings(): Promise<any> {
-    // Fetch all bonus-related settings from key-value table
+  async getBonusSettings(): Promise<{
+    depositBonusPercent: number;
+    referralBonusPercent: number;
+    conditionalBonusThreshold: number;
+    bonusClaimThreshold: number;
+    adminWhatsappNumber: string;
+  }> {
     const { data, error } = await supabaseServer
       .from('game_settings')
-      .select('*')
+      .select('setting_key, setting_value')
       .in('setting_key', [
-        'deposit_bonus_percent',
+        'default_deposit_bonus_percent',
         'referral_bonus_percent',
         'conditional_bonus_threshold',
         'bonus_claim_threshold',
@@ -5306,80 +5462,105 @@ export class SupabaseStorage implements IStorage {
       ]);
 
     if (error) {
-      console.error('Error fetching bonus settings:', error);
+      console.error('❌ Error fetching bonus settings:', error);
+      // Safe defaults that match previous behavior
+      return {
+        depositBonusPercent: 5,
+        referralBonusPercent: 1,
+        conditionalBonusThreshold: 30,
+        bonusClaimThreshold: 500,
+        adminWhatsappNumber: ''
+      };
     }
 
-    // Convert array of key-value pairs to object
-    const settings: any = {
-      depositBonusPercent: 5,
-      referralBonusPercent: 1,
-      conditionalBonusThreshold: 1000,
-      bonusClaimThreshold: 100,
-      adminWhatsappNumber: ''
+    const map = new Map<string, string>();
+    (data || []).forEach((row: any) => {
+      if (row.setting_key) {
+        map.set(row.setting_key, row.setting_value ?? '');
+      }
+    });
+
+    const toNumber = (key: string, def: number): number => {
+      const raw = map.get(key);
+      if (raw === undefined || raw === null || raw === '') return def;
+      const n = parseFloat(raw);
+      return isNaN(n) ? def : n;
     };
 
-    if (data) {
-      data.forEach((row: any) => {
-        switch (row.setting_key) {
-          case 'deposit_bonus_percent':
-            settings.depositBonusPercent = parseFloat(row.setting_value || '5');
-            break;
-          case 'referral_bonus_percent':
-            settings.referralBonusPercent = parseFloat(row.setting_value || '1');
-            break;
-          case 'conditional_bonus_threshold':
-            settings.conditionalBonusThreshold = parseFloat(row.setting_value || '1000');
-            break;
-          case 'bonus_claim_threshold':
-            settings.bonusClaimThreshold = parseFloat(row.setting_value || '100');
-            break;
-          case 'admin_whatsapp_number':
-            settings.adminWhatsappNumber = row.setting_value || '';
-            break;
-        }
-      });
-    }
-
-    return settings;
+    return {
+      depositBonusPercent: toNumber('default_deposit_bonus_percent', 5),
+      referralBonusPercent: toNumber('referral_bonus_percent', 1),
+      conditionalBonusThreshold: toNumber('conditional_bonus_threshold', 30),
+      bonusClaimThreshold: toNumber('bonus_claim_threshold', 500),
+      adminWhatsappNumber: map.get('admin_whatsapp_number') || ''
+    };
   }
 
   /**
    * Update bonus settings
+   *
+   * Accepts flat keys from the admin UI and upserts into `game_settings`
+   * using the canonical keys consumed by getBonusSettings().
    */
-  async updateBonusSettings(settings: any): Promise<void> {
-    // Update each setting individually in key-value table
-    const updates = [
-      { key: 'deposit_bonus_percent', value: String(settings.depositBonusPercent) },
-      { key: 'referral_bonus_percent', value: String(settings.referralBonusPercent) },
-      { key: 'conditional_bonus_threshold', value: String(settings.conditionalBonusThreshold) },
-      { key: 'bonus_claim_threshold', value: String(settings.bonusClaimThreshold) },
-      { key: 'admin_whatsapp_number', value: String(settings.adminWhatsappNumber || '') }
-    ];
+  async updateBonusSettings(settings: {
+    depositBonusPercent?: number;
+    referralBonusPercent?: number;
+    conditionalBonusThreshold?: number;
+    bonusClaimThreshold?: number;
+    adminWhatsappNumber?: string;
+  }): Promise<void> {
+    const updates: { key: string; value: string }[] = [];
 
-    for (const update of updates) {
-      // Try to update existing setting
-      const { error: updateError } = await supabaseServer
+    if (typeof settings.depositBonusPercent === 'number') {
+      updates.push({
+        key: 'default_deposit_bonus_percent',
+        value: settings.depositBonusPercent.toString()
+      });
+    }
+
+    if (typeof settings.referralBonusPercent === 'number') {
+      updates.push({
+        key: 'referral_bonus_percent',
+        value: settings.referralBonusPercent.toString()
+      });
+    }
+
+    if (typeof settings.conditionalBonusThreshold === 'number') {
+      updates.push({
+        key: 'conditional_bonus_threshold',
+        value: settings.conditionalBonusThreshold.toString()
+      });
+    }
+
+    if (typeof settings.bonusClaimThreshold === 'number') {
+      updates.push({
+        key: 'bonus_claim_threshold',
+        value: settings.bonusClaimThreshold.toString()
+      });
+    }
+
+    if (typeof settings.adminWhatsappNumber === 'string') {
+      updates.push({
+        key: 'admin_whatsapp_number',
+        value: settings.adminWhatsappNumber
+      });
+    }
+
+    for (const u of updates) {
+      const { error } = await supabaseServer
         .from('game_settings')
-        .update({
-          setting_value: update.value,
-          updated_at: new Date()
-        })
-        .eq('setting_key', update.key);
+        .upsert(
+          {
+            setting_key: u.key,
+            setting_value: u.value,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'setting_key' }
+        );
 
-      // If update didn't affect any rows, insert new setting
-      if (updateError) {
-        const { error: insertError } = await supabaseServer
-          .from('game_settings')
-          .insert({
-            setting_key: update.key,
-            setting_value: update.value,
-            description: `Bonus setting: ${update.key}`
-          });
-
-        if (insertError) {
-          console.error(`Error upserting setting ${update.key}:`, insertError);
-          throw new Error(`Failed to update setting: ${update.key}`);
-        }
+      if (error) {
+        console.error(`❌ Failed to update bonus setting ${u.key}:`, error);
+        throw new Error(`Failed to update bonus setting: ${u.key}`);
       }
     }
   }

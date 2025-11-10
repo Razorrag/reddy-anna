@@ -31,6 +31,8 @@ import {
 
     getPaymentRequestHistory,
 
+    getPaymentsSummary,
+
   } from '../controllers/adminController';
 
 import {
@@ -286,6 +288,8 @@ router.patch('/users/:userId/password', async (req, res) => {
 router.get('/payment-requests/pending', getPendingPaymentRequests);
 
 router.get('/payment-requests/history', getPaymentRequestHistory);
+
+router.get('/payments/summary', getPaymentsSummary);
 
 router.patch('/payment-requests/:requestId/approve', approvePaymentRequest);
 
