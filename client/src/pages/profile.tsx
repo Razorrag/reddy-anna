@@ -29,6 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { getPaymentWhatsAppNumber, createWhatsAppUrl } from '@/lib/whatsapp-helper';
+import { copyToClipboard } from '@/lib/utils';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import { useBalance } from '@/contexts/BalanceContext';
 import { WalletModal } from '@/components/WalletModal';
@@ -271,9 +272,19 @@ const Profile: React.FC = () => {
     setShowWalletModal(true);
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    // You could add a toast notification here
+  const handleCopyToClipboard = async (text: string) => {
+    // ✅ FIX: Use shared utility with proper HTTPS/secure context checks
+    const success = await copyToClipboard(text);
+    if (success) {
+      showNotification('Referral code copied to clipboard!', 'success');
+    } else {
+      // ✅ FIX: Show specific error for non-HTTPS contexts
+      if (!window.isSecureContext) {
+        showNotification('Clipboard access requires HTTPS. Please use a secure connection.', 'error');
+      } else {
+        showNotification('Failed to copy referral code. Please try again.', 'error');
+      }
+    }
   };
 
   const loadMoreTransactions = () => {
@@ -1498,7 +1509,7 @@ const Profile: React.FC = () => {
                         {profileState.user?.referralCode || 'RAJUGARIKOSSU' + user.id.slice(-6).toUpperCase()}
                       </div>
                       <Button
-                        onClick={() => copyToClipboard(profileState.user?.referralCode || 'RAJUGARIKOSSU' + user.id.slice(-6).toUpperCase())}
+                        onClick={() => handleCopyToClipboard(profileState.user?.referralCode || 'RAJUGARIKOSSU' + user.id.slice(-6).toUpperCase())}
                         variant="outline"
                         className="border-gold/30 text-gold hover:bg-gold/10"
                       >

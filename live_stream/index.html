@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Responsive Fullscreen HLS Video with Pause Button</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    width: 100vw;
+    background: #000;
+    overflow: hidden;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .video-container {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+    background-color: black;
+  }
+  video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    min-width: 100%;
+    min-height: 100%;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    object-position: center;
+    pointer-events: none;
+    display: block;
+  }
+  #pauseButton {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 30px;
+    background-color: #c00;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    z-index: 10;
+    display: none;
+  }
+  @media (min-width: 768px) {
+    .video-container {
+      width: 600px;
+      height: 400px;
+      margin: 50px auto 10px;
+    }
+    video {
+      position: static;
+      width: 600px;
+      height: 400px;
+      transform: none;
+      min-width: auto;
+      min-height: auto;
+    }
+    #pauseButton {
+      position: static;
+      transform: none;
+      margin: 10px auto 0;
+      display: none;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="video-container" aria-label="Video display area">
+    <video id="video" autoplay playsinline muted></video>
+  </div>
+  <button id="pauseButton" disabled>Pause</button>
+
+<script>
+  const video = document.getElementById('video');
+  const pauseButton = document.getElementById('pauseButton');
+
+  video.addEventListener('contextmenu', e => e.preventDefault());
+  window.addEventListener('keydown', e => {
+    if (document.activeElement === video) e.preventDefault();
+  });
+
+  function playHLS() {
+    const ts = Date.now();
+    const videoSrc = `https://stream.raajugarikossu.com/live/test/index.m3u8?ts=${ts}`;
+    if (Hls.isSupported()) {
+      const hls = new Hls({ liveSyncDurationCount: 3 });
+      hls.loadSource(videoSrc);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {});
+        pauseButton.style.display = 'block';
+        pauseButton.disabled = false;
+        pauseButton.textContent = 'Pause';
+      });
+      video.addEventListener('pause', () => {
+        pauseButton.textContent = 'Play';
+        pauseButton.style.display = 'block';
+      });
+      video.addEventListener('play', () => {
+        pauseButton.textContent = 'Pause';
+        pauseButton.style.display = 'block';
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = videoSrc;
+      video.addEventListener('loadedmetadata', () => {
+        video.play().catch(() => {});
+        pauseButton.style.display = 'block';
+        pauseButton.disabled = false;
+        pauseButton.textContent = 'Pause';
+      });
+      video.addEventListener('pause', () => {
+        pauseButton.textContent = 'Play';
+        pauseButton.style.display = 'block';
+      });
+      video.addEventListener('play', () => {
+        pauseButton.textContent = 'Pause';
+        pauseButton.style.display = 'block';
+      });
+    }
+  }
+  playHLS();
+  setInterval(playHLS, 10000);
+
+  pauseButton.addEventListener('click', () => {
+    if (video.paused) {
+      video.play();
+      pauseButton.textContent = 'Pause';
+    } else {
+      video.pause();
+      pauseButton.textContent = 'Play';
+    }
+  });
+
+  function unmuteOnInteraction() {
+    if (video.muted || video.volume === 0) {
+      video.muted = false;
+      video.volume = 1;
+      video.play();
+      pauseButton.style.display = 'block';
+      pauseButton.textContent = 'Pause';
+      document.body.removeEventListener('click', unmuteOnInteraction);
+      document.body.removeEventListener('touchstart', unmuteOnInteraction);
+    }
+  }
+  document.body.addEventListener('click', unmuteOnInteraction);
+  document.body.addEventListener('touchstart', unmuteOnInteraction);
+</script>
+</body>
+</html>

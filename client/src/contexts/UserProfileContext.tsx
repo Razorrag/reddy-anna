@@ -374,17 +374,27 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         dispatch({ type: 'SET_REFERRAL_DATA', payload: response.data });
       }
     } catch (error: any) {
-      // ✅ FIX: Suppress error gracefully - referral feature is optional
-      // Database schema issue: missing foreign key relationship
-      console.warn('Referral feature not available (database schema incomplete)');
+      // ✅ FIX: Log detailed error instead of silently caching fallback
+      console.error('❌ Failed to fetch referral data:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        endpoint: '/user/referral-data'
+      });
+      
       const fallbackData = { 
         totalReferrals: 0, 
         totalReferralEarnings: 0, 
-        referredUsers: [] 
+        referredUsers: [],
+        error: error.message || 'Failed to load referral data' // ✅ Track error state
       };
-      // Cache fallback data to prevent repeated failed requests
+      
+      // ✅ FIX: Only cache fallback for 5 minutes (not 24 hours) to allow retry
+      const SHORT_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
       localStorage.setItem('referral_data_cache', JSON.stringify(fallbackData));
       localStorage.setItem('referral_data_cache_timestamp', Date.now().toString());
+      localStorage.setItem('referral_data_cache_duration', SHORT_CACHE_DURATION.toString());
+      
       dispatch({ 
         type: 'SET_REFERRAL_DATA', 
         payload: fallbackData

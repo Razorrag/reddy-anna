@@ -142,7 +142,7 @@ app.use((req, res, next) => {
       "font-src 'self' data: https://fonts.gstatic.com; " +
       "connect-src 'self' ws: wss: http: https:; " +
       "media-src 'self' blob:; " +
-      "frame-src 'self' https://player.restream.io;"
+      "frame-src 'self' https://player.restream.io https://www.youtube.com https://youtube.com;"
     );
   }
   

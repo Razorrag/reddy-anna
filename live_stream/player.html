@@ -65,7 +65,11 @@
     <script>
         const video = document.getElementById('video');
         const status = document.getElementById('status');
-        const streamUrl = 'http://91.108.110.72:8000/live/test/index.m3u8';
+
+        // Stream URL for working VPS (update here before deploying if needed)
+        // This is ONLY for this standalone player.html used on the streaming server.
+        // The main app uses /api/stream/simple-config instead of this hardcoded value.
+        const streamUrl = 'http://72.61.170.227:8000/live/test/index.m3u8';
 
         function showStatus(message, type = 'loading') {
             status.textContent = message;

@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import AnalyticsDashboard from "@/components/AnalyticsDashboard";
+import LiveBetMonitoring from "@/components/LiveBetMonitoring";
 import { BarChart3 } from "lucide-react";
 import AdminLayout from "@/components/AdminLayout";
 
@@ -20,6 +21,14 @@ export default function AdminAnalytics() {
                 Export Report
               </Button>
             </div>
+          </div>
+        </div>
+
+        {/* Live Bet Monitoring */}
+        <div className="max-w-7xl mx-auto mb-8">
+          <h2 className="text-2xl font-bold text-gold mb-4">🧭 Live Bet Monitoring</h2>
+          <div className="bg-black/40 border-gold/30 backdrop-blur-sm rounded-lg p-4">
+            <LiveBetMonitoring />
           </div>
         </div>
 

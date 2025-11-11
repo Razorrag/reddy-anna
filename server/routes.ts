@@ -725,9 +725,15 @@ const getCurrentGameStateForUser = async (userId: string) => {
       baharCards: currentGameState.baharCards,
       winner: currentGameState.winner,
       winningCard: currentGameState.winningCard,
-      // DO NOT send round1Bets/round2Bets (total bets) to players - only admins see total bets
-      // round1Bets: currentGameState.round1Bets, // REMOVED - total bets from all players
-      // round2Bets: currentGameState.round2Bets, // REMOVED - total bets from all players
+      // ✅ FIX: Include total bets for admins ONLY (fixes "0 after refresh" for admin dashboard)
+      ...(user.role === 'admin' ? {
+        round1Bets: currentGameState.round1Bets, // Total bets from all players (admin only)
+        round2Bets: currentGameState.round2Bets, // Total bets from all players (admin only)
+        totalBets: {
+          andar: (currentGameState.round1Bets?.andar || 0) + (currentGameState.round2Bets?.andar || 0),
+          bahar: (currentGameState.round1Bets?.bahar || 0) + (currentGameState.round2Bets?.bahar || 0)
+        }
+      } : {}),
       // User-specific data only
       userBalance: userBalance,
       userBets: {
