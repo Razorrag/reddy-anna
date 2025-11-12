@@ -334,11 +334,14 @@ const GameHistoryPage: React.FC = () => {
       {/* Results Summary */}
       <div className="max-w-7xl mx-auto mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Total Games - use pagination.total from backend, not local history length */}
           <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
             <CardContent className="pt-6">
               <div className="text-center">
                 <p className="text-purple-300 text-sm">Total Games</p>
-                <p className="text-2xl font-bold text-white">{pagination.total}</p>
+                <p className="text-2xl font-bold text-white">
+                  {pagination.total || 0}
+                </p>
               </div>
             </CardContent>
           </Card>

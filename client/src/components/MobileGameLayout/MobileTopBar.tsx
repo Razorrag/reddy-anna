@@ -35,11 +35,10 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
   const { showNotification } = useNotification();
   const [isClaiming, setIsClaiming] = React.useState(false);
   
-  // ✅ FIX: Fetch bonus info only on mount, not on every balance change
-  // WebSocket will handle bonus updates in real-time
+  // Fetch unified bonus summary/info once; WebSocket + context keep it in sync
   React.useEffect(() => {
     fetchBonusInfo();
-  }, []); // Only fetch on mount, prevents 100+ API calls per session
+  }, [fetchBonusInfo]);
   
   // Use props gameState if provided, otherwise use context
   const gameState = propsGameState || contextGameState;
@@ -47,10 +46,14 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
   // Ensure balance is always a valid number and visible
   const displayBalance = typeof userBalance === 'number' ? userBalance : 0;
   
-  // Get bonus info
-  const bonusInfo = profileState.bonusInfo;
-  const totalBonus = (bonusInfo?.depositBonus || 0) + (bonusInfo?.referralBonus || 0);
-  const hasBonus = totalBonus > 0;
+  // Use unified cumulative bonus from context:
+  // - bonusSummary.totals.available already represents total available bonus across deposits/referrals.
+  // - bonusInfo (derived) kept for compatibility but not used for amount to avoid "latest-only" bug.
+  const bonusSummary = (profileState as any).bonusSummary;
+  const availableBonus = bonusSummary?.totals?.available || 0;
+
+  const bonusInfo = profileState.bonusInfo; // contains derived flags like bonusLocked/wageringProgress when provided
+  const hasBonus = availableBonus > 0;
 
   const handleProfileClick = () => {
     setLocation('/profile');
@@ -59,7 +62,7 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
   const handleClaimBonus = async () => {
     if (isClaiming) return;
     
-    // ✅ Check if bonus is locked (wagering requirement not met)
+    // Check if bonus is locked (if backend provides this info via derived bonusInfo)
     if (bonusInfo?.bonusLocked) {
       const progress = bonusInfo.wageringProgress || 0;
       showNotification(
@@ -73,8 +76,12 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
     try {
       const result = await claimBonus();
       if (result.success) {
-        showNotification(`Bonus claimed! ₹${totalBonus.toLocaleString('en-IN')} added to your balance`, 'success');
-        await fetchBonusInfo(); // Refresh bonus info
+        // Use availableBonus here so multiple deposit bonuses are correctly included
+        showNotification(
+          `Bonus claimed! ₹${availableBonus.toLocaleString('en-IN')} added to your balance`,
+          'success'
+        );
+        await fetchBonusInfo(); // Refresh summary/bonus info
       } else {
         showNotification(result.error || 'Failed to claim bonus', 'error');
       }
@@ -135,22 +142,30 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
                     ? 'bg-gradient-to-r from-yellow-500/30 to-orange-600/30 border-2 border-yellow-400 hover:from-yellow-500/40 hover:to-orange-600/40 hover:border-yellow-300 shadow-yellow-500/20'
                     : 'bg-gradient-to-r from-green-500/30 to-green-600/30 border-2 border-green-400 hover:from-green-500/40 hover:to-green-600/40 hover:border-green-300 shadow-green-500/20 animate-pulse'
                 }`}
-                title={bonusInfo?.bonusLocked ? `Locked: ${bonusInfo.wageringProgress.toFixed(0)}% wagering complete` : 'Click to claim bonus'}
+                title={
+                  bonusInfo?.bonusLocked && bonusInfo.wageringProgress !== undefined
+                    ? `Locked: ${bonusInfo.wageringProgress.toFixed(0)}% wagering complete`
+                    : 'Click to claim bonus'
+                }
               >
                 {bonusInfo?.bonusLocked ? (
                   <>
                     <svg className="w-4 h-4 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                      <path
+                        fillRule="evenodd"
+                        d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                     <span className="text-yellow-300 font-bold text-sm">
-                      ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      ₹{availableBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </span>
                   </>
                 ) : (
                   <>
                     <Gift className="w-4 h-4 text-green-300" />
                     <span className="text-green-300 font-bold text-sm">
-                      ₹{totalBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      ₹{availableBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </span>
                   </>
                 )}

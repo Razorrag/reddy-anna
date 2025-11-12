@@ -33,7 +33,11 @@ const config = {
       {
         app: 'live',
         hls: true,
-        hlsFlags: '[hls_time=1:hls_list_size=3:hls_flags=delete_segments]',
+        // Low-latency HLS:
+        // - hls_time=0.5 → 0.5s segments
+        // - hls_list_size=2 → keep only 2 segments in playlist
+        // - delete_segments → remove old segments to avoid growing latency
+        hlsFlags: '[hls_time=0.5:hls_list_size=2:hls_flags=delete_segments]',
         dash: false,
       },
     ],

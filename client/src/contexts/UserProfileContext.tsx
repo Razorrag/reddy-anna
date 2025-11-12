@@ -105,10 +105,31 @@ export interface UserProfile {
 }
 
 // Context state
+interface BonusSummary {
+  depositBonuses: {
+    unlocked: number;
+    locked: number;
+    credited: number;
+    total: number;
+  };
+  referralBonuses: {
+    pending: number;
+    credited: number;
+    total: number;
+  };
+  totals: {
+    available: number;
+    credited: number;
+    lifetime: number;
+  };
+}
+
 interface UserProfileState {
   user: UserProfile | null;
   analytics: UserAnalytics | null;
+  // bonusInfo is kept for backward compatibility, but underlying data comes from unified bonus summary
   bonusInfo: BonusInfo | null;
+  bonusSummary: BonusSummary | null;
   referralData: ReferralData | null;
   transactions: Transaction[];
   gameHistory: GameHistoryEntry[];
@@ -127,6 +148,7 @@ type UserProfileAction =
   | { type: 'SET_USER'; payload: UserProfile | null }
   | { type: 'SET_ANALYTICS'; payload: UserAnalytics | null }
   | { type: 'SET_BONUS_INFO'; payload: BonusInfo | null }
+  | { type: 'SET_BONUS_SUMMARY'; payload: BonusSummary | null }
   | { type: 'SET_REFERRAL_DATA'; payload: ReferralData | null }
   | { type: 'SET_TRANSACTIONS'; payload: { transactions: Transaction[]; hasMore: boolean; append?: boolean } }
   | { type: 'SET_GAME_HISTORY'; payload: { games: GameHistoryEntry[]; hasMore: boolean; append?: boolean } }
@@ -139,6 +161,7 @@ const initialState: UserProfileState = {
   user: null,
   analytics: null,
   bonusInfo: null,
+  bonusSummary: null,
   referralData: null,
   transactions: [],
   gameHistory: [],
@@ -167,6 +190,9 @@ const userProfileReducer = (state: UserProfileState, action: UserProfileAction):
     
     case 'SET_BONUS_INFO':
       return { ...state, bonusInfo: action.payload };
+
+    case 'SET_BONUS_SUMMARY':
+      return { ...state, bonusSummary: action.payload };
     
     case 'SET_REFERRAL_DATA':
       return { ...state, referralData: action.payload };
@@ -317,21 +343,44 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       try {
         const user = JSON.parse(userStr);
         if (user.role === 'admin' || user.role === 'super_admin') {
-          return; // Admins don't have bonuses
+          return;
         }
-      } catch (e) {
-        // Continue if parsing fails
+      } catch {
+        // Ignore parse errors
       }
     }
-    
+
     try {
-      const response = await apiClient.get('/user/bonus-info') as any;
-      if (response.success && response.data) {
-        dispatch({ type: 'SET_BONUS_INFO', payload: response.data });
+      // Use unified bonus summary as single source of truth
+      const summaryRes = await apiClient.get('/api/user/bonus-summary') as any;
+
+      if (summaryRes?.success && summaryRes.data) {
+        const summary: BonusSummary = summaryRes.data;
+        dispatch({ type: 'SET_BONUS_SUMMARY', payload: summary });
+
+        // Derive legacy BonusInfo shape from summary for backward compatibility
+        const derivedBonusInfo: BonusInfo = {
+          depositBonus: summary.depositBonuses?.unlocked || 0,
+          referralBonus: summary.referralBonuses?.credited || 0,
+          totalBonus:
+            (summary.depositBonuses?.unlocked || 0) +
+            (summary.referralBonuses?.credited || 0),
+          wageringRequired: 0,
+          wageringCompleted: 0,
+          wageringProgress: 0,
+          bonusLocked: false
+        };
+
+        dispatch({ type: 'SET_BONUS_INFO', payload: derivedBonusInfo });
+      } else {
+        // Fallback: clear on bad response
+        dispatch({ type: 'SET_BONUS_SUMMARY', payload: null });
+        dispatch({ type: 'SET_BONUS_INFO', payload: null });
       }
     } catch (error: any) {
-      console.error('Failed to fetch bonus info:', error);
+      console.error('Failed to fetch bonus summary:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to fetch bonus information' });
+      dispatch({ type: 'SET_BONUS_SUMMARY', payload: null });
     }
   }, []);
 
@@ -771,7 +820,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     const handleBonusUpdate = async (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log('🎁 Bonus update received:', customEvent.detail);
-      // Refresh bonus info and analytics when bonus changes
+      // Refresh bonus summary/bonus info and analytics when bonus changes
       await Promise.all([
         fetchBonusInfo(),
         fetchAnalytics()

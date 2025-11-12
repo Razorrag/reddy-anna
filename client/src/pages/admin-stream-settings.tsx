@@ -13,6 +13,12 @@ export default function AdminStreamSettings() {
   const [, setLocation] = useLocation();
   const [streamUrl, setStreamUrl] = useState('');
   const [isActive, setIsActive] = useState(false);
+
+  // NEW: Let admin choose how to play the URL
+  // "iframe" for YouTube/embed players
+  // "video" for direct MP4/HLS (.m3u8)
+  const [streamType, setStreamType] = useState<'iframe' | 'video'>('iframe');
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
@@ -25,10 +31,21 @@ export default function AdminStreamSettings() {
   const loadConfig = async () => {
     setLoading(true);
     try {
+      // Fetch existing simple stream configuration
       const response = await apiClient.get<any>('/stream/simple-config');
       if (response.success && response.data) {
-        setStreamUrl(response.data.streamUrl || '');
-        setIsActive(response.data.isActive || false);
+        const cfg = response.data;
+        setStreamUrl(cfg.streamUrl || '');
+        setIsActive(cfg.isActive || false);
+
+        // If backend has streamType, use it, else infer from URL
+        if (cfg.streamType === 'video' || cfg.streamType === 'iframe') {
+          setStreamType(cfg.streamType);
+        } else if (cfg.streamUrl && cfg.streamUrl.toLowerCase().endsWith('.m3u8')) {
+          setStreamType('video');
+        } else {
+          setStreamType('iframe');
+        }
       }
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -40,26 +57,35 @@ export default function AdminStreamSettings() {
   const saveConfig = async () => {
     setSaving(true);
     setMessage(null);
+
     try {
-      const response = await apiClient.post<any>('/stream/simple-config', {
+      if (!streamUrl) {
+        setMessage({ type: 'error', text: 'Stream URL is required' });
+        setSaving(false);
+        return;
+      }
+
+      const payload = {
         streamUrl,
-        streamType: 'iframe',
+        streamType, // 'iframe' or 'video' from UI toggle
         isActive,
         streamTitle: 'Live Game Stream',
         autoplay: true,
         muted: true,
-        controls: false
-      });
-      
+        controls: streamType === 'video' ? false : true
+      };
+
+      const response = await apiClient.post<any>('/stream/simple-config', payload);
+
       if (response.success) {
         setMessage({ type: 'success', text: 'Stream settings saved successfully!' });
         setTimeout(() => setMessage(null), 3000);
       } else {
-        setMessage({ type: 'error', text: 'Failed to save settings' });
+        setMessage({ type: 'error', text: response.error || 'Failed to save settings' });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save config:', error);
-      setMessage({ type: 'error', text: 'Failed to save settings' });
+      setMessage({ type: 'error', text: error?.message || 'Failed to save settings' });
     } finally {
       setSaving(false);
     }
@@ -102,11 +128,45 @@ export default function AdminStreamSettings() {
                   type="text"
                   value={streamUrl}
                   onChange={(e) => setStreamUrl(e.target.value)}
-                  placeholder="Enter your stream URL (HLS, YouTube embed, etc.)"
+                  placeholder="Enter your stream URL (HLS .m3u8, MP4, or YouTube embed)"
                   className="w-full px-4 py-3 bg-black/50 border border-green-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 transition-colors"
                 />
                 <p className="text-xs text-gray-500 mt-2">
-                  Example: http://91.108.110.72:8000/live/test/index.m3u8
+                  For HLS use: https://yourserver.com/live/stream/index.m3u8
+                </p>
+              </div>
+
+              {/* Stream Type Selector */}
+              <div>
+                <label className="block text-sm font-semibold text-gold mb-2">
+                  How should we play this URL?
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setStreamType('iframe')}
+                    className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
+                      streamType === 'iframe'
+                        ? 'bg-gold text-black shadow-lg'
+                        : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-gold/40'
+                    }`}
+                  >
+                    iFrame (YouTube / Embed)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStreamType('video')}
+                    className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
+                      streamType === 'video'
+                        ? 'bg-green-500 text-black shadow-lg'
+                        : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-green-400/40'
+                    }`}
+                  >
+                    Video (MP4 / HLS .m3u8)
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Select "Video" for HLS (.m3u8) or direct MP4 links. Use "iFrame" only for embed URLs.
                 </p>
               </div>
 
@@ -170,19 +230,21 @@ export default function AdminStreamSettings() {
           <div className="space-y-4 text-sm text-gray-300">
             <div>
               <strong className="text-blue-300">HLS Stream (.m3u8):</strong>
-              <p className="text-gray-400 font-mono text-xs mt-1">http://91.108.110.72:8000/live/test/index.m3u8</p>
+              <p className="text-gray-400 font-mono text-xs mt-1">
+                Use with "Video" type. Example: https://yourserver.com/live/stream/index.m3u8
+              </p>
             </div>
             <div>
-              <strong className="text-blue-300">YouTube Embed:</strong>
-              <p className="text-gray-400 font-mono text-xs mt-1">https://www.youtube.com/embed/VIDEO_ID</p>
+              <strong className="text-blue-300">YouTube Embed (iFrame):</strong>
+              <p className="text-gray-400 font-mono text-xs mt-1">
+                Use with "iFrame" type. Example: https://www.youtube.com/embed/VIDEO_ID
+              </p>
             </div>
             <div>
-              <strong className="text-blue-300">Custom Player:</strong>
-              <p className="text-gray-400 font-mono text-xs mt-1">https://live-streaming-frontend.onrender.com/</p>
-            </div>
-            <div>
-              <strong className="text-blue-300">Direct MP4:</strong>
-              <p className="text-gray-400 font-mono text-xs mt-1">https://yourserver.com/video.mp4</p>
+              <strong className="text-blue-300">Direct MP4 (Video):</strong>
+              <p className="text-gray-400 font-mono text-xs mt-1">
+                Use with "Video" type. Example: https://yourserver.com/video.mp4
+              </p>
             </div>
           </div>
         </div>
