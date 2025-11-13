@@ -20,35 +20,41 @@ interface VideoAreaProps {
   isScreenSharing?: boolean; // No longer used, kept for backward compatibility
 }
 
-interface GameCompleteResult {
-  winner: 'andar' | 'bahar' | null;
-  winningCard: any;
-  payoutAmount: number;
-  totalBetAmount: number;
-  result: 'win' | 'loss' | 'no_bet' | 'refund' | 'mixed';
-  round: number;
-  // Detailed bet breakdown for mixed scenarios
-  playerBets?: {
-    round1: { andar: number; bahar: number };
-    round2: { andar: number; bahar: number };
-  };
-  // Profit/loss details
-  netProfit?: number;
-  isRefundOnly?: boolean;
-}
-
 const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const { gameState } = useGameState();
   
   // Use the gameState.timer directly
   const localTimer = gameState.countdownTimer;
   const [isPulsing, setIsPulsing] = useState(false);
-  const [gameResult, setGameResult] = useState<GameCompleteResult | null>(null);
-  const [showResult, setShowResult] = useState(false);
 
   // Stream configuration from backend
   const [streamConfig, setStreamConfig] = useState<any>(null);
   const [streamLoading, setStreamLoading] = useState(true);
+  
+  // Live viewer count - using totalPlayers from backend
+  const [liveViewerCount, setLiveViewerCount] = useState<number>(0);
+
+  // Fetch totalPlayers from backend
+  useEffect(() => {
+    const fetchTotalPlayers = async () => {
+      try {
+        const response = await fetch('/api/game/current-state');
+        const data = await response.json();
+        if (data && typeof data.totalPlayers === 'number') {
+          setLiveViewerCount(data.totalPlayers);
+        }
+      } catch (error) {
+        console.error('❌ Failed to fetch total players:', error);
+      }
+    };
+
+    // Fetch immediately
+    fetchTotalPlayers();
+
+    // Update every 3 seconds to keep live count accurate
+    const interval = setInterval(fetchTotalPlayers, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Load stream configuration with auto-refresh
   useEffect(() => {
@@ -152,6 +158,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => clearInterval(refreshInterval);
   }, []);
 
+
   // Handle pulse effect when less than 5 seconds
   useEffect(() => {
     if (localTimer <= 5 && localTimer > 0) {
@@ -160,91 +167,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       setIsPulsing(false);
     }
   }, [localTimer]);
-
-  // Listen for game complete celebration events
-  useEffect(() => {
-    const handleGameComplete = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const detail = customEvent.detail;
-      
-      console.log('🎉 CELEBRATION EVENT RECEIVED:', detail);
-      console.log('📊 Game State Phase:', gameState.phase);
-      console.log('📊 Current Round:', gameState.currentRound);
-      console.log('📊 Show Result State (before):', showResult);
-      console.log('📊 Game Result State (before):', gameResult);
-      
-      if (detail?.winner) {
-        const payoutAmount = detail.localWinAmount || 0;
-        const totalBetAmount = detail.totalBetAmount || 0;
-        const netProfit = payoutAmount - totalBetAmount;
-        
-        // Determine detailed result type
-        let resultType: 'win' | 'loss' | 'no_bet' | 'refund' | 'mixed' = detail.result || 'no_bet';
-        let isRefundOnly = false;
-        
-        // Check if this is a refund scenario (payout equals bet, no profit)
-        if (totalBetAmount > 0 && payoutAmount === totalBetAmount) {
-          resultType = 'refund';
-          isRefundOnly = true;
-        }
-        // Check for mixed bets (bet on both sides)
-        else if (detail.playerBets) {
-          const { round1, round2 } = detail.playerBets;
-          const hasAndarBets = (round1.andar + round2.andar) > 0;
-          const hasBaharBets = (round1.bahar + round2.bahar) > 0;
-          if (hasAndarBets && hasBaharBets) {
-            resultType = 'mixed';
-          }
-        }
-        
-        const celebrationData = {
-          winner: detail.winner,
-          winningCard: detail.winningCard || gameState.winningCard,
-          payoutAmount,
-          totalBetAmount,
-          result: resultType,
-          round: detail.round || gameState.currentRound,
-          netProfit,
-          playerBets: detail.playerBets,
-          isRefundOnly
-        };
-        
-        console.log('🎊 SETTING GAME RESULT:', celebrationData);
-        console.log('💰 Payout Amount:', payoutAmount);
-        console.log('💵 Total Bet:', totalBetAmount);
-        console.log('💚 Net Profit:', netProfit);
-        console.log('🎯 Result Type:', resultType);
-        
-        setGameResult(celebrationData);
-        setShowResult(true);
-        console.log('✅ CELEBRATION TRIGGERED - showResult set to TRUE');
-        
-        // Auto-hide after longer duration to ensure user sees it
-        const duration = resultType === 'no_bet' ? 3000 : 8000; // Increased from 5000 to 8000
-        console.log(`⏰ Celebration will hide after ${duration}ms`);
-        setTimeout(() => {
-          console.log('⏰ HIDING CELEBRATION after', duration, 'ms');
-          setShowResult(false);
-          setTimeout(() => {
-            console.log('🧹 CLEARING GAME RESULT');
-            setGameResult(null);
-          }, 500);
-        }, duration);
-      }
-    };
-
-    window.addEventListener('game-complete-celebration', handleGameComplete as EventListener);
-    return () => window.removeEventListener('game-complete-celebration', handleGameComplete as EventListener);
-  }, []); // ✅ FIXED: Empty deps to prevent duplicate listeners
-
-  // ❌ DISABLED: This was causing celebrations to hide immediately
-  // The phase can change before the celebration renders, causing it to never show
-  // useEffect(() => {
-  //   if (gameState.phase !== 'complete') {
-  //     setShowResult(false);
-  //     setTimeout(() => setGameResult(null), 500);
-  //   }
-  // }, [gameState.phase]);
 
   // Get timer color based on phase
   const getTimerColor = () => {
@@ -358,6 +280,18 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     }
   };
 
+  // Determine if stream is live
+  const isLive = !!(streamConfig?.isActive && streamConfig?.streamUrl);
+  
+  console.log('🎥 VideoArea render state:', {
+    isLive,
+    streamConfigExists: !!streamConfig,
+    isActive: streamConfig?.isActive,
+    hasUrl: !!streamConfig?.streamUrl,
+    liveViewerCount,
+    phase: gameState.phase
+  });
+
   return (
     <div className={`relative bg-black overflow-hidden ${className}`}>
       {/* Embedded Video Stream - Runs independently in background, never interrupted */}
@@ -367,6 +301,28 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         {/* Overlay Gradient for better text visibility */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" style={{ zIndex: 2 }} />
       </div>
+
+      {/* LIVE Badge - Top Left */}
+      {isLive && (
+        <div className="absolute top-3 left-3 z-40">
+          <div className="flex items-center gap-2 bg-red-600/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+            <span className="text-white font-bold text-xs uppercase tracking-wider">LIVE</span>
+          </div>
+        </div>
+      )}
+
+      {/* Viewer Count - Top Right - Show when stream is live */}
+      {isLive && (
+        <div className="absolute top-3 right-3 z-40">
+          <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full">
+            <span className="text-red-400 text-[10px]">👁</span>
+            <span className="text-white text-xs font-medium">
+              {liveViewerCount > 0 ? liveViewerCount.toLocaleString() : '—'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Circular Timer Overlay - CENTERED - ONLY VISIBLE DURING BETTING */}
       {gameState.phase === 'betting' && (
@@ -439,258 +395,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           </div>
         </div>
       )}
-
-      {/* Game Result Overlay - Shows when showResult is true */}
-      <AnimatePresence>
-        {showResult && gameResult && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none"
-          >
-            {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-            
-            {/* Result Card */}
-            <motion.div
-              initial={{ scale: 0.8, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.8, y: 20 }}
-              transition={{ type: "spring", duration: 0.5 }}
-              className="relative z-10 max-w-sm w-full mx-4"
-            >
-              {gameResult.result === 'win' || gameResult.result === 'refund' || gameResult.result === 'mixed' ? (
-                // WIN / REFUND / MIXED - Celebration with detailed breakdown
-                <div className={`rounded-2xl p-6 border-4 shadow-2xl ${
-                  gameResult.result === 'refund' 
-                    ? 'bg-gradient-to-br from-blue-600/90 via-blue-700/90 to-blue-800/90 border-blue-400'
-                    : gameResult.result === 'mixed'
-                    ? (gameResult.netProfit && gameResult.netProfit > 0
-                      ? 'bg-gradient-to-br from-green-600/90 via-green-700/90 to-green-800/90 border-green-400'
-                      : 'bg-gradient-to-br from-orange-600/90 via-orange-700/90 to-orange-800/90 border-orange-400')
-                    : 'bg-gradient-to-br from-yellow-600/90 via-yellow-700/90 to-yellow-800/90 border-yellow-400'
-                }`}>
-                  {/* Icon */}
-                  <motion.div
-                    initial={{ scale: 0, rotate: -180 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ delay: 0.2, type: "spring" }}
-                    className="text-center mb-4"
-                  >
-                    <div className="text-6xl">
-                      {gameResult.result === 'refund' ? '💰' : gameResult.result === 'mixed' ? '🎲' : '🏆'}
-                    </div>
-                  </motion.div>
-                  
-                  {/* Winner Text */}
-                  <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="text-center mb-4"
-                  >
-                    <div className="text-3xl font-black text-white mb-2">
-                      {gameResult.winner === 'andar' 
-                        ? 'ANDAR WON!' 
-                        : (gameResult.round >= 3 ? 'BAHAR WON!' : 'BABA WON!')}
-                    </div>
-                    <div className="text-xl font-bold text-yellow-200">
-                      {typeof gameResult.winningCard === 'string' 
-                        ? gameResult.winningCard 
-                        : gameResult.winningCard?.display || 'Winning Card'}
-                    </div>
-                    {/* Round Info */}
-                    <div className="text-sm font-semibold text-white/80 mt-1">
-                      Round {gameResult.round} Completed
-                    </div>
-                  </motion.div>
-                  
-                  {/* Payout Details */}
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.5, type: "spring" }}
-                    className="bg-black/50 rounded-xl p-4 mb-2 border-2 border-white/30"
-                  >
-                    <div className="text-center">
-                      {gameResult.result === 'refund' ? (
-                        // REFUND ONLY (Bahar R1 win) - ENHANCED DISPLAY
-                        <>
-                          <div className="text-xl font-black text-blue-300 mb-2 uppercase tracking-wider">
-                            💵 BET REFUNDED
-                          </div>
-                          {/* REFUND AMOUNT - Prominent */}
-                          <div className="text-5xl font-black text-white mb-2 drop-shadow-[0_0_20px_rgba(59,130,246,0.5)]">
-                            ₹{gameResult.payoutAmount.toLocaleString('en-IN')}
-                          </div>
-                          {/* EXPLANATION */}
-                          <div className="bg-blue-500/20 rounded-lg py-2 px-4 border-2 border-blue-400/50">
-                            <div className="text-sm text-blue-200">
-                              {gameResult.round === 1 ? 'Bahar Round 1: 1:0 Payout' : 'Your bet was returned'}
-                            </div>
-                            <div className="text-xs text-blue-300/70 mt-1">
-                              No profit, no loss
-                            </div>
-                          </div>
-                        </>
-                      ) : gameResult.result === 'mixed' ? (
-                        // MIXED BETS (Bet on both sides) - ENHANCED DISPLAY
-                        <>
-                          <div className="text-xl font-black text-white/90 mb-2 uppercase tracking-wider">
-                            {gameResult.netProfit && gameResult.netProfit > 0 ? '🎯 NET PROFIT' : '📊 NET LOSS'}
-                          </div>
-                          {/* NET RESULT - Most prominent */}
-                          <div className={`text-5xl font-black mb-2 drop-shadow-[0_0_20px_rgba(0,0,0,0.5)] ${
-                            gameResult.netProfit && gameResult.netProfit > 0 ? 'text-green-300' : 'text-orange-300'
-                          }`}>
-                            {gameResult.netProfit && gameResult.netProfit > 0 ? '+' : ''}
-                            ₹{Math.abs(gameResult.netProfit || 0).toLocaleString('en-IN')}
-                          </div>
-                          {/* BREAKDOWN - Clear details */}
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div className="bg-green-500/20 rounded-lg p-2 border border-green-500/30">
-                              <div className="text-xs text-green-200">Payout</div>
-                              <div className="text-lg font-bold text-white">₹{gameResult.payoutAmount.toLocaleString('en-IN')}</div>
-                            </div>
-                            <div className="bg-red-500/20 rounded-lg p-2 border border-red-500/30">
-                              <div className="text-xs text-red-200">Total Bet</div>
-                              <div className="text-lg font-bold text-white">₹{gameResult.totalBetAmount.toLocaleString('en-IN')}</div>
-                            </div>
-                          </div>
-                          <div className="text-xs text-white/50 mt-2">
-                            You bet on both Andar & Bahar
-                          </div>
-                        </>
-                      ) : (
-                        // PURE WIN - ENHANCED DISPLAY
-                        <>
-                          <div className="text-xl font-black text-yellow-300 mb-2 uppercase tracking-wider">
-                            🏆 YOU WON!
-                          </div>
-                          {/* YOUR WIN AMOUNT - Most prominent (what user actually won) */}
-                          <div className="text-6xl font-black text-green-300 mb-3 drop-shadow-[0_0_20px_rgba(74,222,128,0.6)] animate-pulse">
-                            +₹{(gameResult.netProfit || 0).toLocaleString('en-IN')}
-                          </div>
-                          <div className="text-sm text-green-200/80 mb-3 font-semibold">
-                            Your Win Amount
-                          </div>
-                          
-                          {/* BREAKDOWN - Clear details */}
-                          <div className="bg-black/40 rounded-lg p-3 space-y-2 border border-yellow-400/30">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-gray-300">Total Payout:</span>
-                              <span className="text-sm font-bold text-white">₹{gameResult.payoutAmount.toLocaleString('en-IN')}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-gray-300">Your Bet:</span>
-                              <span className="text-sm font-bold text-red-300">-₹{gameResult.totalBetAmount.toLocaleString('en-IN')}</span>
-                            </div>
-                            <div className="h-px bg-yellow-400/30"></div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm font-bold text-yellow-200">Net Profit:</span>
-                              <span className="text-lg font-black text-green-300">+₹{(gameResult.netProfit || 0).toLocaleString('en-IN')}</span>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </motion.div>
-                  
-                  {/* Confetti Effect - Only for pure wins */}
-                  {gameResult.result === 'win' && (
-                    <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl">
-                      {[...Array(20)].map((_, i) => (
-                        <motion.div
-                          key={i}
-                          initial={{
-                            x: '50%',
-                            y: '50%',
-                            scale: 0,
-                            rotate: 0
-                          }}
-                          animate={{
-                            x: Math.random() * 100 + '%',
-                            y: Math.random() * 100 + '%',
-                            scale: [0, 1, 0],
-                            rotate: Math.random() * 360
-                          }}
-                          transition={{
-                            duration: 2 + Math.random(),
-                            delay: Math.random() * 0.5,
-                            repeat: Infinity
-                          }}
-                          className="absolute w-2 h-2 rounded-full"
-                          style={{
-                            backgroundColor: ['#ffd700', '#ff6b6b', '#4ecdc4'][Math.floor(Math.random() * 3)]
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : gameResult.result === 'loss' ? (
-                // LOSS - Better luck next time
-                <div className="bg-gradient-to-br from-gray-800/90 via-gray-700/90 to-gray-800/90 rounded-2xl p-6 border-4 border-gray-500 shadow-2xl">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring" }}
-                    className="text-center"
-                  >
-                    <div className="text-5xl mb-4">😔</div>
-                    <div className="text-2xl font-bold text-white mb-2">
-                      {gameResult.winner === 'andar' 
-                        ? 'ANDAR WON' 
-                        : (gameResult.round >= 3 ? 'BAHAR WON' : 'BABA WON')}
-                    </div>
-                    <div className="text-xl font-semibold text-gray-300 mb-3">
-                      Better Luck Next Round!
-                    </div>
-                    <div className="text-sm text-gray-400 mb-3">
-                      {typeof gameResult.winningCard === 'string' 
-                        ? gameResult.winningCard 
-                        : gameResult.winningCard?.display || 'Winning Card'}
-                    </div>
-                    {/* Loss Amount */}
-                    <div className="bg-black/50 rounded-lg p-3 border border-red-500/30">
-                      <div className="text-sm text-red-400 mb-1">Lost</div>
-                      <div className="text-2xl font-bold text-red-300">
-                        -₹{gameResult.totalBetAmount.toLocaleString('en-IN')}
-                      </div>
-                    </div>
-                  </motion.div>
-                </div>
-              ) : (
-                // NO BET - Just show winner
-                <div className="bg-gradient-to-br from-purple-800/90 via-purple-700/90 to-purple-800/90 rounded-2xl p-6 border-4 border-purple-400 shadow-2xl">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0 }}
-                    transition={{ type: "spring" }}
-                    className="text-center"
-                  >
-                    <div className="text-4xl mb-3">🎴</div>
-                    <div className="text-3xl font-black text-white mb-2">
-                      {gameResult.winner === 'andar' 
-                        ? 'ANDAR WON!' 
-                        : (gameResult.round >= 3 ? 'BAHAR WON!' : 'BABA WON!')}
-                    </div>
-                    <div className="text-lg text-purple-200">
-                      {typeof gameResult.winningCard === 'string' 
-                        ? gameResult.winningCard 
-                        : gameResult.winningCard?.display || 'Winning Card'}
-                    </div>
-                  </motion.div>
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Clean video surface during dealing: no overlays */}
 
     </div>
   );

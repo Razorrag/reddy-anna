@@ -48,22 +48,9 @@ const WinnerCelebration: React.FC<WinnerCelebrationProps> = ({
     };
   }, [winner, onComplete]);
 
-  // Listen for celebration event to capture per-user win amount and calculate net profit
-  useEffect(() => {
-    const handler = (e: any) => {
-      if (e?.detail?.localWinAmount != null) {
-        const payout = Number(e.detail.localWinAmount) || 0;
-        const bet = Number(e.detail.totalBetAmount) || 0;
-        const profit = payout - bet;
-        
-        setLocalWinAmount(payout);
-        setTotalBetAmount(bet);
-        setNetProfit(profit);
-      }
-    };
-    window.addEventListener('game-complete-celebration', handler as EventListener);
-    return () => window.removeEventListener('game-complete-celebration', handler as EventListener);
-  }, []);
+  // ❌ DISABLED: Global event listener removed
+  // GlobalWinnerCelebration now handles all celebration events
+  // This component is now purely presentational and only renders when given props
 
   if (!winner) return null;
 

@@ -101,7 +101,7 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Timer Display - ALWAYS VISIBLE */}
-      <div className={`rounded-lg border-2 p-5 text-center transition-all duration-300 ${
+      <div className={`rounded-lg border-2 p-4 text-center transition-all duration-300 ${
         gameState.phase === 'betting' && gameState.countdownTimer <= 5
           ? 'border-red-500 bg-red-900/30 animate-pulse'
           : gameState.phase === 'betting'
@@ -109,7 +109,7 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
           : 'border-gray-600 bg-gray-800/50'
       }`}>
         <div className="text-sm text-gray-400 mb-2">{phaseDisplay.text}</div>
-        <div className={`text-6xl font-bold transition-colors duration-300 ${
+        <div className={`text-5xl font-bold transition-colors duration-300 ${
           gameState.phase === 'betting' && gameState.countdownTimer > 0
             ? gameState.countdownTimer <= 5 ? 'text-red-400' : 'text-yellow-400'
             : gameState.phase === 'dealing'
@@ -136,9 +136,9 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
 
 
       {/* Opening Card - ALWAYS VISIBLE */}
-      <div className="bg-gradient-to-br from-gold/20 to-yellow-600/20 rounded-lg p-5 border-2 border-gold/50 text-center">
+      <div className="bg-gradient-to-br from-gold/20 to-yellow-600/20 rounded-lg p-4 border border-gold/50 text-center">
         <div className="text-sm text-gray-400 mb-2">Opening Card</div>
-        <div className="text-5xl font-bold text-white">
+        <div className="text-4xl font-bold text-white">
           {gameState.selectedOpeningCard?.display || '--'}
         </div>
         {!gameState.selectedOpeningCard && (
@@ -149,9 +149,9 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
       {/* Betting Stats - ALWAYS VISIBLE - ENHANCED VISIBILITY */}
       <div className="space-y-3">
         {/* ANDAR BETS */}
-        <div className="bg-red-900/40 rounded-lg p-4 border-2 border-red-500/70 transition-all duration-300 hover:border-red-400 shadow-lg">
-          <div className="text-sm font-bold text-red-200 mb-2 uppercase tracking-wide">ANDAR BETS</div>
-          <div className="text-3xl font-bold text-red-300">
+        <div className="bg-red-900/40 rounded-lg p-3 border border-red-500/70 transition-all duration-300 hover:border-red-400 shadow-lg">
+          <div className="text-xs font-bold text-red-200 mb-2 uppercase tracking-wide">ANDAR BETS</div>
+          <div className="text-2xl font-bold text-red-300">
             ₹{currentAndarBet.toLocaleString('en-IN')}
           </div>
           <div className="text-sm text-red-100 mt-2">
@@ -169,9 +169,9 @@ const PersistentSidePanel: React.FC<PersistentSidePanelProps> = ({ className = '
         </div>
         
         {/* BAHAR BETS */}
-        <div className="bg-blue-900/40 rounded-lg p-4 border-2 border-blue-500/70 transition-all duration-300 hover:border-blue-400 shadow-lg">
-          <div className="text-sm font-bold text-blue-200 mb-2 uppercase tracking-wide">BAHAR BETS</div>
-          <div className="text-3xl font-bold text-blue-300">
+        <div className="bg-blue-900/40 rounded-lg p-3 border border-blue-500/70 transition-all duration-300 hover:border-blue-400 shadow-lg">
+          <div className="text-xs font-bold text-blue-200 mb-2 uppercase tracking-wide">BAHAR BETS</div>
+          <div className="text-2xl font-bold text-blue-300">
             ₹{currentBaharBet.toLocaleString('en-IN')}
           </div>
           <div className="text-sm text-blue-100 mt-2">

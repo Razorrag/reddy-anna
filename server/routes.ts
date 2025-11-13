@@ -2283,6 +2283,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ success: false, error: "Internal server error" });
     }
   });
+
+  // Public endpoint to get admin WhatsApp number (for frontend use)
+  app.get("/api/whatsapp-number", async (req, res) => {
+    try {
+      const adminWhatsappNumber = await storage.getGameSetting('admin_whatsapp_number');
+      // Return the number from database, or empty string if not set
+      // Frontend will handle fallback to env variable
+      res.json({ 
+        success: true, 
+        whatsappNumber: adminWhatsappNumber || '' 
+      });
+    } catch (error) {
+      console.error('Error fetching WhatsApp number:', error);
+      res.status(500).json({ 
+        success: false, 
+        whatsappNumber: '',
+        error: "Internal server error" 
+      });
+    }
+  });
   
   // Payment Routes - ADMIN ONLY APPROVAL SYSTEM
   app.post("/api/payment/process", paymentLimiter, async (req, res) => {
@@ -4297,6 +4317,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin endpoint to get specific user's bonus history
+  app.get("/api/admin/users/:userId/bonus-history", generalLimiter, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { type = 'all', limit = 100, offset = 0 } = req.query;
+      
+      // Get deposit bonuses
+      const depositBonuses = await storage.getDepositBonuses(userId);
+      // Get referral bonuses
+      const referralBonuses = await storage.getReferralBonuses(userId);
+      // Get bonus transactions
+      const bonusTransactions = await storage.getBonusTransactions(userId, { 
+        limit: parseInt(limit as string), 
+        offset: parseInt(offset as string) 
+      });
+
+      // Format deposit bonuses
+      const formattedDepositBonuses = depositBonuses.map((bonus: any) => ({
+        id: bonus.id,
+        type: 'deposit_bonus',
+        depositAmount: parseFloat(bonus.deposit_amount || '0'),
+        bonusAmount: parseFloat(bonus.bonus_amount || '0'),
+        bonusPercentage: parseFloat(bonus.bonus_percentage || '0'),
+        wageringRequired: parseFloat(bonus.wagering_required || '0'),
+        wageringCompleted: parseFloat(bonus.wagering_completed || '0'),
+        wageringProgress: parseFloat(bonus.wagering_progress || '0'),
+        status: bonus.status,
+        lockedAt: bonus.locked_at,
+        unlockedAt: bonus.unlocked_at,
+        creditedAt: bonus.credited_at,
+        expiredAt: bonus.expired_at,
+        createdAt: bonus.created_at,
+        updatedAt: bonus.updated_at
+      }));
+
+      // Format referral bonuses
+      const formattedReferralBonuses = referralBonuses.map((bonus: any) => ({
+        id: bonus.id,
+        type: 'referral_bonus',
+        referredUserId: bonus.referred_user_id,
+        referredUsername: bonus.referred_user?.phone || bonus.referred_user?.full_name || 'Unknown',
+        depositAmount: parseFloat(bonus.deposit_amount || '0'),
+        bonusAmount: parseFloat(bonus.bonus_amount || '0'),
+        bonusPercentage: parseFloat(bonus.bonus_percentage || '0'),
+        status: bonus.status,
+        creditedAt: bonus.credited_at,
+        expiredAt: bonus.expired_at,
+        createdAt: bonus.created_at,
+        updatedAt: bonus.updated_at
+      }));
+
+      // Format bonus transactions
+      const formattedTransactions = bonusTransactions.map((tx: any) => ({
+        id: tx.id,
+        type: 'transaction',
+        bonusType: tx.bonus_type,
+        bonusSourceId: tx.bonus_source_id,
+        amount: parseFloat(tx.amount || '0'),
+        balanceBefore: tx.balance_before ? parseFloat(tx.balance_before) : null,
+        balanceAfter: tx.balance_after ? parseFloat(tx.balance_after) : null,
+        action: tx.action,
+        description: tx.description,
+        metadata: tx.metadata,
+        createdAt: tx.created_at
+      }));
+
+      // Combine and filter by type if specified
+      let allHistory: any[] = [];
+      if (type === 'all' || type === 'deposit') {
+        allHistory = allHistory.concat(formattedDepositBonuses);
+      }
+      if (type === 'all' || type === 'referral') {
+        allHistory = allHistory.concat(formattedReferralBonuses);
+      }
+      if (type === 'all' || type === 'transaction') {
+        allHistory = allHistory.concat(formattedTransactions);
+      }
+
+      // Sort by created date (newest first)
+      allHistory.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      res.json({
+        success: true,
+        data: {
+          depositBonuses: formattedDepositBonuses,
+          referralBonuses: formattedReferralBonuses,
+          transactions: formattedTransactions,
+          allHistory: allHistory.slice(parseInt(offset as string), parseInt(offset as string) + parseInt(limit as string)),
+          totals: {
+            depositBonuses: formattedDepositBonuses.length,
+            referralBonuses: formattedReferralBonuses.length,
+            transactions: formattedTransactions.length,
+            total: allHistory.length
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Get user bonus history error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve user bonus history'
+      });
+    }
+  });
+
   // Admin Bonus Action Endpoints
   // Apply a pending bonus (credit it to user's balance)
   app.post("/api/admin/bonus-transactions/:id/apply", generalLimiter, async (req, res) => {
@@ -5388,7 +5517,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           bettingLocked: false,
           openingCard: null,
           andarCards: [],
-          baharCards: []
+          baharCards: [],
+          totalPlayers: 0
         });
       }
 
@@ -5404,7 +5534,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         baharCards: currentState.baharCards || [],
         winner: currentState.winner,
         winningCard: currentState.winningCard,
-        bettingLocked: currentState.bettingLocked || false
+        bettingLocked: currentState.bettingLocked || false,
+        totalPlayers: currentState.userBets?.size || 0
       });
     } catch (error) {
       console.error("Get current game state error:", error);

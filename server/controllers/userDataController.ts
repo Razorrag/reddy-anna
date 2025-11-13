@@ -126,51 +126,54 @@ export const getUserBonusSummary = async (req: Request, res: Response) => {
       });
     }
 
-    const depositBonusAvailable = parseFloat(user.deposit_bonus_available || '0');
-    const referralBonusAvailable = parseFloat(user.referral_bonus_available || '0');
-    const totalBonusEarned = parseFloat(user.total_bonus_earned || '0');
-
-    // Get bonus breakdowns from bonus tables
+    // ✅ FIX: Calculate available from bonus tables instead of stale user fields
     const depositBonuses = await storage.getDepositBonuses(req.user.id);
     const referralBonuses = await storage.getReferralBonuses(req.user.id);
 
+    let depositUnlocked = 0;
     let depositLocked = 0;
     let depositCredited = 0;
-    let referralLocked = 0;
+    let referralPending = 0;
     let referralCredited = 0;
 
     depositBonuses.forEach((bonus: any) => {
       const amount = parseFloat(bonus.bonus_amount || '0');
-      if (bonus.status === 'locked' || bonus.status === 'unlocked') {
-        depositLocked += amount;
+      if (bonus.status === 'unlocked') {
+        depositUnlocked += amount; // Ready to claim
+      } else if (bonus.status === 'locked') {
+        depositLocked += amount; // Still locked
       } else if (bonus.status === 'credited') {
-        depositCredited += amount;
+        depositCredited += amount; // Already credited
       }
     });
 
     referralBonuses.forEach((bonus: any) => {
       const amount = parseFloat(bonus.bonus_amount || '0');
       if (bonus.status === 'pending') {
-        referralLocked += amount;
+        referralPending += amount; // Waiting for approval
       } else if (bonus.status === 'credited') {
-        referralCredited += amount;
+        referralCredited += amount; // Already credited
       }
     });
+
+    const totalBonusEarned = parseFloat(user.total_bonus_earned || '0');
 
     res.json({
       success: true,
       data: {
         totals: {
-          available: depositBonusAvailable + referralBonusAvailable,
+          // ✅ FIX: Sum all unlocked + pending bonuses from tables
+          available: depositUnlocked + referralPending,
           credited: depositCredited + referralCredited,
           lifetime: totalBonusEarned
         },
         depositBonuses: {
+          unlocked: depositUnlocked,
           locked: depositLocked,
           credited: depositCredited
         },
         referralBonuses: {
-          locked: referralLocked,
+          pending: referralPending,
           credited: referralCredited
         }
       }

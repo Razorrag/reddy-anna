@@ -129,13 +129,13 @@ const getWebSocketUrl = (): string => {
 };
 
 export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { 
+  const {
     gameState,
     setGameId,
-    setPhase, 
-    setCountdown, 
-    setWinner, 
-    addAndarCard, 
+    setPhase,
+    setCountdown,
+    setWinner,
+    addAndarCard,
     addBaharCard,
     setSelectedOpeningCard,
     updateTotalBets,
@@ -149,12 +149,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     setWinningCard,
     removeLastBet,
     clearRoundBets,
-    setBettingLocked, // ✅ FIX: Add missing setBettingLocked
+    setBettingLocked,
   } = useGameState();
   const { showNotification } = useNotification();
   const { state: authState, logout, refreshAccessToken } = useAuth();
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
   const [isWebSocketAuthenticated, setIsWebSocketAuthenticated] = useState(false);
+  
+  // ✅ NEW: Store payout data from server for celebration
+  const lastPayoutRef = useRef<{
+    amount: number;
+    winner: 'andar' | 'bahar';
+    round: number;
+    timestamp: number;
+  } | null>(null);
 
   const getAuthToken = useCallback(async () => {
     let currentToken = authState.token;
@@ -807,41 +815,137 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         
         // ❌ REMOVED: showNotification(message, 'success'); - Duplicate, shown in VideoArea overlay
         
-        // Calculate actual payout amount (not just bet amount) using server's payout logic
-        const round1Andar = getTotalBetAmount(gameState.playerRound1Bets?.andar, 'andar');
-        const round1Bahar = getTotalBetAmount(gameState.playerRound1Bets?.bahar, 'bahar');
-        const round2Andar = getTotalBetAmount(gameState.playerRound2Bets?.andar, 'andar');
-        const round2Bahar = getTotalBetAmount(gameState.playerRound2Bets?.bahar, 'bahar');
+        // ✅ CRITICAL FIX: Use server's payout data if available (most accurate)
+        // Otherwise, fallback to local calculation from stored bets
+        let payoutAmount = 0;
+        let totalBetAmount = 0;
+        let netProfit = 0;
+        let dataSource = 'none';
         
-        const playerBets = {
-          round1: { andar: round1Andar, bahar: round1Bahar },
-          round2: { andar: round2Andar, bahar: round2Bahar }
-        };
+        // Check if we have recent payout data from server (within last 2 seconds)
+        const hasRecentPayout = lastPayoutRef.current &&
+                               (Date.now() - lastPayoutRef.current.timestamp < 2000) &&
+                               lastPayoutRef.current.winner === winner;
         
-        const totalBetAmount = round1Andar + round1Bahar + round2Andar + round2Bahar;
-        const localWinAmount = calculatePayout(gameState.currentRound, winner, playerBets);
-        
-        // Determine result: win (payout > bet), loss (payout < bet or 0), no_bet (no bets)
-        let result: 'win' | 'loss' | 'no_bet';
-        if (totalBetAmount === 0) {
-          result = 'no_bet';
-        } else if (localWinAmount > totalBetAmount) {
-          result = 'win'; // User won (payout exceeds bet)
+        if (hasRecentPayout) {
+          // ✅ PRIMARY: Use server's payout data (most accurate)
+          payoutAmount = lastPayoutRef.current!.amount;
+          dataSource = 'server_payout';
+          
+          console.group('💰 WebSocket: Using SERVER payout data for celebration');
+          console.log('📊 Server Payout Data:', lastPayoutRef.current);
+          console.log('💵 Payout Amount:', payoutAmount);
+          console.groupEnd();
+          
+          // Calculate total bet and net profit from payout
+          const round1Andar = getTotalBetAmount(gameState.playerRound1Bets?.andar, 'andar');
+          const round1Bahar = getTotalBetAmount(gameState.playerRound1Bets?.bahar, 'bahar');
+          const round2Andar = getTotalBetAmount(gameState.playerRound2Bets?.andar, 'andar');
+          const round2Bahar = getTotalBetAmount(gameState.playerRound2Bets?.bahar, 'bahar');
+          totalBetAmount = round1Andar + round1Bahar + round2Andar + round2Bahar;
+          netProfit = payoutAmount - totalBetAmount;
+          
         } else {
-          result = 'loss'; // User lost or got refund only
+          // ✅ FALLBACK: Calculate from local bet data
+          const round1Andar = getTotalBetAmount(gameState.playerRound1Bets?.andar, 'andar');
+          const round1Bahar = getTotalBetAmount(gameState.playerRound1Bets?.bahar, 'bahar');
+          const round2Andar = getTotalBetAmount(gameState.playerRound2Bets?.andar, 'andar');
+          const round2Bahar = getTotalBetAmount(gameState.playerRound2Bets?.bahar, 'bahar');
+          
+          console.group('💰 WebSocket: Calculating payout from LOCAL bets (fallback)');
+          console.log('📊 Player Bets:', {
+            round1: { andar: round1Andar, bahar: round1Bahar },
+            round2: { andar: round2Andar, bahar: round2Bahar }
+          });
+          
+          const playerBets = {
+            round1: { andar: round1Andar, bahar: round1Bahar },
+            round2: { andar: round2Andar, bahar: round2Bahar }
+          };
+          
+          totalBetAmount = round1Andar + round1Bahar + round2Andar + round2Bahar;
+          payoutAmount = calculatePayout(gameState.currentRound, winner, playerBets);
+          netProfit = payoutAmount - totalBetAmount;
+          dataSource = 'local_calculation';
+          
+          console.log('🧮 Calculation Results:', {
+            totalBetAmount,
+            payoutAmount,
+            netProfit,
+            winner,
+            round: gameState.currentRound
+          });
+          console.groupEnd();
         }
         
-        const celebrationEvent = new CustomEvent('game-complete-celebration', {
-          detail: { 
-            ...data.data, 
-            localWinAmount,
-            totalBetAmount,
-            result,
-            round: data.data.round || gameState.currentRound, // ← FIXED: Use server's round number first
-            playerBets // Include bet breakdown for mixed bet detection
+        // Determine canonical result type with proper classification
+        let result: 'no_bet' | 'refund' | 'mixed' | 'win' | 'loss';
+        
+        if (totalBetAmount === 0) {
+          // No bets placed
+          result = 'no_bet';
+        } else if (payoutAmount === totalBetAmount) {
+          // Pure refund (Bahar R1 1:0 or any pure refund scenario)
+          result = 'refund';
+        } else {
+          // Check if player bet on both sides (mixed)
+          const round1Andar = getTotalBetAmount(gameState.playerRound1Bets?.andar, 'andar');
+          const round1Bahar = getTotalBetAmount(gameState.playerRound1Bets?.bahar, 'bahar');
+          const round2Andar = getTotalBetAmount(gameState.playerRound2Bets?.andar, 'andar');
+          const round2Bahar = getTotalBetAmount(gameState.playerRound2Bets?.bahar, 'bahar');
+          const hasAndar = (round1Andar + round2Andar) > 0;
+          const hasBahar = (round1Bahar + round2Bahar) > 0;
+          
+          if (hasAndar && hasBahar) {
+            // Mixed bets - final result depends on net profit
+            result = 'mixed';
+          } else if (netProfit > 0) {
+            // Pure win (one side, positive profit)
+            result = 'win';
+          } else {
+            // Loss
+            result = 'loss';
           }
+        }
+        
+        const playerBets = {
+          round1: {
+            andar: getTotalBetAmount(gameState.playerRound1Bets?.andar, 'andar'),
+            bahar: getTotalBetAmount(gameState.playerRound1Bets?.bahar, 'bahar')
+          },
+          round2: {
+            andar: getTotalBetAmount(gameState.playerRound2Bets?.andar, 'andar'),
+            bahar: getTotalBetAmount(gameState.playerRound2Bets?.bahar, 'bahar')
+          }
+        };
+        
+        // ✅ ENHANCED: Dispatch celebration event with comprehensive logging
+        const celebrationData = {
+          winner,
+          winningCard,
+          round: data.data.round || gameState.currentRound,
+          payoutAmount,
+          totalBetAmount,
+          netProfit,
+          playerBets,
+          result,
+          dataSource // Track where data came from for debugging
+        };
+        
+        console.group('🎊 WebSocket: Dispatching game-complete-celebration event');
+        console.log('📤 Event Data:', celebrationData);
+        console.log('📍 Data Source:', dataSource);
+        console.groupEnd();
+        
+        const celebrationEvent = new CustomEvent('game-complete-celebration', {
+          detail: celebrationData
         });
         window.dispatchEvent(celebrationEvent);
+        
+        console.log('✅ game-complete-celebration event dispatched successfully');
+        
+        // Clear the payout ref after use
+        lastPayoutRef.current = null;
         break;
       }
 
@@ -1154,8 +1258,16 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'payout_received': {
         const { amount, balance, winner, round } = (data as PayoutReceivedMessage).data;
         
-        // ✅ Store the payout amount for celebration display
-        console.log(`💰 Payout received: ₹${amount}, Winner: ${winner}, Round: ${round}`);
+        // ✅ Store payout data in ref for use by celebration
+        lastPayoutRef.current = {
+          amount,
+          winner,
+          round,
+          timestamp: Date.now()
+        };
+        
+        console.log(`💰 Payout received from server: ₹${amount}, Winner: ${winner}, Round: ${round}`);
+        console.log(`✅ Stored payout data for celebration:`, lastPayoutRef.current);
         
         // Immediately update balance from the message (no API delay)
         if (balance !== undefined && balance !== null) {

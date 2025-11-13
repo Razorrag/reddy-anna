@@ -3264,6 +3264,7 @@ export class SupabaseStorage implements IStorage {
     }
     
     // ✅ FIX #3: Ensure this is the FIRST deposit only
+    // Check if user has any APPROVED deposits (excluding current one being processed)
     const { data: previousDeposits, error: depositError } = await supabaseServer
       .from('payment_requests')
       .select('id')
@@ -3276,8 +3277,9 @@ export class SupabaseStorage implements IStorage {
       return;
     }
     
-    if (previousDeposits && previousDeposits.length > 1) {
-      console.log(`❌ User ${userId} has already made ${previousDeposits.length} deposits. Referral bonus only on first deposit.`);
+    // ✅ FIX: Check if there's already an approved deposit (this means current one is NOT first)
+    if (previousDeposits && previousDeposits.length >= 1) {
+      console.log(`❌ User ${userId} has already made ${previousDeposits.length} approved deposit(s). Referral bonus only on first deposit.`);
       return;
     }
     
@@ -3310,24 +3312,35 @@ export class SupabaseStorage implements IStorage {
     const bonusPercentage = parseFloat(referralBonusPercent);
     const bonusAmount = (depositAmount * bonusPercentage) / 100;
 
-    // Add bonus to referrer
-    await this.addUserBonus(referrerData.id, bonusAmount, 'referral_bonus', depositAmount);
-
-    // Track referral relationship
+    // ✅ FIX: Track referral relationship first (creates user_referrals record)
     await this.trackUserReferral(referrerData.id, userId, depositAmount, bonusAmount);
 
-    // Add transaction record for referrer
-    await this.addTransaction({
-      userId: referrerData.id,
-      transactionType: 'bonus',
-      amount: bonusAmount,
-      balanceBefore: 0, // Will be calculated in addTransaction
-      balanceAfter: 0,   // Will be calculated in addTransaction
-      referenceId: `referral_bonus_${Date.now()}`,
-      description: `Referral bonus for user ${userId} deposit of ₹${depositAmount}`
-    });
+    // ✅ CRITICAL FIX: Use NEW referral_bonuses table instead of old addUserBonus
+    // Get the referral ID that was just created
+    const { data: referralRecord } = await supabaseServer
+      .from('user_referrals')
+      .select('id')
+      .eq('referrer_user_id', referrerData.id)
+      .eq('referred_user_id', userId)
+      .single();
 
-    console.log(`Referral bonus of ₹${bonusAmount} applied to referrer ${referrerData.id}`);
+    try {
+      await this.createReferralBonus({
+        referrerUserId: referrerData.id,
+        referredUserId: userId,
+        referralId: referralRecord?.id,
+        depositAmount: depositAmount,
+        bonusAmount: bonusAmount,
+        bonusPercentage: bonusPercentage
+      });
+      console.log(`✅ Referral bonus record created in referral_bonuses table for referrer ${referrerData.id}`);
+    } catch (createError: any) {
+      console.error('⚠️ Failed to create referral bonus record:', createError);
+      // Fallback to old system if new table fails
+      await this.addUserBonus(referrerData.id, bonusAmount, 'referral_bonus', depositAmount);
+    }
+
+    console.log(`✅ Referral bonus of ₹${bonusAmount} applied to referrer ${referrerData.id} for user ${userId}'s first deposit of ₹${depositAmount}`);
   }
 
   async applyConditionalBonus(userId: string): Promise<boolean> {
@@ -4567,15 +4580,31 @@ export class SupabaseStorage implements IStorage {
       const newBalance = await this.addBalanceAtomic(userId, amount);
       console.log(`✅ Balance updated: User ${userId}, New Balance: ₹${newBalance} (deposit only)`);
       
-      // Step 5: Store bonus separately and set wagering requirement
+      // Step 5: Get current user bonus state to ACCUMULATE instead of overwrite
+      const user = await this.getUserById(userId);
+      if (!user) {
+        throw new Error(`User ${userId} not found`);
+      }
+      
+      const currentDepositBonus = parseFloat(user.deposit_bonus_available || '0');
+      const currentWagering = parseFloat(user.wagering_requirement || '0');
+      const currentOriginalDeposit = parseFloat(user.original_deposit_amount || '0');
+      const currentWageringCompleted = parseFloat(user.wagering_completed || '0');
+      
+      // Calculate new accumulated values
+      const newDepositBonus = currentDepositBonus + bonusAmount;
+      const newWageringRequirement = currentWagering + wageringRequirement;
+      const newOriginalDeposit = currentOriginalDeposit + amount;
+      
+      // Step 6: Store bonus separately and set wagering requirement (ACCUMULATE, don't overwrite)
       const { error: bonusError } = await supabaseServer
         .from('users')
         .update({
-          deposit_bonus_available: bonusAmount,
-          wagering_requirement: wageringRequirement,
-          wagering_completed: 0,
+          deposit_bonus_available: newDepositBonus, // ✅ FIX: Accumulate instead of overwrite
+          wagering_requirement: newWageringRequirement, // ✅ FIX: Accumulate instead of overwrite
+          wagering_completed: currentWageringCompleted, // Keep existing progress
           bonus_locked: true,
-          original_deposit_amount: amount
+          original_deposit_amount: newOriginalDeposit // ✅ FIX: Accumulate instead of overwrite
         })
         .eq('id', userId);
       
@@ -4583,10 +4612,27 @@ export class SupabaseStorage implements IStorage {
         console.error('Error setting bonus and wagering requirement:', bonusError);
         // Don't fail the approval if bonus setup fails
       } else {
-        console.log(`🔒 Bonus locked: ₹${bonusAmount} - User must wager ₹${wageringRequirement} to unlock`);
+        console.log(`🔒 Bonus locked: ₹${bonusAmount} (Total: ₹${newDepositBonus}) - User must wager ₹${wageringRequirement} (Total: ₹${newWageringRequirement}) to unlock`);
       }
       
-      // Step 5: Update payment request status to approved
+      // ✅ CRITICAL FIX: Create deposit bonus record for history tracking
+      let bonusRecordId: string | null = null;
+      try {
+        bonusRecordId = await this.createDepositBonus({
+          userId: userId,
+          depositRequestId: requestId,
+          depositAmount: amount,
+          bonusAmount: bonusAmount,
+          bonusPercentage: bonusPercent,
+          wageringRequired: wageringRequirement
+        });
+        console.log(`✅ Deposit bonus record created: ${bonusRecordId} - History will be visible in admin panel`);
+      } catch (createError: any) {
+        console.error('⚠️ Failed to create deposit bonus record:', createError);
+        // Don't fail approval if bonus record creation fails, but log it
+      }
+      
+      // Step 7: Update payment request status to approved
       const { error: updateError } = await supabaseServer
         .from('payment_requests')
         .update({
@@ -4601,12 +4647,21 @@ export class SupabaseStorage implements IStorage {
       }
       
       console.log(`✅ Payment request approved: ${requestId}`);
-      console.log(`📊 Summary: Deposit: ₹${amount} (added to balance), Bonus: ₹${bonusAmount} (locked), Required wagering: ₹${wageringRequirement}`);
+      console.log(`📊 Summary: Deposit: ₹${amount} (added to balance), Bonus: ₹${bonusAmount} (Total locked: ₹${newDepositBonus}), Required wagering: ₹${wageringRequirement} (Total: ₹${newWageringRequirement})`);
+      
+      // ✅ CRITICAL FIX: Apply referral bonus when admin APPROVES deposit (not when user submits)
+      try {
+        await this.checkAndApplyReferralBonus(userId, amount);
+        console.log(`✅ Referral bonus check completed for user ${userId}`);
+      } catch (referralError: any) {
+        console.error('⚠️ Failed to apply referral bonus on deposit approval:', referralError);
+        // Don't fail approval if referral bonus fails
+      }
       
       return {
         balance: newBalance,
-        bonusAmount: bonusAmount,
-        wageringRequirement: wageringRequirement
+        bonusAmount: newDepositBonus, // ✅ FIX: Return total accumulated bonus
+        wageringRequirement: newWageringRequirement // ✅ FIX: Return total accumulated wagering
       };
     } catch (error: any) {
       console.error('Error in approvePaymentRequestAtomic:', error);
@@ -5077,16 +5132,59 @@ export class SupabaseStorage implements IStorage {
 
   /**
    * Get bonus summary for a user
+   * Calculates from actual tables instead of relying on view
    */
   async getBonusSummary(userId: string): Promise<any> {
-    const { data, error } = await supabaseServer
-      .from('user_bonus_summary')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
+    try {
+      // Get deposit bonuses
+      const depositBonuses = await this.getDepositBonuses(userId);
+      // Get referral bonuses
+      const referralBonuses = await this.getReferralBonuses(userId);
 
-    if (error) {
-      console.error('Error fetching bonus summary:', error);
+      let depositBonusUnlocked = 0;
+      let depositBonusLocked = 0;
+      let depositBonusCredited = 0;
+      let referralBonusCredited = 0;
+      let referralBonusPending = 0;
+
+      // Calculate deposit bonus totals by status
+      depositBonuses.forEach((bonus: any) => {
+        const amount = parseFloat(bonus.bonus_amount || '0');
+        if (bonus.status === 'unlocked') {
+          depositBonusUnlocked += amount;
+        } else if (bonus.status === 'locked') {
+          depositBonusLocked += amount;
+        } else if (bonus.status === 'credited') {
+          depositBonusCredited += amount;
+        }
+      });
+
+      // Calculate referral bonus totals by status
+      referralBonuses.forEach((bonus: any) => {
+        const amount = parseFloat(bonus.bonus_amount || '0');
+        if (bonus.status === 'credited') {
+          referralBonusCredited += amount;
+        } else if (bonus.status === 'pending') {
+          referralBonusPending += amount;
+        }
+      });
+
+      const totalAvailable = depositBonusUnlocked + depositBonusLocked + referralBonusPending;
+      const totalCredited = depositBonusCredited + referralBonusCredited;
+      const lifetimeEarnings = depositBonusUnlocked + depositBonusLocked + depositBonusCredited + referralBonusCredited + referralBonusPending;
+
+      return {
+        depositBonusUnlocked,
+        depositBonusLocked,
+        depositBonusCredited,
+        referralBonusCredited,
+        referralBonusPending,
+        totalAvailable,
+        totalCredited,
+        lifetimeEarnings
+      };
+    } catch (error) {
+      console.error('Error calculating bonus summary:', error);
       return {
         depositBonusUnlocked: 0,
         depositBonusLocked: 0,
@@ -5098,17 +5196,6 @@ export class SupabaseStorage implements IStorage {
         lifetimeEarnings: 0
       };
     }
-
-    return {
-      depositBonusUnlocked: parseFloat(data.deposit_bonus_unlocked || '0'),
-      depositBonusLocked: parseFloat(data.deposit_bonus_locked || '0'),
-      depositBonusCredited: parseFloat(data.deposit_bonus_credited || '0'),
-      referralBonusCredited: parseFloat(data.referral_bonus_credited || '0'),
-      referralBonusPending: parseFloat(data.referral_bonus_pending || '0'),
-      totalAvailable: parseFloat(data.total_available || '0'),
-      totalCredited: parseFloat(data.total_credited || '0'),
-      lifetimeEarnings: parseFloat(data.lifetime_earnings || '0')
-    };
   }
 
   /**
@@ -5303,9 +5390,12 @@ export class SupabaseStorage implements IStorage {
 
   /**
    * Get all bonus transactions with user details (admin)
+   * ✅ FIX: Now accepts filters as per interface definition
    */
-  async getAllBonusTransactions(): Promise<any[]> {
-    const { data, error } = await supabaseServer
+  async getAllBonusTransactions(filters?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { status, type, limit = 100, offset = 0 } = filters || {};
+    
+    let query = supabaseServer
       .from('bonus_transactions')
       .select(`
         *,
@@ -5315,7 +5405,20 @@ export class SupabaseStorage implements IStorage {
           full_name
         )
       `)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    // Apply status filter if provided
+    if (status && status !== 'all') {
+      query = query.eq('action', status);
+    }
+
+    // Apply type filter if provided
+    if (type && type !== 'all') {
+      query = query.eq('bonus_type', type);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error getting all bonus transactions:', error);

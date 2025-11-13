@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Eye, EyeOff, User, AlertCircle, MessageCircle } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getSupportWhatsAppNumberAsync, createWhatsAppUrl } from "@/lib/whatsapp-helper";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -118,18 +119,15 @@ export default function Login() {
     }));
   };
 
-  const handleForgotPassword = () => {
-    // Admin WhatsApp number - can be configured via environment variable
-    const adminWhatsApp = import.meta.env.VITE_ADMIN_WHATSAPP || "919876543210"; // Default admin number
+  const handleForgotPassword = async () => {
     const userPhone = formData.phone || "your_phone_number";
     
     // Create pre-filled WhatsApp message
-    const message = encodeURIComponent(
-      `Hello Admin,\n\nI need help resetting my password.\n\nMy Phone Number: ${userPhone}\n\nPlease help me reset my password.\n\nThank you!`
-    );
+    const message = `Hello Admin,\n\nI need help resetting my password.\n\nMy Phone Number: ${userPhone}\n\nPlease help me reset my password.\n\nThank you!`;
     
-    // Open WhatsApp with pre-filled message
-    const whatsappUrl = `https://wa.me/${adminWhatsApp}?text=${message}`;
+    // Get admin WhatsApp number from backend
+    const adminNumber = await getSupportWhatsAppNumberAsync();
+    const whatsappUrl = createWhatsAppUrl(adminNumber, message);
     window.open(whatsappUrl, '_blank');
   };
 

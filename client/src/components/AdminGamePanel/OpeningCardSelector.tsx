@@ -121,7 +121,7 @@ const OpeningCardSelector: React.FC = () => {
                       onClick={() => !isDisabled && handleCardSelect(card)}
                       disabled={isDisabled}
                       className={`
-                        w-[calc(100%/13-0.25rem)] min-w-[45px] h-[55px] rounded text-sm font-bold transition-all duration-300
+                        w-[calc(100%/13-0.25rem)] min-w-[52px] h-[72px] rounded text-lg font-bold transition-all duration-300
                         ${isCurrentlySelected
                           ? 'bg-gradient-to-br from-gold to-yellow-500 text-black border-2 border-white scale-105 relative z-10 shadow-lg shadow-gold/50 animate-pulse-subtle'
                           : isUsed

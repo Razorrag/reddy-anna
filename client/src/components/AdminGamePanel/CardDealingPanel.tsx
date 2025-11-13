@@ -136,9 +136,9 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
   };
 
   return (
-    <div className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-sm rounded-lg p-5 border-2 border-gold/30">
+    <div className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 backdrop-blur-sm rounded-lg p-3 border-2 border-gold/30">
       {/* Dealing Instructions */}
-      <div className="bg-blue-900/30 border-2 border-blue-500/50 rounded-lg p-3 mb-3">
+      <div className="bg-blue-900/30 border-2 border-blue-500/50 rounded-lg p-2 mb-2">
         <div className="text-sm text-gray-300 text-center font-medium">
           {phase === 'betting' ? (
             <span className="text-yellow-400">⏳ Betting in progress - Cards locked until timer ends</span>
@@ -152,7 +152,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
       
       {/* Current Selection (Rounds 1 & 2) */}
       {round < 3 && selectedCard && (
-        <div className="bg-gradient-to-r from-blue-900/30 to-red-900/30 rounded-lg p-3 border-2 border-gold/50 text-center">
+        <div className="bg-gradient-to-r from-blue-900/30 to-red-900/30 rounded-lg p-2 border-2 border-gold/50 text-center">
           <div className="text-sm text-gray-400 mb-1">Next Card: {nextSide.toUpperCase()}</div>
           <div className={`text-4xl font-bold ${selectedCard ? (selectedCard.color === 'red' ? 'text-red-500' : 'text-white') : 'text-gray-600'}`}>
             {selectedCard?.display || '--'}
@@ -161,7 +161,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
       )}
       
       {/* Card Selector Grid */}
-      <div className="bg-black/30 rounded-lg p-3 mb-3">
+      <div className="bg-black/30 rounded-lg p-2 mb-2">
         {/* Cards organized by suit - 13 cards per row */}
         {suits.map(suit => (
           <div key={suit.name} className="mb-2 last:mb-0">
@@ -172,7 +172,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
               <span className="text-gray-400 uppercase text-xs">{suit.name}</span>
             </div>
             
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-0.5">
               {allCards
                 .filter(card => card.suit === suit.name)
                 .map(card => {
@@ -189,7 +189,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
                       onClick={() => !isUsed && handleQuickCardSelect(card)}
                       disabled={isDisabled}
                       className={`
-                        w-[calc(100%/13-0.25rem)] min-w-[45px] h-[55px] rounded text-sm font-bold transition-all duration-300
+                        w-[calc(100%/13-0.25rem)] min-w-[52px] h-[72px] rounded text-lg font-bold transition-all duration-300
                         ${isSelected
                           ? 'bg-gradient-to-br from-gold to-yellow-500 text-black border-2 border-white scale-105 relative z-10 shadow-lg shadow-gold/50 animate-pulse-subtle'
                           : isUsed
@@ -229,7 +229,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
       </div>
       
       {/* Action Buttons - Phase Aware */}
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         <button
           onClick={handleUndo}
           disabled={!selectedCard || dealingInProgress}
@@ -259,7 +259,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
       
       {/* Dealt Cards Display */}
       {(andarCards.length > 0 || baharCards.length > 0) && (
-        <div className="mt-6 bg-black/30 rounded-xl p-4">
+        <div className="mt-4 bg-black/30 rounded-xl p-3">
           <div className="text-sm font-semibold text-gray-400 mb-3">Recently Dealt Cards</div>
           <div className="grid grid-cols-2 gap-4">
             <div>

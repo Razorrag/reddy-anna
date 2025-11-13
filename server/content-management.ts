@@ -168,6 +168,8 @@ export const getSystemSettings = async (): Promise<ContentResponse> => {
     const customerSupportEmail = await storage.getGameSetting('customer_support_email');
     const customerSupportPhone = await storage.getGameSetting('customer_support_phone');
     
+    // ✅ FIX: Remove hardcoded fallback - return empty string if not configured
+    // Admin must configure WhatsApp number in settings
     return { success: true, content: {
       maintenanceMode: maintenanceMode === 'true',
       maintenanceMessage: maintenanceMessage || '',
@@ -175,8 +177,8 @@ export const getSystemSettings = async (): Promise<ContentResponse> => {
       referralCommission: parseInt(referralCommission || '5', 10),
       backupFrequency: 'daily',
       whatsappBusinessAPI: '',
-      adminWhatsappNumber: adminWhatsappNumber || '918686886632',
-      whatsappNumber: adminWhatsappNumber || '918686886632', // Legacy field
+      adminWhatsappNumber: adminWhatsappNumber || '',
+      whatsappNumber: adminWhatsappNumber || '', // Legacy field
       minDepositAmount: parseInt(minDepositAmount || '100', 10),
       maxDepositAmount: parseInt(maxDepositAmount || '100000', 10),
       minWithdrawAmount: parseInt(minWithdrawAmount || '500', 10),
@@ -184,7 +186,7 @@ export const getSystemSettings = async (): Promise<ContentResponse> => {
       autoWithdrawal: false,
       kycRequired: true,
       customerSupportEmail: customerSupportEmail || 'support@raju-gari-kossu.com',
-      customerSupportPhone: customerSupportPhone || '+91 8686886632'
+      customerSupportPhone: customerSupportPhone || ''
     } };
   } catch (error) {
     console.error('Settings retrieval error:', error);
@@ -404,6 +406,7 @@ export const getGameSettings = async (): Promise<ContentResponse> => {
     const conditionalBonusThreshold = await storage.getGameSetting('conditional_bonus_threshold');
     const wageringMultiplier = await storage.getGameSetting('wagering_multiplier');
 
+    // ✅ FIX: Remove hardcoded WhatsApp fallback
     return {
       success: true,
       content: {
@@ -413,7 +416,7 @@ export const getGameSettings = async (): Promise<ContentResponse> => {
         maxBetAmount: parseInt(maxBet || '100000', 10),
         defaultStartingBalance: parseInt(startingBalance || '100000', 10),
         houseCommissionRate: parseFloat(commissionRate || '0.05'),
-        adminWhatsAppNumber: adminWhatsApp || '918686886632',
+        adminWhatsAppNumber: adminWhatsApp || '',
         default_deposit_bonus_percent: parseFloat(defaultDepositBonusPercent || '5'),
         referral_bonus_percent: parseFloat(referralBonusPercent || '1'),
         conditional_bonus_threshold: parseFloat(conditionalBonusThreshold || '30'),

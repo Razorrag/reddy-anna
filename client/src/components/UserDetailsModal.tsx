@@ -26,7 +26,9 @@ import {
   Target, 
   TrendingUp,
   Activity,
-  DollarSign
+  DollarSign,
+  Gift,
+  Users
 } from "lucide-react";
 import { formatCurrency, getStatusBadgeClass } from "@/services/userAdminService";
 import { AdminUser } from "@/types/game";
@@ -54,6 +56,19 @@ interface GameHistoryItem {
   createdAt: string;
 }
 
+interface BonusHistoryItem {
+  id: string;
+  type: 'deposit_bonus' | 'referral_bonus' | 'transaction';
+  depositAmount?: number;
+  bonusAmount: number;
+  bonusPercentage?: number;
+  status?: string;
+  referredUsername?: string;
+  action?: string;
+  description?: string;
+  createdAt: string;
+}
+
 export default function UserDetailsModal({
   isOpen,
   onClose,
@@ -61,10 +76,13 @@ export default function UserDetailsModal({
 }: UserDetailsModalProps) {
   const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [bonusHistory, setBonusHistory] = useState<BonusHistoryItem[]>([]);
+  const [isLoadingBonusHistory, setIsLoadingBonusHistory] = useState(false);
 
   useEffect(() => {
     if (isOpen && user) {
       loadGameHistory();
+      loadBonusHistory();
     }
   }, [isOpen, user]);
 
@@ -114,6 +132,38 @@ export default function UserDetailsModal({
     }
   };
 
+  const loadBonusHistory = async () => {
+    if (!user) return;
+    
+    setIsLoadingBonusHistory(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/users/${user.id}/bonus-history?limit=50`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch bonus history');
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.data?.allHistory) {
+        setBonusHistory(data.data.allHistory);
+      } else {
+        setBonusHistory([]);
+      }
+    } catch (error) {
+      console.error('Failed to load bonus history:', error);
+      setBonusHistory([]);
+    } finally {
+      setIsLoadingBonusHistory(false);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-IN', {
       day: '2-digit',
@@ -150,7 +200,7 @@ export default function UserDetailsModal({
         </DialogHeader>
 
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-purple-900/50 border-purple-400/30">
+          <TabsList className="grid w-full grid-cols-4 bg-purple-900/50 border-purple-400/30">
             <TabsTrigger value="overview" className="text-purple-200 data-[state=active]:text-white">
               Overview
             </TabsTrigger>
@@ -159,6 +209,9 @@ export default function UserDetailsModal({
             </TabsTrigger>
             <TabsTrigger value="history" className="text-purple-200 data-[state=active]:text-white">
               Game History
+            </TabsTrigger>
+            <TabsTrigger value="bonus" className="text-purple-200 data-[state=active]:text-white">
+              Bonus & Referral
             </TabsTrigger>
           </TabsList>
 
@@ -383,6 +436,89 @@ export default function UserDetailsModal({
                       ))}
                     </TableBody>
                   </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="bonus" className="space-y-4">
+            <Card className="bg-purple-950/60 border-purple-400/30">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Gift className="w-4 h-4" />
+                  Bonus & Referral History
+                </CardTitle>
+                <CardDescription className="text-purple-200">
+                  Complete bonus and referral history for this user
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingBonusHistory ? (
+                  <div className="text-center py-8">
+                    <p className="text-purple-300">Loading bonus history...</p>
+                  </div>
+                ) : bonusHistory.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-purple-300">No bonus or referral history available</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {bonusHistory.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-4 bg-purple-950/40 rounded-lg border border-purple-400/20"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              {item.type === 'deposit_bonus' && (
+                                <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+                                  Deposit Bonus
+                                </Badge>
+                              )}
+                              {item.type === 'referral_bonus' && (
+                                <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+                                  Referral Bonus
+                                </Badge>
+                              )}
+                              {item.type === 'transaction' && (
+                                <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                                  Transaction
+                                </Badge>
+                              )}
+                              {item.status && (
+                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                                  {item.status}
+                                </Badge>
+                              )}
+                            </div>
+                            {item.description && (
+                              <p className="text-white text-sm mb-1">{item.description}</p>
+                            )}
+                            {item.referredUsername && (
+                              <p className="text-purple-300 text-sm mb-1">
+                                Referred User: {item.referredUsername}
+                              </p>
+                            )}
+                            {item.depositAmount && (
+                              <p className="text-purple-300 text-sm mb-1">
+                                Deposit: {formatCurrency(item.depositAmount)}
+                                {item.bonusPercentage && ` (${item.bonusPercentage}%)`}
+                              </p>
+                            )}
+                            <p className="text-purple-400 text-xs">
+                              {formatDate(item.createdAt)}
+                            </p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <div className="text-lg font-bold text-green-400">
+                              +{formatCurrency(item.bonusAmount)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

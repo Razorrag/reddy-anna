@@ -218,7 +218,7 @@ export default function Admin() {
                   </div>
                   <CardTitle className="text-center text-gold text-xl mb-2">Stream Settings</CardTitle>
                   <CardDescription className="text-center text-gray-400">
-                    Configure WebRTC & RTMP streaming
+                    Configure global live stream URL (simple mode)
                   </CardDescription>
                 </CardHeader>
               </Card>

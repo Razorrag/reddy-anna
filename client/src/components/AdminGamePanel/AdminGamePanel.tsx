@@ -1,6 +1,6 @@
 /**
  * AdminGamePanel - Complete Casino Control Panel
- * 
+ *
  * Professional admin interface for controlling the multi-round Andar Bahar game.
  * Features:
  * - Round-wise state management
@@ -8,7 +8,8 @@
  * - Live card dealing interface
  * - Proper multiplayer synchronization
  * - Clean casino-themed UI matching player interface
- * 
+ * - Betting overview tab for hedge/steering decisions
+ *
  * CRITICAL: DO NOT add RoundTransition or NoWinnerTransition components here!
  * These are PLAYER-ONLY UI elements. Admin should maintain continuous game control
  * without flashing black screens or transition animations during round changes.
@@ -24,6 +25,7 @@ import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
 import PersistentSidePanel from '@/components/PersistentSidePanel';
 import StreamControlPanel from './StreamControlPanel';
+import AdminBetsOverview from './AdminBetsOverview';
 import { Home } from 'lucide-react';
 
 const AdminGamePanel: React.FC = () => {
@@ -32,7 +34,7 @@ const AdminGamePanel: React.FC = () => {
   const { showNotification } = useNotification();
   
   const [isResetting, setIsResetting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'game' | 'stream'>('game');
+  const [activeTab, setActiveTab] = useState<'game' | 'stream' | 'bets'>('game');
   const [, setLocation] = useLocation();
   
   // Sync game state when admin navigates to this page
@@ -91,7 +93,7 @@ const AdminGamePanel: React.FC = () => {
             </button>
           </div>
           
-          {/* Tab Navigation - Game Control and Stream */}
+          {/* Tab Navigation - Game Control, Stream, and Bets */}
           <div className="flex gap-3 border-t border-gold/20 pt-4 overflow-x-auto">
             <button
               onClick={() => setActiveTab('game')}
@@ -111,7 +113,17 @@ const AdminGamePanel: React.FC = () => {
                   : 'bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 border border-slate-600/50'
               }`}
             >
-              🎥 Stream Settings
+              🎥 Stream
+            </button>
+            <button
+              onClick={() => setActiveTab('bets')}
+              className={`px-6 py-3 rounded-xl font-bold transition-all duration-200 whitespace-nowrap ${
+                activeTab === 'bets'
+                  ? 'bg-gradient-to-r from-gold to-yellow-600 text-gray-900 shadow-lg scale-105'
+                  : 'bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 border border-slate-600/50'
+              }`}
+            >
+              📊 Bets
             </button>
           </div>
         </div>
@@ -121,6 +133,8 @@ const AdminGamePanel: React.FC = () => {
         {/* Tab Content */}
         {activeTab === 'stream' ? (
           <StreamControlPanel />
+        ) : activeTab === 'bets' ? (
+          <AdminBetsOverview />
         ) : (
           <div className="space-y-4">
             {/* STEP 1: Opening Card Selection (Only at start) */}
@@ -132,18 +146,30 @@ const AdminGamePanel: React.FC = () => {
           {gameState.phase === 'betting' && (
             <div className="grid grid-cols-3 gap-3">
               {/* LEFT: Card Selection */}
-              <div className="col-span-2">
-                <CardDealingPanel 
+              <div className="col-span-2 space-y-4">
+                <CardDealingPanel
                   round={gameState.currentRound}
                   phase={gameState.phase}
                   andarCards={gameState.andarCards}
                   baharCards={gameState.baharCards}
                 />
+                
+                {/* Opening Card Strip - Below Card Selector */}
+                {gameState.selectedOpeningCard && (
+                  <div className="bg-gradient-to-r from-gold/20 to-yellow-600/20 border-2 border-gold rounded-lg p-4 text-center shadow-xl">
+                    <div className="text-sm font-semibold text-gray-300 mb-2">🎴 Opening Card</div>
+                    <div className={`text-5xl font-bold ${
+                      gameState.selectedOpeningCard.color === 'red' ? 'text-red-500' : 'text-white'
+                    }`}>
+                      {gameState.selectedOpeningCard.display}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* RIGHT: Persistent Side Panel - ALWAYS VISIBLE */}
               <div className="col-span-1">
-                <PersistentSidePanel />
+                <PersistentSidePanel className="w-full max-w-xs ml-auto" />
               </div>
             </div>
           )}
@@ -154,14 +180,26 @@ const AdminGamePanel: React.FC = () => {
               {/* LEFT: Card Selection and Status */}
               <div className="col-span-2 space-y-4">
               {/* Card Selection FIRST */}
-              <CardDealingPanel 
+              <CardDealingPanel
                 round={gameState.currentRound}
                 phase={gameState.phase}
                 andarCards={gameState.andarCards}
                 baharCards={gameState.baharCards}
               />
+              
+              {/* Opening Card Strip - Below Card Selector */}
+              {gameState.selectedOpeningCard && (
+                <div className="bg-gradient-to-r from-gold/20 to-yellow-600/20 border-2 border-gold rounded-lg p-4 text-center shadow-xl">
+                  <div className="text-sm font-semibold text-gray-300 mb-2">🎴 Opening Card</div>
+                  <div className={`text-5xl font-bold ${
+                    gameState.selectedOpeningCard.color === 'red' ? 'text-red-500' : 'text-white'
+                  }`}>
+                    {gameState.selectedOpeningCard.display}
+                  </div>
+                </div>
+              )}
 
-              {/* Status Message (below cards) */}
+              {/* Status Message (below opening card) */}
               <div className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 rounded-xl border border-green-500/50 p-6 text-center shadow-xl backdrop-blur-sm">
                 <div className="text-2xl font-bold text-green-300 mb-2">
                   {gameState.currentRound === 1 && '🃏 Round 1 - Individual Card Dealing'}
@@ -184,7 +222,7 @@ const AdminGamePanel: React.FC = () => {
 
               {/* RIGHT: Persistent Side Panel - ALWAYS VISIBLE */}
               <div className="col-span-1">
-                <PersistentSidePanel />
+                <PersistentSidePanel className="w-full max-w-xs ml-auto" />
               </div>
             </div>
           )}
@@ -228,7 +266,7 @@ const AdminGamePanel: React.FC = () => {
 
               {/* RIGHT: Persistent Side Panel - ALWAYS VISIBLE */}
               <div className="col-span-1">
-                <PersistentSidePanel />
+                <PersistentSidePanel className="w-full max-w-xs ml-auto" />
               </div>
             </div>
           )}

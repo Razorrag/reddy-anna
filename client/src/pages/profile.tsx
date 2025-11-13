@@ -28,7 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
-import { getPaymentWhatsAppNumber, createWhatsAppUrl } from '@/lib/whatsapp-helper';
+import { getPaymentWhatsAppNumber, getPaymentWhatsAppNumberAsync, createWhatsAppUrl } from '@/lib/whatsapp-helper';
 import { copyToClipboard } from '@/lib/utils';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import { useBalance } from '@/contexts/BalanceContext';
@@ -76,13 +76,11 @@ const Profile: React.FC = () => {
   const [submittingTransaction, setSubmittingTransaction] = useState(false);
   
   // WhatsApp deeplink helper
-  const adminWhatsApp = (import.meta as any)?.env?.VITE_ADMIN_WHATSAPP || '';
-  const openWhatsAppRequest = (requestType: 'deposit' | 'withdraw') => {
+  const openWhatsAppRequest = async (requestType: 'deposit' | 'withdraw') => {
     const phone = (user && (user.phone || user.id)) || '';
-    const base = 'https://wa.me/';
-    const number = adminWhatsApp.replace(/\D/g, '');
+    const adminNumber = await getPaymentWhatsAppNumberAsync();
     const text = `Request: ${requestType.toUpperCase()}\nUser: ${phone}\nPlease assist.`;
-    const url = number ? `${base}${number}?text=${encodeURIComponent(text)}` : `${base}?text=${encodeURIComponent(text)}`;
+    const url = createWhatsAppUrl(adminNumber, text);
     window.open(url, '_blank');
   };
 
@@ -175,8 +173,20 @@ const Profile: React.FC = () => {
           setBonusSummary(summaryRes.data || summaryRes);
           setDepositBonuses(depositRes.data || depositRes);
           setReferralBonuses(referralRes.data || referralRes);
-          setBonusTransactions(transactionsRes.data || transactionsRes.data || []);
-          setBonusHasMore(transactionsRes.hasMore || false);
+          
+          // ✅ FIX: Handle both wrapped and unwrapped API responses
+          const transactionsArray = Array.isArray(transactionsRes)
+            ? transactionsRes
+            : Array.isArray(transactionsRes.data)
+              ? transactionsRes.data
+              : [];
+          
+          setBonusTransactions(transactionsArray);
+          setBonusHasMore(
+            transactionsRes.hasMore ??
+            (transactionsRes.data?.hasMore) ??
+            false
+          );
         } catch (error) {
           console.error('Failed to fetch bonus data:', error);
           showNotification('Failed to load bonus data', 'error');
@@ -671,7 +681,7 @@ const Profile: React.FC = () => {
                         }) as any;
 
                         if (response.success) {
-                          const adminNumber = getPaymentWhatsAppNumber();
+                          const adminNumber = await getPaymentWhatsAppNumberAsync();
                           const whatsappMessage = `Hello! I want to deposit ₹${numAmount.toLocaleString('en-IN')} using ${paymentMethodSelected}.`;
                           const whatsappUrl = createWhatsAppUrl(adminNumber, whatsappMessage);
 
@@ -844,31 +854,33 @@ const Profile: React.FC = () => {
                   <div className="border border-red-500/20 rounded-lg p-4 bg-black/30 space-y-4">
                     <div className="text-sm text-red-400 font-semibold mb-3">Payment Details</div>
                     
-                    {(paymentMethodSelected === 'UPI' || paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') && (
-                      <>
-                        <div>
-                          <Label className="text-white/80 mb-2">Mobile Number (for PhonePe/GPay/Paytm)</Label>
-                          <Input
-                            type="tel"
-                            value={mobileNumber}
-                            onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
-                            placeholder="9876543210"
-                            maxLength={10}
-                            className="bg-black/50 border-red-500/30 text-white focus:border-red-500/60"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-white/80 mb-2">UPI ID (Alternative)</Label>
-                          <Input
-                            type="text"
-                            value={upiId}
-                            onChange={(e) => setUpiId(e.target.value)}
-                            placeholder="yourname@upi"
-                            className="bg-black/50 border-red-500/30 text-white focus:border-red-500/60"
-                          />
-                          <p className="text-xs text-white/40 mt-1">Enter either mobile number OR UPI ID</p>
-                        </div>
-                      </>
+                    {/* UPI: Show only UPI ID field */}
+                    {paymentMethodSelected === 'UPI' && (
+                      <div>
+                        <Label className="text-white/80 mb-2">UPI ID *</Label>
+                        <Input
+                          type="text"
+                          value={upiId}
+                          onChange={(e) => setUpiId(e.target.value)}
+                          placeholder="yourname@upi"
+                          className="bg-black/50 border-red-500/30 text-white focus:border-red-500/60"
+                        />
+                      </div>
+                    )}
+
+                    {/* PhonePe/GPay/Paytm: Show only Mobile Number field */}
+                    {(paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') && (
+                      <div>
+                        <Label className="text-white/80 mb-2">Mobile Number *</Label>
+                        <Input
+                          type="tel"
+                          value={mobileNumber}
+                          onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
+                          placeholder="9876543210"
+                          maxLength={10}
+                          className="bg-black/50 border-red-500/30 text-white focus:border-red-500/60"
+                        />
+                      </div>
                     )}
 
                     {paymentMethodSelected === 'Bank Transfer' && (
@@ -921,10 +933,13 @@ const Profile: React.FC = () => {
                         return;
                       }
 
-                      // Validate payment details
-                      if ((paymentMethodSelected === 'UPI' || paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') 
-                          && !upiId.trim() && !mobileNumber.trim()) {
-                        showNotification('Please enter your UPI ID or Mobile Number', 'error');
+                      // Validate payment details based on method
+                      if (paymentMethodSelected === 'UPI' && !upiId.trim()) {
+                        showNotification('Please enter your UPI ID', 'error');
+                        return;
+                      }
+                      if ((paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') && !mobileNumber.trim()) {
+                        showNotification('Please enter your Mobile Number', 'error');
                         return;
                       }
                       if (paymentMethodSelected === 'Bank Transfer' && (!accountNumber.trim() || !ifscCode.trim() || !accountName.trim())) {
@@ -934,10 +949,12 @@ const Profile: React.FC = () => {
 
                       setSubmittingTransaction(true);
                       try {
+                        // Build payment details based on method
                         const paymentDetails: any = {};
-                        if (paymentMethodSelected === 'UPI' || paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') {
-                          if (mobileNumber.trim()) paymentDetails.mobileNumber = mobileNumber;
-                          if (upiId.trim()) paymentDetails.upiId = upiId;
+                        if (paymentMethodSelected === 'UPI') {
+                          paymentDetails.upiId = upiId;
+                        } else if (paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') {
+                          paymentDetails.mobileNumber = mobileNumber;
                         } else if (paymentMethodSelected === 'Bank Transfer') {
                           paymentDetails.accountNumber = accountNumber;
                           paymentDetails.ifscCode = ifscCode;
@@ -952,15 +969,16 @@ const Profile: React.FC = () => {
                         }) as any;
 
                         if (response.success) {
-                          const adminNumber = getPaymentWhatsAppNumber();
+                          const adminNumber = await getPaymentWhatsAppNumberAsync();
                           
                           let whatsappMessage = `Hello! I want to withdraw ₹${numAmount.toLocaleString('en-IN')}.\n\n`;
                           whatsappMessage += `Payment Details:\n`;
                           whatsappMessage += `Mode: ${paymentMethodSelected}\n`;
                           
-                          if (paymentMethodSelected === 'UPI' || paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') {
-                            if (mobileNumber.trim()) whatsappMessage += `Mobile: ${mobileNumber}\n`;
-                            if (upiId.trim()) whatsappMessage += `UPI ID: ${upiId}\n`;
+                          if (paymentMethodSelected === 'UPI') {
+                            whatsappMessage += `UPI ID: ${upiId}\n`;
+                          } else if (paymentMethodSelected === 'PhonePe' || paymentMethodSelected === 'GPay' || paymentMethodSelected === 'Paytm') {
+                            whatsappMessage += `Mobile: ${mobileNumber}\n`;
                           } else if (paymentMethodSelected === 'Bank Transfer') {
                             whatsappMessage += `Account: ${accountNumber}\n`;
                             whatsappMessage += `IFSC: ${ifscCode}\n`;
@@ -1483,9 +1501,21 @@ const Profile: React.FC = () => {
                   onLoadMore={async () => {
                     try {
                       const offset = bonusTransactions.length;
-                      const res = await apiClient.get(`/api/user/bonus-transactions?limit=20&offset=${offset}`);
-                      setBonusTransactions([...bonusTransactions, ...(res.data || [])]);
-                      setBonusHasMore(res.hasMore || false);
+                      const res = await apiClient.get(`/api/user/bonus-transactions?limit=20&offset=${offset}`) as any;
+                      
+                      // ✅ FIX: Handle both wrapped and unwrapped API responses
+                      const moreTransactions = Array.isArray(res)
+                        ? res
+                        : Array.isArray(res.data)
+                          ? res.data
+                          : [];
+                      
+                      setBonusTransactions([...bonusTransactions, ...moreTransactions]);
+                      setBonusHasMore(
+                        res.hasMore ??
+                        (res.data?.hasMore) ??
+                        false
+                      );
                     } catch (error) {
                       console.error('Failed to load more transactions:', error);
                     }

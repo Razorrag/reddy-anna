@@ -3,6 +3,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { MessageSquare, Save, Phone, AlertCircle, CheckCircle } from 'lucide-react';
 import apiClient from '../lib/api-client';
 import AdminLayout from '@/components/AdminLayout';
+import { clearWhatsAppNumberCache } from '@/lib/whatsapp-helper';
 
 export default function AdminWhatsAppSettings() {
   const { showNotification } = useNotification();
@@ -22,7 +23,7 @@ export default function AdminWhatsAppSettings() {
       const response = await apiClient.get<any>('/admin/settings');
       
       if (response.success && response.content) {
-        setWhatsappNumber(response.content.adminWhatsappNumber || '918686886632');
+        setWhatsappNumber(response.content.adminWhatsappNumber || '');
         setCustomerSupportEmail(response.content.customerSupportEmail || '');
         setCustomerSupportPhone(response.content.customerSupportPhone || '');
       }
@@ -53,6 +54,8 @@ export default function AdminWhatsAppSettings() {
       if (response.success) {
         showNotification('✅ WhatsApp settings saved successfully!', 'success');
         setWhatsappNumber(cleanNumber); // Update with cleaned number
+        // Clear cache so new number is fetched on next use
+        clearWhatsAppNumberCache();
       } else {
         showNotification('Failed to save settings', 'error');
       }

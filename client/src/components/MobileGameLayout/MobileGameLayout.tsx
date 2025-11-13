@@ -1,6 +1,6 @@
 /**
  * MobileGameLayout - Main Game Layout Component
- * 
+ *
  * Mobile-first layout that works seamlessly across all devices
  * with the same portrait-oriented design.
  */
@@ -13,6 +13,7 @@ import ControlsRow from './ControlsRow.tsx';
 import CardHistory from './CardHistory.tsx';
 import HorizontalChipSelector from './HorizontalChipSelector.tsx';
 import ProgressBar from './ProgressBar.tsx';
+import GlobalWinnerCelebration from './GlobalWinnerCelebration.tsx';
 import type { GameState } from '../../types/game';
 import type { BetSide } from '../../types/game';
 
@@ -117,6 +118,9 @@ const MobileGameLayout: React.FC<MobileGameLayoutProps> = ({
           gameState={gameState}
           className="h-1"
         />
+
+        {/* Global Winner Celebration - Overlays entire game layout */}
+        <GlobalWinnerCelebration />
       </div>
     </div>
   );

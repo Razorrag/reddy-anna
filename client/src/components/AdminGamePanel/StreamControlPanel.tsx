@@ -907,7 +907,10 @@ const StreamControlPanel: React.FC<StreamControlPanelProps> = ({ className = '' 
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Video className="w-6 h-6 text-gold" />
-          <h2 className="text-2xl font-bold text-gold">Stream Control</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gold">Live Game Stream Controls</h2>
+            <p className="text-xs text-gray-400 mt-1">Runtime streaming controls (WebRTC/RTMP/HLS) • Persistent settings in <a href="/admin/stream-settings" className="text-blue-400 hover:underline">/admin/stream-settings</a></p>
+          </div>
           {isStreaming && (
             <span className="flex items-center gap-2 px-3 py-1 bg-red-600/30 border border-red-400 text-red-200 rounded-lg text-sm font-semibold animate-pulse">
               <Radio className="w-4 h-4" />

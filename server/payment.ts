@@ -117,8 +117,8 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
         
-        // Check if user was referred and apply referral bonus
-        await storage.checkAndApplyReferralBonus(userId, amount);
+        // ✅ FIX: Referral bonus is now applied when admin APPROVES deposit, not when user submits
+        // Removed checkAndApplyReferralBonus call from here - it's called in approvePaymentRequestAtomic()
         
         return { success: true };
         
@@ -131,13 +131,11 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         // Process bank transfer
         console.log(`Processing bank deposit of ${amount} to account ${method.details.accountNumber}`);
         
-        // ✅ FIX: Removed duplicate bonus application - bonus is applied in processPayment()
-        
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
         
-        // Check if user was referred and apply referral bonus
-        await storage.checkAndApplyReferralBonus(userId, amount);
+        // ✅ FIX: Referral bonus is now applied when admin APPROVES deposit, not when user submits
+        // Removed checkAndApplyReferralBonus call from here - it's called in approvePaymentRequestAtomic()
         
         return { success: true };
         
@@ -153,8 +151,8 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
         
-        // Check if user was referred and apply referral bonus
-        await storage.checkAndApplyReferralBonus(userId, amount);
+        // ✅ FIX: Referral bonus is now applied when admin APPROVES deposit, not when user submits
+        // Removed checkAndApplyReferralBonus call from here - it's called in approvePaymentRequestAtomic()
         
         return { success: true };
         
@@ -171,8 +169,8 @@ export const processDeposit = async (request: PaymentRequest): Promise<{ success
         // Store original deposit amount for conditional bonus check
         await storage.updateUserOriginalDeposit(userId, amount);
         
-        // Check if user was referred and apply referral bonus
-        await storage.checkAndApplyReferralBonus(userId, amount);
+        // ✅ FIX: Referral bonus is now applied when admin APPROVES deposit, not when user submits
+        // Removed checkAndApplyReferralBonus call from here - it's called in approvePaymentRequestAtomic()
         
         return { success: true };
         
