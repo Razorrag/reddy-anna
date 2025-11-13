@@ -1646,6 +1646,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         console.log('⏸️ User not authenticated - disconnecting WebSocket');
         setIsWebSocketAuthenticated(false);
         webSocketManagerRef.current?.disconnect();
+        // ✅ FIX: Clean up global WebSocket context when disconnecting
+        delete (window as any).__wsContext;
         return;
       }
 
@@ -1677,14 +1679,25 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         console.log('🔌 Auth lost - disconnecting WebSocket on cleanup');
         setIsWebSocketAuthenticated(false);
         webSocketManagerRef.current?.disconnect();
+        // ✅ FIX: Clean up global WebSocket context
+        delete (window as any).__wsContext;
       }
     };
   }, [authState.authChecked, authState.isAuthenticated, authState.token, initWebSocketManager]); // Depend on auth state
 
   // ✅ FIX: Subscribe to game state immediately after WebSocket authentication
+  // ✅ FIX: Expose WebSocket in global context for VideoArea pause/play sync
   useEffect(() => {
     if (connectionStatus === ConnectionStatus.CONNECTED && isWebSocketAuthenticated && webSocketManagerRef.current) {
       console.log('✅ WebSocket authenticated - subscribing to game state');
+      
+      // ✅ CRITICAL FIX: Expose WebSocket in global context for components that need direct access
+      // This allows VideoArea to receive pause/play messages from admin
+      const ws = webSocketManagerRef.current.getWebSocket?.();
+      if (ws) {
+        (window as any).__wsContext = { ws };
+        console.log('✅ WebSocket exposed in global context for pause/play sync');
+      }
       
       // ✅ FIX: Subscribe immediately (no delay) for faster state sync
       const subscribeToGameState = () => {

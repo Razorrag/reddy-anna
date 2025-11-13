@@ -13,6 +13,7 @@ export default function AdminStreamSettings() {
   const [, setLocation] = useLocation();
   const [streamUrl, setStreamUrl] = useState('');
   const [isActive, setIsActive] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
   // NEW: Let admin choose how to play the URL
   // "iframe" for YouTube/embed players
@@ -21,6 +22,7 @@ export default function AdminStreamSettings() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
   // Load current config
@@ -37,6 +39,7 @@ export default function AdminStreamSettings() {
         const cfg = response.data;
         setStreamUrl(cfg.streamUrl || '');
         setIsActive(cfg.isActive || false);
+        setIsPaused(cfg.isPaused || false);
 
         // If backend has streamType, use it, else infer from URL
         if (cfg.streamType === 'video' || cfg.streamType === 'iframe') {
@@ -69,6 +72,7 @@ export default function AdminStreamSettings() {
         streamUrl,
         streamType, // 'iframe' or 'video' from UI toggle
         isActive,
+        isPaused,
         streamTitle: 'Live Game Stream',
         autoplay: true,
         muted: true,
@@ -88,6 +92,35 @@ export default function AdminStreamSettings() {
       setMessage({ type: 'error', text: error?.message || 'Failed to save settings' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const togglePausePlay = async () => {
+    setToggling(true);
+    setMessage(null);
+
+    try {
+      const newPausedState = !isPaused;
+      
+      const response = await apiClient.post<any>('/stream/toggle-pause', {
+        isPaused: newPausedState
+      });
+
+      if (response.success) {
+        setIsPaused(newPausedState);
+        setMessage({
+          type: 'success',
+          text: `Stream ${newPausedState ? 'paused' : 'resumed'} for all players!`
+        });
+        setTimeout(() => setMessage(null), 3000);
+      } else {
+        setMessage({ type: 'error', text: response.error || 'Failed to toggle pause state' });
+      }
+    } catch (error: any) {
+      console.error('Failed to toggle pause:', error);
+      setMessage({ type: 'error', text: error?.message || 'Failed to toggle pause state' });
+    } finally {
+      setToggling(false);
     }
   };
 
@@ -189,6 +222,53 @@ export default function AdminStreamSettings() {
                   />
                 </button>
               </div>
+
+              {/* Pause/Play Control - Only show when stream is active */}
+              {isActive && streamUrl && (
+                <div className="p-4 bg-gradient-to-r from-purple-900/40 to-blue-900/40 rounded-lg border border-purple-500/30">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-semibold text-white flex items-center gap-2">
+                        <span className="text-2xl">{isPaused ? '⏸️' : '▶️'}</span>
+                        Stream Playback Control
+                      </p>
+                      <p className="text-sm text-gray-400 mt-1">
+                        {isPaused
+                          ? 'Stream is currently PAUSED for all players (frozen frame visible)'
+                          : 'Stream is currently PLAYING for all players'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={togglePausePlay}
+                    disabled={toggling}
+                    className={`w-full px-6 py-3 rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+                      isPaused
+                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'
+                        : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white'
+                    }`}
+                  >
+                    {toggling ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        {isPaused ? 'Resuming...' : 'Pausing...'}
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xl">{isPaused ? '▶️' : '⏸️'}</span>
+                        {isPaused ? 'Resume Stream for All Players' : 'Pause Stream for All Players'}
+                      </>
+                    )}
+                  </button>
+                  
+                  <p className="text-xs text-gray-400 mt-2 text-center">
+                    💡 {isPaused
+                      ? 'Click to resume playback - players will see the live stream again'
+                      : 'Click to pause - players will see a frozen frame (no black screen)'}
+                  </p>
+                </div>
+              )}
 
               {/* Status Message */}
               {message && (

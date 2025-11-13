@@ -11,7 +11,7 @@
  * - Video stream never interrupted by game state or operations
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -33,6 +33,15 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   
   // Live viewer count - using totalPlayers from backend
   const [liveViewerCount, setLiveViewerCount] = useState<number>(0);
+  
+  // Refs for direct stream control
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  
+  // Canvas ref for capturing frozen frame when paused
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
+  const [isPausedState, setIsPausedState] = useState(false);
 
   // Fetch totalPlayers from backend
   useEffect(() => {
@@ -116,10 +125,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             }
           }
           
-          setStreamConfig({
+          const config = {
             ...data.data,
             streamUrl: streamUrl
-          });
+          };
+          setStreamConfig(config);
+          setIsPausedState(config.isPaused || false);
           
           console.log('🎥 VideoArea: Stream config loaded:', {
             streamUrl: streamUrl,
@@ -158,6 +169,144 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => clearInterval(refreshInterval);
   }, []);
 
+  // ✅ AUTO-RESUME: Page Visibility API - Auto-resume stream when user returns to app
+  // ✅ FIX: Check isPausedState to prevent auto-resume when admin has paused
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // ✅ CRITICAL FIX: Only auto-resume if NOT paused by admin
+      if (!document.hidden && streamConfig?.streamUrl && !isPausedState) {
+        console.log('👁️ Page visible again - auto-resuming stream...');
+        
+        // For VIDEO elements - auto-resume playback
+        const videoElement = videoRef.current;
+        if (videoElement) {
+          console.log('🎥 Auto-resuming video playback...');
+          videoElement.play().catch(err => {
+            console.log('⚠️ Video play failed, retrying...', err);
+            // Retry after short delay
+            setTimeout(() => {
+              videoElement.play().catch(e => console.error('❌ Video play retry failed:', e));
+            }, 500);
+          });
+        }
+        
+        // For IFRAME elements - force reload to resume
+        const iframeElement = iframeRef.current;
+        if (iframeElement && iframeElement.src) {
+          console.log('🎬 Reloading iframe to resume stream...');
+          const currentSrc = iframeElement.src;
+          iframeElement.src = ''; // Clear
+          setTimeout(() => {
+            iframeElement.src = currentSrc; // Reload
+            console.log('✅ Iframe reloaded successfully');
+          }, 100);
+        }
+      } else if (!document.hidden && isPausedState) {
+        console.log('⏸️ Page visible but stream is paused by admin - not auto-resuming');
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [streamConfig?.streamUrl, isPausedState]);
+
+  // ✅ STREAM HEALTH MONITOR: Auto-recovery for paused or failed streams
+  // ✅ FIX: Check isPausedState to prevent auto-resume when admin has paused
+  useEffect(() => {
+    const monitorStream = setInterval(() => {
+      if (document.hidden) return; // Don't check when page is hidden
+      
+      const videoElement = videoRef.current;
+      if (videoElement && streamConfig?.streamUrl) {
+        // ✅ CRITICAL FIX: Only auto-resume if NOT paused by admin
+        if (videoElement.paused && videoElement.readyState >= 2 && !isPausedState) {
+          console.log('🔄 Auto-resuming paused video...');
+          videoElement.play().catch(err => console.error('❌ Auto-resume failed:', err));
+        }
+        
+        // If video failed to load, reload it (but respect pause state)
+        if (videoElement.readyState === 0 || videoElement.error) {
+          console.log('🔄 Reloading failed video...');
+          videoElement.load();
+          if (!isPausedState) {
+            videoElement.play().catch(err => console.error('❌ Video reload failed:', err));
+          }
+        }
+      }
+    }, 2000); // Check every 2 seconds
+    
+    return () => clearInterval(monitorStream);
+  }, [streamConfig?.streamUrl, isPausedState]);
+
+  // ✅ WEBSOCKET LISTENER: Listen for pause/play state changes from admin
+  useEffect(() => {
+    const { ws } = (window as any).__wsContext || {};
+    
+    if (!ws) {
+      console.warn('⚠️ WebSocket not available for pause/play synchronization');
+      return;
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'stream_pause_state') {
+          const { isPaused } = message.data;
+          console.log(`🎬 Stream ${isPaused ? 'PAUSED' : 'RESUMED'} by admin`);
+          
+          setIsPausedState(isPaused);
+          
+          // Capture frame when pausing
+          if (isPaused) {
+            captureCurrentFrame();
+          } else {
+            // Clear frozen frame when resuming
+            setFrozenFrame(null);
+            // Resume video playback
+            if (videoRef.current) {
+              videoRef.current.play().catch(console.error);
+            }
+          }
+        }
+      } catch (error) {
+        // Ignore non-JSON messages
+      }
+    };
+
+    ws.addEventListener('message', handleMessage);
+    return () => ws.removeEventListener('message', handleMessage);
+  }, []);
+
+  // Capture current video frame to canvas
+  const captureCurrentFrame = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    if (video && canvas && video.readyState >= 2) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const frameData = canvas.toDataURL('image/jpeg', 0.9);
+        setFrozenFrame(frameData);
+        console.log('📸 Captured frozen frame');
+      }
+    } else {
+      console.warn('⚠️ Could not capture frame - video not ready');
+    }
+  };
+
+  // Handle pause effect when paused state changes
+  useEffect(() => {
+    if (isPausedState && videoRef.current) {
+      videoRef.current.pause();
+      captureCurrentFrame();
+    } else if (!isPausedState && videoRef.current) {
+      setFrozenFrame(null);
+      videoRef.current.play().catch(console.error);
+    }
+  }, [isPausedState]);
 
   // Handle pulse effect when less than 5 seconds
   useEffect(() => {
@@ -235,13 +384,15 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       console.log('✅ VideoArea: Rendering VIDEO stream:', streamConfig.streamUrl);
       return (
         <video
+          ref={videoRef}
           src={streamConfig.streamUrl}
           className="w-full h-full object-cover"
-          autoPlay={streamConfig.autoplay !== false}
+          autoPlay
           muted={streamConfig.muted !== false}
           controls={streamConfig.controls || false}
           loop
           playsInline
+          preload="auto"
           style={{
             position: 'absolute',
             top: 0,
@@ -251,6 +402,26 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             objectFit: 'cover',
             zIndex: 1
           }}
+          onPause={() => {
+            // ✅ CRITICAL FIX: Auto-resume if paused unexpectedly, but NOT if admin paused
+            if (!document.hidden && videoRef.current && !isPausedState) {
+              console.log('🔄 Video paused unexpectedly - auto-resuming...');
+              setTimeout(() => {
+                videoRef.current?.play().catch(err => console.error('❌ Auto-resume on pause failed:', err));
+              }, 100);
+            }
+          }}
+          onError={(e) => {
+            console.error('❌ Video error:', e);
+            // Try to reload after error
+            setTimeout(() => {
+              if (videoRef.current && !document.hidden) {
+                console.log('🔄 Attempting to recover from video error...');
+                videoRef.current.load();
+                videoRef.current.play().catch(console.error);
+              }
+            }, 1000);
+          }}
         />
       );
     } else {
@@ -258,9 +429,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       console.log('✅ VideoArea: Rendering IFRAME stream:', streamConfig.streamUrl);
       return (
         <iframe
+          ref={iframeRef}
           src={streamConfig.streamUrl}
           className="w-full h-full border-0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allow="autoplay; fullscreen; picture-in-picture; accelerometer; clipboard-write; encrypted-media; gyroscope"
           allowFullScreen
           // ✅ Allow mixed content and cross-origin
           sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
@@ -275,6 +447,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             zIndex: 1
           }}
           title="Live Game Stream"
+          onLoad={() => {
+            console.log('✅ Iframe loaded successfully');
+          }}
+          onError={(e) => {
+            console.error('❌ Iframe error:', e);
+          }}
         />
       );
     }
@@ -282,6 +460,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
   // Determine if stream is live
   const isLive = !!(streamConfig?.isActive && streamConfig?.streamUrl);
+  const showFrozenFrame = isPausedState && frozenFrame;
   
   console.log('🎥 VideoArea render state:', {
     isLive,
@@ -294,9 +473,46 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
   return (
     <div className={`relative bg-black overflow-hidden ${className}`}>
+      {/* Hidden canvas for frame capture */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+      
       {/* Embedded Video Stream - Runs independently in background, never interrupted */}
       <div className="absolute inset-0">
         {renderStream()}
+
+        {/* Frozen Frame Overlay - Shows when VIDEO stream is paused */}
+        {showFrozenFrame && streamConfig?.streamType === 'video' && (
+          <div className="absolute inset-0 z-10">
+            <img
+              src={frozenFrame}
+              alt="Paused Stream"
+              className="w-full h-full object-cover"
+            />
+            {/* Paused Indicator */}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <div className="bg-black/80 backdrop-blur-sm px-6 py-4 rounded-2xl border-2 border-amber-500/50 shadow-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="text-4xl animate-pulse">⏸️</div>
+                  <div>
+                    <p className="text-white font-bold text-xl">Stream Paused</p>
+                    <p className="text-gray-300 text-sm">Admin will resume shortly</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ NEW: Iframe Pause Overlay - Shows full-screen overlay for iframe streams (can't capture frame) */}
+        {isPausedState && streamConfig?.streamType === 'iframe' && (
+          <div className="absolute inset-0 z-10 bg-black/95 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-6xl mb-4 animate-pulse">⏸️</div>
+              <p className="text-white font-bold text-2xl mb-2">Stream Paused</p>
+              <p className="text-gray-400 text-sm">Admin will resume shortly</p>
+            </div>
+          </div>
+        )}
 
         {/* Overlay Gradient for better text visibility */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" style={{ zIndex: 2 }} />

@@ -640,6 +640,7 @@ router.get('/simple-config', optionalAuth, async (req, res) => {
       streamUrl: data.stream_url || '',
       streamType: data.stream_type || 'iframe',
       isActive: data.is_active || false,
+      isPaused: data.is_paused || false,
       streamTitle: data.stream_title || 'Live Game Stream',
       autoplay: data.autoplay !== false,
       muted: data.muted !== false,
@@ -692,7 +693,7 @@ function convertYouTubeUrl(url: string): string {
  */
 router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res) => {
   try {
-    let { streamUrl, streamType, isActive, streamTitle, autoplay, muted, controls } = req.body;
+    let { streamUrl, streamType, isActive, isPaused, streamTitle, autoplay, muted, controls } = req.body;
 
     // Validate required fields
     if (!streamUrl || !streamType) {
@@ -725,6 +726,7 @@ router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res)
       stream_url: streamUrl,
       stream_type: streamType,
       is_active: isActive !== false,
+      is_paused: isPaused || false,
       stream_title: streamTitle || 'Live Game Stream',
       autoplay: autoplay !== false,
       muted: muted !== false,
@@ -787,6 +789,86 @@ router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res)
     res.status(500).json({
       success: false,
       error: 'Failed to save stream configuration'
+    });
+  }
+});
+
+/**
+ * POST /api/stream/toggle-pause
+ * Toggle stream pause/play state (Admin only)
+ * Broadcasts state to all connected players via WebSocket
+ */
+router.post('/toggle-pause', requireAuth, validateAdminAccess, async (req, res) => {
+  try {
+    const { isPaused } = req.body;
+
+    if (typeof isPaused !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'isPaused must be a boolean value'
+      });
+    }
+
+    // Update pause state in database
+    const { data: existing } = await supabaseServer
+      .from('simple_stream_config')
+      .select('id')
+      .limit(1)
+      .single();
+
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Stream configuration not found'
+      });
+    }
+
+    const { error } = await supabaseServer
+      .from('simple_stream_config')
+      .update({
+        is_paused: isPaused,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existing.id);
+
+    if (error) {
+      console.error('❌ Error updating pause state:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to update pause state'
+      });
+    }
+
+    // Broadcast pause/play state to all connected WebSocket clients
+    const wss = (req.app as any).get('wss');
+    if (wss) {
+      const message = JSON.stringify({
+        type: 'stream_pause_state',
+        data: {
+          isPaused,
+          timestamp: Date.now()
+        }
+      });
+
+      wss.clients.forEach((client: any) => {
+        if (client.readyState === 1) { // WebSocket.OPEN
+          client.send(message);
+        }
+      });
+
+      console.log(`📢 Broadcasted stream ${isPaused ? 'PAUSE' : 'PLAY'} to ${wss.clients.size} clients`);
+    }
+
+    res.json({
+      success: true,
+      message: `Stream ${isPaused ? 'paused' : 'playing'}`,
+      data: { isPaused }
+    });
+  } catch (error) {
+    console.error('❌ Error toggling pause state:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to toggle pause state'
     });
   }
 });
