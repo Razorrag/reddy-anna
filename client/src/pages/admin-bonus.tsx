@@ -142,7 +142,8 @@ export default function AdminBonus() {
   // Fetch bonus settings
   const fetchBonusSettings = async () => {
     try {
-      const response = await apiClient.get<{ success: boolean; data: BonusSettings }>('/admin/bonus-settings');
+      // Use unified API route for admin bonus settings
+      const response = await apiClient.get<{ success: boolean; data: BonusSettings }>('/api/admin/bonus-settings');
       if (response.success && response.data) {
         setBonusSettings({
           depositBonusPercent: parseFloat(response.data.depositBonusPercent?.toString() || '5'),
@@ -268,8 +269,9 @@ export default function AdminBonus() {
 
   const handleSaveSettings = async () => {
     try {
+      // Persist changes via unified admin settings API
       const response = await apiClient.put<{ success: boolean; message?: string; error?: string }>(
-        '/admin/bonus-settings',
+        '/api/admin/bonus-settings',
         {
           depositBonusPercent: bonusSettings.depositBonusPercent,
           referralBonusPercent: bonusSettings.referralBonusPercent,

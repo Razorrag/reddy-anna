@@ -653,7 +653,7 @@ async function restoreActiveGameState() {
             data: {
               phase: 'dealing',
               round: currentGameState.currentRound,
-              bettingLocked: true,
+              bettingLocked: true, // ✅ FIX: Explicitly set betting locked
               message: 'Betting closed. Admin can now deal cards.'
             }
           });
@@ -683,7 +683,7 @@ const getCurrentGameStateForUser = async (userId: string) => {
       } as any;
       userBalance = 0;
     } else {
-      userBalance = parseFloat(user.balance) || 0;
+      userBalance = parseFloat(user.balance as string) || 0;
     }
 
     // Get user's current bets from database (only for non-admin users)
@@ -1355,8 +1355,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               // Get user information
               const user = await storage.getUser(decoded.id);
-              if (!user || user.status !== 'active') {
-                throw new Error('User not found or inactive');
+              if (!user) {
+                throw new Error('User not found');
               }
               
               // Generate new tokens
@@ -2481,7 +2481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               description: `Withdrawal requested - ₹${numAmount} deducted (pending admin approval)`
             });
           } catch (txError: any) {
-            // ✅ FIX #3: Don't fail withdrawal if transaction logging fails, but maintain audit trail
+            // ✅ FIX: Don't fail withdrawal if transaction logging fails, but maintain audit trail
             console.warn('⚠️ Transaction logging to database failed (non-critical):', txError.message);
             
             // Fallback: Log to console with structured format for external log aggregators
@@ -4172,7 +4172,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         depositBonusPercent: settings.default_deposit_bonus_percent || '5',
         referralBonusPercent: settings.referral_bonus_percent || '1',
         conditionalBonusThreshold: settings.conditional_bonus_threshold || '30',
-        bonusClaimThreshold: (settings as any).bonus_claim_threshold || '500'
+        bonusClaimThreshold: (settings as any).bonus_claim_threshold || '500',
+        // Surface admin WhatsApp number for frontend configuration
+        adminWhatsappNumber: (settings as any).admin_whatsapp_number || ''
       };
       
       res.json({
@@ -4190,7 +4192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/admin/bonus-settings", generalLimiter, async (req, res) => {
     try {
-      const { depositBonusPercent, referralBonusPercent, conditionalBonusThreshold, bonusClaimThreshold } = req.body;
+      const { depositBonusPercent, referralBonusPercent, conditionalBonusThreshold, bonusClaimThreshold, adminWhatsappNumber } = req.body;
       
       // Update game settings
       const updates: any = {};
@@ -4205,6 +4207,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (bonusClaimThreshold !== undefined) {
         updates.bonus_claim_threshold = bonusClaimThreshold.toString();
+      }
+      if (adminWhatsappNumber !== undefined) {
+        updates.admin_whatsapp_number = adminWhatsappNumber.toString();
       }
       
       const result = await updateGameSettings(updates, req.user!.id);
@@ -5485,6 +5490,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get game history error:", error);
       res.status(500).json({ error: "Failed to get game history" });
+    }
+  });
+
+  // Per-user payout lookup for a completed game (API fallback for frontend)
+  app.get("/api/game/:gameId/user-payout", async (req, res) => {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+
+      const { gameId } = req.params;
+      const userId = req.user.id;
+
+      if (!gameId) {
+        return res.status(400).json({ success: false, message: 'gameId is required' });
+      }
+
+      // Get user's bets for this game
+      const bets = await storage.getBetsForUser(userId, gameId);
+      if (!bets || bets.length === 0) {
+        return res.json({
+          success: true,
+          payout: 0,
+          totalBet: 0,
+          netProfit: 0,
+          winner: null,
+          round: null
+        });
+      }
+
+      // Get game session/result
+      const game = await storage.getGameSession(gameId);
+      if (!game || !game.winner) {
+        return res.json({ success: false, message: 'Game not complete' });
+      }
+
+      const winner = (game as any).winner as 'andar' | 'bahar';
+      const round = (game as any).round || (game as any).current_round || 1;
+
+      let totalBet = 0;
+      const userBets = {
+        round1: { andar: 0, bahar: 0 },
+        round2: { andar: 0, bahar: 0 }
+      };
+
+      bets.forEach((bet: any) => {
+        const amount = parseFloat(bet.amount || '0');
+        totalBet += amount;
+        const betRound = bet.round === '1' || bet.round === 1 ? 1 : 2;
+        const side = bet.side as 'andar' | 'bahar';
+
+        if (betRound === 1) {
+          userBets.round1[side] += amount;
+        } else {
+          userBets.round2[side] += amount;
+        }
+      });
+
+      // Apply SAME payout rules as completeGame
+      let payout = 0;
+      if (round === 1) {
+        // Round 1: Andar 1:1, Bahar 1:0 (refund)
+        payout = winner === 'andar'
+          ? userBets.round1.andar * 2
+          : userBets.round1.bahar;
+      } else if (round === 2) {
+        // Round 2: Andar 1:1 on all Andar bets, Bahar 1:1 on R1 + 1:0 on R2
+        if (winner === 'andar') {
+          payout = (userBets.round1.andar + userBets.round2.andar) * 2;
+        } else {
+          payout = (userBets.round1.bahar * 2) + userBets.round2.bahar;
+        }
+      } else {
+        // Round 3: both sides 1:1 on total combined bets
+        const totalOnWinner = userBets.round1[winner] + userBets.round2[winner];
+        payout = totalOnWinner * 2;
+      }
+
+      const netProfit = payout - totalBet;
+
+      res.json({
+        success: true,
+        payout,
+        totalBet,
+        netProfit,
+        winner,
+        round
+      });
+    } catch (error) {
+      console.error('Failed to get user payout:', error);
+      res.status(500).json({ success: false, message: 'Failed to get payout' });
     }
   });
 

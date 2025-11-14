@@ -1523,10 +1523,22 @@ const Profile: React.FC = () => {
                   <div className="p-4 bg-gold/10 rounded-lg border border-gold/30">
                     <div className="text-center">
                       <div className="text-3xl font-bold text-gold mb-2">
-                        {profileState.user?.referralCode || 'RAJUGARIKOSSU' + user.id.slice(-6).toUpperCase()}
+                        {profileState.user?.referralCodeGenerated ||
+                          profileState.referralData?.referralCode ||
+                          'NO REFERRAL CODE YET'}
                       </div>
                       <Button
-                        onClick={() => handleCopyToClipboard(profileState.user?.referralCode || 'RAJUGARIKOSSU' + user.id.slice(-6).toUpperCase())}
+                        onClick={() => {
+                          const codeToCopy =
+                            profileState.user?.referralCodeGenerated ||
+                            profileState.referralData?.referralCode ||
+                            '';
+                          if (!codeToCopy) {
+                            showNotification('Referral code not available yet. Please contact support.', 'error');
+                            return;
+                          }
+                          void handleCopyToClipboard(codeToCopy);
+                        }}
                         variant="outline"
                         className="border-gold/30 text-gold hover:bg-gold/10"
                       >
@@ -1612,16 +1624,19 @@ const Profile: React.FC = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {profileState.referralData.referredUsers.map((referral, index) => (
+                    {profileState.referralData.referredUsers.map((referral, index) => {
+                      const displayName = referral.fullName || referral.phone || 'User';
+                      const initials = displayName.slice(0, 2).toUpperCase();
+                      return (
                       <div key={index} className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-gold/10">
                         <div className="flex items-center gap-4">
                           <Avatar className="w-10 h-10">
                             <AvatarFallback className="bg-gold/20 text-gold text-sm font-semibold">
-                              {referral.username.slice(0, 2).toUpperCase()}
+                              {initials}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <div className="text-white font-medium">{referral.username}</div>
+                            <div className="font-semibold text-white">{displayName}</div>
                             <div className="text-white/60 text-sm">Joined: {formatDate(referral.createdAt)}</div>
                           </div>
                         </div>
@@ -1634,7 +1649,7 @@ const Profile: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 </CardContent>
               </Card>

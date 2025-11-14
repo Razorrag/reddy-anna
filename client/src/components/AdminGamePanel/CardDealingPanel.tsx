@@ -154,7 +154,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
       {round < 3 && selectedCard && (
         <div className="bg-gradient-to-r from-blue-900/30 to-red-900/30 rounded-lg p-2 border-2 border-gold/50 text-center">
           <div className="text-sm text-gray-400 mb-1">Next Card: {nextSide.toUpperCase()}</div>
-          <div className={`text-4xl font-bold ${selectedCard ? (selectedCard.color === 'red' ? 'text-red-500' : 'text-white') : 'text-gray-600'}`}>
+          <div className={`text-6xl font-bold ${selectedCard ? (selectedCard.color === 'red' ? 'text-red-500' : 'text-white') : 'text-gray-600'}`}>
             {selectedCard?.display || '--'}
           </div>
         </div>
@@ -172,7 +172,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
               <span className="text-gray-400 uppercase text-xs">{suit.name}</span>
             </div>
             
-            <div className="flex flex-wrap gap-0.5">
+            <div className="flex flex-wrap gap-1">
               {allCards
                 .filter(card => card.suit === suit.name)
                 .map(card => {
@@ -189,7 +189,7 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
                       onClick={() => !isUsed && handleQuickCardSelect(card)}
                       disabled={isDisabled}
                       className={`
-                        w-[calc(100%/13-0.25rem)] min-w-[52px] h-[72px] rounded text-lg font-bold transition-all duration-300
+                        w-[calc(100%/13-0.25rem)] min-w-[64px] h-[88px] rounded text-3xl font-bold transition-all duration-300 flex items-center justify-center
                         ${isSelected
                           ? 'bg-gradient-to-br from-gold to-yellow-500 text-black border-2 border-white scale-105 relative z-10 shadow-lg shadow-gold/50 animate-pulse-subtle'
                           : isUsed

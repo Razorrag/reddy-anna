@@ -21,11 +21,12 @@ import { useLocation } from 'wouter';
 import { useGameState } from '@/contexts/GameStateContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useNotification } from '@/contexts/NotificationContext';
+import { apiClient } from '@/lib/api-client';
 import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
 import PersistentSidePanel from '@/components/PersistentSidePanel';
 import StreamControlPanel from './StreamControlPanel';
-import { Home } from 'lucide-react';
+import { Home, RefreshCw } from 'lucide-react';
 
 const AdminGamePanel: React.FC = () => {
   const { gameState } = useGameState();
@@ -34,6 +35,11 @@ const AdminGamePanel: React.FC = () => {
   
   const [isResetting, setIsResetting] = useState(false);
   const [activeTab, setActiveTab] = useState<'game' | 'stream'>('game');
+  const [minViewers, setMinViewers] = useState<number>(1000);
+  const [maxViewers, setMaxViewers] = useState<number>(1100);
+  const [isPaused, setIsPaused] = useState(false);
+  const [viewSaving, setViewSaving] = useState(false);
+  const [togglingPause, setTogglingPause] = useState(false);
   const [, setLocation] = useLocation();
   
   // Sync game state when admin navigates to this page
@@ -46,6 +52,25 @@ const AdminGamePanel: React.FC = () => {
     });
     console.log('🔄 Admin panel mounted - requesting game state sync');
   }, [sendWebSocketMessage]);
+
+  // Load current simple stream config to sync fake viewer range and pause state
+  useEffect(() => {
+    const loadStreamConfig = async () => {
+      try {
+        const response = await apiClient.get<any>('/stream/simple-config');
+        if (response.success && response.data) {
+          const cfg = response.data;
+          setMinViewers(cfg.minViewers ?? 1000);
+          setMaxViewers(cfg.maxViewers ?? 1100);
+          setIsPaused(cfg.isPaused || false);
+        }
+      } catch (error) {
+        console.error('Failed to load stream config for header controls:', error);
+      }
+    };
+
+    loadStreamConfig();
+  }, []);
   
   const handleResetGame = async () => {
     if (!window.confirm('🔄 Reset the entire game? This will clear all bets and restart.')) {
@@ -63,6 +88,62 @@ const AdminGamePanel: React.FC = () => {
     console.log('🔄 Admin reset initiated - waiting for backend broadcast');
     showNotification('🔄 Game reset successfully', 'success');
     setTimeout(() => setIsResetting(false), 1000);
+  };
+
+  const handleSaveViewerRange = async () => {
+    setViewSaving(true);
+    try {
+      // Get the latest config first so we don't overwrite URL/type/active from elsewhere
+      const current = await apiClient.get<any>('/stream/simple-config');
+      if (!current.success || !current.data) {
+        showNotification('Failed to load current stream settings', 'error');
+        return;
+      }
+
+      const cfg = current.data;
+      const payload = {
+        ...cfg,
+        minViewers,
+        maxViewers,
+      };
+
+      const response = await apiClient.post<any>('/stream/simple-config', payload);
+      if (response.success) {
+        showNotification('Live view range updated', 'success');
+      } else {
+        showNotification(response.error || 'Failed to update live view range', 'error');
+      }
+    } catch (error: any) {
+      console.error('Failed to save viewer range:', error);
+      showNotification(error?.message || 'Failed to update live view range', 'error');
+    } finally {
+      setViewSaving(false);
+    }
+  };
+
+  const handleToggleStreamPause = async () => {
+    setTogglingPause(true);
+    try {
+      const newPausedState = !isPaused;
+      const response = await apiClient.post<any>('/stream/toggle-pause', {
+        isPaused: newPausedState,
+      });
+
+      if (response.success) {
+        setIsPaused(newPausedState);
+        showNotification(
+          `Stream ${newPausedState ? 'paused' : 'resumed'} for all players!`,
+          'success'
+        );
+      } else {
+        showNotification(response.error || 'Failed to toggle stream pause state', 'error');
+      }
+    } catch (error: any) {
+      console.error('Failed to toggle stream pause:', error);
+      showNotification(error?.message || 'Failed to toggle stream pause state', 'error');
+    } finally {
+      setTogglingPause(false);
+    }
   };
 
   return (
@@ -83,12 +164,69 @@ const AdminGamePanel: React.FC = () => {
               <span className="text-base px-4 py-2 bg-gold/20 border border-gold/40 text-gold rounded-lg font-bold shadow-lg">Round {gameState.currentRound}</span>
               <span className="text-sm px-3 py-1.5 bg-purple-600/30 border border-purple-400/30 text-purple-200 rounded-lg font-medium">Phase: {gameState.phase}</span>
             </div>
-            <button 
-              onClick={handleResetGame} 
-              disabled={isResetting} 
-              className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-600 disabled:to-gray-700 text-white text-sm rounded-xl font-bold shadow-lg transition-all duration-200 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-700/80 rounded-lg px-3 py-2 shadow-md">
+                <span className="text-xs font-semibold text-gray-300 whitespace-nowrap">Live View</span>
+                <input
+                  type="number"
+                  value={minViewers}
+                  onChange={(e) => setMinViewers(parseInt(e.target.value || '0', 10))}
+                  className="w-16 px-2 py-1 bg-slate-950/70 border border-slate-700 rounded-md text-xs text-white focus:outline-none focus:border-gold"
+                />
+                <input
+                  type="number"
+                  value={maxViewers}
+                  onChange={(e) => setMaxViewers(parseInt(e.target.value || '0', 10))}
+                  className="w-16 px-2 py-1 bg-slate-950/70 border border-slate-700 rounded-md text-xs text-white focus:outline-none focus:border-gold"
+                />
+                <button
+                  onClick={handleSaveViewerRange}
+                  disabled={viewSaving}
+                  className="flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-600 disabled:to-gray-700 text-white text-[11px] font-semibold rounded-md shadow-sm transition-all disabled:opacity-60"
+                >
+                  {viewSaving ? (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      Saving
+                    </>
+                  ) : (
+                    'Save'
+                  )}
+                </button>
+              </div>
+
+              <button 
+                onClick={handleResetGame} 
+                disabled={isResetting} 
+                className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-600 disabled:to-gray-700 text-white text-sm rounded-xl font-bold shadow-lg transition-all duration-200 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isResetting ? '⏳ Resetting...' : '🔄 Reset Game'}
+              </button>
+            </div>
+          </div>
+
+          {/* Global Stream Pause/Play control for quick access */}
+          <div className="mb-4">
+            <button
+              onClick={handleToggleStreamPause}
+              disabled={togglingPause}
+              className={`w-full px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed ${
+                isPaused
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'
+                  : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white'
+              }`}
             >
-              {isResetting ? '⏳ Resetting...' : '🔄 Reset Game'}
+              {togglingPause ? (
+                <span className="flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  {isPaused ? 'Resuming stream for all players...' : 'Pausing stream for all players...'}
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="text-lg">{isPaused ? '▶️' : '⏸️'}</span>
+                  {isPaused ? 'Resume Stream for All Players' : 'Pause Stream for All Players'}
+                </span>
+              )}
             </button>
           </div>
           

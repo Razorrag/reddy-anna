@@ -31,9 +31,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const [streamConfig, setStreamConfig] = useState<any>(null);
   const [streamLoading, setStreamLoading] = useState(true);
   
-  // Live viewer count - using totalPlayers from backend
-  const [liveViewerCount, setLiveViewerCount] = useState<number>(0);
-  // Displayed viewer count - can be fake or real based on config
+  // Displayed viewer count - always fake based on configured range
   const [displayedViewerCount, setDisplayedViewerCount] = useState<number>(0);
   
   // Refs for direct stream control
@@ -45,44 +43,23 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
   const [isPausedState, setIsPausedState] = useState(false);
 
-  // Fetch totalPlayers from backend and manage displayed count
-  useEffect(() => {
-    const fetchTotalPlayers = async () => {
-      try {
-        const response = await fetch('/api/game/current-state');
-        const data = await response.json();
-        if (data && typeof data.totalPlayers === 'number') {
-          setLiveViewerCount(data.totalPlayers);
-        }
-      } catch (error) {
-        console.error('❌ Failed to fetch total players:', error);
-      }
-    };
-
-    // Fetch immediately
-    fetchTotalPlayers();
-
-    // Update every 3 seconds to keep live count accurate
-    const interval = setInterval(fetchTotalPlayers, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // NEW: Fake viewer count logic with fallback to real count
+  // Fake viewer count logic - ALWAYS uses a range (configured if available, otherwise defaults)
   useEffect(() => {
     const updateDisplayedCount = () => {
-      // Check if fake viewer range is configured
-      const minViewers = streamConfig?.minViewers;
-      const maxViewers = streamConfig?.maxViewers;
+      // Use configured fake viewer range if available; otherwise fall back to defaults
+      let minViewers = streamConfig?.minViewers;
+      let maxViewers = streamConfig?.maxViewers;
 
-      if (typeof minViewers === 'number' && typeof maxViewers === 'number' && minViewers > 0 && maxViewers > 0) {
-        // Use fake random count between min and max
-        const fakeCount = Math.floor(Math.random() * (maxViewers - minViewers + 1)) + minViewers;
-        setDisplayedViewerCount(fakeCount);
-        console.log(`👥 Displaying fake viewer count: ${fakeCount} (range: ${minViewers}-${maxViewers})`);
-      } else {
-        // Fallback to real viewer count
-        setDisplayedViewerCount(liveViewerCount);
+      if (typeof minViewers !== 'number' || minViewers <= 0) {
+        minViewers = 1000;
       }
+      if (typeof maxViewers !== 'number' || maxViewers < minViewers) {
+        maxViewers = 1100;
+      }
+
+      const fakeCount = Math.floor(Math.random() * (maxViewers - minViewers + 1)) + minViewers;
+      setDisplayedViewerCount(fakeCount);
+      console.log(`👥 Displaying fake viewer count: ${fakeCount} (range: ${minViewers}-${maxViewers})`);
     };
 
     // Update immediately
@@ -91,7 +68,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     // Update every 2 seconds for fake count variation
     const interval = setInterval(updateDisplayedCount, 2000);
     return () => clearInterval(interval);
-  }, [streamConfig?.minViewers, streamConfig?.maxViewers, liveViewerCount]);
+  }, [streamConfig?.minViewers, streamConfig?.maxViewers]);
 
   // Load stream configuration with auto-refresh
   useEffect(() => {
@@ -495,7 +472,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     streamConfigExists: !!streamConfig,
     isActive: streamConfig?.isActive,
     hasUrl: !!streamConfig?.streamUrl,
-    liveViewerCount,
     phase: gameState.phase
   });
 

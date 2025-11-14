@@ -66,6 +66,8 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     newBalance?: number;
     betAmount?: number;
     result: 'win' | 'loss' | 'no_bet';
+    // Store full bet breakdown for this user (used later for WebSocket payloads)
+    bets: any;
   }> = [];
   
   // Calculate individual payouts for each user (proper Andar Bahar rules)
@@ -118,7 +120,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     payoutNotifications.push({
       userId,
       payout,
-      won: payout > 0,
+      result,
       bets: userBets
     });
     
@@ -382,21 +384,21 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   
   // STEP 2: Send WebSocket updates with more detailed information
   const clients = (global as any).clients as Set<{ ws: any; userId: string; role: string; wallet: number }>;
-  
+
   // ✅ CRITICAL FIX: Batch fetch all user balances to reduce DB queries
   // BEFORE: 10 separate queries (500ms-1000ms)
   // AFTER: 1 batch query (~100ms) - 80% faster
   const wsStartTime = Date.now();
   const userIds = payoutNotifications.map(n => n.userId);
   const balanceMap = new Map<string, number>();
-  
+
   if (userIds.length > 0) {
     try {
       const { data: users, error: balanceError } = await (storage as any).supabaseServer
         .from('users')
         .select('id, balance')
         .in('id', userIds);
-      
+
       if (!balanceError && users) {
         users.forEach((u: any) => balanceMap.set(u.id, parseFloat(u.balance || '0')));
         console.log(`✅ Batch fetched ${users.length} user balances in ${Date.now() - wsStartTime}ms`);
@@ -406,152 +408,115 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       // Continue with individual fetches as fallback
     }
   }
-  
-  // ✅ FIX: Check if payoutNotifications and clients exist before iterating
+
   if (payoutNotifications && payoutNotifications.length > 0 && clients) {
-    // Send payout notifications to players who won, with detailed breakdown
+    const clientsArray = Array.from(clients);
+
+    // Send payout_received with detailed breakdown to each user who bet
     for (const notification of payoutNotifications) {
-      const clientsArray = Array.from(clients);
       const client = clientsArray.find(c => c.userId === notification.userId);
-    if (client) {
+      if (!client) continue;
+
       try {
-        // ✅ FIX: Use batch-fetched balance or fetch individually as fallback
         let updatedBalance = balanceMap.get(notification.userId);
         if (updatedBalance === undefined) {
           const updatedUser = await storage.getUser(notification.userId);
           updatedBalance = updatedUser?.balance || 0;
         }
-        
-        // ✅ CRITICAL FIX: Calculate complete payout data to send to frontend
+
         const totalUserBets =
           notification.bets.round1.andar + notification.bets.round1.bahar +
           notification.bets.round2.andar + notification.bets.round2.bahar;
-        
+
         const netProfit = notification.payout - totalUserBets;
         const result: 'win' | 'loss' | 'no_bet' =
           notification.payout > 0 ? 'win' : (totalUserBets > 0 ? 'loss' : 'no_bet');
-        
-        // Send payout details to the winning player with COMPLETE DATA
+
         client.ws.send(JSON.stringify({
           type: 'payout_received',
           data: {
             amount: notification.payout,
             balance: updatedBalance,
-            totalBetAmount: totalUserBets,        // ← NEW: Total bet from server
-            netProfit: netProfit,                  // ← NEW: Net profit from server
+            totalBetAmount: totalUserBets,
+            netProfit,
             winner: winningSide,
             round: gameState.currentRound,
-            result: result,                        // ← FIXED: Use calculated result
+            result,
             betAmount: notification.betAmount,
             payoutBreakdown: {
-              winningBets: winningSide === 'andar' ?
-                (gameState.currentRound === 1 ? gameState.round1Bets.andar :
-                 gameState.currentRound === 2 ? (gameState.round1Bets.andar + gameState.round2Bets.andar) :
-                 gameState.round1Bets.andar + gameState.round2Bets.andar) :
-                (gameState.currentRound === 1 ? gameState.round1Bets.bahar :
-                 gameState.currentRound === 2 ? (gameState.round1Bets.bahar * 2 + gameState.round2Bets.bahar) :
-                 gameState.round1Bets[winningSide] + gameState.round2Bets[winningSide]),
+              winningBets: winningSide === 'andar'
+                ? (gameState.currentRound === 1
+                    ? gameState.round1Bets.andar
+                    : gameState.currentRound === 2
+                      ? (gameState.round1Bets.andar + gameState.round2Bets.andar)
+                      : gameState.round1Bets.andar + gameState.round2Bets.andar)
+                : (gameState.currentRound === 1
+                    ? gameState.round1Bets.bahar
+                    : gameState.currentRound === 2
+                      ? (gameState.round1Bets.bahar * 2 + gameState.round2Bets.bahar)
+                      : gameState.round1Bets[winningSide] + gameState.round2Bets[winningSide]),
               multiplier: 2
             }
           }
         }));
-        
+
         console.log(`💸 Sent complete payout to user ${notification.userId}:`, {
           amount: notification.payout,
           totalBet: totalUserBets,
-          netProfit: netProfit,
-          result: result,
+          netProfit,
+          result,
           newBalance: updatedBalance
         });
       } catch (error) {
         console.error(`❌ Error sending payout notification to user ${notification.userId}:`, error);
       }
     }
-    }
-  }
-  
-  // ✅ NEW: Send balance refresh to ALL players who had bets (winners AND losers)
-  // This ensures everyone sees their updated balance instantly, even if they lost
-  if (clients && payoutNotifications) {
-    const clientsArray = Array.from(clients);
-    const allBettingUserIds = Array.from(new Set(payoutNotifications.map(n => n.userId)));
-    
-    for (const userId of allBettingUserIds) {
-      const client = clientsArray.find(c => c.userId === userId);
-      if (client) {
-        try {
-          const updatedUser = await storage.getUser(userId);
-          const updatedBalance = updatedUser?.balance || 0;
-          
-          // Send balance update to ensure UI refreshes instantly
-          client.ws.send(JSON.stringify({
-            type: 'balance_update',
-            data: {
-              balance: updatedBalance,
-              amount: 0, // Just a refresh, not a transaction
-              type: 'game_complete_refresh'
-            }
-          }));
-          
-          console.log(`🔄 Sent balance refresh to user ${userId}: ₹${updatedBalance}`);
-        } catch (error) {
-          console.error(`❌ Error sending balance refresh to user ${userId}:`, error);
+
+    // Now send game_complete with per-user payout info
+    const actualRound = gameState.currentRound;
+    const andarCount = gameState.andarCards.length;
+    const baharCount = gameState.baharCards.length;
+    const totalCards = andarCount + baharCount + 1; // +1 for opening card
+
+    console.log(`🎯 Game complete - Cards: ${totalCards} (${andarCount}A + ${baharCount}B + 1 opening), Round: ${actualRound}`);
+
+    for (const client of clientsArray) {
+      try {
+        const userBets = gameState.userBets.get(client.userId);
+        let totalUserBets = 0;
+        if (userBets) {
+          totalUserBets =
+            userBets.round1.andar + userBets.round1.bahar +
+            userBets.round2.andar + userBets.round2.bahar;
         }
+
+        const userPayout = payouts[client.userId] || 0;
+        const netProfit = userPayout - totalUserBets;
+
+        client.ws.send(JSON.stringify({
+          type: 'game_complete',
+          data: {
+            winner: winningSide,
+            winningCard,
+            round: actualRound,
+            totalBets: totalBetsAmount,
+            totalPayouts: totalPayoutsAmount,
+            message: `${winningSide.toUpperCase()} wins with ${winningCard}!`,
+            userPayout: {
+              amount: userPayout,
+              totalBet: totalUserBets,
+              netProfit
+            }
+          }
+        }));
+      } catch (error) {
+        console.error(`❌ Error sending game_complete to user ${client.userId}:`, error);
       }
     }
+
+    console.log(`⏱️ WebSocket messages (payout_received + per-user game_complete) sent in ${Date.now() - wsStartTime}ms`);
   }
-  
-  // ✅ FIX: STEP 3: Broadcast game completion to ALL clients (not just admins)
-  // Use broadcast instead of broadcastToRole to ensure all clients receive the message
-  
-  // ✅ CRITICAL FIX: Use gameState.currentRound which is already correctly set by game-handlers.ts
-  // The round transition logic in game-handlers.ts (lines 831-862) ensures:
-  // - Round 1: Cards 1-3 (opening + 1B + 1A)
-  // - Round 2: Card 4 (2nd B or 2nd A)
-  // - Round 3: Card 5+ (after 4th card, transitions to Round 3)
-  // So gameState.currentRound is the authoritative source
-  const actualRound = gameState.currentRound;
-  const andarCount = gameState.andarCards.length;
-  const baharCount = gameState.baharCards.length;
-  const totalCards = andarCount + baharCount + 1; // +1 for opening card
-  
-  console.log(`🎯 Game complete - Cards: ${totalCards} (${andarCount}A + ${baharCount}B + 1 opening), Round: ${actualRound}`);
-  
-  if (typeof (global as any).broadcast === 'function') {
-    (global as any).broadcast({
-      type: 'game_complete',
-      data: {
-        winner: winningSide,
-        winningCard: winningCard,
-        round: actualRound, // ← FIXED: Use calculated round, not gameState.currentRound
-        totalBets: totalBetsAmount,
-        totalPayouts: totalPayoutsAmount,
-        message: `${winningSide.toUpperCase()} wins with ${winningCard}!`
-      }
-    });
-  } else {
-    // Fallback to broadcastToRole if broadcast not available
-    broadcastToRole({
-      type: 'game_complete',
-      data: {
-        winner: winningSide,
-        winningCard: winningCard,
-        round: actualRound, // ← FIXED: Use calculated round here too
-        totalBets: totalBetsAmount,
-        totalPayouts: totalPayoutsAmount,
-        message: `${winningSide.toUpperCase()} wins with ${winningCard}!`
-      }
-    }, 'admin'); // This will only go to admins, but better than nothing
-    console.warn('⚠️ broadcast function not available, using broadcastToRole as fallback');
-  }
-  
-  console.log(`⏱️ WebSocket messages sent in ${Date.now() - wsStartTime}ms`);
-  
-  // ✅ CRITICAL FIX: Move non-critical operations to background (async)
-  // BEFORE: Game history/stats blocked WebSocket messages (1000ms-5000ms delay)
-  // AFTER: WebSocket messages sent immediately, history saved in background
-  // This reduces perceived delay from 2900ms to ~600ms (80% improvement)
-  
+
   // STEP 4: Save game history to database with comprehensive analytics (ASYNC - NON-BLOCKING)
   // ✅ CRITICAL: This runs in background and doesn't block player notifications
   const saveGameDataAsync = async () => {

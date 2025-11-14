@@ -33,13 +33,26 @@ export interface BonusInfo {
 }
 
 export interface ReferralData {
+  // The referral code generated for the current user (referral_code_generated)
+  referralCode?: string;
+  // Total number of users referred
   totalReferrals: number;
+  // Total bonus earned from all referrals
   totalReferralEarnings: number;
+  // Optional extra stats from backend
+  activeReferrals?: number;
+  totalDepositsFromReferrals?: number;
   referredUsers: Array<{
-    username: string;
-    createdAt: Date;
-    hasDeposited: boolean;
-    bonusEarned: number;
+    id: string;
+    phone?: string;
+    fullName?: string;
+    // Raw createdAt from backend can be string; we normalize in UI when needed
+    createdAt?: string | Date;
+    hasDeposited?: boolean;
+    bonusEarned?: number;
+    depositAmount?: number;
+    bonusAmount?: number;
+    bonusApplied?: boolean;
   }>;
 }
 
@@ -415,7 +428,8 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       
       // Fetch fresh data
       console.log('🔄 Fetching referral data from API');
-      const response = await apiClient.get('/user/referral-data') as any;
+      // Use the authenticated referral data endpoint
+      const response = await apiClient.get('/api/user/referral-data') as any;
       if (response.success && response.data) {
         // Cache the data
         localStorage.setItem(CACHE_KEY, JSON.stringify(response.data));
