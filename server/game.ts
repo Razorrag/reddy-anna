@@ -422,30 +422,47 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
           updatedBalance = updatedUser?.balance || 0;
         }
         
-        // Send payout details to the winning player with UPDATED BALANCE
+        // ✅ CRITICAL FIX: Calculate complete payout data to send to frontend
+        const totalUserBets =
+          notification.bets.round1.andar + notification.bets.round1.bahar +
+          notification.bets.round2.andar + notification.bets.round2.bahar;
+        
+        const netProfit = notification.payout - totalUserBets;
+        const result: 'win' | 'loss' | 'no_bet' =
+          notification.payout > 0 ? 'win' : (totalUserBets > 0 ? 'loss' : 'no_bet');
+        
+        // Send payout details to the winning player with COMPLETE DATA
         client.ws.send(JSON.stringify({
           type: 'payout_received',
           data: {
             amount: notification.payout,
-            balance: updatedBalance, // ✅ CRITICAL: Include updated balance for instant UI update
-            betAmount: notification.betAmount,
+            balance: updatedBalance,
+            totalBetAmount: totalUserBets,        // ← NEW: Total bet from server
+            netProfit: netProfit,                  // ← NEW: Net profit from server
             winner: winningSide,
             round: gameState.currentRound,
-            result: notification.result,
+            result: result,                        // ← FIXED: Use calculated result
+            betAmount: notification.betAmount,
             payoutBreakdown: {
-              winningBets: winningSide === 'andar' ? 
-                (gameState.currentRound === 1 ? gameState.round1Bets.andar : 
+              winningBets: winningSide === 'andar' ?
+                (gameState.currentRound === 1 ? gameState.round1Bets.andar :
                  gameState.currentRound === 2 ? (gameState.round1Bets.andar + gameState.round2Bets.andar) :
                  gameState.round1Bets.andar + gameState.round2Bets.andar) :
                 (gameState.currentRound === 1 ? gameState.round1Bets.bahar :
                  gameState.currentRound === 2 ? (gameState.round1Bets.bahar * 2 + gameState.round2Bets.bahar) :
                  gameState.round1Bets[winningSide] + gameState.round2Bets[winningSide]),
-              multiplier: 2 // 1:1 payout for winners
+              multiplier: 2
             }
           }
         }));
         
-        console.log(`💸 Sent payout notification to user ${notification.userId}: ₹${notification.payout}, New Balance: ₹${updatedBalance}`);
+        console.log(`💸 Sent complete payout to user ${notification.userId}:`, {
+          amount: notification.payout,
+          totalBet: totalUserBets,
+          netProfit: netProfit,
+          result: result,
+          newBalance: updatedBalance
+        });
       } catch (error) {
         console.error(`❌ Error sending payout notification to user ${notification.userId}:`, error);
       }

@@ -51,7 +51,6 @@ const Profile: React.FC = () => {
     fetchGameHistory,
     updateProfile,
     fetchReferralData,
-    claimBonus,
     fetchUserProfile  // ✅ ADDED: Profile data fetcher
   } = useUserProfile();
   const { balance, refreshBalance } = useBalance();
@@ -87,7 +86,6 @@ const Profile: React.FC = () => {
   const [activeTab, setActiveTab] = useState('profile');
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
-  const [claimingBonus, setClaimingBonus] = useState(false);
   
   // Bonus data state
   const [bonusSummary, setBonusSummary] = useState<any>(null);
@@ -266,17 +264,6 @@ const Profile: React.FC = () => {
     }
   };
 
-
-  const handleClaimBonus = async () => {
-    try {
-      setClaimingBonus(true);
-      await claimBonus();
-    } catch (error) {
-      console.error('Failed to claim bonus:', error);
-    } finally {
-      setClaimingBonus(false);
-    }
-  };
 
   const openWalletModal = () => {
     setShowWalletModal(true);

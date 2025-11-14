@@ -7,6 +7,7 @@ import UserAdmin from "@/pages/user-admin.tsx";
 import AdminAnalytics from "@/pages/admin-analytics.tsx";
 import AdminPayments from "@/pages/admin-payments.tsx";
 import AdminBonus from "@/pages/admin-bonus.tsx";
+import AdminBets from "@/pages/admin-bets.tsx";
 import BackendSettings from "@/pages/backend-settings.tsx";
 import AdminWhatsAppSettings from "@/pages/admin-whatsapp-settings.tsx";
 import AdminStreamSettings from "@/pages/admin-stream-settings.tsx";
@@ -81,6 +82,11 @@ function Router() {
       <Route path="/admin/bonus">
         <ProtectedAdminRoute>
           <AdminBonus />
+        </ProtectedAdminRoute>
+      </Route>
+      <Route path="/admin/bets">
+        <ProtectedAdminRoute>
+          <AdminBets />
         </ProtectedAdminRoute>
       </Route>
       <Route path="/admin/backend-settings">

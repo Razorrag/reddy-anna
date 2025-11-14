@@ -2686,28 +2686,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // 3. Wagering requirement (from game settings)
           // 4. Bonus locking until wagering complete
           
-          // Check if bonus threshold reached for auto-credit (if applicable)
+          // Run threshold checks to auto-credit eligible deposit bonuses
           try {
-            const { checkAndAutoCreditBonus } = await import('./payment');
-            const autoCredited = await checkAndAutoCreditBonus(request.user_id);
-            if (autoCredited) {
-              console.log(`✅ Bonus auto-credited for user ${request.user_id} after deposit approval (threshold reached)`);
-              // Notify user about auto-credit
-              clients.forEach(c => {
-                if (c.userId === request.user_id && c.ws.readyState === WebSocket.OPEN) {
-                  c.ws.send(JSON.stringify({
-                    type: 'bonus_update',
-                    data: {
-                      message: 'Bonus automatically credited to your balance!',
-                      timestamp: Date.now()
-                    }
-                  }));
-                }
-              });
-            }
+            await storage.checkBonusThresholds(request.user_id);
+            clients.forEach(c => {
+              if (c.userId === request.user_id && c.ws.readyState === WebSocket.OPEN) {
+                c.ws.send(JSON.stringify({
+                  type: 'bonus_update',
+                  data: {
+                    message: 'Bonus status updated',
+                    timestamp: Date.now()
+                  }
+                }));
+              }
+            });
           } catch (bonusError) {
-            console.error(`⚠️ Error checking bonus threshold after deposit:`, bonusError);
-            // Don't fail approval if bonus check fails
+            console.error(`⚠️ Threshold check failed after deposit:`, bonusError);
           }
         } else {
           // For withdrawals, use regular approval (no bonus)
@@ -3239,21 +3233,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user || !req.user.id) {
         return res.status(401).json({ success: false, error: 'Authentication required' });
       }
-      const userId = req.user.id;
-      const result = await applyAvailableBonus(userId);
-       
-      if (result) {
-        auditLogger('bonus_claimed', userId, { timestamp: new Date().toISOString() });
-        res.json({
-          success: true,
-          message: 'Bonus successfully claimed and added to your balance'
-        });
-      } else {
-        res.json({
-          success: false,
-          error: 'No bonus available to claim'
-        });
-      }
+      // Bonuses are now fully automatic based on gameplay and balance thresholds.
+      // Manual claiming is no longer supported to avoid inconsistent states.
+      return res.status(400).json({
+        success: false,
+        error: 'Bonus is credited to your wallet automatically based on your gameplay and balance. Manual claiming is not required.'
+      });
     } catch (error) {
       console.error('Claim bonus error:', error);
       res.status(500).json({

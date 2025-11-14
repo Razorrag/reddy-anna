@@ -644,7 +644,9 @@ router.get('/simple-config', optionalAuth, async (req, res) => {
       streamTitle: data.stream_title || 'Live Game Stream',
       autoplay: data.autoplay !== false,
       muted: data.muted !== false,
-      controls: data.controls || false
+      controls: data.controls || false,
+      minViewers: data.min_viewers ?? null,
+      maxViewers: data.max_viewers ?? null
     };
 
     res.json({
@@ -693,7 +695,7 @@ function convertYouTubeUrl(url: string): string {
  */
 router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res) => {
   try {
-    let { streamUrl, streamType, isActive, isPaused, streamTitle, autoplay, muted, controls } = req.body;
+    let { streamUrl, streamType, isActive, isPaused, streamTitle, autoplay, muted, controls, minViewers, maxViewers } = req.body;
 
     // Validate required fields
     if (!streamUrl || !streamType) {
@@ -701,6 +703,12 @@ router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res)
         success: false,
         error: 'streamUrl and streamType are required'
       });
+    }
+
+    // Optional: Auto-swap if min > max
+    if (minViewers != null && maxViewers != null && minViewers > maxViewers) {
+      [minViewers, maxViewers] = [maxViewers, minViewers];
+      console.log('⚠️ Swapped min/max viewers:', { minViewers, maxViewers });
     }
 
     // ✅ Auto-convert YouTube watch URLs to embed URLs
@@ -731,6 +739,8 @@ router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res)
       autoplay: autoplay !== false,
       muted: muted !== false,
       controls: controls || false,
+      min_viewers: typeof minViewers === 'number' ? minViewers : null,
+      max_viewers: typeof maxViewers === 'number' ? maxViewers : null,
       updated_at: new Date().toISOString()
     };
 

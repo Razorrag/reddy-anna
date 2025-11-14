@@ -85,16 +85,6 @@ const OpeningCardSelector: React.FC = () => {
         🎴 Select Opening Card
       </h2>
       
-      {/* Selected Card Display */}
-      {selectedCard && (
-        <div className="bg-gradient-to-r from-gold/20 to-yellow-600/20 border-2 border-gold rounded-lg p-4 mb-3 text-center">
-          <div className="text-sm text-gray-400 mb-1">Selected Opening Card</div>
-          <div className={`text-5xl font-bold ${selectedCard.color === 'red' ? 'text-red-500' : 'text-white'}`}>
-            {selectedCard.display}
-          </div>
-        </div>
-      )}
-      
       {/* Card Grid */}
       <div className="bg-black/30 rounded-lg p-3">
         {/* Cards organized by suit - 13 cards per row */}
@@ -121,7 +111,7 @@ const OpeningCardSelector: React.FC = () => {
                       onClick={() => !isDisabled && handleCardSelect(card)}
                       disabled={isDisabled}
                       className={`
-                        w-[calc(100%/13-0.25rem)] min-w-[52px] h-[72px] rounded text-lg font-bold transition-all duration-300
+                        w-[calc(100%/13-0.25rem)] min-w-[64px] h-[88px] rounded text-3xl font-bold transition-all duration-300 flex items-center justify-center
                         ${isCurrentlySelected
                           ? 'bg-gradient-to-br from-gold to-yellow-500 text-black border-2 border-white scale-105 relative z-10 shadow-lg shadow-gold/50 animate-pulse-subtle'
                           : isUsed

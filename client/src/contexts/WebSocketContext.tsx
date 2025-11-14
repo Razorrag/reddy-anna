@@ -156,9 +156,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
   const [isWebSocketAuthenticated, setIsWebSocketAuthenticated] = useState(false);
   
-  // ✅ NEW: Store payout data from server for celebration
+  // ✅ ENHANCED: Store complete payout data from server for celebration
   const lastPayoutRef = useRef<{
     amount: number;
+    totalBetAmount: number;
+    netProfit: number;
+    result: 'win' | 'loss' | 'no_bet';
     winner: 'andar' | 'bahar';
     round: number;
     timestamp: number;
@@ -815,38 +818,39 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         
         // ❌ REMOVED: showNotification(message, 'success'); - Duplicate, shown in VideoArea overlay
         
-        // ✅ CRITICAL FIX: Use server's payout data if available (most accurate)
+        // ✅ CRITICAL FIX: Use server's complete payout data if available (most accurate)
         // Otherwise, fallback to local calculation from stored bets
         let payoutAmount = 0;
         let totalBetAmount = 0;
         let netProfit = 0;
         let dataSource = 'none';
         
-        // Check if we have recent payout data from server (within last 2 seconds)
+        // ✅ ENHANCED: Check if we have recent payout data from server (within last 10 seconds)
+        // Extended window from 2s to 10s to handle slow connections and ensure reliability
         const hasRecentPayout = lastPayoutRef.current &&
-                               (Date.now() - lastPayoutRef.current.timestamp < 2000) &&
+                               (Date.now() - lastPayoutRef.current.timestamp < 10000) &&
                                lastPayoutRef.current.winner === winner;
         
         if (hasRecentPayout) {
-          // ✅ PRIMARY: Use server's payout data (most accurate)
+          // ✅ PRIMARY: Use complete server data (absolute truth from backend)
           payoutAmount = lastPayoutRef.current!.amount;
+          totalBetAmount = lastPayoutRef.current!.totalBetAmount;
+          netProfit = lastPayoutRef.current!.netProfit;
           dataSource = 'server_payout';
           
-          console.group('💰 WebSocket: Using SERVER payout data for celebration');
-          console.log('📊 Server Payout Data:', lastPayoutRef.current);
+          console.group('💰 WebSocket: Using COMPLETE SERVER payout data (authoritative)');
+          console.log('📊 Server Data:', lastPayoutRef.current);
           console.log('💵 Payout Amount:', payoutAmount);
+          console.log('💰 Total Bet:', totalBetAmount);
+          console.log('📈 Net Profit:', netProfit);
+          console.log('🎯 Result:', lastPayoutRef.current!.result);
+          console.log('⏱️ Age:', Date.now() - lastPayoutRef.current!.timestamp, 'ms');
           console.groupEnd();
           
-          // Calculate total bet and net profit from payout
-          const round1Andar = getTotalBetAmount(gameState.playerRound1Bets?.andar, 'andar');
-          const round1Bahar = getTotalBetAmount(gameState.playerRound1Bets?.bahar, 'bahar');
-          const round2Andar = getTotalBetAmount(gameState.playerRound2Bets?.andar, 'andar');
-          const round2Bahar = getTotalBetAmount(gameState.playerRound2Bets?.bahar, 'bahar');
-          totalBetAmount = round1Andar + round1Bahar + round2Andar + round2Bahar;
-          netProfit = payoutAmount - totalBetAmount;
-          
         } else {
-          // ✅ FALLBACK: Calculate from local bet data
+          // ✅ FALLBACK: Calculate from local bet data (only when server data unavailable)
+          console.warn('⚠️ Server payout data not available or expired, using local calculation');
+          
           const round1Andar = getTotalBetAmount(gameState.playerRound1Bets?.andar, 'andar');
           const round1Bahar = getTotalBetAmount(gameState.playerRound1Bets?.bahar, 'bahar');
           const round2Andar = getTotalBetAmount(gameState.playerRound2Bets?.andar, 'andar');
@@ -1256,36 +1260,47 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       // Payout received after game completion
       case 'payout_received': {
-        const { amount, balance, winner, round } = (data as PayoutReceivedMessage).data;
+        const {
+          amount, balance, totalBetAmount, netProfit, result, winner, round
+        } = (data as PayoutReceivedMessage).data;
         
-        // ✅ Store payout data in ref for use by celebration
+        // ✅ ENHANCED: Store complete payout data from server
         lastPayoutRef.current = {
           amount,
+          totalBetAmount,
+          netProfit,
+          result,
           winner,
           round,
           timestamp: Date.now()
         };
         
-        console.log(`💰 Payout received from server: ₹${amount}, Winner: ${winner}, Round: ${round}`);
-        console.log(`✅ Stored payout data for celebration:`, lastPayoutRef.current);
+        console.group('💰 Complete payout data received from server');
+        console.log('Amount:', amount);
+        console.log('Total Bet:', totalBetAmount);
+        console.log('Net Profit:', netProfit);
+        console.log('Result:', result);
+        console.log('Winner:', winner);
+        console.log('Round:', round);
+        console.groupEnd();
         
         // Immediately update balance from the message (no API delay)
         if (balance !== undefined && balance !== null) {
           updatePlayerWallet(balance);
           // Also dispatch event for other components that listen to balance updates
           const balanceEvent = new CustomEvent('balance-websocket-update', {
-            detail: { balance, amount, type: amount > 0 ? 'win' : 'loss', timestamp: Date.now() }
+            detail: { balance, amount, type: result, timestamp: Date.now() }
           });
           window.dispatchEvent(balanceEvent);
         }
         
-        // ✅ Dispatch payout event so celebration can use the exact server amount
+        // ✅ Dispatch payout event with complete data
         const payoutEvent = new CustomEvent('payout-received-event', {
-          detail: { amount, winner, round, balance }
+          detail: { amount, totalBetAmount, netProfit, result, winner, round, balance }
         });
         window.dispatchEvent(payoutEvent);
         
-        console.log(`✅ Payout event dispatched: ₹${amount}`);
+        console.log(`✅ Complete payout event dispatched`);
         break;
       }
       

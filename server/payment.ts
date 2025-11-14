@@ -291,121 +291,39 @@ export const addBonus = async (userId: string, bonusAmount: number, reason: stri
 // New bonus-related functions
 export const applyDepositBonus = async (userId: string, depositAmount: number): Promise<boolean> => {
   try {
-    // OPTIMIZED: Use cached settings (much faster)
-    const { settingsCache } = await import('./lib/settings-cache');
-    
-    // Get deposit bonus percentage from settings (default 5%) - cached
-    const depositBonusPercent = await settingsCache.get(
-      'default_deposit_bonus_percent',
-      () => storage.getGameSetting('default_deposit_bonus_percent')
-    ) || '5';
-    const bonusPercentage = parseFloat(depositBonusPercent);
-    
-    // Calculate bonus amount
-    const bonusAmount = (depositAmount * bonusPercentage) / 100;
-    
-    if (bonusAmount <= 0) {
-      return false;
-    }
-    
-    // ✅ FIX #2: WAGERING MULTIPLIER EXPLANATION
-    // Wagering requirement = DEPOSIT AMOUNT × multiplier (NOT bonus amount)
-    // Examples:
-    //   - 0.3 = User must wager 30% of their deposit (₹1000 deposit = ₹300 wagering)
-    //   - 1.0 = User must wager 100% of their deposit (₹1000 deposit = ₹1000 wagering)
-    //   - 3.0 = User must wager 3x their deposit (₹1000 deposit = ₹3000 wagering)
-    // Default: 0.3 (30% of deposit) - very user-friendly
-    const wageringMultiplierStr = await settingsCache.get(
-      'wagering_multiplier',
-      () => storage.getGameSetting('wagering_multiplier')
-    ) || '0.3';
-    const wageringMultiplier = parseFloat(wageringMultiplierStr);
-    const wageringRequirement = depositAmount * wageringMultiplier;
-    
-    // Add LOCKED bonus to user's bonus field (not main balance yet)
-    await storage.addUserBonus(userId, bonusAmount, 'deposit_bonus', depositAmount);
-    
-    // Set wagering requirement and lock bonus
-    await storage.setUserWageringRequirement(userId, wageringRequirement);
-    
-    // Add to user transactions
-    const user = await storage.getUser(userId);
-    if (user) {
-      await storage.addTransaction({
-        userId,
-        transactionType: 'bonus',
-        amount: bonusAmount,
-        balanceBefore: parseFloat(user.balance),
-        balanceAfter: parseFloat(user.balance), // Bonus not added to main balance yet
-        referenceId: `bonus_deposit_${Date.now()}`,
-        description: `Deposit bonus (${bonusPercentage}% of ₹${depositAmount}) - LOCKED until ₹${wageringRequirement.toFixed(2)} wagered (${(wageringMultiplier * 100).toFixed(0)}% of deposit)`
-      });
-    }
-    
-    console.log(`✅ Deposit bonus of ₹${bonusAmount} added as LOCKED for user ${userId}`);
-    console.log(`   Must wager ₹${wageringRequirement.toFixed(2)} to unlock (${(wageringMultiplier * 100).toFixed(0)}% of deposit)`);
-    
-    // User must meet wagering requirement first
-    
-    return true;
+    console.log('applyDepositBonus legacy path called; ignored because new per-deposit bonus system handles bonuses on admin approval.', {
+      userId,
+      depositAmount
+    });
+    // All deposit bonuses are now created in approvePaymentRequestAtomic and
+    // credited automatically via threshold-based logic in storage-supabase.ts
+    return false;
   } catch (error) {
-    console.error('Error applying deposit bonus:', error);
+    console.error('Error in legacy applyDepositBonus (no-op):', error);
     return false;
   }
 };
 
 export const applyReferralBonus = async (referrerId: string, depositAmount: number): Promise<boolean> => {
   try {
-    // OPTIMIZED: Use cached settings
-    const { settingsCache } = await import('./lib/settings-cache');
-    
-    // Get referral bonus percentage from settings (default 1%) - cached
-    const referralBonusPercent = await settingsCache.get(
-      'referral_bonus_percent',
-      () => storage.getGameSetting('referral_bonus_percent')
-    ) || '1';
-    const bonusPercentage = parseFloat(referralBonusPercent);
-    
-    // Calculate bonus amount
-    const bonusAmount = (depositAmount * bonusPercentage) / 100;
-    
-    if (bonusAmount <= 0) {
-      return false;
-    }
-    
-    // Add referral bonus to referrer's bonus field
-    await storage.addUserBonus(referrerId, bonusAmount, 'referral_bonus', depositAmount);
-    
-    // Add to user transactions
-    const referrer = await storage.getUser(referrerId);
-    if (referrer) {
-      await storage.addTransaction({
-        userId: referrerId,
-        transactionType: 'bonus',
-        amount: bonusAmount,
-        balanceBefore: parseFloat(referrer.balance),
-        balanceAfter: parseFloat(referrer.balance), // Bonus not added to main balance yet
-        referenceId: `referral_bonus_${Date.now()}`,
-        description: `Referral bonus (${bonusPercentage}% of ₹${depositAmount})`
-      });
-    }
-    
-    console.log(`Referral bonus of ₹${bonusAmount} added for referrer ${referrerId}`);
-    
-    // Referral bonuses can be unlocked with the same wagering requirement as deposit bonuses
-    
-    return true;
+    console.log('applyReferralBonus legacy path called; ignored because referral bonuses are now created from credited deposit bonuses.', {
+      referrerId,
+      depositAmount
+    });
+    // Referral bonuses are now created in handleReferralForBonus in storage-supabase.ts
+    return false;
   } catch (error) {
-    console.error('Error applying referral bonus:', error);
+    console.error('Error in legacy applyReferralBonus (no-op):', error);
     return false;
   }
 };
 
 export const checkConditionalBonus = async (userId: string): Promise<boolean> => {
   try {
-    return await storage.applyConditionalBonus(userId);
+    console.log('checkConditionalBonus legacy path called; no-op under new bonus system.', { userId });
+    return false;
   } catch (error) {
-    console.error('Error checking conditional bonus:', error);
+    console.error('Error in legacy checkConditionalBonus (no-op):', error);
     return false;
   }
 };
@@ -413,119 +331,36 @@ export const checkConditionalBonus = async (userId: string): Promise<boolean> =>
 // Check if bonus has reached threshold and auto-credit it
 export const checkAndAutoCreditBonus = async (userId: string): Promise<boolean> => {
   try {
-    // Get bonus claim threshold setting (default 500)
-    const claimThresholdSetting = await storage.getGameSetting('bonus_claim_threshold');
-    const claimThreshold = parseFloat(claimThresholdSetting || '500');
-    
-    if (claimThreshold <= 0) {
-      // If threshold is 0 or not set, don't auto-credit
-      return false;
-    }
-    
-    // Get current bonus info
-    const bonusInfo = await storage.getUserBonusInfo(userId);
-    
-    // Check if total bonus has reached or exceeded the threshold
-    if (bonusInfo.totalBonus >= claimThreshold) {
-      console.log(`✅ Bonus threshold reached! Total bonus: ₹${bonusInfo.totalBonus}, Threshold: ₹${claimThreshold}`);
-      return await autoCreditBonus(userId, bonusInfo);
-    }
-    
+    console.log('checkAndAutoCreditBonus legacy path called; auto-credit is now handled by checkBonusThresholds on balance changes.', { userId });
     return false;
   } catch (error) {
-    console.error('Error checking bonus threshold:', error);
+    console.error('Error in legacy checkAndAutoCreditBonus (no-op):', error);
     return false;
   }
 };
 
-// Auto-credit bonus to main balance
+// Auto-credit bonus to main balance (legacy helper now unused)
 const autoCreditBonus = async (userId: string, bonusInfo: { depositBonus: number; referralBonus: number; totalBonus: number }): Promise<boolean> => {
   try {
-    const user = await storage.getUser(userId);
-    if (!user) {
-      return false;
-    }
-    
-    const balanceBefore = parseFloat(user.balance);
-    const newBalance = balanceBefore + bonusInfo.totalBonus;
-    
-    // Add to main balance
-    await storage.updateUserBalance(userId, bonusInfo.totalBonus);
-    
-    // Reset bonus amounts
-    await storage.resetUserBonus(userId);
-    
-    // Log the auto-credit
-    await storage.addTransaction({
+    console.log('autoCreditBonus legacy helper called; ignored under new bonus system.', {
       userId,
-      transactionType: 'bonus_applied',
-      amount: bonusInfo.totalBonus,
-      balanceBefore,
-      balanceAfter: newBalance,
-      referenceId: `bonus_auto_credited_${Date.now()}`,
-      description: `Bonus auto-credited (threshold reached): ₹${bonusInfo.depositBonus} deposit + ₹${bonusInfo.referralBonus} referral`
+      bonusInfo
     });
-    
-    console.log(`✅ Bonus of ₹${bonusInfo.totalBonus} auto-credited to main balance for user ${userId}`);
-    return true;
+    return false;
   } catch (error) {
-    console.error('Error auto-crediting bonus:', error);
+    console.error('Error in legacy autoCreditBonus (no-op):', error);
     return false;
   }
 };
 
 export const applyAvailableBonus = async (userId: string): Promise<boolean> => {
   try {
-    // Get bonus claim threshold setting
-    const claimThresholdSetting = await storage.getGameSetting('bonus_claim_threshold');
-    const claimThreshold = parseFloat(claimThresholdSetting || '500');
-    
-    // Get current bonus info
-    const bonusInfo = await storage.getUserBonusInfo(userId);
-    
-    // ✅ CRITICAL FIX: Check if bonus is locked (wagering requirement not met)
-    if (bonusInfo.bonusLocked) {
-      console.log(`❌ Cannot claim bonus for user ${userId}: Wagering requirement not met (${bonusInfo.wageringProgress.toFixed(1)}% complete)`);
-      return false;
-    }
-    
-    // ✅ CRITICAL FIX: Only claim bonus that has met wagering requirement
-    // If bonus is unlocked, it means wagering requirement is met
-    if (!bonusInfo.bonusLocked && bonusInfo.totalBonus > 0) {
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return false;
-      }
-      
-      const balanceBefore = parseFloat(user.balance);
-      const claimableAmount = bonusInfo.totalBonus;
-      const newBalance = balanceBefore + claimableAmount;
-      
-      // Add to main balance
-      await storage.updateUserBalance(userId, claimableAmount);
-      
-      // Reset bonus amounts
-      await storage.resetUserBonus(userId);
-      
-      // Log the application
-      await storage.addTransaction({
-        userId,
-        transactionType: 'bonus_applied',
-        amount: claimableAmount,
-        balanceBefore,
-        balanceAfter: newBalance,
-        referenceId: `bonus_applied_${Date.now()}`,
-        description: `Bonus manually claimed: ₹${bonusInfo.depositBonus} deposit + ₹${bonusInfo.referralBonus} referral (wagering requirement met)`
-      });
-      
-      console.log(`✅ Bonus of ₹${claimableAmount} applied to main balance for user ${userId} (wagering requirement met)`);
-      return true;
-    }
-    
-    console.log(`⚠️ No claimable bonus for user ${userId}: Total bonus ₹${bonusInfo.totalBonus}, Locked: ${bonusInfo.bonusLocked}`);
+    console.log('applyAvailableBonus legacy manual-claim path called; bonuses are now auto-credited and cannot be manually claimed.', { userId });
+    // Manual claiming is disabled; any UI calling this should be updated to rely on
+    // automatic crediting via the new bonus engine.
     return false;
   } catch (error) {
-    console.error('Error applying available bonus:', error);
+    console.error('Error in legacy applyAvailableBonus (no-op):', error);
     return false;
   }
 };

@@ -25,7 +25,6 @@ import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
 import PersistentSidePanel from '@/components/PersistentSidePanel';
 import StreamControlPanel from './StreamControlPanel';
-import AdminBetsOverview from './AdminBetsOverview';
 import { Home } from 'lucide-react';
 
 const AdminGamePanel: React.FC = () => {
@@ -34,7 +33,7 @@ const AdminGamePanel: React.FC = () => {
   const { showNotification } = useNotification();
   
   const [isResetting, setIsResetting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'game' | 'stream' | 'bets'>('game');
+  const [activeTab, setActiveTab] = useState<'game' | 'stream'>('game');
   const [, setLocation] = useLocation();
   
   // Sync game state when admin navigates to this page
@@ -116,12 +115,8 @@ const AdminGamePanel: React.FC = () => {
               🎥 Stream
             </button>
             <button
-              onClick={() => setActiveTab('bets')}
-              className={`px-6 py-3 rounded-xl font-bold transition-all duration-200 whitespace-nowrap ${
-                activeTab === 'bets'
-                  ? 'bg-gradient-to-r from-gold to-yellow-600 text-gray-900 shadow-lg scale-105'
-                  : 'bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 border border-slate-600/50'
-              }`}
+              onClick={() => setLocation('/admin/bets')}
+              className="px-6 py-3 rounded-xl font-bold transition-all duration-200 whitespace-nowrap bg-slate-800/50 text-gray-300 hover:bg-slate-700/50 border border-slate-600/50"
             >
               📊 Bets
             </button>
@@ -133,8 +128,6 @@ const AdminGamePanel: React.FC = () => {
         {/* Tab Content */}
         {activeTab === 'stream' ? (
           <StreamControlPanel />
-        ) : activeTab === 'bets' ? (
-          <AdminBetsOverview />
         ) : (
           <div className="space-y-4">
             {/* STEP 1: Opening Card Selection (Only at start) */}
@@ -144,7 +137,7 @@ const AdminGamePanel: React.FC = () => {
 
           {/* STEP 2: Betting Phase - Efficient Grid Layout */}
           {gameState.phase === 'betting' && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-0">
               {/* LEFT: Card Selection */}
               <div className="col-span-2 space-y-4">
                 <CardDealingPanel
@@ -169,14 +162,14 @@ const AdminGamePanel: React.FC = () => {
 
               {/* RIGHT: Persistent Side Panel - ALWAYS VISIBLE */}
               <div className="col-span-1">
-                <PersistentSidePanel className="w-full max-w-xs ml-auto" />
+                <PersistentSidePanel className="w-full h-full" />
               </div>
             </div>
           )}
 
           {/* STEP 3: Dealing Phase - Card Selection First */}
           {gameState.phase === 'dealing' && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-0">
               {/* LEFT: Card Selection and Status */}
               <div className="col-span-2 space-y-4">
               {/* Card Selection FIRST */}
@@ -222,7 +215,7 @@ const AdminGamePanel: React.FC = () => {
 
               {/* RIGHT: Persistent Side Panel - ALWAYS VISIBLE */}
               <div className="col-span-1">
-                <PersistentSidePanel className="w-full max-w-xs ml-auto" />
+                <PersistentSidePanel className="w-full h-full" />
               </div>
             </div>
           )}

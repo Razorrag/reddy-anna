@@ -430,8 +430,16 @@ export type ConditionalBonusAppliedMessage = WebSocketMessageBase<'conditional_b
 export type PayoutReceivedMessage = WebSocketMessageBase<'payout_received', {
   amount: number;
   balance: number;
+  totalBetAmount: number;
+  netProfit: number;
   winner: string;
   round: number;
+  result: 'win' | 'loss' | 'no_bet';
+  betAmount?: number;
+  payoutBreakdown?: {
+    winningBets: number;
+    multiplier: number;
+  };
 }>;
 
 export type GameStartedMessage = WebSocketMessageBase<'game_started', {

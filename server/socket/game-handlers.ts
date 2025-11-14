@@ -214,6 +214,15 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       console.error('⚠️ Error tracking wagering:', wageringError);
     }
 
+    // Check deposit bonus thresholds after balance change
+    try {
+      await storage.checkBonusThresholds(userId);
+      ws.send(JSON.stringify({
+        type: 'bonus_update',
+        data: { message: 'Bonus status updated', timestamp: Date.now() }
+      }));
+    } catch (e) {}
+
     // ✅ FIX: Add bet to current game state using proper methods (only after successful balance deduction)
     if (round === 1) {
       if ((global as any).currentGameState?.userBets?.get) {

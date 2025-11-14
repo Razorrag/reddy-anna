@@ -949,7 +949,10 @@ export class SupabaseStorage implements IStorage {
             throw new Error('Failed to update balance - please try again');
           }
 
-          // Success - return new balance
+          // Success - return new balance after threshold checks
+          try {
+            await this.checkBonusThresholds(userId);
+          } catch (error) {}
           return newBalance;
         } catch (error: any) {
           lastError = error;
@@ -1034,7 +1037,10 @@ export class SupabaseStorage implements IStorage {
           throw new Error('Failed to update balance - please try again');
         }
 
-        // Success - return new balance
+        // Success - return new balance after threshold checks
+        try {
+          await this.checkBonusThresholds(userId);
+        } catch (error) {}
         return newBalance;
       } catch (error: any) {
         lastError = error;
@@ -4596,24 +4602,7 @@ export class SupabaseStorage implements IStorage {
       const newWageringRequirement = currentWagering + wageringRequirement;
       const newOriginalDeposit = currentOriginalDeposit + amount;
       
-      // Step 6: Store bonus separately and set wagering requirement (ACCUMULATE, don't overwrite)
-      const { error: bonusError } = await supabaseServer
-        .from('users')
-        .update({
-          deposit_bonus_available: newDepositBonus, // ✅ FIX: Accumulate instead of overwrite
-          wagering_requirement: newWageringRequirement, // ✅ FIX: Accumulate instead of overwrite
-          wagering_completed: currentWageringCompleted, // Keep existing progress
-          bonus_locked: true,
-          original_deposit_amount: newOriginalDeposit // ✅ FIX: Accumulate instead of overwrite
-        })
-        .eq('id', userId);
-      
-      if (bonusError) {
-        console.error('Error setting bonus and wagering requirement:', bonusError);
-        // Don't fail the approval if bonus setup fails
-      } else {
-        console.log(`🔒 Bonus locked: ₹${bonusAmount} (Total: ₹${newDepositBonus}) - User must wager ₹${wageringRequirement} (Total: ₹${newWageringRequirement}) to unlock`);
-      }
+      // Step 6: Do not update legacy user bonus buckets; bonus tracking is per-deposit
       
       // ✅ CRITICAL FIX: Create deposit bonus record for history tracking
       let bonusRecordId: string | null = null;
@@ -4648,15 +4637,40 @@ export class SupabaseStorage implements IStorage {
       
       console.log(`✅ Payment request approved: ${requestId}`);
       console.log(`📊 Summary: Deposit: ₹${amount} (added to balance), Bonus: ₹${bonusAmount} (Total locked: ₹${newDepositBonus}), Required wagering: ₹${wageringRequirement} (Total: ₹${newWageringRequirement})`);
-      
-      // ✅ CRITICAL FIX: Apply referral bonus when admin APPROVES deposit (not when user submits)
+
+      // Set up referral relationship if first approved deposit and a referral code was used
       try {
-        await this.checkAndApplyReferralBonus(userId, amount);
-        console.log(`✅ Referral bonus check completed for user ${userId}`);
-      } catch (referralError: any) {
-        console.error('⚠️ Failed to apply referral bonus on deposit approval:', referralError);
-        // Don't fail approval if referral bonus fails
-      }
+        const u = await this.getUserById(userId);
+        if (u && u.referral_code) {
+          const { data: referrer } = await supabaseServer
+            .from('users')
+            .select('id')
+            .eq('referral_code_generated', u.referral_code)
+            .single();
+          if (referrer && referrer.id) {
+            const { data: existing } = await supabaseServer
+              .from('user_referrals')
+              .select('id')
+              .eq('referred_user_id', userId)
+              .single();
+            if (!existing) {
+              const referralPercentSetting = await this.getGameSetting('referral_bonus_percent');
+              const referralPercent = parseFloat(referralPercentSetting || '0');
+              const potentialReferral = bonusAmount * (referralPercent / 100);
+              await supabaseServer
+                .from('user_referrals')
+                .upsert({
+                  referrer_user_id: referrer.id,
+                  referred_user_id: userId,
+                  deposit_amount: amount,
+                  bonus_amount: potentialReferral,
+                  bonus_applied: false,
+                  created_at: new Date().toISOString()
+                }, { onConflict: 'referred_user_id' });
+            }
+          }
+        }
+      } catch (e) {}
       
       return {
         balance: newBalance,
@@ -4757,8 +4771,7 @@ export class SupabaseStorage implements IStorage {
         wagering_required: data.wageringRequired,
         wagering_completed: 0,
         wagering_progress: 0,
-        status: 'locked',
-        locked_at: new Date().toISOString()
+        status: 'pending'
       })
       .select('id')
       .single();
@@ -5056,6 +5069,97 @@ export class SupabaseStorage implements IStorage {
   }
 
   /**
+   * Check pending deposit bonuses and auto-credit when wallet crosses thresholds
+   */
+  async checkBonusThresholds(userId: string): Promise<void> {
+    try {
+      const thresholdSetting = await this.getGameSetting('conditional_bonus_threshold');
+      const thresholdPercent = parseFloat(thresholdSetting || '30');
+      const t = thresholdPercent / 100;
+
+      const { data: bonuses, error } = await supabaseServer
+        .from('deposit_bonuses')
+        .select('*')
+        .eq('user_id', userId)
+        .in('status', ['pending', 'locked']);
+
+      if (error || !bonuses || bonuses.length === 0) {
+        return;
+      }
+
+      const wallet = await this.getUserById(userId);
+      if (!wallet) return;
+      const W = parseFloat(wallet.balance || '0');
+
+      for (const b of bonuses) {
+        const O = parseFloat(b.deposit_amount || '0');
+        const lower = O * (1 - t);
+        const upper = O * (1 + t);
+        if (W <= lower || W >= upper) {
+          const before = W;
+          const amount = parseFloat(b.bonus_amount || '0');
+          await this.updateUserBalance(userId, amount);
+          const after = before + amount;
+
+          await supabaseServer
+            .from('deposit_bonuses')
+            .update({ status: 'credited', credited_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .eq('id', b.id);
+
+          await this.logBonusTransaction({
+            userId,
+            bonusType: 'deposit_bonus',
+            bonusSourceId: b.id,
+            amount,
+            balanceBefore: before,
+            balanceAfter: after,
+            action: 'credited',
+            description: `Threshold reached (≤ ₹${lower.toFixed(2)} or ≥ ₹${upper.toFixed(2)})`
+          });
+
+          await this.handleReferralForBonus(b.id);
+        }
+      }
+    } catch {}
+  }
+
+  /**
+   * Create and credit referral bonus tied to a credited deposit bonus
+   */
+  async handleReferralForBonus(depositBonusId: string): Promise<void> {
+    const { data: b, error } = await supabaseServer
+      .from('deposit_bonuses')
+      .select('*')
+      .eq('id', depositBonusId)
+      .single();
+    if (error || !b) return;
+
+    const referredUserId = b.user_id;
+    const { data: relation } = await supabaseServer
+      .from('user_referrals')
+      .select('*')
+      .eq('referred_user_id', referredUserId)
+      .single();
+    if (!relation) return;
+
+    const setting = await this.getGameSetting('referral_bonus_percent');
+    const percent = parseFloat(setting || '0');
+    if (percent <= 0) return;
+
+    const referralAmount = parseFloat(b.bonus_amount || '0') * (percent / 100);
+    if (referralAmount <= 0) return;
+
+    await this.createReferralBonus({
+      referrerUserId: relation.referrer_user_id,
+      referredUserId: referredUserId,
+      referralId: relation.id,
+      depositAmount: parseFloat(b.deposit_amount || '0'),
+      bonusAmount: referralAmount,
+      bonusPercentage: percent
+    });
+  }
+
+  /**
    * Get all referral bonuses for a user
    */
   async getReferralBonuses(userId: string): Promise<any[]> {
@@ -5152,7 +5256,7 @@ export class SupabaseStorage implements IStorage {
         const amount = parseFloat(bonus.bonus_amount || '0');
         if (bonus.status === 'unlocked') {
           depositBonusUnlocked += amount;
-        } else if (bonus.status === 'locked') {
+        } else if (bonus.status === 'locked' || bonus.status === 'pending') {
           depositBonusLocked += amount;
         } else if (bonus.status === 'credited') {
           depositBonusCredited += amount;

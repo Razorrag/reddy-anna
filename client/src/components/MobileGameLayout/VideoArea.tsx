@@ -33,6 +33,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   
   // Live viewer count - using totalPlayers from backend
   const [liveViewerCount, setLiveViewerCount] = useState<number>(0);
+  // Displayed viewer count - can be fake or real based on config
+  const [displayedViewerCount, setDisplayedViewerCount] = useState<number>(0);
   
   // Refs for direct stream control
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -43,7 +45,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
   const [isPausedState, setIsPausedState] = useState(false);
 
-  // Fetch totalPlayers from backend
+  // Fetch totalPlayers from backend and manage displayed count
   useEffect(() => {
     const fetchTotalPlayers = async () => {
       try {
@@ -64,6 +66,32 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     const interval = setInterval(fetchTotalPlayers, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  // NEW: Fake viewer count logic with fallback to real count
+  useEffect(() => {
+    const updateDisplayedCount = () => {
+      // Check if fake viewer range is configured
+      const minViewers = streamConfig?.minViewers;
+      const maxViewers = streamConfig?.maxViewers;
+
+      if (typeof minViewers === 'number' && typeof maxViewers === 'number' && minViewers > 0 && maxViewers > 0) {
+        // Use fake random count between min and max
+        const fakeCount = Math.floor(Math.random() * (maxViewers - minViewers + 1)) + minViewers;
+        setDisplayedViewerCount(fakeCount);
+        console.log(`👥 Displaying fake viewer count: ${fakeCount} (range: ${minViewers}-${maxViewers})`);
+      } else {
+        // Fallback to real viewer count
+        setDisplayedViewerCount(liveViewerCount);
+      }
+    };
+
+    // Update immediately
+    updateDisplayedCount();
+
+    // Update every 2 seconds for fake count variation
+    const interval = setInterval(updateDisplayedCount, 2000);
+    return () => clearInterval(interval);
+  }, [streamConfig?.minViewers, streamConfig?.maxViewers, liveViewerCount]);
 
   // Load stream configuration with auto-refresh
   useEffect(() => {
@@ -534,7 +562,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full">
             <span className="text-red-400 text-[10px]">👁</span>
             <span className="text-white text-xs font-medium">
-              {liveViewerCount > 0 ? liveViewerCount.toLocaleString() : '—'}
+              {displayedViewerCount > 0 ? displayedViewerCount.toLocaleString() : '—'}
             </span>
           </div>
         </div>

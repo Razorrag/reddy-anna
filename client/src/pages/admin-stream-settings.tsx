@@ -20,6 +20,10 @@ export default function AdminStreamSettings() {
   // "video" for direct MP4/HLS (.m3u8)
   const [streamType, setStreamType] = useState<'iframe' | 'video'>('iframe');
 
+  // NEW: Viewer range for fake viewer count display
+  const [minViewers, setMinViewers] = useState<number>(1000);
+  const [maxViewers, setMaxViewers] = useState<number>(1100);
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -49,6 +53,10 @@ export default function AdminStreamSettings() {
         } else {
           setStreamType('iframe');
         }
+
+        // Load viewer range settings
+        setMinViewers(cfg.minViewers ?? 1000);
+        setMaxViewers(cfg.maxViewers ?? 1100);
       }
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -76,7 +84,9 @@ export default function AdminStreamSettings() {
         streamTitle: 'Live Game Stream',
         autoplay: true,
         muted: true,
-        controls: streamType === 'video' ? false : true
+        controls: streamType === 'video' ? false : true,
+        minViewers,
+        maxViewers
       };
 
       const response = await apiClient.post<any>('/stream/simple-config', payload);
@@ -200,6 +210,48 @@ export default function AdminStreamSettings() {
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
                   Select "Video" for HLS (.m3u8) or direct MP4 links. Use "iFrame" only for embed URLs.
+                </p>
+              </div>
+
+              {/* Viewer Range Configuration */}
+              <div className="space-y-4 p-4 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 rounded-lg border border-indigo-500/30">
+                <div>
+                  <h3 className="text-lg font-semibold text-indigo-300 mb-2">👥 Live Viewer Count Settings</h3>
+                  <p className="text-sm text-gray-400 mb-4">
+                    Configure the fake viewer count range that will be displayed to players. Leave both at default to show real player count.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-indigo-300 mb-2">
+                      Min Viewers
+                    </label>
+                    <input
+                      type="number"
+                      value={minViewers}
+                      onChange={(e) => setMinViewers(Number(e.target.value))}
+                      min={0}
+                      className="w-full px-4 py-3 bg-black/50 border border-indigo-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-400/50 transition-colors"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-indigo-300 mb-2">
+                      Max Viewers
+                    </label>
+                    <input
+                      type="number"
+                      value={maxViewers}
+                      onChange={(e) => setMaxViewers(Number(e.target.value))}
+                      min={0}
+                      className="w-full px-4 py-3 bg-black/50 border border-indigo-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-400/50 transition-colors"
+                    />
+                  </div>
+                </div>
+                
+                <p className="text-xs text-gray-400">
+                  💡 A random number between Min and Max will be shown every 2 seconds. Set both to 0 to display real player count.
                 </p>
               </div>
 

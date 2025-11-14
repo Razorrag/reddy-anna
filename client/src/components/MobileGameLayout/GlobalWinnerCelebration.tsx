@@ -26,6 +26,7 @@ interface CelebrationData {
     round2: { andar: number; bahar: number };
   };
   result: 'no_bet' | 'refund' | 'mixed' | 'win' | 'loss';
+  dataSource?: 'server_payout' | 'local_calculation' | 'none';
 }
 
 const GlobalWinnerCelebration: React.FC = () => {
@@ -45,13 +46,14 @@ const GlobalWinnerCelebration: React.FC = () => {
         return;
       }
 
-      // ✅ ENHANCED DEBUG LOGGING
+      // ✅ ENHANCED DEBUG LOGGING WITH DATA SOURCE
       console.group('🎉 GlobalWinnerCelebration: Game Complete');
       console.log('📊 Celebration Data:', {
         winner: detail.winner,
         winningCard: detail.winningCard,
         round: detail.round,
-        result: detail.result
+        result: detail.result,
+        dataSource: detail.dataSource || 'unknown'
       });
       console.log('💰 Payout Details:', {
         payoutAmount: detail.payoutAmount,
@@ -59,6 +61,16 @@ const GlobalWinnerCelebration: React.FC = () => {
         netProfit: detail.netProfit,
         playerBets: detail.playerBets
       });
+      
+      // ✅ DATA SOURCE INDICATOR
+      if (detail.dataSource === 'server_payout') {
+        console.log('✅ DATA SOURCE: Server (Authoritative - Backend calculated)');
+      } else if (detail.dataSource === 'local_calculation') {
+        console.warn('⚠️ DATA SOURCE: Local Calculation (Fallback - may be inaccurate)');
+      } else {
+        console.warn('❓ DATA SOURCE: Unknown');
+      }
+      
       console.log('👤 User Info:', {
         isAdmin,
         userId: user?.id,
@@ -221,11 +233,9 @@ const GlobalWinnerCelebration: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <div className="text-sm font-semibold text-red-300 mb-1 uppercase tracking-wider">You Lost</div>
-                      <div className="text-6xl font-black text-red-400 mb-2">
-                        -₹{Math.abs(data.netProfit).toLocaleString('en-IN')}
-                      </div>
-                      <div className="text-sm text-red-200/80 font-semibold">Net Loss</div>
+                      <div className="text-sm font-semibold text-red-300 mb-1 uppercase tracking-wider">Better Luck Next Time</div>
+                      <div className="text-5xl font-black text-red-400 mb-2">😊</div>
+                      <div className="text-sm text-red-200/80 font-semibold">Don't worry, it's all part of the game!</div>
                     </>
                   )}
                 </div>
