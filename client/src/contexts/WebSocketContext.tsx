@@ -737,10 +737,79 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         } else {
           addBaharCard(parsedCard);
         }
+
         if (isWinningCard) {
           // ❌ REMOVED: showNotification - Duplicate, shown in VideoArea overlay
           // Trigger celebration event (will be handled by game_complete message)
           // Note: game_complete message will be sent separately with full payout calculation
+
+          // ✅ NEW: SAFETY NET - Trigger local celebration immediately when winning card is dealt
+          // This ensures players see the winner + payout even if game_complete is delayed or missed.
+          try {
+            // Avoid double-trigger if a celebration is already showing
+            if ((gameState as any).showCelebration) {
+              console.log('🎉 Skipping local celebration trigger - celebration already visible');
+              break;
+            }
+
+            const winner = side;
+            const winningCardLocal = parsedCard;
+            const round = gameState.currentRound;
+
+            const round1Andar = getTotalBetAmount(gameState.playerRound1Bets?.andar, 'andar');
+            const round1Bahar = getTotalBetAmount(gameState.playerRound1Bets?.bahar, 'bahar');
+            const round2Andar = getTotalBetAmount(gameState.playerRound2Bets?.andar, 'andar');
+            const round2Bahar = getTotalBetAmount(gameState.playerRound2Bets?.bahar, 'bahar');
+
+            const playerBetsFallback = {
+              round1: { andar: round1Andar, bahar: round1Bahar },
+              round2: { andar: round2Andar, bahar: round2Bahar }
+            };
+
+            const totalBetAmount = round1Andar + round1Bahar + round2Andar + round2Bahar;
+            const payoutAmount = calculatePayout(round, winner, playerBetsFallback);
+            const netProfit = payoutAmount - totalBetAmount;
+
+            let result: 'no_bet' | 'refund' | 'mixed' | 'win' | 'loss';
+            if (payoutAmount > 0) {
+              result = 'win';
+            } else if (totalBetAmount === 0 && payoutAmount === 0) {
+              result = 'no_bet';
+            } else if (payoutAmount === totalBetAmount) {
+              result = 'refund';
+            } else {
+              const hasAndar = (round1Andar + round2Andar) > 0;
+              const hasBahar = (round1Bahar + round2Bahar) > 0;
+              if (hasAndar && hasBahar) {
+                result = 'mixed';
+              } else if (netProfit > 0) {
+                result = 'win';
+              } else {
+                result = 'loss';
+              }
+            }
+
+            const celebrationData = {
+              winner,
+              winningCard: winningCardLocal,
+              round,
+              winnerDisplay: undefined,
+              payoutAmount,
+              totalBetAmount,
+              netProfit,
+              playerBets: playerBetsFallback,
+              result,
+              dataSource: 'local_calculation',
+            };
+
+            console.group('🎉 Local Celebration Trigger (card_dealt winningCard)');
+            console.log('📊 Local celebration data:', celebrationData);
+            console.groupEnd();
+
+            setCelebration(celebrationData as any);
+          } catch (err) {
+            console.error('❌ Error triggering local celebration from card_dealt:', err);
+          }
         }
         break;
       }
@@ -876,8 +945,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             netProfit = payoutAmount - totalBetAmount;
             dataSource = 'local_calculation';
             
-            // Calculate result locally
-            if (totalBetAmount === 0) {
+            // Calculate result locally (never show no_bet if there is payout)
+            if (payoutAmount > 0) {
+              result = 'win';
+            } else if (totalBetAmount === 0 && payoutAmount === 0) {
               result = 'no_bet';
             } else if (payoutAmount === totalBetAmount) {
               result = 'refund';

@@ -85,7 +85,7 @@ const GlobalWinnerCelebration: React.FC = () => {
     });
     console.groupEnd();
 
-    const duration = data.result === 'no_bet' ? 3000 : 8000;
+    const duration = 8000; // Fixed duration so players can always read payout, even in fallback
     console.log(`⏱️ GlobalWinnerCelebration: Will auto-hide after ${duration}ms`);
 
     const hideTimer = setTimeout(() => {
@@ -206,8 +206,8 @@ const GlobalWinnerCelebration: React.FC = () => {
               <div className="text-lg text-gray-200">{winningCardDisplay} • Round {data.round}</div>
             </motion.div>
 
-            {/* Payout Information - Always shown when there's a bet */}
-            {data.totalBetAmount > 0 ? (
+            {/* Payout Information - Always shown when there's any bet or payout */}
+            {(data.totalBetAmount > 0 || data.payoutAmount > 0) ? (
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -262,7 +262,7 @@ const GlobalWinnerCelebration: React.FC = () => {
                 </div>
               </motion.div>
             ) : (
-              // No bet placed
+              // No bet placed (no payout and no bet recorded)
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}

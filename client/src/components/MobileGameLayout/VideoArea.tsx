@@ -238,7 +238,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           }
         }
       }
-    }, 2000); // Check every 2 seconds
+    }, 1000); // Check every 1 second for tighter auto-refresh
     
     return () => clearInterval(monitorStream);
   }, [streamConfig?.streamUrl, isPausedState]);
@@ -465,7 +465,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
   // Determine if stream is live
   const isLive = !!(streamConfig?.isActive && streamConfig?.streamUrl);
-  const showFrozenFrame = isPausedState && frozenFrame;
+  const showFrozenFrame = false;
   
   console.log('🎥 VideoArea render state:', {
     isLive,
@@ -484,41 +484,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       <div className="absolute inset-0">
         {renderStream()}
 
-        {/* Frozen Frame Overlay - Shows when VIDEO stream is paused */}
-        {showFrozenFrame && streamConfig?.streamType === 'video' && (
-          <div className="absolute inset-0 z-10">
-            <img
-              src={frozenFrame}
-              alt="Paused Stream"
-              className="w-full h-full object-cover"
-            />
-            {/* Paused Indicator */}
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-              <div className="bg-black/80 backdrop-blur-sm px-6 py-4 rounded-2xl border-2 border-amber-500/50 shadow-2xl">
-                <div className="flex items-center gap-3">
-                  <div className="text-4xl animate-pulse">⏸️</div>
-                  <div>
-                    <p className="text-white font-bold text-xl">Stream Paused</p>
-                    <p className="text-gray-300 text-sm">Admin will resume shortly</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ✅ NEW: Iframe Pause Overlay - Shows full-screen overlay for iframe streams (can't capture frame) */}
-        {isPausedState && streamConfig?.streamType === 'iframe' && (
-          <div className="absolute inset-0 z-10 bg-black/95 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-6xl mb-4 animate-pulse">⏸️</div>
-              <p className="text-white font-bold text-2xl mb-2">Stream Paused</p>
-              <p className="text-gray-400 text-sm">Admin will resume shortly</p>
-            </div>
-          </div>
-        )}
-
-        {/* Overlay Gradient for better text visibility */}
+        {/* Overlay Gradient for better text visibility (no paused popup) */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" style={{ zIndex: 2 }} />
       </div>
 
