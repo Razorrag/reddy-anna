@@ -211,6 +211,8 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         andarCards: [], // Clear cards from previous game
         baharCards: [], // Clear cards from previous game
         selectedOpeningCard: null, // Clear opening card
+        showCelebration: false, // ✅ FIX: Explicitly clear celebration on reset
+        lastCelebration: null, // ✅ FIX: Clear celebration data on reset
       };
     case 'SET_GAME_ACTIVE':
       return { ...state, isGameActive: action.payload };

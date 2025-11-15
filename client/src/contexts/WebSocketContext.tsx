@@ -151,6 +151,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     clearRoundBets,
     setBettingLocked,
     setCelebration,
+    hideCelebration,
   } = useGameState();
   const { showNotification } = useNotification();
   const { state: authState, logout, refreshAccessToken } = useAuth();
@@ -457,8 +458,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
         
         console.log('Bet confirmed:', data.data);
-        // ❌ REMOVED: Redundant notification - User already sees bet in UI and balance update
-        // showNotification(`Bet placed: ₹${data.data.amount} on ${data.data.side}`, 'success');
         
         // Immediately update balance from WebSocket (highest priority)
         const betBalance = data.data.newBalance;
@@ -708,6 +707,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         const { gameId, openingCard, phase, round, timer } = (data as OpeningCardConfirmedMessage).data;
         const parsed = typeof openingCard === 'string' ? parseDisplayCard(openingCard) : openingCard;
         
+        // ✅ FIX: Hide celebration when new game starts
+        // This ensures the celebration popup is cleared when admin starts a new game
+        hideCelebration();
+        
         // ✅ FIX: Set gameId from broadcast so players can place bets
         if (gameId) {
           setGameId(gameId);
@@ -718,8 +721,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         setPhase(phase);
         setCurrentRound(round);
         setCountdown(timer);
-        // ❌ REMOVED: Redundant notification - Opening card is visible in UI, timer shows betting started
-        // showNotification(`Opening card: ${parsed.display} - Round ${round} betting started!`, 'success');
         break;
       }
 
@@ -743,7 +744,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           // Trigger celebration event (will be handled by game_complete message)
           // Note: game_complete message will be sent separately with full payout calculation
 
-          // ✅ NEW: SAFETY NET - Trigger local celebration immediately when winning card is dealt
+          // SAFETY NET - Trigger local celebration immediately when winning card is dealt
           // This ensures players see the winner + payout even if game_complete is delayed or missed.
           try {
             // Avoid double-trigger if a celebration is already showing
@@ -888,7 +889,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         
         // ❌ REMOVED: showNotification(message, 'success'); - Duplicate, shown in VideoArea overlay
         
-        // ✅ SIMPLIFIED: Resolve payout using 3-layer priority (removed slow REST API fallback)
+        // Resolve payout using 3-layer priority
         let payoutAmount = 0;
         let totalBetAmount = 0;
         let netProfit = 0;
@@ -1044,8 +1045,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'game_reset': {
         const { message } = (data as GameResetMessage).data;
         resetGame();
-        // ❌ REMOVED: Redundant notification - Game reset is visible in UI state change
-        // showNotification(message || 'Game reset', 'info');
         console.log('🔄 Game reset:', message);
         break;
       }
@@ -1059,8 +1058,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         setSelectedOpeningCard(null);
         setWinner(null);
         setWinningCard(null);
-        // ❌ REMOVED: Redundant notification - UI already shows game is ready
-        // showNotification(message || 'Game completed. Ready for new game!', 'info');
         console.log('🔄 Game return to opening:', message);
         break;
       }

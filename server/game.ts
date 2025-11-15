@@ -417,7 +417,9 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
         let updatedBalance = balanceMap.get(notification.userId);
         if (updatedBalance === undefined) {
           const updatedUser = await storage.getUser(notification.userId);
-          updatedBalance = updatedUser?.balance || 0;
+          // ✅ FIX: Ensure balance is a number
+          const balanceValue = updatedUser?.balance;
+          updatedBalance = typeof balanceValue === 'number' ? balanceValue : (typeof balanceValue === 'string' ? parseFloat(balanceValue) || 0 : 0);
         }
 
         const totalUserBets =
@@ -918,7 +920,6 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     console.error('⚠️ Error broadcasting analytics updates:', error);
   }
   
-  // ✅ REMOVED: Duplicate winnerDisplay calculation (now computed earlier before game_complete messages)
   // Determine payout message for logging
   let payoutMessage = '';
   
@@ -945,7 +946,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   
   console.log(`🏆 GAME COMPLETED: ${payoutMessage}`);
   
-  // STEP 6: Update game session in database and reset for next game
+  // STEP 6: Update game session in database
   try {
     await storage.updateGameSession(gameState.gameId, {
       phase: 'complete',
@@ -959,10 +960,11 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     console.error('⚠️ Error updating game session in database:', error);
   }
   
-  // STEP 7: Reset game state for next game
-  gameState.reset();
+  // DO NOT reset game state here - keep it in 'complete' phase
+  // The game state will be reset when admin clicks "Start New Game" button
+  // This allows admin to see the "Start New Game" button and players to see celebration
   
-  console.log('🔄 Game state reset for next game');
+  console.log('✅ Game completed - state kept in "complete" phase until admin starts new game');
   console.log(`⏱️ Game history/stats saved in ${Date.now() - historyStartTime}ms (background)`);
   }; // End of saveGameDataAsync
   

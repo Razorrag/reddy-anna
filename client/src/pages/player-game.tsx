@@ -20,7 +20,6 @@ import { GameHistoryModal } from '../components/GameHistoryModal';
 import { WalletModal } from '../components/WalletModal';
 import RoundNotification from '../components/RoundNotification';
 import NoWinnerTransition from '../components/NoWinnerTransition';
-// ❌ REMOVED: WinnerCelebration - Now shown in VideoArea overlay
 import type { BetSide } from '../types/game';
 
 interface WhatsAppResponse {
@@ -30,7 +29,7 @@ interface WhatsAppResponse {
 
 const PlayerGame: React.FC = () => {
   const { showNotification } = useNotification();
-  const { gameState, updatePlayerWallet, removeLastBet, clearRoundBets } = useGameState();
+  const { gameState, updatePlayerWallet, removeLastBet, clearRoundBets, setCelebration } = useGameState();
   const { placeBet: placeBetWebSocket, connectionStatus } = useWebSocket();
   const { balance, updateBalance } = useBalance();
 
@@ -56,7 +55,6 @@ const PlayerGame: React.FC = () => {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showRoundNotification, setShowRoundNotification] = useState(false);
   const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
-  // ❌ REMOVED: showWinnerCelebration - Now handled in VideoArea overlay
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
 
   // Available bet amounts - matching schema limits (1000-100000)
@@ -184,9 +182,6 @@ const PlayerGame: React.FC = () => {
           }
         }
       );
-      
-      // ❌ REMOVED: Duplicate notification - WebSocket bet_confirmed already shows this
-      // showNotification(`Bet placed: ₹${selectedBetAmount} on ${position.toUpperCase()} (Round ${gameState.currentRound})`, 'success');
     } catch (error: any) {
       // Revert balance if bet fails
       updateBalance(userBalance, 'local');
@@ -405,8 +400,12 @@ const PlayerGame: React.FC = () => {
       const customEvent = event as CustomEvent;
       console.log('Game complete celebration received:', customEvent.detail);
       
-      // ❌ REMOVED: setShowWinnerCelebration - Now handled in VideoArea overlay
-      // ❌ REMOVED: showNotification - Duplicate, shown in VideoArea overlay
+      // ✅ FIX: Trigger the celebration state from context
+      // This ensures the celebration data is stored in GameStateContext
+      // and will persist until admin starts a new game
+      if (customEvent.detail) {
+        setCelebration(customEvent.detail);
+      }
       
       // Refresh balance after game completion to get updated payout
       setTimeout(() => {
@@ -416,7 +415,7 @@ const PlayerGame: React.FC = () => {
 
     window.addEventListener('game-complete-celebration', handleGameComplete);
     return () => window.removeEventListener('game-complete-celebration', handleGameComplete);
-  }, [updateBalance]);
+  }, [updateBalance, setCelebration]);
 
   // Listen for payment notifications and balance refresh requests
   useEffect(() => {
