@@ -99,6 +99,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserBalance(userId: string, amountChange: number): Promise<void>;
   getUserBalance(userId: string): Promise<number>; // Fast balance retrieval (optimized)
+  getUsersBalances(userIds: string[]): Promise<{ id: string; balance: number }[]>; // Batch balance retrieval
   updateUser(userId: string, updates: any): Promise<User>;
   deductBalanceAtomic(userId: string, amount: number): Promise<number>; // Atomic balance deduction
   addBalanceAtomic(userId: string, amount: number): Promise<number>; // Atomic balance addition
@@ -870,6 +871,33 @@ export class SupabaseStorage implements IStorage {
     } catch (error) {
       console.error(`Error in getUserBalance for ${userId}:`, error);
       return 0;
+    }
+  }
+
+  // Batch fetch balances for multiple users
+  async getUsersBalances(userIds: string[]): Promise<{ id: string; balance: number }[]> {
+    if (!userIds || userIds.length === 0) {
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabaseServer
+        .from('users')
+        .select('id, balance')
+        .in('id', userIds);
+
+      if (error) {
+        console.error('Error batch fetching user balances:', error);
+        return [];
+      }
+
+      return (data || []).map((u: any) => ({
+        id: u.id,
+        balance: this.parseBalance(u.balance)
+      }));
+    } catch (error) {
+      console.error('Error in getUsersBalances:', error);
+      return [];
     }
   }
 

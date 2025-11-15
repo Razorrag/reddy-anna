@@ -1,20 +1,22 @@
--- Drop old text[] version of apply_payouts_and_update_bets function
--- This fixes the PGRST203 error: "Could not choose the best candidate function"
--- The database has two versions (text[] and uuid[]) causing ambiguity
-
--- Drop the old text[] version
+-- Clean up any old versions of apply_payouts_and_update_bets to avoid ambiguity
+-- We want a SINGLE function whose types match the actual schema
 DROP FUNCTION IF EXISTS public.apply_payouts_and_update_bets(
-  payouts jsonb,
-  winning_bets_ids text[],
-  losing_bets_ids text[]
-);
-
--- Verify the UUID[] version exists (this should already be present from previous migrations)
--- If not, create it
-CREATE OR REPLACE FUNCTION public.apply_payouts_and_update_bets(
   payouts JSONB,
   winning_bets_ids UUID[],
   losing_bets_ids UUID[]
+);
+
+DROP FUNCTION IF EXISTS public.apply_payouts_and_update_bets(
+  payouts JSONB,
+  winning_bets_ids TEXT[],
+  losing_bets_ids TEXT[]
+);
+
+-- Create the canonical version using TEXT[] to match player_bets.id (character varying)
+CREATE OR REPLACE FUNCTION public.apply_payouts_and_update_bets(
+  payouts JSONB,
+  winning_bets_ids TEXT[],
+  losing_bets_ids TEXT[]
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -42,7 +44,7 @@ BEGIN
   END LOOP;
   
   -- Update winning bets status and actual_payout
-  UPDATE bets
+  UPDATE player_bets
   SET 
     status = 'won',
     actual_payout = amount * 2,  -- Winning bets get 2x payout
@@ -50,7 +52,7 @@ BEGIN
   WHERE id = ANY(winning_bets_ids);
   
   -- Update losing bets status
-  UPDATE bets
+  UPDATE player_bets
   SET 
     status = 'lost',
     actual_payout = 0,  -- Losing bets get 0 payout

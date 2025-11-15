@@ -394,13 +394,9 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
 
   if (userIds.length > 0) {
     try {
-      const { data: users, error: balanceError } = await (storage as any).supabaseServer
-        .from('users')
-        .select('id, balance')
-        .in('id', userIds);
-
-      if (!balanceError && users) {
-        users.forEach((u: any) => balanceMap.set(u.id, parseFloat(u.balance || '0')));
+      const users = await storage.getUsersBalances(userIds);
+      if (users && users.length > 0) {
+        users.forEach((u: any) => balanceMap.set(u.id, u.balance));
         console.log(`✅ Batch fetched ${users.length} user balances in ${Date.now() - wsStartTime}ms`);
       }
     } catch (error) {

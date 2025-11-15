@@ -68,6 +68,8 @@ interface GameState {
   playerRound1Bets: RoundBets;
   playerRound2Bets: RoundBets;
   isScreenSharingActive: boolean;
+  lastCelebration?: any;
+  showCelebration?: boolean;
 }
 
 // Helper functions to work with BetInfo arrays
@@ -116,7 +118,9 @@ type GameStateAction =
   | { type: 'REMOVE_LAST_BET'; payload: { round: GameRound; side: BetSide } }
   | { type: 'CLEAR_ROUND_BETS'; payload: { round: GameRound; side?: BetSide } }
   | { type: 'SET_SCREEN_SHARING'; payload: boolean }
-  | { type: 'CLEAR_CARDS' };
+  | { type: 'CLEAR_CARDS' }
+  | { type: 'SHOW_CELEBRATION'; payload: any }
+  | { type: 'HIDE_CELEBRATION' };
 
 const initialState: GameState = {
   id: '',
@@ -147,7 +151,9 @@ const initialState: GameState = {
   playerWallet: 0,
   playerRound1Bets: { andar: [], bahar: [] },
   playerRound2Bets: { andar: [], bahar: [] },
-  isScreenSharingActive: false
+  isScreenSharingActive: false,
+  lastCelebration: null,
+  showCelebration: false
 };
 
 const gameReducer = (state: GameState, action: GameStateAction): GameState => {
@@ -364,6 +370,17 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         winningCard: null,  // ✅ Now clears winning card
         usedCards: [] // Clear used cards tracking
       };
+    case 'SHOW_CELEBRATION':
+      return {
+        ...state,
+        lastCelebration: action.payload,
+        showCelebration: true
+      };
+    case 'HIDE_CELEBRATION':
+      return {
+        ...state,
+        showCelebration: false
+      };
     default:
       return state;
   }
@@ -398,6 +415,8 @@ interface GameStateContextType {
   resetBettingData: () => void;
   setScreenSharing: (isSharing: boolean) => void;
   phase: GamePhase;
+  setCelebration: (data: any) => void;
+  hideCelebration: () => void;
 }
 
 const GameStateContext = createContext<GameStateContextType | undefined>(undefined);
@@ -664,6 +683,14 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'SET_SCREEN_SHARING', payload: isSharing });
   };
 
+  const setCelebration = (data: any) => {
+    dispatch({ type: 'SHOW_CELEBRATION', payload: data });
+  };
+
+  const hideCelebration = () => {
+    dispatch({ type: 'HIDE_CELEBRATION' });
+  };
+
   const resetBettingData = () => {
     dispatch({ type: 'UPDATE_TOTAL_BETS', payload: { andar: 0, bahar: 0 } });
     dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round: 1, bets: { andar: 0, bahar: 0 } } });
@@ -762,6 +789,8 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     clearRoundBets,
     resetBettingData,
     setScreenSharing,
+    setCelebration,
+    hideCelebration,
     phase: gameState.phase,
   };
 

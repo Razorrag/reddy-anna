@@ -150,6 +150,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     removeLastBet,
     clearRoundBets,
     setBettingLocked,
+    setCelebration,
   } = useGameState();
   const { showNotification } = useNotification();
   const { state: authState, logout, refreshAccessToken } = useAuth();
@@ -935,7 +936,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           winner,
           winningCard,
           round: round || gameState.currentRound,
-          winnerDisplay, // ✅ NEW: Server-computed winner text (ANDAR WON / BABA WON / BAHAR WON)
+          winnerDisplay, // ✅ NEW: Server-computed winner text (ANDAR WON / BAHAR WON / BAHAR WON)
           payoutAmount,
           totalBetAmount,
           netProfit,
@@ -949,7 +950,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         console.log('📍 Data Source:', dataSource);
         console.log('🏆 Winner Display:', winnerDisplay || 'not provided (will compute on client)');
         console.groupEnd();
-        
+
+        // ✅ NEW: Drive celebration overlay from shared game state (authoritative)
+        try {
+          setCelebration(celebrationData);
+        } catch (e) {
+          console.error('❌ Error setting celebration state:', e);
+        }
+
         const celebrationEvent = new CustomEvent('game-complete-celebration', {
           detail: celebrationData
         });
