@@ -18,6 +18,7 @@ interface CelebrationData {
   winner: 'andar' | 'bahar';
   winningCard: any;
   round: number;
+  winnerDisplay?: string; // NEW: Server-computed winner text (ANDAR WON / BABA WON / BAHAR WON)
   payoutAmount: number;
   totalBetAmount: number;
   netProfit: number;
@@ -26,7 +27,7 @@ interface CelebrationData {
     round2: { andar: number; bahar: number };
   };
   result: 'no_bet' | 'refund' | 'mixed' | 'win' | 'loss';
-  dataSource?: 'server_payout' | 'local_calculation' | 'none';
+  dataSource?: 'game_complete_direct' | 'payout_received_websocket' | 'local_calculation' | 'none';
 }
 
 const GlobalWinnerCelebration: React.FC = () => {
@@ -37,12 +38,25 @@ const GlobalWinnerCelebration: React.FC = () => {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   useEffect(() => {
+    console.log('🎉 GlobalWinnerCelebration: Component mounted, registering event listener');
+    console.log('🎉 GlobalWinnerCelebration: User role:', user?.role, 'isAdmin:', isAdmin);
+    console.log('🎉 GlobalWinnerCelebration: Window object available:', typeof window !== 'undefined');
+    
+    // Test that event system is working
+    const testHandler = () => console.log('✅ GlobalWinnerCelebration: Test event received - event system working!');
+    window.addEventListener('test-celebration-mount', testHandler);
+    window.dispatchEvent(new CustomEvent('test-celebration-mount'));
+    window.removeEventListener('test-celebration-mount', testHandler);
+    
     const handleCelebration = (event: Event) => {
+      console.log('🎊 GlobalWinnerCelebration: Event received!', event);
       const customEvent = event as CustomEvent<CelebrationData>;
       const detail = customEvent.detail;
+      
+      console.log('📦 GlobalWinnerCelebration: Event detail:', detail);
 
       if (!detail || !detail.winner) {
-        console.warn('⚠️ GlobalWinnerCelebration: Invalid celebration data received', detail);
+        console.error('❌ GlobalWinnerCelebration: Invalid celebration data received', detail);
         return;
       }
 
@@ -52,6 +66,7 @@ const GlobalWinnerCelebration: React.FC = () => {
         winner: detail.winner,
         winningCard: detail.winningCard,
         round: detail.round,
+        winnerDisplay: detail.winnerDisplay || 'not provided',
         result: detail.result,
         dataSource: detail.dataSource || 'unknown'
       });
@@ -62,13 +77,22 @@ const GlobalWinnerCelebration: React.FC = () => {
         playerBets: detail.playerBets
       });
       
-      // ✅ DATA SOURCE INDICATOR
-      if (detail.dataSource === 'server_payout') {
-        console.log('✅ DATA SOURCE: Server (Authoritative - Backend calculated)');
-      } else if (detail.dataSource === 'local_calculation') {
-        console.warn('⚠️ DATA SOURCE: Local Calculation (Fallback - may be inaccurate)');
+      // ✅ WINNER DISPLAY SOURCE
+      if (detail.winnerDisplay) {
+        console.log('✅ WINNER TEXT: Server (Authoritative)');
       } else {
-        console.warn('❓ DATA SOURCE: Unknown');
+        console.warn('⚠️ WINNER TEXT: Client Fallback (Server did not provide)');
+      }
+      
+      // ✅ PAYOUT DATA SOURCE INDICATOR
+      if (detail.dataSource === 'game_complete_direct') {
+        console.log('✅ PAYOUT SOURCE: Server game_complete (Authoritative)');
+      } else if (detail.dataSource === 'payout_received_websocket') {
+        console.warn('⚠️ PAYOUT SOURCE: payout_received Backup');
+      } else if (detail.dataSource === 'local_calculation') {
+        console.error('❌ PAYOUT SOURCE: Local Calculation (Fallback - may be inaccurate)');
+      } else {
+        console.warn('❓ PAYOUT SOURCE: Unknown');
       }
       
       console.log('👤 User Info:', {
@@ -86,15 +110,21 @@ const GlobalWinnerCelebration: React.FC = () => {
         netProfit: typeof detail.netProfit === 'number' && !isNaN(detail.netProfit) ? detail.netProfit : 0,
       };
       
+      console.log('✅ GlobalWinnerCelebration: Setting celebration visible with data:', validatedData);
       setData(validatedData);
       setVisible(true);
 
       // Auto-hide based on result type
       const duration = validatedData.result === 'no_bet' ? 3000 : 8000;
+      console.log(`⏱️ GlobalWinnerCelebration: Will auto-hide after ${duration}ms`);
       
       setTimeout(() => {
+        console.log('⏱️ GlobalWinnerCelebration: Auto-hiding celebration');
         setVisible(false);
-        setTimeout(() => setData(null), 500);
+        setTimeout(() => {
+          console.log('🧹 GlobalWinnerCelebration: Clearing celebration data');
+          setData(null);
+        }, 500);
       }, duration);
     };
 
@@ -107,11 +137,21 @@ const GlobalWinnerCelebration: React.FC = () => {
   }, [isAdmin, user?.id, user?.role]);
 
   if (!visible || !data) {
+    console.log('👻 GlobalWinnerCelebration: Not rendering (visible:', visible, 'data:', !!data, ')');
     return null;
   }
+  
+  console.log('🎨 GlobalWinnerCelebration: Rendering celebration overlay');
 
-  // Determine winner text based on round and side
+  // ✅ ENHANCED: Prefer server's winnerDisplay, fallback to local calculation
   const getWinnerText = () => {
+    // 1️⃣ PRIMARY: Use server's pre-computed winner text
+    if (data.winnerDisplay) {
+      return data.winnerDisplay;
+    }
+    
+    // 2️⃣ FALLBACK: Compute locally (only if server didn't provide it)
+    console.warn('⚠️ winnerDisplay missing from server, computing locally');
     if (data.winner === 'andar') {
       return 'ANDAR WON';
     } else {

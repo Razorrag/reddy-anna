@@ -26,6 +26,7 @@ import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
 import PersistentSidePanel from '@/components/PersistentSidePanel';
 import StreamControlPanel from './StreamControlPanel';
+import GlobalWinnerCelebration from '@/components/MobileGameLayout/GlobalWinnerCelebration';
 import { Home, RefreshCw } from 'lucide-react';
 
 const AdminGamePanel: React.FC = () => {
@@ -404,6 +405,9 @@ const AdminGamePanel: React.FC = () => {
           </div>
         )}
       </div>
+      
+      {/* Global Winner Celebration - Overlays entire admin panel */}
+      <GlobalWinnerCelebration />
     </div>
   );
 };

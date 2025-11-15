@@ -478,7 +478,24 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     const baharCount = gameState.baharCards.length;
     const totalCards = andarCount + baharCount + 1; // +1 for opening card
 
-    console.log(`🎯 Game complete - Cards: ${totalCards} (${andarCount}A + ${baharCount}B + 1 opening), Round: ${actualRound}`);
+    // ✅ CRITICAL FIX: Calculate winnerDisplay BEFORE sending messages
+    // This ensures consistent winner text across all clients
+    let winnerDisplay = '';
+    if (actualRound === 1) {
+      winnerDisplay = winningSide === 'andar' ? 'ANDAR WON' : 'BABA WON';
+    } else if (actualRound === 2) {
+      winnerDisplay = winningSide === 'andar' ? 'ANDAR WON' : 'BABA WON';
+    } else {
+      // Round 3+: Bahar gets proper name
+      winnerDisplay = winningSide === 'andar' ? 'ANDAR WON' : 'BAHAR WON';
+    }
+
+    // ✅ VALIDATION: Ensure round is valid
+    if (!actualRound || actualRound < 1 || actualRound > 3) {
+      console.error(`❌ CRITICAL: Invalid round detected: ${actualRound}, defaulting to 1`);
+    }
+
+    console.log(`🎯 Game complete - Cards: ${totalCards} (${andarCount}A + ${baharCount}B + 1 opening), Round: ${actualRound}, Display: ${winnerDisplay}`);
 
     for (const client of clientsArray) {
       try {
@@ -493,6 +510,27 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
         const userPayout = payouts[client.userId] || 0;
         const netProfit = userPayout - totalUserBets;
 
+        // ✅ CRITICAL FIX: Calculate result classification on server (authoritative)
+        let result: 'no_bet' | 'refund' | 'mixed' | 'win' | 'loss';
+        if (totalUserBets === 0) {
+          result = 'no_bet';
+        } else if (userPayout === totalUserBets) {
+          result = 'refund';
+        } else if (userBets) {
+          // Check if user bet on both sides
+          const hasAndar = (userBets.round1.andar + userBets.round2.andar) > 0;
+          const hasBahar = (userBets.round1.bahar + userBets.round2.bahar) > 0;
+          if (hasAndar && hasBahar) {
+            result = 'mixed';
+          } else if (netProfit > 0) {
+            result = 'win';
+          } else {
+            result = 'loss';
+          }
+        } else {
+          result = netProfit > 0 ? 'win' : 'loss';
+        }
+
         client.ws.send(JSON.stringify({
           type: 'game_complete',
           data: {
@@ -502,10 +540,12 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
             totalBets: totalBetsAmount,
             totalPayouts: totalPayoutsAmount,
             message: `${winningSide.toUpperCase()} wins with ${winningCard}!`,
+            winnerDisplay, // ✅ NEW: Server-computed winner text (ANDAR WON / BABA WON / BAHAR WON)
             userPayout: {
               amount: userPayout,
               totalBet: totalUserBets,
-              netProfit
+              netProfit,
+              result // ✅ NEW: Server-computed result classification
             }
           }
         }));
@@ -882,38 +922,32 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     console.error('⚠️ Error broadcasting analytics updates:', error);
   }
   
-  // Determine payout message and winner display based on winner and round
+  // ✅ REMOVED: Duplicate winnerDisplay calculation (now computed earlier before game_complete messages)
+  // Determine payout message for logging
   let payoutMessage = '';
-  let winnerDisplay = '';
   
   if (gameState.currentRound === 1) {
     if (winningSide === 'andar') {
       payoutMessage = 'Andar wins! Payout: 1:1 (Double money) 💰';
-      winnerDisplay = 'ANDAR WON';
     } else {
       payoutMessage = 'Baba wins! Payout: 1:0 (Refund only) 💵';
-      winnerDisplay = 'BABA WON'; // Round 1 Bahar = Baba Won
     }
   } else if (gameState.currentRound === 2) {
     if (winningSide === 'andar') {
       payoutMessage = 'Andar wins! Payout: 1:1 on all Andar bets 🎰';
-      winnerDisplay = 'ANDAR WON';
     } else {
       payoutMessage = 'Baba wins! Payout: 1:1 on Round 1 + 1:0 on Round 2 💸';
-      winnerDisplay = 'BABA WON'; // Round 2 Bahar = Baba Won (same as Round 1)
     }
   } else {
     // Round 3: Both sides get proper names
     if (winningSide === 'andar') {
       payoutMessage = 'Andar wins! Payout: 1:1 on all Andar bets 🎉';
-      winnerDisplay = 'ANDAR WON';
     } else {
       payoutMessage = 'Bahar wins! Payout: 1:1 on all Bahar bets 🎉';
-      winnerDisplay = 'BAHAR WON'; // ✅ FIX: Round 3 Bahar = Bahar Won
     }
   }
   
-  console.log(`🏆 GAME COMPLETED: ${winnerDisplay} - ${payoutMessage}`);
+  console.log(`🏆 GAME COMPLETED: ${payoutMessage}`);
   
   // STEP 6: Update game session in database and reset for next game
   try {
