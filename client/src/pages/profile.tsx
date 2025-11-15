@@ -197,6 +197,47 @@ const Profile: React.FC = () => {
     fetchBonusData();
   }, [activeTab, user, showNotification]);
 
+  // Listen for real-time bonus updates
+  useEffect(() => {
+    const handleBonusUpdate = (event: Event) => {
+      console.log('Bonus update received, refreshing data...');
+      if (activeTab === 'bonuses' && user) {
+        // Refresh bonus data when update received
+        const fetchBonusData = async () => {
+          setLoadingBonuses(true);
+          try {
+            const [summaryRes, depositRes, referralRes, transactionsRes] = await Promise.all([
+              apiClient.get('/api/user/bonus-summary'),
+              apiClient.get('/api/user/deposit-bonuses'),
+              apiClient.get('/api/user/referral-bonuses'),
+              apiClient.get('/api/user/bonus-transactions?limit=20&offset=0')
+            ]);
+
+            setBonusSummary(summaryRes.data || summaryRes);
+            setDepositBonuses(depositRes.data || depositRes);
+            setReferralBonuses(referralRes.data || referralRes);
+            
+            const transactionsArray = Array.isArray(transactionsRes)
+              ? transactionsRes
+              : Array.isArray(transactionsRes.data)
+                ? transactionsRes.data
+                : [];
+            
+            setBonusTransactions(transactionsArray);
+          } catch (error) {
+            console.error('Failed to refresh bonus data:', error);
+          } finally {
+            setLoadingBonuses(false);
+          }
+        };
+        fetchBonusData();
+      }
+    };
+    
+    window.addEventListener('bonus_update', handleBonusUpdate);
+    return () => window.removeEventListener('bonus_update', handleBonusUpdate);
+  }, [activeTab, user]);
+
   // Fetch payment requests when transactions tab is active
   const fetchPaymentRequests = async () => {
     if (!user) return;

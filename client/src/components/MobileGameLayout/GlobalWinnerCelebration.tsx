@@ -55,47 +55,32 @@ const GlobalWinnerCelebration: React.FC = () => {
       result: data.result,
       dataSource: data.dataSource || 'unknown'
     });
-    console.log('💰 Payout Details:', {
+    console.log('💰 Payout Details (FROM SERVER):', {
       payoutAmount: data.payoutAmount,
       totalBetAmount: data.totalBetAmount,
       netProfit: data.netProfit,
-      playerBets: data.playerBets
     });
-
-    if (data.winnerDisplay) {
-      console.log('✅ WINNER TEXT: Server (Authoritative)');
-    } else {
-      console.warn('⚠️ WINNER TEXT: Client Fallback (Server did not provide)');
-    }
-
-    if (data.dataSource === 'game_complete_direct') {
-      console.log('✅ PAYOUT SOURCE: Server game_complete (Authoritative)');
-    } else if (data.dataSource === 'payout_received_websocket') {
-      console.warn('⚠️ PAYOUT SOURCE: payout_received Backup');
-    } else if (data.dataSource === 'local_calculation') {
-      console.error('❌ PAYOUT SOURCE: Local Calculation (Fallback - may be inaccurate)');
-    } else {
-      console.warn('❓ PAYOUT SOURCE: Unknown');
-    }
-
     console.log('👤 User Info:', {
       isAdmin,
       userId: user?.id,
       userRole: user?.role
     });
     console.groupEnd();
+    
+    // ✅ --- START OF FIX ---
+    //
+    // THE BUG WAS HERE: The old code had a setTimeout that would
+    // call `hideCelebration()` after 8 seconds.
+    //
+    // THE FIX is to remove that timer. The celebration will now
+    // stay visible until the `resetGame()` action (from Phase 2B) hides it.
+    //
+    console.log(`⏱️ GlobalWinnerCelebration: Will stay visible until admin starts new game.`);
+    
+    // (The old setTimeout logic is now deleted)
+    
+    // --- END OF FIX ---
 
-    const duration = 8000; // Fixed duration so players can always read payout, even in fallback
-    console.log(`⏱️ GlobalWinnerCelebration: Will auto-hide after ${duration}ms`);
-
-    const hideTimer = setTimeout(() => {
-      console.log('⏱️ GlobalWinnerCelebration: Auto-hiding celebration');
-      hideCelebration();
-    }, duration);
-
-    return () => {
-      clearTimeout(hideTimer);
-    };
   }, [visible, data, hideCelebration, isAdmin, user?.id, user?.role]);
 
   if (!visible || !data) {

@@ -32,12 +32,14 @@ const balanceReducer = (state: BalanceState, action: BalanceAction): BalanceStat
       const timestamp = action.payload.timestamp || Date.now();
       const source = action.payload.source as 'websocket' | 'api' | 'localStorage';
       
-      // Race condition protection: Prioritize WebSocket updates over API/local updates
+      // ✅ FIX: Race condition protection - Prioritize WebSocket updates over API/local updates
       // If we have a recent WebSocket update and the new update is from API/localStorage, ignore it
+      // EXCEPTION: Allow 'api' updates if they're explicitly requested (like after game complete)
       if (source !== 'websocket' && state.lastWebSocketUpdate > 0) {
         const timeSinceWebSocketUpdate = timestamp - state.lastWebSocketUpdate;
-        // If WebSocket updated within last 2 seconds, ignore API/localStorage updates
-        if (timeSinceWebSocketUpdate < 2000) {
+        // If WebSocket updated within last 1 second, ignore API/localStorage updates
+        // Reduced from 2 seconds to 1 second for faster updates after game complete
+        if (timeSinceWebSocketUpdate < 1000) {
           console.log(`⚠️ Ignoring ${source} balance update - WebSocket update too recent (${timeSinceWebSocketUpdate}ms ago)`);
           return state;
         }

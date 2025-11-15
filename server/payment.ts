@@ -41,21 +41,15 @@ export const processPayment = async (request: PaymentRequest): Promise<PaymentRe
     let error: string | undefined;
     
     if (request.type === 'deposit') {
-      // ✅ FIX: Process deposit based on method
+      // ✅ CRITICAL FIX: Deposits should NOT add balance here!
+      // Balance is only added when admin APPROVES the deposit via approvePaymentRequestAtomic()
+      // This function should only validate the deposit method, not process it
       const result = await processDeposit(request);
       if (result.success) {
-        status = 'success';
-        // ✅ FIX: Use atomic operation for deposit
-        await storage.addBalanceAtomic(request.userId, request.amount);
-        
-        // ✅ FIX: Apply deposit bonus automatically (only once - removed from processDeposit)
-        try {
-          await applyDepositBonus(request.userId, request.amount);
-          console.log(`✅ Deposit bonus applied for user ${request.userId} on deposit of ₹${request.amount}`);
-        } catch (bonusError) {
-          console.error('⚠️ Failed to apply deposit bonus:', bonusError);
-          // Don't fail the deposit if bonus fails
-        }
+        // ✅ FIX: Keep status as 'pending' - balance will be added on admin approval
+        status = 'pending';
+        // ❌ REMOVED: Do NOT add balance here - that happens in approvePaymentRequestAtomic()
+        // ❌ REMOVED: Do NOT apply bonus here - that happens in approvePaymentRequestAtomic()
       } else {
         status = 'failed';
         error = result.error;

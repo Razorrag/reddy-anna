@@ -4799,7 +4799,7 @@ export class SupabaseStorage implements IStorage {
         wagering_required: data.wageringRequired,
         wagering_completed: 0,
         wagering_progress: 0,
-        status: 'pending'
+        status: 'locked' // ✅ FIX: Must be 'locked' for wagering tracking to work
       })
       .select('id')
       .single();
@@ -5109,7 +5109,7 @@ export class SupabaseStorage implements IStorage {
         .from('deposit_bonuses')
         .select('*')
         .eq('user_id', userId)
-        .in('status', ['pending', 'locked']);
+        .eq('status', 'locked'); // ✅ FIX: Only check 'locked' (bonuses are created as 'locked', not 'pending')
 
       if (error || !bonuses || bonuses.length === 0) {
         return;
@@ -5284,8 +5284,8 @@ export class SupabaseStorage implements IStorage {
         const amount = parseFloat(bonus.bonus_amount || '0');
         if (bonus.status === 'unlocked') {
           depositBonusUnlocked += amount;
-        } else if (bonus.status === 'locked' || bonus.status === 'pending') {
-          depositBonusLocked += amount;
+        } else if (bonus.status === 'locked') {
+          depositBonusLocked += amount; // ✅ FIX: Only 'locked' status (bonuses are created as 'locked')
         } else if (bonus.status === 'credited') {
           depositBonusCredited += amount;
         }

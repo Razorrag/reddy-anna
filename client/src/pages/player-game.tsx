@@ -407,10 +407,10 @@ const PlayerGame: React.FC = () => {
         setCelebration(customEvent.detail);
       }
       
-      // Refresh balance after game completion to get updated payout
-      setTimeout(() => {
-        updateBalance(undefined as any, 'api');
-      }, 1000);
+      // ✅ FIX: Refresh balance immediately (no delay needed - WebSocket already updated it)
+      // The game_complete WebSocket message already includes balance update
+      // This is just a safety refresh to ensure consistency
+      updateBalance(undefined as any, 'api');
     };
 
     window.addEventListener('game-complete-celebration', handleGameComplete);

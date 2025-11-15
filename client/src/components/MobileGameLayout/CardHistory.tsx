@@ -36,9 +36,6 @@ const CardHistory: React.FC<CardHistoryProps> = React.memo(({
   const [newGameIds, setNewGameIds] = useState<Set<string>>(new Set());
   const previousGameIdsRef = useRef<Set<string>>(new Set());
   const lastFetchTimeRef = useRef<number>(0);
-  // ❌ REMOVED: Own modal state - now uses parent's GameHistoryModal
-  // const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
-  // const [gameDetails, setGameDetails] = useState<any>(null);
   // const [loadingDetails, setLoadingDetails] = useState(false);
 
   useEffect(() => {
@@ -159,9 +156,6 @@ const CardHistory: React.FC<CardHistoryProps> = React.memo(({
     };
 
     fetchHistory();
-    
-    // ❌ REMOVED: 30-second polling causes UI jumping
-    // Real-time WebSocket updates handle all new games
     // No need for polling interval
   }, []);
 

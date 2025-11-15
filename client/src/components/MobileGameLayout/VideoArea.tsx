@@ -14,6 +14,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Volume2, VolumeX } from 'lucide-react';
 
 interface VideoAreaProps {
   className?: string;
@@ -23,8 +24,9 @@ interface VideoAreaProps {
 const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const { gameState } = useGameState();
   
-  // Use the gameState.timer directly
-  const localTimer = gameState.countdownTimer;
+  // ✅ FIX: Use the gameState.countdownTimer directly (synced from server)
+  // This ensures the timer is always in sync with the server
+  const localTimer = gameState.countdownTimer || 0;
   const [isPulsing, setIsPulsing] = useState(false);
 
   // Stream configuration from backend
@@ -42,6 +44,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
   const [isPausedState, setIsPausedState] = useState(false);
+  
+  // ✅ FIX: Add mute state for user control
+  const [isMuted, setIsMuted] = useState(true); // Start muted by default
 
   // Fake viewer count logic - ALWAYS uses a range (configured if available, otherwise defaults)
   useEffect(() => {
@@ -393,7 +398,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           src={streamConfig.streamUrl}
           className="w-full h-full object-cover"
           autoPlay
-          muted={streamConfig.muted !== false}
+          muted={isMuted} // ✅ FIX: User-controlled mute state
           controls={streamConfig.controls || false}
           loop
           playsInline
