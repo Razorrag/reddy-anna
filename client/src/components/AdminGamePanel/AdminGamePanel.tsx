@@ -26,7 +26,6 @@ import OpeningCardSelector from './OpeningCardSelector';
 import CardDealingPanel from './CardDealingPanel';
 import PersistentSidePanel from '@/components/PersistentSidePanel';
 import StreamControlPanel from './StreamControlPanel';
-import GlobalWinnerCelebration from '@/components/MobileGameLayout/GlobalWinnerCelebration';
 import { Home, RefreshCw } from 'lucide-react';
 
 const AdminGamePanel: React.FC = () => {
@@ -43,16 +42,15 @@ const AdminGamePanel: React.FC = () => {
   const [togglingPause, setTogglingPause] = useState(false);
   const [, setLocation] = useLocation();
   
-  // Sync game state when admin navigates to this page
-  useEffect(() => {
-    // Request current game state when component mounts
-    // This ensures the opening card is displayed immediately if it exists
-    sendWebSocketMessage({
-      type: 'game_subscribe',
-      data: {}
-    });
-    console.log('🔄 Admin panel mounted - requesting game state sync');
-  }, [sendWebSocketMessage]);
+  // ✅ FIX: Removed redundant game_subscribe - WebSocketContext already handles this on connection
+  // Keeping this commented for reference:
+  // useEffect(() => {
+  //   sendWebSocketMessage({
+  //     type: 'game_subscribe',
+  //     data: {}
+  //   });
+  //   console.log('🔄 Admin panel mounted - requesting game state sync');
+  // }, [sendWebSocketMessage]);
 
   // Load current simple stream config to sync fake viewer range and pause state
   useEffect(() => {
@@ -344,12 +342,7 @@ const AdminGamePanel: React.FC = () => {
                     : 'Deal ONE card at a time - winner checked immediately after each card'
                   }
                 </div>
-                <div className="text-sm text-blue-300 mt-2">
-                  {gameState.currentRound === 1 && 'Round 1: Deal 1 Bahar → Check winner → Deal 1 Andar → Check winner → Round 2 if no winner'}
-                  {gameState.currentRound === 2 && 'Round 2: Deal 2nd Bahar → Check winner → Deal 2nd Andar → Check winner → Round 3 if no winner'}
-                </div>
               </div>
-
               </div>
 
               {/* RIGHT: Persistent Side Panel - ALWAYS VISIBLE */}
@@ -364,23 +357,26 @@ const AdminGamePanel: React.FC = () => {
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2 space-y-4">
               <div className={`rounded-2xl border-2 p-10 text-center shadow-2xl backdrop-blur-sm ${
-                gameState.gameWinner === 'andar' 
-                  ? 'bg-gradient-to-br from-red-900/50 to-red-800/50 border-red-400' 
+                gameState.gameWinner === 'andar'
+                  ? 'bg-gradient-to-br from-red-900/50 to-red-800/50 border-red-400'
                   : 'bg-gradient-to-br from-blue-900/50 to-blue-800/50 border-blue-400'
               }`}>
                 <div className="text-7xl mb-6 animate-bounce">🎉</div>
                 <div className={`text-5xl font-black mb-4 ${
                   gameState.gameWinner === 'andar' ? 'text-[#A52A2A]' : 'text-[#01073b]'
                 }`}>
-                  {gameState.gameWinner === 'andar' 
-                    ? 'ANDAR WINS!' 
-                    : (gameState.currentRound >= 3 
-                      ? 'BAHAR WINS!' 
-                      : 'BABA WINS!')}
+                  {/* ✅ FIX: Use server's winnerDisplay for consistency with players */}
+                  {(gameState as any).winnerDisplay || (
+                    gameState.gameWinner === 'andar'
+                      ? 'ANDAR WINS!'
+                      : (gameState.currentRound >= 3
+                        ? 'BAHAR WINS!'
+                        : 'BABA WINS!')
+                  )}
                 </div>
                 <div className="text-2xl text-gray-200 mb-6 font-semibold">
-                  Winning Card: {typeof gameState.winningCard === 'string' 
-                    ? gameState.winningCard 
+                  Winning Card: {typeof gameState.winningCard === 'string'
+                    ? gameState.winningCard
                     : gameState.winningCard?.display || 'Unknown'}
                 </div>
                 <div className="text-lg text-gray-300">
@@ -388,7 +384,7 @@ const AdminGamePanel: React.FC = () => {
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={handleResetGame}
                 className="w-full px-8 py-5 bg-gradient-to-r from-green-600 via-emerald-600 to-green-600 hover:from-green-700 hover:via-emerald-700 hover:to-green-700 text-white rounded-xl text-xl font-black shadow-2xl transition-all duration-200 hover:scale-105"
               >
@@ -405,9 +401,6 @@ const AdminGamePanel: React.FC = () => {
           </div>
         )}
       </div>
-      
-      {/* Global Winner Celebration - Overlays entire admin panel */}
-      <GlobalWinnerCelebration />
     </div>
   );
 };

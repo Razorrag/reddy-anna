@@ -578,7 +578,8 @@ async function restoreActiveGameState() {
       // Restore game state from database
       currentGameState.gameId = gameId;
       currentGameState.phase = phase;
-      currentGameState.currentRound = ((activeSession as any).current_round || activeSession.currentTimer || 1) as 1 | 2 | 3;
+      // ✅ FIX: Never use currentTimer as fallback for round - it's a timer value, not a round number
+      currentGameState.currentRound = ((activeSession as any).current_round || 1) as 1 | 2 | 3;
       currentGameState.timer = (activeSession as any).current_timer || activeSession.currentTimer || 0;
       currentGameState.openingCard = (activeSession as any).opening_card || activeSession.openingCard;
       // ✅ FIX: Use restore methods instead of direct assignment
@@ -823,7 +824,7 @@ const getJoinMessage = (phase: string, currentRound: number): string => {
 };
 
 // WebSocket broadcast functions
-function broadcast(message: any, excludeClient?: WSClient) {
+export function broadcast(message: any, excludeClient?: WSClient) {
   const messageStr = JSON.stringify({...message, timestamp: Date.now()});
   
   // Buffer important game events for replay on reconnection
@@ -4122,6 +4123,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      if (amount <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Amount must be positive'
+        });
+      }
+      
       if (!['deposit_bonus', 'referral_bonus', 'manual_bonus'].includes(bonusType)) {
         return res.status(400).json({
           success: false,
@@ -4129,18 +4137,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Apply bonus to user
-      await storage.addUserBonus(userId, amount, bonusType, 0);
+      const user = await storage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found'
+        });
+      }
       
-      // Add transaction record
-      await storage.addTransaction({
-        userId,
-        transactionType: 'bonus',
-        amount,
-        balanceBefore: 0, // Will be calculated in storage
-        balanceAfter: 0,   // Will be calculated in storage
-        referenceId: `admin_bonus_${Date.now()}`,
-        description: reason || `Manual ${bonusType} applied by admin`
+      const balanceBefore = parseFloat(user.balance as string);
+      
+      // ✅ NEW: Use unified bonus system - creates records in new tables
+      if (bonusType === 'deposit_bonus' || bonusType === 'manual_bonus') {
+        // Create deposit bonus record (immediately credited)
+        const bonusId = await storage.createDepositBonus({
+          userId: userId,
+          depositRequestId: `manual_${Date.now()}`, // Manual bonus marker
+          depositAmount: 0, // No associated deposit
+          bonusAmount: amount,
+          bonusPercentage: 0,
+          wageringRequired: 0 // No wagering for manual bonuses
+        });
+        
+        // Credit immediately
+        await storage.updateUserBalance(userId, amount);
+        const balanceAfter = balanceBefore + amount;
+        
+        // Mark as credited in deposit_bonuses table
+        await supabaseServer
+          .from('deposit_bonuses')
+          .update({
+            status: 'credited',
+            credited_at: new Date().toISOString()
+          })
+          .eq('id', bonusId);
+        
+        // Log via new system (appears in bonus history)
+        await storage.logBonusTransaction({
+          userId,
+          bonusType: 'deposit_bonus',
+          bonusSourceId: bonusId,
+          amount,
+          balanceBefore,
+          balanceAfter,
+          action: 'credited',
+          description: reason || `Manual bonus applied by admin`
+        });
+        
+      } else if (bonusType === 'referral_bonus') {
+        // Create referral bonus record (immediately credited)
+        await storage.createReferralBonus({
+          referrerUserId: userId,
+          referredUserId: `manual_${Date.now()}`, // Manual marker
+          depositAmount: 0,
+          bonusAmount: amount,
+          bonusPercentage: 0
+        });
+        // createReferralBonus auto-credits, so balance already updated
+      }
+      
+      // Notify user via WebSocket
+      clients.forEach(c => {
+        if (c.userId === userId && c.ws.readyState === WebSocket.OPEN) {
+          c.ws.send(JSON.stringify({
+            type: 'bonus_update',
+            data: { 
+              message: `Admin bonus credited: ₹${amount}`,
+              timestamp: Date.now() 
+            }
+          }));
+        }
       });
       
       auditLogger('admin_bonus_applied', req.user!.id, {
@@ -4152,7 +4218,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         success: true,
-        message: `Bonus of ₹${amount} applied successfully to user ${userId}`
+        message: `Bonus of ₹${amount} applied successfully to user ${userId}`,
+        bonusAmount: amount
       });
     } catch (error) {
       console.error('Apply bonus error:', error);

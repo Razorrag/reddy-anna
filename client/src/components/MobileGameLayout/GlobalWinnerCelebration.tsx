@@ -39,6 +39,14 @@ const GlobalWinnerCelebration: React.FC = () => {
 
   const data = gameState.lastCelebration as CelebrationData | null;
   const visible = !!gameState.showCelebration && !!data;
+  
+  console.log('🎨 GlobalWinnerCelebration render:', {
+    showCelebration: gameState.showCelebration,
+    hasData: !!data,
+    visible,
+    isAdmin,
+    phase: gameState.phase
+  });
 
   // ✅ --- START OF FIX 2 (ADMIN IS BLOCKED) ---
   //

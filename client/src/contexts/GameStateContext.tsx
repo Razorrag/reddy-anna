@@ -373,12 +373,14 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         usedCards: [] // Clear used cards tracking
       };
     case 'SHOW_CELEBRATION':
+      console.log('🎊 SHOW_CELEBRATION reducer action:', action.payload);
       return {
         ...state,
         lastCelebration: action.payload,
         showCelebration: true
       };
     case 'HIDE_CELEBRATION':
+      console.log('🎊 HIDE_CELEBRATION reducer action');
       return {
         ...state,
         showCelebration: false

@@ -291,10 +291,29 @@ export interface IStorage {
     wageringRequired: number;
   }): Promise<any>;
   updateDepositBonusWagering(userId: string, betAmount: number): Promise<void>;
+  checkBonusThresholds(userId: string): Promise<void>;
   getBonusSummary(userId: string): Promise<any>;
   getDepositBonuses(userId: string, filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
   getReferralBonuses(userId: string, filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
   getBonusTransactions(userId: string, filters?: { limit?: number; offset?: number }): Promise<any[]>;
+  logBonusTransaction(data: {
+    userId: string;
+    bonusType: string;
+    bonusSourceId: string;
+    amount: number;
+    balanceBefore?: number;
+    balanceAfter?: number;
+    action: string;
+    description: string;
+  }): Promise<void>;
+  createReferralBonus(data: {
+    referrerUserId: string;
+    referredUserId: string;
+    referralId?: string;
+    depositAmount: number;
+    bonusAmount: number;
+    bonusPercentage: number;
+  }): Promise<string>;
   
   // Payment Summary Method
   getPaymentsSummary(): Promise<{

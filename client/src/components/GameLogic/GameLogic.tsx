@@ -1,6 +1,20 @@
 /**
  * GameLogic - Core game logic with backend's exact payout calculation
  * 
+ * IMPORTANT: This file contains client-side payout calculations that are INTENTIONAL and NOT REDUNDANT.
+ * 
+ * PURPOSE:
+ * 1. UI PREVIEWS: Show potential payout BEFORE user places bet
+ * 2. MULTIPLIER DISPLAY: Show correct multipliers for each round/side
+ * 3. BET VALIDATION: Provide immediate feedback on bet amounts
+ * 4. OPTIMISTIC UI: Display expected results while waiting for server confirmation
+ * 
+ * ARCHITECTURE NOTE:
+ * - Client calculations are for DISPLAY ONLY
+ * - Server is the SINGLE SOURCE OF TRUTH for actual payouts
+ * - This ensures frontend calculations match backend logic exactly
+ * - Any discrepancy between client/server is resolved in favor of server
+ * 
  * This file contains the exact same payout logic as the backend
  * to ensure frontend calculations match backend perfectly.
  */

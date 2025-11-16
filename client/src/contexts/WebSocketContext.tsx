@@ -71,35 +71,7 @@ const getTotalBetAmount = (bets: number | number[] | any[] | undefined, side: 'a
   return 0;
 };
 
-// Helper: Calculate payout using the same logic as server's calculatePayout function
-const calculatePayout = (
-  round: number,
-  winner: 'andar' | 'bahar',
-  playerBets: { round1: { andar: number; bahar: number }, round2: { andar: number; bahar: number } }
-): number => {
-  if (round === 1) {
-    // Round 1: Andar wins 1:1 (double), Bahar wins 1:0 (refund only)
-    if (winner === 'andar') {
-      return playerBets.round1.andar * 2; // 1:1 payout (stake + profit)
-    } else {
-      return playerBets.round1.bahar; // 1:0 payout (refund only)
-    }
-  } else if (round === 2) {
-    // Round 2: Andar wins 1:1 on all Andar bets, Bahar wins mixed (1:1 on R1, 1:0 on R2)
-    if (winner === 'andar') {
-      const totalAndar = playerBets.round1.andar + playerBets.round2.andar;
-      return totalAndar * 2; // 1:1 on all Andar bets
-    } else {
-      const round1Payout = playerBets.round1.bahar * 2; // 1:1 on Round 1 Bahar
-      const round2Refund = playerBets.round2.bahar; // 1:0 on Round 2 Bahar
-      return round1Payout + round2Refund;
-    }
-  } else {
-    // Round 3 (Continuous Draw): Both sides win 1:1 on total combined bets
-    const totalBet = playerBets.round1[winner] + playerBets.round2[winner];
-    return totalBet * 2; // 1:1 payout on total investment
-  }
-};
+
 
 declare global {
   interface Window {
@@ -157,17 +129,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   const { state: authState, logout, refreshAccessToken } = useAuth();
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
   const [isWebSocketAuthenticated, setIsWebSocketAuthenticated] = useState(false);
-  
-  // ✅ ENHANCED: Store complete payout data from server for celebration
-  const lastPayoutRef = useRef<{
-    amount: number;
-    totalBetAmount: number;
-    netProfit: number;
-    result: 'win' | 'loss' | 'no_bet';
-    winner: 'andar' | 'bahar';
-    round: number;
-    timestamp: number;
-  } | null>(null);
 
   const getAuthToken = useCallback(async () => {
     let currentToken = authState.token;
@@ -352,8 +313,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       case 'buffered_event': {
         // Handle individual buffered events sent separately
-        console.log('📦 Received buffered event:', data.data);
-        const event = data.data;
+        console.log('📦 Received buffered event:', (data as any).data);
+        const event = (data as any).data;
         if (event && event.type) {
           handleWebSocketMessage({ type: event.type, data: event.data } as any);
         }
@@ -606,6 +567,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           countdownTimer,
           timer,
           winner,
+          winningCard,
           currentRound,
           openingCard,
           andarCards,
@@ -710,14 +672,18 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         const { gameId, openingCard, phase, round, timer } = (data as OpeningCardConfirmedMessage).data;
         const parsed = typeof openingCard === 'string' ? parseDisplayCard(openingCard) : openingCard;
         
-        // ✅ --- START OF FIX ---
-        //
-        // This event signals a NEW game. We MUST reset all old game state.
-        // This will hide the celebration, clear cards, and reset bets.
-        //
-        resetGame(); 
-        //
-        // --- END OF FIX ---
+        // ✅ FIX: Clear game state for new game AND hide celebration
+        // Celebration should be hidden when new game starts
+        console.log('🎮 New game starting - clearing old state and hiding celebration');
+        
+        // Clear cards and bets from previous game
+        clearCards();
+        clearRoundBets();
+        setWinner(null);
+        setWinningCard(null);
+        
+        // Hide celebration when new game starts
+        hideCelebration();
 
         if (gameId) {
           setGameId(gameId);
@@ -747,76 +713,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
 
         if (isWinningCard) {
-          // Trigger celebration event (will be handled by game_complete message)
-          // Note: game_complete message will be sent separately with full payout calculation
-
-          // SAFETY NET - Trigger local celebration immediately when winning card is dealt
-          // This ensures players see the winner + payout even if game_complete is delayed or missed.
-          try {
-            // Avoid double-trigger if a celebration is already showing
-            if ((gameState as any).showCelebration) {
-              console.log('🎉 Skipping local celebration trigger - celebration already visible');
-              break;
-            }
-
-            const winner = side;
-            const winningCardLocal = parsedCard;
-            const round = gameState.currentRound;
-
-            const round1Andar = getTotalBetAmount(gameState.playerRound1Bets?.andar, 'andar');
-            const round1Bahar = getTotalBetAmount(gameState.playerRound1Bets?.bahar, 'bahar');
-            const round2Andar = getTotalBetAmount(gameState.playerRound2Bets?.andar, 'andar');
-            const round2Bahar = getTotalBetAmount(gameState.playerRound2Bets?.bahar, 'bahar');
-
-            const playerBetsFallback = {
-              round1: { andar: round1Andar, bahar: round1Bahar },
-              round2: { andar: round2Andar, bahar: round2Bahar }
-            };
-
-            const totalBetAmount = round1Andar + round1Bahar + round2Andar + round2Bahar;
-            const payoutAmount = calculatePayout(round, winner, playerBetsFallback);
-            const netProfit = payoutAmount - totalBetAmount;
-
-            let result: 'no_bet' | 'refund' | 'mixed' | 'win' | 'loss';
-            if (payoutAmount > 0) {
-              result = 'win';
-            } else if (totalBetAmount === 0 && payoutAmount === 0) {
-              result = 'no_bet';
-            } else if (payoutAmount === totalBetAmount) {
-              result = 'refund';
-            } else {
-              const hasAndar = (round1Andar + round2Andar) > 0;
-              const hasBahar = (round1Bahar + round2Bahar) > 0;
-              if (hasAndar && hasBahar) {
-                result = 'mixed';
-              } else if (netProfit > 0) {
-                result = 'win';
-              } else {
-                result = 'loss';
-              }
-            }
-
-            const celebrationData = {
-              winner,
-              winningCard: winningCardLocal,
-              round,
-              winnerDisplay: undefined,
-              payoutAmount,
-              totalBetAmount,
-              netProfit,
-              playerBets: playerBetsFallback,
-              result,
-              dataSource: 'local_calculation',
-            };
-
-            console.group('🎉 Local Celebration Trigger (card_dealt winningCard)');
-            console.log('📊 Local celebration data:', celebrationData);
-            console.groupEnd();
-
-            setCelebration(celebrationData as any);
-          } catch (err) {
-            console.error('❌ Error triggering local celebration from card_dealt:', err);
-          }
+          console.log('🏆 Winning card dealt, waiting for server game_complete message...');
         }
         break;
       }
@@ -856,7 +753,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       case 'game_complete': {
-        // ✅ FIX: Validate data before processing
+        console.log('🎊 RECEIVED game_complete event:', JSON.stringify(data, null, 2));
         const gameCompleteData = (data as GameCompleteMessage).data;
         if (!gameCompleteData) {
           console.error('❌ game_complete message missing data');
@@ -865,50 +762,51 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         
         const { winner, winningCard, round, userPayout, winnerDisplay } = gameCompleteData as any;
         
-        // ✅ FIX: Validate required fields
-        if (!winner || !winningCard || !userPayout) {
-          console.error('❌ game_complete message missing required fields:', { winner, winningCard, userPayout });
+        console.log('🎊 game_complete parsed data:', { winner, winningCard, round, userPayout, winnerDisplay });
+        
+        if (!winner || !winningCard) {
+          console.error('❌ game_complete message missing winner or winningCard:', { winner, winningCard });
           break;
         }
         
-        // --- THIS IS THE CRITICAL FIX ---
-        // The old code had a broken "fallback" to local calculation.
-        // We are REMOVING it. We will ONLY trust the server's data.
+        // ✅ SINGLE SOURCE OF TRUTH: Only use server data from game_complete
+        let payoutAmount = 0;
+        let totalBetAmount = 0;
+        let netProfit = 0;
+        let result: 'no_bet' | 'refund' | 'mixed' | 'win' | 'loss' = 'no_bet';
         
-        const payoutAmount = userPayout.amount || 0;
-        const totalBetAmount = userPayout.totalBet || 0;
-        const netProfit = userPayout.netProfit ?? (payoutAmount - totalBetAmount);
-        const result = userPayout.result || (totalBetAmount === 0 ? 'no_bet' : netProfit > 0 ? 'win' : netProfit === 0 ? 'refund' : 'loss');
-        const dataSource = 'game_complete_direct'; // Mark as authoritative
-
-        console.group('🎊 [WebSocket] Game Complete Received');
-        console.log('📊 Using AUTHORITATIVE server payout:', { payoutAmount, totalBetAmount, netProfit, result });
-          console.groupEnd();
-        // --- END OF CRITICAL FIX ---
+        if (userPayout) {
+          console.log('🎊 User Payout data received:', JSON.stringify(userPayout, null, 2));
+          payoutAmount = userPayout.amount || 0;
+          totalBetAmount = userPayout.totalBet || 0;
+          netProfit = userPayout.netProfit ?? (payoutAmount - totalBetAmount);
+          result = userPayout.result || (totalBetAmount === 0 ? 'no_bet' : netProfit > 0 ? 'win' : netProfit === 0 ? 'refund' : 'loss');
+          
+          console.log('🎊 Game Complete - Server authoritative data:', { payoutAmount, totalBetAmount, netProfit, result });
+        } else {
+          console.log('ℹ️ No userPayout in game_complete (user had no bets)');
+        }
 
         const celebrationData = {
           winner,
           winningCard,
           round: round || gameState.currentRound,
-          winnerDisplay, // Use server's "BABA/BAHAR" text
+          winnerDisplay,
           payoutAmount,
           totalBetAmount,
           netProfit,
           result,
-          dataSource 
         };
         
-        // ✅ FIX: Set celebration state FIRST (synchronous) before dispatching event
-        // This ensures the celebration is visible immediately
-          setCelebration(celebrationData);
+        console.log('🎊 Setting celebration with data:', JSON.stringify(celebrationData, null, 2));
+        setCelebration(celebrationData);
 
-        // 1. Dispatch the celebration event WITH the correct data (for other listeners)
         const celebrationEvent = new CustomEvent('game-complete-celebration', {
           detail: celebrationData
         });
         window.dispatchEvent(celebrationEvent);
         
-        // 3. Set phase to 'complete' so Admin sees "Start New Game" button
+        console.log('🎊 Setting phase to complete and winner to:', winner);
         setPhase('complete');
         setWinner(winner);
         
@@ -927,8 +825,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           console.error('❌ Error parsing winning card:', error);
         }
 
-        // Clear the payout ref last
-        lastPayoutRef.current = null;
         break;
       }
 
@@ -963,7 +859,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         
         // ✅ CRITICAL: Set timer from server (not 0)
         if (timer !== undefined && timer > 0) {
-          setCountdownTimer(timer);
+          setCountdown(timer);
           console.log(`✅ Round 2 timer initialized: ${timer}s`);
         }
         
@@ -1017,6 +913,27 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         });
         window.dispatchEvent(balanceEvent);
         updatePlayerWallet(balance);
+        break;
+      }
+
+      case 'payout_received': {
+        const wsData = (data as any).data;
+        console.log('💰 Payout received (balance update only):', wsData);
+        
+        // Only update balance, celebration is handled by game_complete
+        if (wsData.balance !== undefined && wsData.balance !== null) {
+          updatePlayerWallet(wsData.balance);
+          
+          const balanceEvent = new CustomEvent('balance-websocket-update', {
+            detail: { 
+              balance: wsData.balance, 
+              amount: wsData.netProfit || 0,
+              type: 'payout', 
+              timestamp: Date.now() 
+            }
+          });
+          window.dispatchEvent(balanceEvent);
+        }
         break;
       }
 
@@ -1250,51 +1167,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         break;
       }
 
-      // Payout received after game completion
-      case 'payout_received': {
-        const {
-          amount, balance, totalBetAmount, netProfit, result, winner, round
-        } = (data as PayoutReceivedMessage).data;
-        
-        // ✅ ENHANCED: Store complete payout data from server
-        lastPayoutRef.current = {
-          amount,
-          totalBetAmount,
-          netProfit,
-          result,
-          winner,
-          round,
-          timestamp: Date.now()
-        };
-        
-        console.group('💰 Complete payout data received from server');
-        console.log('Amount:', amount);
-        console.log('Total Bet:', totalBetAmount);
-        console.log('Net Profit:', netProfit);
-        console.log('Result:', result);
-        console.log('Winner:', winner);
-        console.log('Round:', round);
-        console.groupEnd();
-        
-        // Immediately update balance from the message (no API delay)
-        if (balance !== undefined && balance !== null) {
-          updatePlayerWallet(balance);
-          // Also dispatch event for other components that listen to balance updates
-          const balanceEvent = new CustomEvent('balance-websocket-update', {
-            detail: { balance, amount, type: result, timestamp: Date.now() }
-          });
-          window.dispatchEvent(balanceEvent);
-        }
-        
-        // ✅ Dispatch payout event with complete data
-        const payoutEvent = new CustomEvent('payout-received-event', {
-          detail: { amount, totalBetAmount, netProfit, result, winner, round, balance }
-        });
-        window.dispatchEvent(payoutEvent);
-        
-        console.log(`✅ Complete payout event dispatched`);
-        break;
-      }
+
       
       case 'user_bets_update': {
         // ✅ FIX: user_bets_update is sent after DB fetch, but bet_confirmed already updated local state

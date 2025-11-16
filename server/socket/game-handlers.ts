@@ -191,37 +191,23 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       return;
     }
 
-    // ✅ Track wagering for bonus unlock
+    // ✅ NEW: Track wagering for deposit bonuses (unified system)
     try {
-      await storage.trackWagering(userId, amount);
+      await storage.updateDepositBonusWagering(userId, amount);
+      await storage.checkBonusThresholds(userId);
       
-      // Check if wagering requirement met and unlock bonus
-      const bonusUnlocked = await storage.checkAndUnlockBonus(userId);
-      
-      if (bonusUnlocked && bonusUnlocked.unlocked) {
-        // Notify user that bonus is now unlocked!
-        ws.send(JSON.stringify({
-          type: 'bonus_unlocked',
-          data: {
-            message: `🎉 Bonus unlocked! ₹${bonusUnlocked.amount.toLocaleString()} added to your balance.`,
-            amount: bonusUnlocked.amount,
-            timestamp: Date.now()
-          }
-        }));
-      }
+      // Send single unified event
+      ws.send(JSON.stringify({
+        type: 'bonus_update',
+        data: { 
+          message: 'Bonus status updated', 
+          timestamp: Date.now() 
+        }
+      }));
     } catch (wageringError) {
       // Don't fail bet if wagering tracking fails
       console.error('⚠️ Error tracking wagering:', wageringError);
     }
-
-    // Check deposit bonus thresholds after balance change
-    try {
-      await storage.checkBonusThresholds(userId);
-      ws.send(JSON.stringify({
-        type: 'bonus_update',
-        data: { message: 'Bonus status updated', timestamp: Date.now() }
-      }));
-    } catch (e) {}
 
     // ✅ FIX: Add bet to current game state using proper methods (only after successful balance deduction)
     if (round === 1) {
@@ -289,15 +275,6 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         status: 'pending'
       });
       console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
-      
-      // ✅ NEW: Track wagering for deposit bonuses
-      try {
-        await storage.updateDepositBonusWagering(userId, amount);
-        console.log(`📊 Wagering tracked: ${userId} - ₹${amount} towards bonus unlock`);
-      } catch (wageringError) {
-        console.error('⚠️ Error tracking wagering:', wageringError);
-        // Don't fail bet if wagering tracking fails
-      }
     } catch (error) {
         console.error('❌ CRITICAL: Error storing bet in database:', error);
         
@@ -516,10 +493,12 @@ export async function handleStartGame(client: WSClient, data: any) {
       const currentPhase = (global as any).currentGameState.phase;
       if (currentPhase === 'complete') {
         console.log('🔄 Previous game was completed, ensuring full reset before starting new game...');
-        // Clear any pending operations
+        // ✅ FIX: Wait for previous payouts to complete before starting new game
         if ((global as any).lastPayoutPromise) {
           try {
+            console.log('⏳ Waiting for previous payout operations to complete...');
             await (global as any).lastPayoutPromise;
+            console.log('✅ Previous payout operations completed');
           } catch (error) {
             console.warn('⚠️ Error waiting for previous payout operation:', error);
           }
