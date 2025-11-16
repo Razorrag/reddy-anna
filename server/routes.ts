@@ -21,7 +21,7 @@ import {
   WebRTCAnswerMessage,
   WebRTCIceCandidateMessage
 } from '../shared/src/types/webSocket';
-import { webrtcSignaling } from './webrtc-signaling';
+// Removed webrtc-signaling import - WebRTC handled via stream-routes
 import { AdminRequestsAPI } from './admin-requests-api';
 import pg from 'pg';
 const { Pool } = pg;
@@ -153,7 +153,7 @@ import {
 } from './security';
 import { validateUserData } from './validation';
 import streamRoutes from './stream-routes';
-import { streamStorage } from './stream-storage';
+// Removed stream-storage import - stream config handled via stream-routes
 import { AdminRequestsSupabaseAPI } from './admin-requests-supabase';
 import adminUserRoutes from './routes/admin';
 import userRoutes from './routes/user';
@@ -1230,12 +1230,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               clients.add(client);
               isAuthenticated = true;
               
-              // Register with WebRTC signaling server
+              // WebRTC signaling disabled - functionality moved to stream-routes
               webrtcClientId = `ws-${decoded.id}-${Date.now()}`;
-              webrtcSignaling.registerClient(ws, webrtcClientId, decoded.role || 'player');
+              // webrtcSignaling.registerClient(ws, webrtcClientId, decoded.role || 'player');
               
               console.log(`[WS] Client ${client.userId} added to active clients. Role: ${clientRole}, Total: ${clients.size}`);
-              console.log(`[WebRTC] Client registered with signaling: ${webrtcClientId}`);
+              // console.log(`[WebRTC] Client registered with signaling: ${webrtcClientId}`);
               
               // Log admin connections
               if (clientRole === 'admin' || clientRole === 'super_admin') {
@@ -1421,9 +1421,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
           }
           
-          // FIXED: WebRTC Signaling - Handle unified 'webrtc:signal' messages from client
+          // WebRTC Signaling disabled - stream functionality moved to stream-routes
           case 'webrtc:signal': {
-            if (!client || !isAuthenticated || !webrtcClientId) {
+            if (!client || !isAuthenticated) {
               console.log('⚠️ WebRTC signal received but client not properly initialized');
               return;
             }
@@ -1431,26 +1431,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const signalData = (message as any).data;
             console.log(`📡 WebRTC signal from ${client.role} ${client.userId}:`, signalData.type);
             
-            // Route based on the nested signal type
+            // Handle stream pause/resume directly without webrtcSignaling
             switch (signalData.type) {
-              case 'stream-start':
-                console.log('🎬 Stream start signal from admin');
-                webrtcSignaling.handleMessage(webrtcClientId, {
-                  type: 'stream-start',
-                  from: webrtcClientId,
-                  streamId: signalData.streamId || `stream-${Date.now()}`
-                });
-                break;
-                
-              case 'stream-stop':
-                console.log('🛑 Stream stop signal from admin');
-                webrtcSignaling.handleMessage(webrtcClientId, {
-                  type: 'stream-stop',
-                  from: webrtcClientId,
-                  streamId: signalData.streamId
-                });
-                break;
-                
               case 'stream-pause':
                 console.log('⏸️ Stream pause signal from admin');
                 // Broadcast pause status to all players
@@ -1483,42 +1465,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 });
                 break;
                 
-              case 'offer':
-                console.log('📤 WebRTC offer from admin');
-                if (client.role === 'admin') {
-                  webrtcSignaling.handleMessage(webrtcClientId, {
-                    type: 'offer',
-                    from: webrtcClientId,
-                    sdp: signalData.sdp,
-                    streamId: signalData.streamId
-                  });
-                }
-                break;
-                
-              case 'answer':
-                console.log('📥 WebRTC answer from player');
-                if (client.role === 'player') {
-                  webrtcSignaling.handleMessage(webrtcClientId, {
-                    type: 'answer',
-                    from: webrtcClientId,
-                    to: signalData.to || undefined,
-                    sdp: signalData.sdp
-                  });
-                }
-                break;
-                
-              case 'ice-candidate':
-                console.log('🧊 ICE candidate');
-                webrtcSignaling.handleMessage(webrtcClientId, {
-                  type: 'ice-candidate',
-                  from: webrtcClientId,
-                  to: signalData.to || undefined,
-                  candidate: signalData.candidate
-                });
-                break;
-                
               default:
-                console.warn('⚠️ Unknown WebRTC signal type:', signalData.type);
+                console.log('⚠️ WebRTC signaling disabled - stream handled via stream-routes');
             }
             break;
           }
@@ -1743,141 +1691,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
           }
 
-          // Handle stream viewer join
-          case 'stream_viewer_join': {
-            if (!client || !isAuthenticated) {
-              sendError(ws, 'Authentication required to join stream');
-              return;
-            }
-
-            const { roomId } = (message as any).data;
-            console.log(`[STREAM] Player ${client.userId} joining room ${roomId}`);
-            
-            // Handle through WebRTC signaling server
-            if (webrtcClientId) {
-              webrtcSignaling.handleStreamViewerJoin(webrtcClientId, roomId);
-            }
-            break;
-          }
-
-          // Handle new WebRTC message types
-          case 'request_stream': {
-            if (!client || !isAuthenticated) {
-              sendError(ws, 'Authentication required to request stream');
-              return;
-            }
-
-            const { roomId } = (message as any).data;
-            console.log(`[STREAM] Player ${client.userId} requesting stream for room ${roomId}`);
-            
-            const activeStreams = webrtcSignaling.getActiveStreams();
-            if (activeStreams.length > 0) {
-              const streamInfo = activeStreams[0];
-              
-              // Get stored offer if available
-              const storedOffer = webrtcSignaling.getStoredOffer(streamInfo.streamId);
-              
-              if (storedOffer) {
-                // Send offer directly so player can create answer immediately
-                ws.send(JSON.stringify({
-                  type: 'webrtc:signal',
-                  data: {
-                    type: 'offer',
-                    from: streamInfo.adminUserId,
-                    streamId: streamInfo.streamId,
-                    sdp: storedOffer
-                  }
-                }));
-                console.log(`[STREAM] ✅ Sent stored offer to player ${client.userId}`);
-              } else {
-                // Fallback: send stream-start notification
-                ws.send(JSON.stringify({
-                  type: 'webrtc:signal',
-                  data: {
-                    type: 'stream-start',
-                    from: streamInfo.adminUserId,
-                    streamId: streamInfo.streamId
-                  }
-                }));
-                console.log(`[STREAM] ⚠️ No stored offer available, sent stream-start to ${client.userId}`);
-              }
-            } else {
-              console.log(`[STREAM] No active streams for player ${client.userId}`);
-            }
-            break;
-          }
-
-          case 'webrtc_offer': {
-            if (!client || !isAuthenticated || !webrtcClientId) {
-              console.log('⚠️ WebRTC offer received but client not properly initialized');
-              return;
-            }
-
-            const offerData = (message as any).data;
-            console.log(`📡 WebRTC offer from ${client.role} ${client.userId}`);
-            
-            if (client.role === 'admin') {
-              webrtcSignaling.handleMessage(webrtcClientId, {
-                type: 'offer',
-                from: webrtcClientId,
-                sdp: offerData.offer,
-                streamId: offerData.streamId,
-                roomId: offerData.roomId
-              });
-            }
-            break;
-          }
-
-          case 'webrtc_answer': {
-            if (!client || !isAuthenticated || !webrtcClientId) {
-              console.log('⚠️ WebRTC answer received but client not properly initialized');
-              return;
-            }
-
-            const answerData = (message as any).data;
-            console.log(`📡 WebRTC answer from ${client.role} ${client.userId}`);
-            
-            if (client.role === 'player') {
-              webrtcSignaling.handleMessage(webrtcClientId, {
-                type: 'answer',
-                from: webrtcClientId,
-                sdp: answerData.answer,
-                roomId: answerData.roomId
-              });
-            }
-            break;
-          }
-
-          case 'webrtc_ice_candidate': {
-            if (!client || !isAuthenticated || !webrtcClientId) {
-              console.log('⚠️ WebRTC ICE candidate received but client not properly initialized');
-              return;
-            }
-
-            const candidateData = (message as any).data;
-            console.log(`🧊 WebRTC ICE candidate from ${client.role} ${client.userId}`);
-            
-            webrtcSignaling.handleMessage(webrtcClientId, {
-              type: 'ice-candidate',
-              from: webrtcClientId,
-              candidate: candidateData.candidate,
-              roomId: candidateData.roomId
-            });
-            break;
-          }
-
-          // Handle stream viewer leave
+          // WebRTC stream messages disabled - stream handled via stream-routes
+          case 'stream_viewer_join':
+          case 'request_stream':
+          case 'webrtc_offer':
+          case 'webrtc_answer':
+          case 'webrtc_ice_candidate':
           case 'stream_viewer_leave': {
-            if (!client || !isAuthenticated) {
-              return; // No error needed for leave
-            }
-
-            const { roomId } = (message as any).data;
-            console.log(`[STREAM] Player ${client.userId} leaving room ${roomId}`);
-            
-            // Handle through WebRTC signaling server
-            if (webrtcClientId) {
-              webrtcSignaling.handleStreamViewerLeave(webrtcClientId, roomId);
+            console.log(`⚠️ WebRTC message type '${message.type}' disabled - stream handled via stream-routes`);
+            if (client?.ws && client.ws.readyState === WebSocket.OPEN) {
+              client.ws.send(JSON.stringify({
+                type: 'error',
+                data: { message: 'WebRTC signaling disabled - please use stream configuration' }
+              }));
             }
             break;
           }
@@ -1954,11 +1780,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Client ${client.userId} removed. Active clients: ${clients.size}`);
       }
       
-      // Unregister from WebRTC signaling server
-      if (webrtcClientId) {
-        webrtcSignaling.unregisterClient(webrtcClientId);
-        console.log(`[WebRTC] Client unregistered from signaling: ${webrtcClientId}`);
-      }
+      // WebRTC signaling disabled
+      // if (webrtcClientId) {
+      //   console.log(`[WebRTC] Client closed: ${webrtcClientId}`);
+      // }
     });
     
     // Handle connection errors
@@ -2834,8 +2659,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             balanceBefore: newBalance - request.amount,
             balanceAfter: newBalance,
             referenceId: `withdrawal_refund_${id}`,
-            description: `Withdrawal request rejected - ₹${request.amount} refunded to balance`,
-            paymentRequestId: id
+            description: `Withdrawal request rejected - ₹${request.amount} refunded to balance`
           });
           
           // Send WebSocket notification to user about refund
@@ -2887,8 +2711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: 'Authentication required'
         });
       }
-      const previousStatus = request.status;
-      await storage.updatePaymentRequest(id, 'rejected', req.user.id, previousStatus);
+      await storage.updatePaymentRequest(id, 'rejected', req.user.id);
       
       // Audit log
       if (req.user) {
@@ -5643,28 +5466,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stream Status Check Endpoint - Redirects to unified stream config
+  // Stream Status Check Endpoint - Use stream-routes API
   app.get("/api/game/stream-status-check", async (req, res) => {
     try {
-      // Use the unified stream configuration instead of the old system
-      const streamConfig = await streamStorage.getStreamConfig();
-      
-      if (!streamConfig) {
-        return res.json({
-          status: 'offline',
-          lastCheck: null,
-          isStale: false,
-          viewers: 0,
-          bitrate: 0
-        });
-      }
-
-      res.json({
-        status: streamConfig.streamStatus,
-        lastCheck: streamConfig.rtmpLastCheck || streamConfig.webrtcLastCheck || null,
-        isStale: false, // Determined by the unified stream system now
-        viewers: streamConfig.viewerCount,
-        bitrate: streamConfig.webrtcBitrate
+      // Use stream-routes API for stream configuration
+      // This endpoint is deprecated - use /api/stream/simple-config instead
+      return res.json({
+        status: 'offline',
+        lastCheck: null,
+        isStale: false,
+        viewers: 0,
+        bitrate: 0,
+        message: 'Use /api/stream/simple-config for stream status'
       });
     } catch (error) {
       console.error('Error checking stream status:', error);
@@ -5685,16 +5498,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Transform snake_case to camelCase for frontend
         const transformedStats = stats ? {
           date: stats.date,
-          totalGames: stats.total_games,
-          totalBets: parseFloat(stats.total_bets as any) || 0,
-          totalPayouts: parseFloat(stats.total_payouts as any) || 0,
-          totalRevenue: parseFloat(stats.total_revenue as any) || 0,
-          profitLoss: parseFloat(stats.profit_loss as any) || 0,
-          profitLossPercentage: stats.profit_loss_percentage || 0,
-          uniquePlayers: stats.unique_players || 0,
-          peakBetsHour: stats.peak_bets_hour,
-          createdAt: stats.created_at,
-          updatedAt: stats.updated_at
+          totalGames: stats.totalGames,
+          totalBets: parseFloat(stats.totalBets as any) || 0,
+          totalPayouts: parseFloat(stats.totalPayouts as any) || 0,
+          totalRevenue: parseFloat(stats.totalRevenue as any) || 0,
+          profitLoss: parseFloat(stats.profitLoss as any) || 0,
+          profitLossPercentage: stats.profitLossPercentage || 0,
+          uniquePlayers: stats.uniquePlayers || 0,
+          peakBetsHour: stats.peakBetsHour,
+          createdAt: stats.createdAt,
+          updatedAt: stats.updatedAt
         } : null;
         
         res.json({ success: true, data: transformedStats });
@@ -5704,16 +5517,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Transform snake_case to camelCase for frontend
         const transformedStats = stats ? {
-          monthYear: stats.month_year,
-          totalGames: stats.total_games,
-          totalBets: parseFloat(stats.total_bets as any) || 0,
-          totalPayouts: parseFloat(stats.total_payouts as any) || 0,
-          totalRevenue: parseFloat(stats.total_revenue as any) || 0,
-          profitLoss: parseFloat(stats.profit_loss as any) || 0,
-          profitLossPercentage: stats.profit_loss_percentage || 0,
-          uniquePlayers: stats.unique_players || 0,
-          createdAt: stats.created_at,
-          updatedAt: stats.updated_at
+          monthYear: stats.monthYear,
+          totalGames: stats.totalGames,
+          totalBets: parseFloat(stats.totalBets as any) || 0,
+          totalPayouts: parseFloat(stats.totalPayouts as any) || 0,
+          totalRevenue: parseFloat(stats.totalRevenue as any) || 0,
+          profitLoss: parseFloat(stats.profitLoss as any) || 0,
+          profitLossPercentage: stats.profitLossPercentage || 0,
+          uniquePlayers: stats.uniquePlayers || 0,
+          createdAt: stats.createdAt,
+          updatedAt: stats.updatedAt
         } : null;
         
         res.json({ success: true, data: transformedStats });
@@ -5724,15 +5537,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Transform snake_case to camelCase for frontend
         const transformedStats = stats ? {
           year: stats.year,
-          totalGames: stats.total_games,
-          totalBets: parseFloat(stats.total_bets as any) || 0,
-          totalPayouts: parseFloat(stats.total_payouts as any) || 0,
-          totalRevenue: parseFloat(stats.total_revenue as any) || 0,
-          profitLoss: parseFloat(stats.profit_loss as any) || 0,
-          profitLossPercentage: stats.profit_loss_percentage || 0,
-          uniquePlayers: stats.unique_players || 0,
-          createdAt: stats.created_at,
-          updatedAt: stats.updated_at
+          totalGames: stats.totalGames,
+          totalBets: parseFloat(stats.totalBets as any) || 0,
+          totalPayouts: parseFloat(stats.totalPayouts as any) || 0,
+          totalRevenue: parseFloat(stats.totalRevenue as any) || 0,
+          profitLoss: parseFloat(stats.profitLoss as any) || 0,
+          profitLossPercentage: stats.profitLossPercentage || 0,
+          uniquePlayers: stats.uniquePlayers || 0,
+          createdAt: stats.createdAt,
+          updatedAt: stats.updatedAt
         } : null;
         
         res.json({ success: true, data: transformedStats });
