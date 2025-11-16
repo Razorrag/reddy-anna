@@ -44,6 +44,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // Pause state
   const [isPausedState, setIsPausedState] = useState(false);
   
+  // Store iframe src when paused (to restore later)
+  const [pausedIframeSrc, setPausedIframeSrc] = useState<string>('');
+  
   // ✅ FIX: Mute state is now controlled by backend only (admin control)
   const [isMuted, setIsMuted] = useState(true);
 
@@ -260,10 +263,11 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // The stream_status_updated listener (line ~181) handles pause/play updates
   // This eliminates the race condition and duplicate handling
 
-  // ✅ FIX: Enhanced pause effect handler for video elements
+  // ✅ FIX: Enhanced pause effect handler for video elements + HLS + iframes
   useEffect(() => {
     const video = videoRef.current;
     const iframe = iframeRef.current;
+    const hls = hlsRef.current;
     
     if (isPausedState) {
       // Pause video element
@@ -271,9 +275,16 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         video.pause();
         console.log('⏸️ Video paused by admin');
       }
-      // For iframe: src is cleared in render, so no action needed here
-      if (iframe) {
-        console.log('⏸️ Iframe paused (src cleared in render)');
+      // ✅ CRITICAL FIX: Stop HLS loading when paused (for .m3u8 streams)
+      if (hls) {
+        hls.stopLoad();
+        console.log('⏸️ HLS loading stopped (no more segment downloads)');
+      }
+      // ✅ CRITICAL FIX: Remove iframe src to actually stop playback
+      if (iframe && iframe.src) {
+        setPausedIframeSrc(iframe.src); // Store it
+        iframe.src = ''; // Clear it to stop playback
+        console.log('⏸️ Iframe paused (src removed to stop playback)');
       }
     } else {
       // Resume video playback
@@ -287,12 +298,19 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         });
         console.log('▶️ Video resumed by admin');
       }
-      // For iframe: src is restored in render, will auto-reload
-      if (iframe) {
-        console.log('▶️ Iframe resumed (src restored in render)');
+      // ✅ CRITICAL FIX: Restart HLS loading when resumed (for .m3u8 streams)
+      if (hls) {
+        hls.startLoad();
+        console.log('▶️ HLS loading restarted');
+      }
+      // ✅ CRITICAL FIX: Restore iframe src to resume playback
+      if (iframe && pausedIframeSrc) {
+        iframe.src = pausedIframeSrc;
+        setPausedIframeSrc(''); // Clear stored src
+        console.log('▶️ Iframe resumed (src restored)');
       }
     }
-  }, [isPausedState]);
+  }, [isPausedState, pausedIframeSrc]);
 
   // Handle pulse effect when less than 5 seconds
   useEffect(() => {
@@ -446,81 +464,101 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       const isHLS = streamConfig.streamUrl.toLowerCase().endsWith('.m3u8');
       
       return (
-        <video
-          ref={videoRef}
-          src={!isHLS ? streamConfig.streamUrl : undefined}
-          className="w-full h-full object-cover"
-          autoPlay
-          muted={isMuted} // ✅ FIX: User-controlled mute state
-          controls={streamConfig.controls || false}
-          loop
-          playsInline
-          preload="auto"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            zIndex: 1
-          }}
-          onPause={() => {
-            // ✅ CRITICAL FIX: Auto-resume if paused unexpectedly, but NOT if admin paused
-            if (!document.hidden && videoRef.current && !isPausedState) {
-              console.log('🔄 Video paused unexpectedly - auto-resuming...');
-              setTimeout(() => {
-                videoRef.current?.play().catch(err => console.error('❌ Auto-resume on pause failed:', err));
-              }, 100);
-            }
-          }}
-          onError={(e) => {
-            console.error('❌ Video error:', e);
-            // Try to reload after error
-            setTimeout(() => {
-              if (videoRef.current && !document.hidden) {
-                console.log('🔄 Attempting to recover from video error...');
-                videoRef.current.load();
-                videoRef.current.play().catch(console.error);
+        <>
+          <video
+            ref={videoRef}
+            src={!isHLS ? streamConfig.streamUrl : undefined}
+            className="w-full h-full object-cover"
+            autoPlay
+            muted={isMuted} // ✅ FIX: User-controlled mute state
+            controls={streamConfig.controls || false}
+            loop
+            playsInline
+            preload="auto"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              zIndex: 1,
+              filter: isPausedState ? 'blur(8px) brightness(0.6)' : 'none',
+              pointerEvents: isPausedState ? 'none' : 'auto'
+            }}
+            onPause={() => {
+              // ✅ CRITICAL FIX: Auto-resume if paused unexpectedly, but NOT if admin paused
+              if (!document.hidden && videoRef.current && !isPausedState) {
+                console.log('🔄 Video paused unexpectedly - auto-resuming...');
+                setTimeout(() => {
+                  videoRef.current?.play().catch(err => console.error('❌ Auto-resume on pause failed:', err));
+                }, 100);
               }
-            }, 1000);
-          }}
-        />
+            }}
+            onError={(e) => {
+              console.error('❌ Video error:', e);
+              // Try to reload after error
+              setTimeout(() => {
+                if (videoRef.current && !document.hidden) {
+                  console.log('🔄 Attempting to recover from video error...');
+                  videoRef.current.load();
+                  videoRef.current.play().catch(console.error);
+                }
+              }, 1000);
+            }}
+          />
+          {/* Semi-transparent overlay when paused - no text, just visual indication */}
+          {isPausedState && (
+            <div
+              className="absolute inset-0 bg-black/40"
+              style={{ zIndex: 2 }}
+            />
+          )}
+        </>
       );
     } else {
       // Use iframe for everything else (YouTube, custom players, RTMP players, etc.)
       console.log('✅ VideoArea: Rendering IFRAME stream:', streamConfig.streamUrl);
       
-      // ✅ FIX #1: When paused, don't render iframe at all (or render with empty src)
-      // This prevents the iframe from continuing to play underneath the overlay
+      // ✅ When paused, show last frame with overlay (iframe src is cleared by useEffect)
+      // When playing, show iframe normally
       return (
-        <iframe
-          ref={iframeRef}
-          src={isPausedState ? '' : streamConfig.streamUrl}
-          className="w-full h-full border-0"
-          allow="autoplay; fullscreen; picture-in-picture; accelerometer; clipboard-write; encrypted-media; gyroscope"
-          allowFullScreen
-          // ✅ Allow mixed content and cross-origin
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
-          referrerPolicy="no-referrer-when-downgrade"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            border: 'none',
-            zIndex: 1,
-            display: isPausedState ? 'none' : 'block'
-          }}
-          title="Live Game Stream"
-          onLoad={() => {
-            console.log('✅ Iframe loaded successfully');
-          }}
-          onError={(e) => {
-            console.error('❌ Iframe error:', e);
-          }}
-        />
+        <>
+          <iframe
+            ref={iframeRef}
+            src={isPausedState ? '' : streamConfig.streamUrl}
+            className="w-full h-full border-0"
+            allow="autoplay; fullscreen; picture-in-picture; accelerometer; clipboard-write; encrypted-media; gyroscope"
+            allowFullScreen
+            // ✅ Allow mixed content and cross-origin
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
+            referrerPolicy="no-referrer-when-downgrade"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              zIndex: 1,
+              display: isPausedState ? 'none' : 'block'
+            }}
+            title="Live Game Stream"
+            onLoad={() => {
+              console.log('✅ Iframe loaded successfully');
+            }}
+            onError={(e) => {
+              console.error('❌ Iframe error:', e);
+            }}
+          />
+          {/* When paused, show a dark overlay with the last visible frame frozen underneath */}
+          {isPausedState && (
+            <div
+              className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-black"
+              style={{ zIndex: 2 }}
+            />
+          )}
+        </>
       );
     }
   };
@@ -542,17 +580,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       {/* Embedded Video Stream - Runs independently in background, never interrupted */}
       <div className="absolute inset-0">
         {renderStream()}
-
-        {/* ✅ PAUSED OVERLAY: Show when stream is paused by admin */}
-        {isPausedState && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20">
-            <div className="text-center">
-              <div className="text-6xl mb-4">⏸️</div>
-              <p className="text-white text-2xl font-bold mb-2">Stream Paused</p>
-              <p className="text-gray-400">The stream has been temporarily paused by the administrator</p>
-            </div>
-          </div>
-        )}
 
         {/* Overlay Gradient for better text visibility */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" style={{ zIndex: 2 }} />
