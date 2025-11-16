@@ -7,8 +7,7 @@ import {
   getUserBonusSummary,
   getUserDepositBonuses,
   getUserReferralBonuses,
-  getUserBonusTransactions,
-  claimUserBonus
+  getUserBonusTransactions
 } from '../controllers/userDataController';
 import { requireAuth } from '../auth';
 
@@ -32,6 +31,6 @@ router.get('/bonus-summary', getUserBonusSummary);
 router.get('/deposit-bonuses', getUserDepositBonuses);
 router.get('/referral-bonuses', getUserReferralBonuses);
 router.get('/bonus-transactions', getUserBonusTransactions);
-router.post('/claim-bonus', claimUserBonus);
+// NOTE: Manual bonus claiming has been removed - bonuses are now auto-credited
 
 export default router;

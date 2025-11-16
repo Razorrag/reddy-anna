@@ -1623,34 +1623,25 @@ const Profile: React.FC = () => {
                       <div className="text-2xl font-bold text-blue-400">
                         {formatCurrency(profileState.bonusInfo?.referralBonus || 0)}
                       </div>
-                      <div className="text-white/60 text-sm">Available Referral Bonus</div>
+                      <div className="text-white/60 text-sm">Total Referral Bonus Earned</div>
                     </div>
                     <div className="text-center p-4 bg-black/30 rounded-lg">
                       <div className="text-2xl font-bold text-purple-400">
                         {formatCurrency(profileState.bonusInfo?.depositBonus || 0)}
                       </div>
-                      <div className="text-white/60 text-sm">Available Deposit Bonus</div>
+                      <div className="text-white/60 text-sm">Total Deposit Bonus Earned</div>
                     </div>
                   </div>
+                  {/* ✅ Auto-Credit Info Banner */}
                   {(profileState.bonusInfo?.referralBonus && profileState.bonusInfo.referralBonus > 0 || profileState.bonusInfo?.depositBonus && profileState.bonusInfo.depositBonus > 0) && (
-                    <div className="text-center pt-2">
-                      <Button
-                        onClick={handleClaimBonus}
-                        disabled={claimingBonus}
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        {claimingBonus ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                            Claiming...
-                          </>
-                        ) : (
-                          <>
-                            <TrendingUp className="w-4 h-4 mr-2" />
-                            Claim Available Bonus ({formatCurrency((profileState.bonusInfo?.referralBonus || 0) + (profileState.bonusInfo?.depositBonus || 0))})
-                          </>
-                        )}
-                      </Button>
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-white/80">
+                          <p className="font-semibold text-green-400 mb-1">✅ Bonuses Auto-Credited</p>
+                          <p className="text-white/60">All bonuses are automatically added to your main balance. No manual claim needed!</p>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </CardContent>

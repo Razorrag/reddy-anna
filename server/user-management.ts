@@ -97,7 +97,7 @@ export const getUserDetails = async (userId: string): Promise<UserManagementResp
       return { success: false, error: 'User not found' };
     }
 
-    // Format response with ALL user fields including statistics
+    // ✅ PHASE 2 FIX: Include referral and bonus fields in profile response
     const userResponse = {
       id: user.id,
       phone: user.phone,
@@ -113,7 +113,14 @@ export const getUserDetails = async (userId: string): Promise<UserManagementResp
       phoneVerified: user.phone_verified,
       lastLogin: user.last_login,
       createdAt: user.created_at,
-      updatedAt: user.updated_at
+      updatedAt: user.updated_at,
+      // ✅ NEW: Add referral fields
+      referralCode: user.referral_code || null,
+      referralCodeGenerated: user.referral_code_generated || null,
+      // ✅ NEW: Add bonus fields
+      depositBonusAvailable: parseFloat(user.deposit_bonus_available as any || '0'),
+      referralBonusAvailable: parseFloat(user.referral_bonus_available as any || '0'),
+      totalBonusEarned: parseFloat(user.total_bonus_earned as any || '0')
     };
 
     return { success: true, user: userResponse };

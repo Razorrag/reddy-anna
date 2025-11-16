@@ -280,7 +280,6 @@ const UserProfileContext = createContext<{
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   deposit: (amount: number, method: string) => Promise<void>;
   withdraw: (amount: number, method: string) => Promise<void>;
-  claimBonus: () => Promise<{ success: boolean; message?: string; error?: string }>;
   refreshData: () => Promise<void>;
 } | undefined>(undefined);
 
@@ -723,31 +722,6 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   };
 
-  const claimBonus = async () => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      
-      const response = await apiClient.post('/user/claim-bonus') as any;
-      
-      if (response.success) {
-        // Refresh analytics and bonus info after claiming
-        await Promise.all([
-          fetchAnalytics(),
-          fetchBonusInfo()
-        ]);
-        
-        return { success: true, message: response.message };
-      }
-      
-      return { success: false, error: response.error || 'Failed to claim bonus' };
-    } catch (error: any) {
-      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to claim bonus' });
-      return { success: false, error: error.message || 'Failed to claim bonus' };
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  };
-
   const refreshData = async () => {
     await Promise.all([
       fetchUserProfile(),
@@ -878,7 +852,6 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     updateProfile,
     deposit,
     withdraw,
-    claimBonus,
     refreshData: enhancedRefreshData
   };
 

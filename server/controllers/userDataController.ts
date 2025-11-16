@@ -298,40 +298,5 @@ export const getUserBonusTransactions = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * POST /api/user/claim-bonus
- * Claims available bonus and adds to main balance
- */
-export const claimUserBonus = async (req: Request, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Unauthorized'
-      });
-    }
-
-    const result = await (storage as any).claimBonus(req.user.id);
-    
-    if (!result.success) {
-      return res.status(400).json({
-        success: false,
-        error: result.error || 'Failed to claim bonus'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: {
-        claimedAmount: result.claimedAmount,
-        newBalance: result.newBalance
-      }
-    });
-  } catch (error: any) {
-    console.error('Claim user bonus error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to claim bonus'
-    });
-  }
-};
+// NOTE: Manual bonus claiming has been removed - bonuses are now auto-credited
+// based on gameplay and balance thresholds. No manual claim endpoint needed.

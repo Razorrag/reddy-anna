@@ -11,7 +11,7 @@
  * - Video stream never interrupted by game state or operations
  */
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Volume2, VolumeX } from 'lucide-react';
@@ -48,6 +48,95 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // ✅ FIX: Add mute state for user control
   const [isMuted, setIsMuted] = useState(true); // Start muted by default
 
+  // ✅ CRITICAL FIX: Move loadStreamConfig to component scope so it can be reused
+  const loadStreamConfig = useCallback(async () => {
+    try {
+      console.log('🔍 VideoArea: Fetching stream config from /api/stream/simple-config...');
+      const response = await fetch('/api/stream/simple-config');
+      const data = await response.json();
+      console.log('🔍 VideoArea: API Response:', data);
+      
+      if (data.success && data.data) {
+        // ✅ Fix mixed content: Match protocol to avoid blocking
+        let streamUrl = data.data.streamUrl;
+        if (streamUrl) {
+          // ✅ Convert Google Drive URLs to embed format
+          if (streamUrl.includes('drive.google.com')) {
+            console.log('🔍 Detected Google Drive URL, converting to embed format...');
+            
+            let fileId = null;
+            
+            // Extract file ID from /file/d/FILE_ID/ format
+            const fileMatch = streamUrl.match(/\/file\/d\/([^\/]+)/);
+            if (fileMatch) {
+              fileId = fileMatch[1];
+            }
+            
+            // Extract file ID from ?id=FILE_ID format
+            const idMatch = streamUrl.match(/[?&]id=([^&]+)/);
+            if (idMatch) {
+              fileId = idMatch[1];
+            }
+            
+            if (fileId) {
+              streamUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+              console.log('✅ Converted Google Drive URL to:', streamUrl);
+            } else {
+              console.warn('⚠️ Could not extract Google Drive file ID from URL');
+            }
+          }
+          
+          const currentProtocol = window.location.protocol; // 'http:' or 'https:'
+          
+          // ✅ CRITICAL: If site is HTTP, downgrade HTTPS URLs to HTTP to avoid blocking
+          if (currentProtocol === 'http:' && streamUrl.startsWith('https://')) {
+            console.log('⚠️ Site is HTTP but stream URL is HTTPS, downgrading to HTTP...');
+            streamUrl = streamUrl.replace('https://', 'http://');
+            console.log('🔄 Downgraded stream URL to:', streamUrl);
+          }
+          // If site is HTTPS but stream URL is HTTP, try to upgrade to HTTPS
+          else if (currentProtocol === 'https:' && streamUrl.startsWith('http://')) {
+            console.log('⚠️ Site is HTTPS but stream URL is HTTP, attempting to upgrade...');
+            streamUrl = streamUrl.replace('http://', 'https://');
+            console.log('🔄 Upgraded stream URL to:', streamUrl);
+          }
+        }
+        
+        const config = {
+          ...data.data,
+          streamUrl: streamUrl
+        };
+        setStreamConfig(config);
+        setIsPausedState(config.isPaused || false);
+        // ✅ NEW: Initialize mute state from backend config
+        setIsMuted(config.muted !== false);
+        
+        console.log('🎥 VideoArea: Stream config loaded:', {
+          streamUrl: streamUrl,
+          streamType: data.data.streamType,
+          isActive: data.data.isActive,
+          isPaused: config.isPaused,
+          muted: config.muted,
+          hasUrl: !!streamUrl
+        });
+        
+        // Debug: Check why stream might not show
+        if (!data.data.isActive) {
+          console.warn('⚠️ Stream is NOT ACTIVE! Toggle "Stream Active" in admin settings.');
+        }
+        if (!streamUrl) {
+          console.warn('⚠️ Stream URL is EMPTY! Enter a URL in admin settings.');
+        }
+      } else {
+        console.warn('⚠️ No stream config data received');
+      }
+    } catch (error) {
+      console.error('❌ Failed to load stream config:', error);
+    } finally {
+      setStreamLoading(false);
+    }
+  }, []);
+
   // Fake viewer count logic - ALWAYS uses a range (configured if available, otherwise defaults)
   useEffect(() => {
     const updateDisplayedCount = () => {
@@ -75,110 +164,25 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => clearInterval(interval);
   }, [streamConfig?.minViewers, streamConfig?.maxViewers]);
 
-  // Load stream configuration with auto-refresh
+  // ✅ FIX: Load stream configuration on mount
   useEffect(() => {
-    const loadStreamConfig = async () => {
-      try {
-        console.log('🔍 VideoArea: Fetching stream config from /api/stream/simple-config...');
-        const response = await fetch('/api/stream/simple-config');
-        const data = await response.json();
-        console.log('🔍 VideoArea: API Response:', data);
-        
-        if (data.success && data.data) {
-          // ✅ Fix mixed content: Match protocol to avoid blocking
-          let streamUrl = data.data.streamUrl;
-          if (streamUrl) {
-            // ✅ Convert Google Drive URLs to embed format
-            if (streamUrl.includes('drive.google.com')) {
-              console.log('🔍 Detected Google Drive URL, converting to embed format...');
-              
-              // Handle different Google Drive URL formats
-              // Format 1: https://drive.google.com/file/d/FILE_ID/view
-              // Format 2: https://drive.google.com/open?id=FILE_ID
-              // Convert to: https://drive.google.com/file/d/FILE_ID/preview
-              
-              let fileId = null;
-              
-              // Extract file ID from /file/d/FILE_ID/ format
-              const fileMatch = streamUrl.match(/\/file\/d\/([^\/]+)/);
-              if (fileMatch) {
-                fileId = fileMatch[1];
-              }
-              
-              // Extract file ID from ?id=FILE_ID format
-              const idMatch = streamUrl.match(/[?&]id=([^&]+)/);
-              if (idMatch) {
-                fileId = idMatch[1];
-              }
-              
-              if (fileId) {
-                streamUrl = `https://drive.google.com/file/d/${fileId}/preview`;
-                console.log('✅ Converted Google Drive URL to:', streamUrl);
-              } else {
-                console.warn('⚠️ Could not extract Google Drive file ID from URL');
-              }
-            }
-            
-            const currentProtocol = window.location.protocol; // 'http:' or 'https:'
-            
-            // ✅ CRITICAL: If site is HTTP, downgrade HTTPS URLs to HTTP to avoid blocking
-            if (currentProtocol === 'http:' && streamUrl.startsWith('https://')) {
-              console.log('⚠️ Site is HTTP but stream URL is HTTPS, downgrading to HTTP...');
-              streamUrl = streamUrl.replace('https://', 'http://');
-              console.log('🔄 Downgraded stream URL to:', streamUrl);
-            }
-            // If site is HTTPS but stream URL is HTTP, try to upgrade to HTTPS
-            else if (currentProtocol === 'https:' && streamUrl.startsWith('http://')) {
-              console.log('⚠️ Site is HTTPS but stream URL is HTTP, attempting to upgrade...');
-              streamUrl = streamUrl.replace('http://', 'https://');
-              console.log('🔄 Upgraded stream URL to:', streamUrl);
-            }
-          }
-          
-          const config = {
-            ...data.data,
-            streamUrl: streamUrl
-          };
-          setStreamConfig(config);
-          setIsPausedState(config.isPaused || false);
-          
-          console.log('🎥 VideoArea: Stream config loaded:', {
-            streamUrl: streamUrl,
-            streamType: data.data.streamType,
-            isActive: data.data.isActive,
-            hasUrl: !!streamUrl
-          });
-          
-          // Debug: Check why stream might not show
-          if (!data.data.isActive) {
-            console.warn('⚠️ Stream is NOT ACTIVE! Toggle "Stream Active" in admin settings.');
-          }
-          if (!streamUrl) {
-            console.warn('⚠️ Stream URL is EMPTY! Enter a URL in admin settings.');
-          }
-        } else {
-          console.warn('⚠️ No stream config data received');
-        }
-      } catch (error) {
-        console.error('❌ Failed to load stream config:', error);
-      } finally {
-        setStreamLoading(false);
-      }
-    };
-    
-    // Load immediately
     loadStreamConfig();
+  }, [loadStreamConfig]);
+
+  // ✅ NEW: Add 1-second polling fallback for instant pause/play updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadStreamConfig();
+    }, 1000); // Poll every 1 second
     
-    // ✅ FIX: Removed 30-second polling - WebSocket events will trigger instant updates
-    // No cleanup needed - no interval to clear
-  }, []);
+    return () => clearInterval(interval);
+  }, [loadStreamConfig]);
 
   // ✅ CRITICAL FIX: Listen for WebSocket stream status updates for instant pause/play
-  // This replaces the slow 30-second polling with instant WebSocket-driven updates
   useEffect(() => {
     const handleStreamStatusUpdate = () => {
       console.log('⚡ [WS] Stream status update received! Refetching config immediately...');
-      loadStreamConfig(); // Instantly refetch the API
+      loadStreamConfig();
     };
 
     window.addEventListener('stream_status_updated', handleStreamStatusUpdate);
@@ -186,7 +190,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => {
       window.removeEventListener('stream_status_updated', handleStreamStatusUpdate);
     };
-  }, []); // Empty deps - loadStreamConfig is stable
+  }, [loadStreamConfig]);
 
   // ✅ AUTO-RESUME: Page Visibility API - Auto-resume stream when user returns to app
   // ✅ FIX: Check isPausedState to prevent auto-resume when admin has paused
@@ -357,6 +361,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return Math.max(0, (maxTime - localTimer) / maxTime);
   };
 
+  // Auto-detect stream type based on URL
+  const url = streamConfig?.streamUrl?.toLowerCase() || '';
+  const isVideoFile = url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.ogg') || url.endsWith('.m3u8');
+  const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+  const shouldUseVideo = streamConfig?.streamType === 'video' || (isVideoFile && !isYouTube);
+
   // Render video based on stream type
   const renderStream = () => {
     if (streamLoading) {
@@ -393,12 +403,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       );
     }
 
-    // Auto-detect stream type based on URL if not explicitly set
-    const url = streamConfig.streamUrl.toLowerCase();
-    const isVideoFile = url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.ogg') || url.endsWith('.m3u8');
-    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-    const shouldUseVideo = streamConfig.streamType === 'video' || (isVideoFile && !isYouTube);
-    
     if (shouldUseVideo) {
       console.log('✅ VideoArea: Rendering VIDEO stream:', streamConfig.streamUrl);
       return (
@@ -498,8 +502,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       <div className="absolute inset-0">
         {renderStream()}
 
-        {/* ✅ FIX: Mute/Unmute Button for video element */}
-        {streamConfig?.streamType === 'video' && (
+        {/* ✅ FIX: Mute/Unmute Button - Show whenever video element is used */}
+        {shouldUseVideo && (
           <button
             onClick={(e) => {
               e.stopPropagation(); // Prevent video from pausing

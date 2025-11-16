@@ -29,7 +29,7 @@ export function WalletModal({
   const [accountNumber, setAccountNumber] = useState<string>('');
   const [ifscCode, setIfscCode] = useState<string>('');
   const [accountName, setAccountName] = useState<string>('');
-  const { state: userProfileState, claimBonus, fetchBonusInfo } = useUserProfile();
+  const { state: userProfileState, fetchBonusInfo } = useUserProfile();
   
   // ✅ FIX: Use BalanceContext directly to avoid showing 0
   const { balance: contextBalance, refreshBalance } = useBalance();

@@ -20,7 +20,6 @@ import {
   AuthErrorMessage,
   StreamStatusMessage,
   NotificationMessage,
-  WebRTCSignalMessage,
   PayoutReceivedMessage,
 } from '../../../shared/src/types/webSocket';
 import WebSocketManager, { ConnectionStatus } from '../lib/WebSocketManager';
@@ -1242,55 +1241,6 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           detail: { status, method, url }
         });
         window.dispatchEvent(event);
-        break;
-      }
-
-      case 'webrtc:signal': {
-        const signalData = data as WebRTCSignalMessage;
-        if (signalData.data) {
-          console.log('📡 WebRTC signal received:', signalData.data.type);
-          switch (signalData.data.type) {
-            case 'stream-start':
-              // Set global state to TRUE
-              setScreenSharing(true);
-              console.log('✅ Screen sharing started - UI updated');
-              // Dispatch event for WebRTCPlayer to initialize connection
-              window.dispatchEvent(new CustomEvent('webrtc_stream_start', { detail: signalData.data }));
-              break;
-            case 'stream-stop':
-              // Set global state to FALSE
-              setScreenSharing(false);
-              console.log('⏹️ Screen sharing stopped - UI updated');
-              // Dispatch event for WebRTCPlayer to cleanup connection
-              window.dispatchEvent(new CustomEvent('webrtc_stream_stop', { detail: signalData.data }));
-              break;
-            case 'stream-pause':
-              // Fire event for WebRTCPlayer to show paused overlay
-              console.log('⏸️ Stream paused - dispatching to WebRTCPlayer');
-              window.dispatchEvent(new CustomEvent('webrtc_stream_pause', { detail: signalData.data }));
-              break;
-            case 'stream-resume':
-              // Fire event for WebRTCPlayer to hide paused overlay
-              console.log('▶️ Stream resumed - dispatching to WebRTCPlayer');
-              window.dispatchEvent(new CustomEvent('webrtc_stream_resume', { detail: signalData.data }));
-              break;
-            case 'offer':
-              // Fire event for WebRTCPlayer to pick up
-              console.log('📡 WebRTC offer received - dispatching to WebRTCPlayer');
-              window.dispatchEvent(new CustomEvent('webrtc_offer_received', { detail: signalData.data }));
-              break;
-            case 'answer':
-              // Fire event for WebRTCPlayer to pick up
-              console.log('📡 WebRTC answer received - dispatching to WebRTCPlayer');
-              window.dispatchEvent(new CustomEvent('webrtc_answer_received', { detail: signalData.data }));
-              break;
-            case 'ice-candidate':
-              // Fire event for WebRTCPlayer to pick up
-              console.log('🧊 WebRTC ICE candidate received - dispatching to WebRTCPlayer');
-              window.dispatchEvent(new CustomEvent('webrtc_ice_candidate_received', { detail: signalData.data }));
-              break;
-          }
-        }
         break;
       }
       

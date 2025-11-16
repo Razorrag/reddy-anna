@@ -108,12 +108,23 @@ export const getAdminAllTimeAnalytics = async (req: Request, res: Response) => {
 };
 
 /**
- * GET /api/admin/bonus-transactions
- * Returns all bonus transactions with user details
+ * GET /api/admin/bonus-transactions?status=...&type=...
+ * Returns all bonus transactions with user details (with backend filtering)
  */
 export const getAdminBonusTransactions = async (req: Request, res: Response) => {
   try {
-    const transactions = await storage.getAllBonusTransactions();
+    // ✅ FIX: Apply filters from query parameters
+    const { status, type, limit = 100, offset = 0 } = req.query;
+    
+    const filters: any = {
+      limit: parseInt(limit as string),
+      offset: parseInt(offset as string)
+    };
+    
+    if (status && status !== 'all') filters.status = status as string;
+    if (type && type !== 'all') filters.type = type as string;
+    
+    const transactions = await storage.getAllBonusTransactions(filters);
 
     res.json({
       success: true,
@@ -129,12 +140,22 @@ export const getAdminBonusTransactions = async (req: Request, res: Response) => 
 };
 
 /**
- * GET /api/admin/referral-data
- * Returns referral data with user details
+ * GET /api/admin/referral-data?status=...
+ * Returns referral data with user details (with backend filtering)
  */
 export const getAdminReferralData = async (req: Request, res: Response) => {
   try {
-    const referrals = await storage.getAllReferralData();
+    // ✅ FIX: Apply filters from query parameters
+    const { status, limit = 100, offset = 0 } = req.query;
+    
+    const filters: any = {
+      limit: parseInt(limit as string),
+      offset: parseInt(offset as string)
+    };
+    
+    if (status && status !== 'all') filters.status = status as string;
+    
+    const referrals = await storage.getAllReferralData(filters);
 
     res.json({
       success: true,

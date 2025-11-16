@@ -551,8 +551,7 @@ async function restoreActiveGameState() {
         try {
           // Mark old game as cancelled in database
           await storage.updateGameSession(gameId, {
-            status: 'cancelled',
-            ended_at: new Date()
+            status: 'cancelled'
           });
           console.log(`✅ Marked game ${gameId} as cancelled in database`);
         } catch (updateError) {
@@ -3229,27 +3228,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Claim Bonus Route
-  app.post("/api/user/claim-bonus", generalLimiter, async (req, res) => {
-    try {
-      if (!req.user || !req.user.id) {
-        return res.status(401).json({ success: false, error: 'Authentication required' });
-      }
-      // Bonuses are now fully automatic based on gameplay and balance thresholds.
-      // Manual claiming is no longer supported to avoid inconsistent states.
-      return res.status(400).json({
-        success: false,
-        error: 'Bonus is credited to your wallet automatically based on your gameplay and balance. Manual claiming is not required.'
-      });
-    } catch (error) {
-      console.error('Claim bonus error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to claim bonus'
-      });
-    }
-  });
+  // NOTE: Manual bonus claiming has been removed - bonuses are now auto-credited
+  // based on gameplay and balance thresholds. No manual claim endpoint needed.
 
-  // Referral Data Route - NEW ENDPOINT
+  // Referral Data Route - FIXED: Correct field mapping and user details
   app.get("/api/user/referral-data", generalLimiter, async (req, res) => {
     try {
       if (!req.user || !req.user.id) {
@@ -3267,36 +3249,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get user's referred users
-      const referredUsers = await storage.getUserReferrals(userId);
+      // Get user's referred users (raw DB rows with snake_case)
+      const referredUsersRaw = await storage.getUserReferrals(userId);
       
-      // Calculate referral statistics
-      const totalReferrals = referredUsers.length;
-      const totalDepositsFromReferrals = referredUsers.reduce((sum, referral) =>
-        sum + (parseFloat(referral.depositAmount || '0') || 0), 0
+      // ✅ FIX: Map DB snake_case fields to camelCase and fetch user details
+      const referredUsersWithDetails = await Promise.all(
+        referredUsersRaw.map(async (referral: any) => {
+          // Fetch referred user details for phone and name
+          const referredUser = await storage.getUser(referral.referred_user_id);
+          
+          return {
+            id: referral.referred_user_id,
+            phone: referredUser?.phone || '',
+            fullName: referredUser?.full_name || '',
+            // ✅ FIX: Use correct DB field names (snake_case)
+            depositAmount: parseFloat(referral.deposit_amount || '0') || 0,
+            bonusAmount: parseFloat(referral.bonus_amount || '0') || 0,
+            bonusApplied: referral.bonus_applied || false,
+            createdAt: referral.created_at
+          };
+        })
       );
-      const totalBonusEarned = referredUsers.reduce((sum, referral) =>
-        sum + (parseFloat(referral.bonusAmount || '0') || 0), 0
+      
+      // ✅ FIX: Calculate stats using correct field names
+      const totalReferrals = referredUsersWithDetails.length;
+      const totalDepositsFromReferrals = referredUsersWithDetails.reduce((sum, referral) =>
+        sum + (referral.depositAmount || 0), 0
       );
-      const activeReferrals = referredUsers.filter(referral =>
+      const totalReferralEarnings = referredUsersWithDetails.reduce((sum, referral) =>
+        sum + (referral.bonusAmount || 0), 0
+      );
+      const activeReferrals = referredUsersWithDetails.filter(referral =>
         referral.bonusApplied
       ).length;
 
+      // ✅ FIX: Match client-expected field name (totalReferralEarnings, not totalBonusEarned)
       const referralData = {
         referralCode: user.referral_code_generated,
         totalReferrals,
         activeReferrals,
         totalDepositsFromReferrals,
-        totalBonusEarned,
-        referredUsers: referredUsers.map(referral => ({
-          id: referral.referredUserId,
-          phone: '', // Would need to fetch user details separately
-          fullName: '', // Would need to fetch user details separately
-          depositAmount: parseFloat(referral.depositAmount || '0') || 0,
-          bonusAmount: parseFloat(referral.bonusAmount || '0') || 0,
-          bonusApplied: referral.bonusApplied,
-          createdAt: referral.createdAt
-        }))
+        totalReferralEarnings, // ✅ FIX: Renamed from totalBonusEarned
+        referredUsers: referredUsersWithDetails
       };
 
       res.json({
@@ -4483,157 +4477,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin Bonus Action Endpoints
-  // Apply a pending bonus (credit it to user's balance)
-  app.post("/api/admin/bonus-transactions/:id/apply", generalLimiter, async (req, res) => {
-    try {
-      const { id } = req.params;
-      
-      // Get the bonus transaction
-      const allTransactions = await storage.getAllBonusTransactions({ limit: 10000, offset: 0 });
-      const transaction = allTransactions.find((t: any) => t.id === id);
-      
-      if (!transaction) {
-        return res.status(404).json({
-          success: false,
-          error: 'Bonus transaction not found'
-        });
-      }
-      
-      if (transaction.action === 'credited' || transaction.action === 'applied') {
-        return res.status(400).json({
-          success: false,
-          error: 'Bonus already applied'
-        });
-      }
-      
-      // Determine bonus type and apply accordingly
-      if (transaction.bonus_type === 'deposit_bonus') {
-        // Credit deposit bonus
-        await storage.creditDepositBonus(transaction.bonus_source_id, transaction.user_id);
-      } else if (transaction.bonus_type === 'referral_bonus') {
-        // Credit referral bonus
-        await storage.creditReferralBonus(transaction.bonus_source_id, transaction.user_id);
-      } else {
-        // Generic bonus application - add to balance directly
-        await storage.addBalanceAtomic(transaction.user_id, parseFloat(transaction.amount));
-        await storage.logBonusTransaction(
-          transaction.user_id,
-          transaction.bonus_type,
-          transaction.bonus_source_id,
-          parseFloat(transaction.amount),
-          'credited',
-          `Admin manually applied ${transaction.bonus_type}`
-        );
-      }
-      
-      res.json({
-        success: true,
-        message: 'Bonus applied successfully'
-      });
-    } catch (error) {
-      console.error('Apply bonus error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to apply bonus'
-      });
-    }
-  });
-
-  // Reject a pending bonus
-  app.post("/api/admin/bonus-transactions/:id/reject", generalLimiter, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { reason } = req.body;
-      
-      // Get the bonus transaction
-      const allTransactions = await storage.getAllBonusTransactions({ limit: 10000, offset: 0 });
-      const transaction = allTransactions.find((t: any) => t.id === id);
-      
-      if (!transaction) {
-        return res.status(404).json({
-          success: false,
-          error: 'Bonus transaction not found'
-        });
-      }
-      
-      if (transaction.action === 'credited' || transaction.action === 'applied') {
-        return res.status(400).json({
-          success: false,
-          error: 'Cannot reject already applied bonus'
-        });
-      }
-      
-      // Mark as rejected based on bonus type
-      if (transaction.bonus_type === 'deposit_bonus' && transaction.bonus_source_id) {
-        // Expire the deposit bonus
-        await storage.expireDepositBonus(transaction.bonus_source_id, reason || 'Admin rejected');
-      } else if (transaction.bonus_type === 'referral_bonus' && transaction.bonus_source_id) {
-        // Expire the referral bonus
-        await storage.expireReferralBonus(transaction.bonus_source_id, reason || 'Admin rejected');
-      }
-      
-      // Log rejection
-      await storage.logBonusTransaction(
-        transaction.user_id,
-        transaction.bonus_type,
-        transaction.bonus_source_id,
-        0,
-        'rejected',
-        reason || 'Admin rejected bonus'
-      );
-      
-      res.json({
-        success: true,
-        message: 'Bonus rejected successfully'
-      });
-    } catch (error) {
-      console.error('Reject bonus error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to reject bonus'
-      });
-    }
-  });
-
-  // Process a referral bonus (approve and credit)
-  app.post("/api/admin/referrals/:id/process", generalLimiter, async (req, res) => {
-    try {
-      const { id } = req.params;
-      
-      // Get referral data
-      const allReferrals = await storage.getAllReferralData({ limit: 10000, offset: 0 });
-      const referral = allReferrals.find((r: any) => r.id === id);
-      
-      if (!referral) {
-        return res.status(404).json({
-          success: false,
-          error: 'Referral not found'
-        });
-      }
-      
-      if (referral.status === 'completed') {
-        return res.status(400).json({
-          success: false,
-          error: 'Referral bonus already processed'
-        });
-      }
-      
-      // Credit the referral bonus
-      await storage.creditReferralBonus(referral.id, referral.referrer_user_id);
-      
-      res.json({
-        success: true,
-        message: 'Referral bonus processed successfully'
-      });
-    } catch (error) {
-      console.error('Process referral error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to process referral bonus'
-      });
-    }
-  });
+  // NOTE: Bonus transaction management endpoints removed - bonuses are auto-credited
+  // Admin can view bonus/referral data via the analytics endpoints
 
   // Game Settings Endpoints
   app.get("/api/admin/game-settings", generalLimiter, async (req, res) => {

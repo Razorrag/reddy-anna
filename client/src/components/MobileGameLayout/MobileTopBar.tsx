@@ -31,9 +31,8 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
 }) => {
   const { gameState: contextGameState } = useGameState();
   const [, setLocation] = useLocation();
-  const { state: profileState, claimBonus, fetchBonusInfo } = useUserProfile();
+  const { state: profileState, fetchBonusInfo } = useUserProfile();
   const { showNotification } = useNotification();
-  const [isClaiming, setIsClaiming] = React.useState(false);
   
   // Fetch unified bonus summary/info once; WebSocket + context keep it in sync
   React.useEffect(() => {
@@ -59,36 +58,19 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
     setLocation('/profile');
   };
 
-  const handleClaimBonus = async () => {
-    if (isClaiming) return;
-    
-    // Check if bonus is locked (if backend provides this info via derived bonusInfo)
+  // ✅ Bonuses are auto-credited - show info instead of claim button
+  const handleBonusInfo = () => {
     if (bonusInfo?.bonusLocked) {
       const progress = bonusInfo.wageringProgress || 0;
       showNotification(
-        `Bonus is locked! Complete ${(100 - progress).toFixed(0)}% more wagering to unlock (${progress.toFixed(0)}% done)`,
-        'error'
+        `Bonus locked: ${progress.toFixed(0)}% wagering complete. Keep playing to unlock!`,
+        'info'
       );
-      return;
-    }
-    
-    setIsClaiming(true);
-    try {
-      const result = await claimBonus();
-      if (result.success) {
-        // Use availableBonus here so multiple deposit bonuses are correctly included
-        showNotification(
-          `Bonus claimed! ₹${availableBonus.toLocaleString('en-IN')} added to your balance`,
-          'success'
-        );
-        await fetchBonusInfo(); // Refresh summary/bonus info
-      } else {
-        showNotification(result.error || 'Failed to claim bonus', 'error');
-      }
-    } catch (error) {
-      showNotification('Failed to claim bonus', 'error');
-    } finally {
-      setIsClaiming(false);
+    } else {
+      showNotification(
+        `Total earned: ₹${availableBonus.toLocaleString('en-IN')}. Bonuses are auto-credited to your balance!`,
+        'success'
+      );
     }
   };
 
@@ -132,20 +114,19 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
               <User className="w-5 h-5 text-gray-300" />
             </button>
 
-            {/* Bonus Chip - Show if bonus available */}
+            {/* Bonus Chip - Shows total earned (auto-credited) */}
             {hasBonus && (
               <button
-                onClick={handleClaimBonus}
-                disabled={isClaiming}
+                onClick={handleBonusInfo}
                 className={`flex items-center space-x-1.5 rounded-full px-3 py-1.5 transition-all active:scale-95 shadow-lg ${
                   bonusInfo?.bonusLocked
                     ? 'bg-gradient-to-r from-yellow-500/30 to-orange-600/30 border-2 border-yellow-400 hover:from-yellow-500/40 hover:to-orange-600/40 hover:border-yellow-300 shadow-yellow-500/20'
-                    : 'bg-gradient-to-r from-green-500/30 to-green-600/30 border-2 border-green-400 hover:from-green-500/40 hover:to-green-600/40 hover:border-green-300 shadow-green-500/20 animate-pulse'
+                    : 'bg-gradient-to-r from-green-500/30 to-green-600/30 border-2 border-green-400 hover:from-green-500/40 hover:to-green-600/40 hover:border-green-300 shadow-green-500/20'
                 }`}
                 title={
                   bonusInfo?.bonusLocked && bonusInfo.wageringProgress !== undefined
                     ? `Locked: ${bonusInfo.wageringProgress.toFixed(0)}% wagering complete`
-                    : 'Click to claim bonus'
+                    : 'Total bonus earned (auto-credited)'
                 }
               >
                 {bonusInfo?.bonusLocked ? (

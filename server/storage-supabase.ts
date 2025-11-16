@@ -5086,7 +5086,7 @@ export class SupabaseStorage implements IStorage {
     // Add to balance
     await this.updateUserBalance(bonus.referrer_user_id, bonusAmount);
 
-    // Update bonus status
+    // Update bonus status in referral_bonuses table
     const { error: updateError } = await supabaseServer
       .from('referral_bonuses')
       .update({
@@ -5098,6 +5098,24 @@ export class SupabaseStorage implements IStorage {
 
     if (updateError) {
       console.error('Error updating referral bonus status:', updateError);
+    }
+
+    // ✅ PHASE 3 FIX: Update bonus_applied flag in user_referrals table
+    if (bonus.referral_id) {
+      const { error: referralUpdateError } = await supabaseServer
+        .from('user_referrals')
+        .update({
+          bonus_applied: true,
+          bonus_applied_at: new Date().toISOString()
+        })
+        .eq('id', bonus.referral_id);
+
+      if (referralUpdateError) {
+        console.error('⚠️ Error updating user_referrals.bonus_applied flag:', referralUpdateError);
+        // Don't fail the credit operation if this update fails
+      } else {
+        console.log(`✅ Updated user_referrals.bonus_applied = true for referral ${bonus.referral_id}`);
+      }
     }
 
     // Log credit
@@ -5591,9 +5609,12 @@ export class SupabaseStorage implements IStorage {
 
   /**
    * Get all referral data with user details (admin)
+   * ✅ FIX: Now accepts filters as per interface definition
    */
-  async getAllReferralData(): Promise<any[]> {
-    const { data, error } = await supabaseServer
+  async getAllReferralData(filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { status, limit = 100, offset = 0 } = filters || {};
+    
+    let query = supabaseServer
       .from('user_referrals')
       .select(`
         *,
@@ -5608,7 +5629,20 @@ export class SupabaseStorage implements IStorage {
           full_name
         )
       `)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    // Apply status filter if provided
+    if (status && status !== 'all') {
+      // Map 'active' to bonus_applied=true, 'pending' to bonus_applied=false
+      if (status === 'active' || status === 'completed') {
+        query = query.eq('bonus_applied', true);
+      } else if (status === 'pending') {
+        query = query.eq('bonus_applied', false);
+      }
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error getting all referral data:', error);
@@ -5623,7 +5657,7 @@ export class SupabaseStorage implements IStorage {
       referredUsername: ref.referred?.phone || 'Unknown',
       depositAmount: parseFloat(ref.deposit_amount || '0'),
       bonusAmount: parseFloat(ref.bonus_amount || '0'),
-      status: ref.status,
+      status: ref.bonus_applied ? 'completed' : 'pending',
       createdAt: ref.created_at,
       bonusAppliedAt: ref.bonus_applied_at
     }));
@@ -5631,13 +5665,22 @@ export class SupabaseStorage implements IStorage {
 
   /**
    * Get per-player bonus analytics (admin)
+   * ✅ FIX: Now accepts filters as per interface definition
    */
-  async getPlayerBonusAnalytics(): Promise<any[]> {
-    // Get all users with their bonus data
-    const { data: users, error: usersError } = await supabaseServer
+  async getPlayerBonusAnalytics(filters?: { userId?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { userId, limit = 1000, offset = 0 } = filters || {};
+    
+    // Get users with optional filtering
+    let usersQuery = supabaseServer
       .from('users')
       .select('*')
       .order('created_at', { ascending: false });
+    
+    if (userId) {
+      usersQuery = usersQuery.eq('id', userId);
+    }
+    
+    const { data: users, error: usersError } = await usersQuery;
 
     if (usersError || !users) {
       console.error('Error getting users for bonus analytics:', usersError);
@@ -5687,7 +5730,8 @@ export class SupabaseStorage implements IStorage {
       };
     }));
 
-    return analytics;
+    // Apply pagination
+    return analytics.slice(offset, offset + limit);
   }
 
   /**
