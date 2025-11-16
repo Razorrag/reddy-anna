@@ -6,6 +6,7 @@
 import React from 'react';
 import { Gift, Lock, CheckCircle, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatCurrency } from '@/lib/formatters';
 
 interface BonusOverviewCardProps {
   totalAvailable: number;
@@ -20,9 +21,6 @@ const BonusOverviewCard: React.FC<BonusOverviewCardProps> = ({
   totalCredited,
   lifetimeEarnings
 }) => {
-  const formatCurrency = (amount: number) => {
-    return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-  };
 
   const stats = [
     {

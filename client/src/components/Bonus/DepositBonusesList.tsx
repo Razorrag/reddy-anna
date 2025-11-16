@@ -7,6 +7,7 @@ import React from 'react';
 import { Lock, Unlock, CheckCircle, Clock, Gift } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrency, formatDate } from '@/lib/formatters';
 
 interface DepositBonus {
   id: string;
@@ -29,20 +30,6 @@ interface DepositBonusesListProps {
 }
 
 const DepositBonusesList: React.FC<DepositBonusesListProps> = ({ bonuses, onRefresh }) => {
-  const formatCurrency = (amount: number) => {
-    return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   const getStatusConfig = (status: string) => {
     switch (status) {

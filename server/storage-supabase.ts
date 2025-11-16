@@ -2116,50 +2116,19 @@ export class SupabaseStorage implements IStorage {
     console.log(`\n🔍 ========== getUserGameHistory START ==========`);
     console.log(`User ID: ${userId}`);
     
-    // ✅ PHASE 1 FIX: Add comprehensive null safety and data validation
+    // ✅ CRITICAL FIX: Use game_history table (permanent record) instead of game_sessions
     try {
-      // First, check if user has any bets at all (diagnostic)
-      const { data: allBets, error: betsError } = await supabaseServer
-        .from('player_bets')
-        .select('id, game_id, amount, side, status, created_at')
-        .eq('user_id', userId);
-      
-      console.log(`📊 Total bets for user: ${allBets?.length || 0}`);
-      if (allBets && allBets.length > 0) {
-        console.log(`Sample bet:`, allBets[0]);
-        
-        // Check if game_sessions exist for these bets
-        const gameIds = Array.from(new Set(allBets.map(b => b.game_id)));
-        console.log(`🎮 Unique game IDs: ${gameIds.length}`);
-        
-        const { data: sessions } = await supabaseServer
-          .from('game_sessions')
-          .select('game_id, status, winner')
-          .in('game_id', gameIds);
-        
-        console.log(`🎮 Game sessions found: ${sessions?.length || 0} out of ${gameIds.length}`);
-        
-        // Check game_history
-        const { data: history } = await supabaseServer
-          .from('game_history')
-          .select('game_id, winner')
-          .in('game_id', gameIds);
-        
-        console.log(`📜 Game history records found: ${history?.length || 0} out of ${gameIds.length}`);
-      }
-      
-      // Get user's bets and join with game sessions to get results
-      // ✅ FIX: Use LEFT JOIN instead of INNER JOIN to show all bets even if session is missing
+      // Get user's bets with game_history data (completed games)
       const { data, error } = await supabaseServer
         .from('player_bets')
         .select(`
           *,
-          game_sessions(
+          game_history!inner(
             opening_card,
             winner,
             winning_card,
-            current_round,
-            status,
+            winning_round,
+            total_cards,
             created_at
           )
         `)
@@ -2172,10 +2141,10 @@ export class SupabaseStorage implements IStorage {
         return [];
       }
 
-      console.log(`✅ Joined query returned: ${data?.length || 0} results`);
+      console.log(`✅ Query returned: ${data?.length || 0} bets with game history`);
 
       if (!data || data.length === 0) {
-        console.log(`⚠️ No results from joined query`);
+        console.log(`⚠️ No game history found for user`);
         console.log(`========== getUserGameHistory END (EMPTY) ==========\n`);
         return [];
       }
@@ -2192,7 +2161,7 @@ export class SupabaseStorage implements IStorage {
       data.forEach((bet: any) => {
         if (!gameBetsMap.has(bet.game_id)) {
           gameBetsMap.set(bet.game_id, {
-            gameSession: bet.game_sessions,
+            gameHistory: bet.game_history, // ✅ FIX: Use game_history instead of game_sessions
             bets: [],
             totalBet: 0,
             totalPayout: 0
@@ -2228,25 +2197,10 @@ export class SupabaseStorage implements IStorage {
         });
       }
 
-      // Get game history for winning round info and total cards
-      const { data: historyData, error: historyError } = await supabaseServer
-        .from('game_history')
-        .select('*')
-        .in('game_id', gameIds);
-
-      if (historyError) {
-        console.error('Error getting game history for user:', historyError);
-      }
-
-      const historyMap = new Map();
-      if (historyData) {
-        historyData.forEach((h: any) => historyMap.set(h.game_id, h));
-      }
-
+      // ✅ FIX: No need to fetch game_history again - we already have it from the join
       // ✅ PHASE 1 FIX: Transform data with comprehensive null safety
       return Array.from(gameBetsMap.entries()).map(([gameId, gameData]) => {
-        const gameSession = gameData.gameSession;
-        const history = historyMap.get(gameId);
+        const history = gameData.gameHistory; // ✅ FIX: Use gameHistory from join
         const cards = cardsMap.get(gameId) || [];
         
         // ✅ FIX: Ensure all numeric values have safe defaults
@@ -2256,15 +2210,15 @@ export class SupabaseStorage implements IStorage {
         
         // Determine result based on actual payouts
         const won = totalPayout > totalBet;
-        const winner = gameSession?.winner || null;
+        const winner = history?.winner || null;
 
         return {
           id: history?.id || gameData.bets[0]?.id || gameId,
           gameId: gameId || 'unknown',
-          openingCard: gameSession?.opening_card || null,
+          openingCard: history?.opening_card || null,
           winner: winner,
-          winningCard: gameSession?.winning_card || null,
-          winningRound: safeParseNumber(history?.winning_round || gameSession?.current_round, 1),
+          winningCard: history?.winning_card || null,
+          winningRound: safeParseNumber(history?.winning_round, 1),
           totalCards: safeParseNumber(history?.total_cards || cards.length),
           // Include dealt cards
           dealtCards: cards.map((c: any) => ({
@@ -2296,8 +2250,8 @@ export class SupabaseStorage implements IStorage {
           yourNetProfit: netProfit,
           result: won ? 'win' : (winner ? 'loss' : 'no_bet'),
           payout: totalPayout,
-          round: safeParseNumber(history?.winning_round || gameSession?.current_round, 1),
-          createdAt: gameSession?.created_at || gameData.bets[0]?.created_at || new Date().toISOString()
+          round: safeParseNumber(history?.winning_round, 1),
+          createdAt: history?.created_at || gameData.bets[0]?.created_at || new Date().toISOString()
         };
       });
     } catch (error) {

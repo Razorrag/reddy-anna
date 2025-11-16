@@ -785,7 +785,7 @@ const Profile: React.FC = () => {
                   <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
                     <div className="text-center">
                       <div className="text-sm text-white/60 mb-1">Available Balance</div>
-                      <div className="text-3xl font-bold text-red-400">₹{balance.toLocaleString('en-IN')}</div>
+                      <div className="text-3xl font-bold text-red-400">₹{(balance || 0).toLocaleString('en-IN')}</div>
                     </div>
                   </div>
 
@@ -803,7 +803,7 @@ const Profile: React.FC = () => {
                         min="0"
                       />
                     </div>
-                    {transactionAmount && parseInt(transactionAmount) > balance && (
+                    {transactionAmount && parseInt(transactionAmount) > (balance || 0) && (
                       <div className="text-red-400 text-sm mt-2 flex items-center gap-1">
                         <XCircle className="w-4 h-4" />
                         Insufficient balance
@@ -820,7 +820,7 @@ const Profile: React.FC = () => {
                           key={value}
                           onClick={() => setTransactionAmount(value.toString())}
                           variant="outline"
-                          disabled={value > balance}
+                          disabled={value > (balance || 0)}
                           className="border-red-500/30 text-red-400 hover:bg-red-500/20 disabled:opacity-30"
                         >
                           ₹{(value / 1000).toFixed(0)}K
@@ -1039,7 +1039,7 @@ const Profile: React.FC = () => {
                         setSubmittingTransaction(false);
                       }
                     }}
-                    disabled={submittingTransaction || !transactionAmount || parseInt(transactionAmount) <= 0 || parseInt(transactionAmount) > balance}
+                    disabled={submittingTransaction || !transactionAmount || parseInt(transactionAmount) <= 0 || parseInt(transactionAmount) > (balance || 0)}
                     className="w-full bg-red-600 hover:bg-red-700 text-white py-6 text-lg font-bold"
                   >
                     {submittingTransaction ? (
