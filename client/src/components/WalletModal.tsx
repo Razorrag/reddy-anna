@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useBalance } from "@/contexts/BalanceContext";
 import { apiClient } from "@/lib/api-client";
-import { getPaymentWhatsAppNumber, createWhatsAppUrl } from "@/lib/whatsapp-helper";
+import { getPaymentWhatsAppNumber, getPaymentWhatsAppNumberAsync, createWhatsAppUrl } from "@/lib/whatsapp-helper";
 
 interface WalletModalProps {
   isOpen: boolean;

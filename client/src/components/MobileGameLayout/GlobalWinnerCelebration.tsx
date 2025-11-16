@@ -40,6 +40,20 @@ const GlobalWinnerCelebration: React.FC = () => {
   const data = gameState.lastCelebration as CelebrationData | null;
   const visible = !!gameState.showCelebration && !!data;
 
+  // ✅ --- START OF FIX 2 (ADMIN IS BLOCKED) ---
+  //
+  // THE BUG WAS HERE: The component would render a "simplified"
+  // overlay for the admin, blocking their controls.
+  //
+  // THE FIX: If the user is an admin, RENDER NOTHING.
+  // The admin's UI is handled by AdminGamePanel.tsx.
+  //
+  if (isAdmin) {
+    console.log('👻 GlobalWinnerCelebration: Hiding for admin.');
+    return null;
+  }
+  // --- END OF FIX 2 ---
+
   useEffect(() => {
     if (!visible || !data) {
       console.log('👻 GlobalWinnerCelebration: Not rendering (visible:', visible, 'data:', !!data, ')');
@@ -67,19 +81,19 @@ const GlobalWinnerCelebration: React.FC = () => {
     });
     console.groupEnd();
     
-    // ✅ --- START OF FIX ---
+    // ✅ --- START OF FIX 1 (ADMIN/PLAYER SYNC) ---
     //
     // THE BUG WAS HERE: The old code had a setTimeout that would
     // call `hideCelebration()` after 8 seconds.
     //
-    // THE FIX is to remove that timer. The celebration will now
-    // stay visible until the `resetGame()` action (from Phase 2B) hides it.
+    // THE FIX: We remove that timer. The celebration will now
+    // stay visible until the admin starts a new game.
     //
     console.log(`⏱️ GlobalWinnerCelebration: Will stay visible until admin starts new game.`);
     
     // (The old setTimeout logic is now deleted)
     
-    // --- END OF FIX ---
+    // --- END OF FIX 1 ---
 
   }, [visible, data, hideCelebration, isAdmin, user?.id, user?.role]);
 
@@ -87,7 +101,7 @@ const GlobalWinnerCelebration: React.FC = () => {
     return null;
   }
 
-  console.log('🎨 GlobalWinnerCelebration: Rendering celebration overlay');
+  console.log('🎨 GlobalWinnerCelebration: Rendering celebration overlay FOR PLAYER');
 
   // ✅ ENHANCED: Prefer server's winnerDisplay, fallback to local calculation
   const getWinnerText = () => {
@@ -109,44 +123,6 @@ const GlobalWinnerCelebration: React.FC = () => {
   const winningCardDisplay = typeof data.winningCard === 'string'
     ? data.winningCard
     : data.winningCard?.display || 'Unknown';
-
-  // Admin sees simplified celebration (winner only, no monetary details)
-  if (isAdmin) {
-    return (
-      <AnimatePresence>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm"
-          style={{ pointerEvents: 'auto' }}
-        >
-          <motion.div
-            initial={{ scale: 0.8, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.8, y: 20 }}
-            transition={{ type: "spring", duration: 0.5 }}
-            className="relative z-10 max-w-sm w-full mx-4"
-          >
-            <div className="bg-gradient-to-br from-purple-800/90 via-purple-700/90 to-purple-800/90 rounded-2xl p-6 border-4 border-purple-400 shadow-2xl">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0 }}
-                transition={{ type: "spring" }}
-                className="text-center"
-              >
-                <div className="text-6xl mb-4">🎴</div>
-                <div className="text-4xl font-black text-white mb-3">{getWinnerText()}</div>
-                <div className="text-2xl text-purple-200 mb-2">{winningCardDisplay}</div>
-                <div className="text-sm font-semibold text-white/70">Round {data.round} Completed</div>
-              </motion.div>
-            </div>
-          </motion.div>
-        </motion.div>
-      </AnimatePresence>
-    );
-  }
 
   // Players see unified celebration: Winner text + Payout information
   return (
