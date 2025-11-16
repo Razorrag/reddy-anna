@@ -41,6 +41,7 @@ import {
   ReferralBonusesList,
   BonusHistoryTimeline
 } from '@/components/Bonus';
+import { formatCurrency as formatCurrencySafe, formatDate as formatDateSafe } from '@/lib/formatters';
 
 const Profile: React.FC = () => {
   const [location, setLocation] = useLocation();
@@ -112,6 +113,7 @@ const Profile: React.FC = () => {
       console.log('📥 Profile page: Fetching user profile data');
       fetchUserProfile();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, profileState.user, profileState.loading]); // ✅ FIX: Removed fetchUserProfile from dependencies to prevent infinite loops
 
   // Parse URL parameters for tab selection
@@ -132,6 +134,7 @@ const Profile: React.FC = () => {
         fetchReferralData();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, user]); // ✅ FIX: Removed fetchReferralData from dependencies to prevent infinite loops
 
   // Fetch transactions when transactions tab is active
@@ -278,19 +281,9 @@ const Profile: React.FC = () => {
     }
   }, [profileState.user]);
 
-  const formatCurrency = (amount: number) => {
-    return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  // ✅ Use shared utility functions with null safety
+  const formatCurrency = formatCurrencySafe;
+  const formatDate = formatDateSafe;
 
   const handleProfileUpdate = async () => {
     try {
@@ -1415,7 +1408,17 @@ const Profile: React.FC = () => {
                   <div className="text-center py-8 text-white/60">No games found</div>
                 ) : (
                   <div className="space-y-3">
-                    {profileState.gameHistory.map((game) => (
+                    {profileState.gameHistory.map((game) => {
+                      // ✅ FIX: Safely extract all numeric values with null safety
+                      const yourTotalBet = typeof game.yourTotalBet === 'number' ? game.yourTotalBet : 0;
+                      const yourTotalPayout = typeof game.yourTotalPayout === 'number' ? game.yourTotalPayout : 0;
+                      const yourNetProfit = typeof game.yourNetProfit === 'number' ? game.yourNetProfit : 0;
+                      const gameId = game.gameId || game.id || 'unknown';
+                      const winner = game.winner || null;
+                      const openingCard = game.openingCard || 'N/A';
+                      const betAmount = game.yourBet?.amount || 0;
+                      
+                      return (
                       <div key={game.id} className="p-3 sm:p-4 bg-black/30 rounded-lg border border-gold/10">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
                           <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
@@ -1424,10 +1427,10 @@ const Profile: React.FC = () => {
                             }`} />
                             <div className="flex-1 min-w-0">
                               <div className="text-white font-medium text-sm sm:text-base">
-                                Game #{game.gameId.slice(-6)} - {game.winner ? game.winner.toUpperCase() : 'IN PROGRESS'} {game.winner ? 'Won' : ''}
+                                Game #{gameId.slice(-6)} - {winner ? winner.toUpperCase() : 'IN PROGRESS'} {winner ? 'Won' : ''}
                               </div>
                               <div className="text-white/60 text-xs sm:text-sm">
-                                Opening Card: {game.openingCard || 'N/A'} | Your Bet: {game.yourBet ? `${game.yourBet.side?.toUpperCase() || 'N/A'} ₹${game.yourBet.amount}` : game.yourTotalBet > 0 ? `Total: ₹${game.yourTotalBet}` : 'No bet'}
+                                Opening Card: {openingCard} | Your Bet: {game.yourBet ? `${game.yourBet.side?.toUpperCase() || 'N/A'} ${formatCurrency(betAmount)}` : yourTotalBet > 0 ? `Total: ${formatCurrency(yourTotalBet)}` : 'No bet'}
                               </div>
                               <div className="text-white/40 text-xs">{formatDate(game.createdAt)}</div>
                             </div>
@@ -1436,13 +1439,13 @@ const Profile: React.FC = () => {
                             {game.result === 'win' ? (
                               <>
                                 <div className="text-green-400 font-bold text-base sm:text-lg">
-                                  +{formatCurrency(game.yourNetProfit)}
+                                  +{formatCurrency(yourNetProfit)}
                                 </div>
                                 <div className="text-green-400/70 text-xs sm:text-sm">
-                                  Won: {formatCurrency(game.yourTotalPayout)}
+                                  Won: {formatCurrency(yourTotalPayout)}
                                 </div>
                                 <div className="text-white/50 text-xs">
-                                  Bet: {formatCurrency(game.yourTotalBet)}
+                                  Bet: {formatCurrency(yourTotalBet)}
                                 </div>
                                 <div className="text-green-400 text-xs font-semibold mt-1">
                                   💰 Net Profit
@@ -1451,10 +1454,10 @@ const Profile: React.FC = () => {
                             ) : game.result === 'loss' ? (
                               <>
                                 <div className="text-red-400 font-bold text-base sm:text-lg">
-                                  -{formatCurrency(game.yourTotalBet)}
+                                  -{formatCurrency(yourTotalBet)}
                                 </div>
                                 <div className="text-red-400/70 text-xs sm:text-sm">
-                                  Lost: {formatCurrency(game.yourTotalBet)}
+                                  Lost: {formatCurrency(yourTotalBet)}
                                 </div>
                                 <div className="text-white/50 text-xs">
                                   Payout: {formatCurrency(0)}
@@ -1476,7 +1479,7 @@ const Profile: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    );})}
                     
                     {profileState.pagination.gameHistory.hasMore && (
                       <div className="text-center pt-4">

@@ -241,42 +241,42 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
               <div>
                 <p className="text-purple-300 text-sm">Game ID</p>
                 <p className="text-white font-mono text-sm">
-                  {realtimeData.currentGame.id.slice(0, 8)}...
+                  {realtimeData.currentGame?.id?.slice(0, 8) || 'N/A'}...
                 </p>
               </div>
               <div>
                 <p className="text-purple-300 text-sm">Phase</p>
-                <p className="text-white capitalize">{realtimeData.currentGame.phase}</p>
+                <p className="text-white capitalize">{realtimeData.currentGame?.phase || 'unknown'}</p>
               </div>
               <div>
                 <p className="text-purple-300 text-sm">Round</p>
-                <p className="text-white">{realtimeData.currentGame.currentRound}</p>
+                <p className="text-white">{realtimeData.currentGame?.currentRound ?? 0}</p>
               </div>
               <div>
                 <p className="text-purple-300 text-sm">Players</p>
-                <p className="text-white">{realtimeData.currentGame.totalPlayers}</p>
+                <p className="text-white">{realtimeData.currentGame?.totalPlayers ?? 0}</p>
               </div>
               <div>
                 <p className="text-purple-300 text-sm">Andar Bets</p>
                 <p className="text-red-400 font-semibold">
-                  {formatCurrency(realtimeData.currentGame.andarTotal)}
+                  {formatCurrency(realtimeData.currentGame?.andarTotal ?? 0)}
                 </p>
               </div>
               <div>
                 <p className="text-purple-300 text-sm">Bahar Bets</p>
                 <p className="text-blue-400 font-semibold">
-                  {formatCurrency(realtimeData.currentGame.baharTotal)}
+                  {formatCurrency(realtimeData.currentGame?.baharTotal ?? 0)}
                 </p>
               </div>
               <div>
                 <p className="text-purple-300 text-sm">Total Bets</p>
                 <p className="text-white font-semibold">
-                  {formatCurrency(realtimeData.currentGame.andarTotal + realtimeData.currentGame.baharTotal)}
+                  {formatCurrency((realtimeData.currentGame?.andarTotal ?? 0) + (realtimeData.currentGame?.baharTotal ?? 0))}
                 </p>
               </div>
               <div>
                 <p className="text-purple-300 text-sm">Timer</p>
-                <p className="text-white">{realtimeData.currentGame.timer}s</p>
+                <p className="text-white">{realtimeData.currentGame?.timer ?? 0}s</p>
               </div>
             </div>
           </CardContent>

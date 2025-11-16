@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import AdminLayout from "@/components/AdminLayout";
 import { apiClient } from "@/lib/api-client";
 import { useNotification } from "@/contexts/NotificationContext";
+import { formatCurrency as formatCurrencySafe, formatDate as formatDateSafe } from "@/lib/formatters";
 
 interface BonusTransaction {
   id: string;
@@ -216,9 +217,9 @@ export default function AdminBonus() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, activeTab]);
 
-  const formatCurrency = (amount: number) => {
-    return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+  // ✅ Use shared utility with null safety
+  const formatCurrency = formatCurrencySafe;
+  const formatDate = formatDateSafe;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -649,14 +650,7 @@ export default function AdminBonus() {
                             </div>
                             <p className="text-purple-300 text-sm">{transaction.description}</p>
                             <p className="text-purple-400 text-xs">
-                              {transaction.timestamp ? new Date(transaction.timestamp).toLocaleString('en-IN', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit'
-                              }) : 'N/A'}
+                              {formatDate(transaction.timestamp)}
                             </p>
                           </div>
                         </div>
@@ -747,25 +741,11 @@ export default function AdminBonus() {
                               {getStatusBadge(referral.status)}
                             </div>
                             <p className="text-purple-300 text-sm">
-                              Referral created on {referral.createdAt ? new Date(referral.createdAt).toLocaleString('en-IN', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit'
-                              }) : 'N/A'}
+                              Referral created on {formatDate(referral.createdAt)}
                             </p>
                             {referral.bonusAppliedAt && (
                               <p className="text-green-400 text-sm">
-                                Bonus applied on {new Date(referral.bonusAppliedAt).toLocaleString('en-IN', {
-                                  year: 'numeric',
-                                  month: '2-digit',
-                                  day: '2-digit',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                  second: '2-digit'
-                                })}
+                                Bonus applied on {formatDate(referral.bonusAppliedAt)}
                               </p>
                             )}
                           </div>
@@ -884,7 +864,7 @@ export default function AdminBonus() {
                                   </div>
                                   <p className="text-purple-400 text-sm">{player.phone}</p>
                                   <p className="text-purple-500 text-xs">
-                                    Player since {new Date(player.userCreatedAt).toLocaleDateString('en-IN')}
+                                    Player since {formatDate(player.userCreatedAt, { year: 'numeric', month: 'short', day: 'numeric' })}
                                   </p>
                                 </div>
                               </div>
@@ -937,7 +917,7 @@ export default function AdminBonus() {
                                   <div>
                                     <span className="text-purple-300">First Bonus: </span>
                                     <span className="text-white font-semibold">
-                                      {new Date(player.firstBonusDate).toLocaleString('en-IN', {
+                                      {formatDate(player.firstBonusDate, {
                                         year: 'numeric',
                                         month: 'short',
                                         day: 'numeric',
@@ -951,7 +931,7 @@ export default function AdminBonus() {
                                   <div>
                                     <span className="text-purple-300">Last Bonus: </span>
                                     <span className="text-white font-semibold">
-                                      {new Date(player.lastBonusDate).toLocaleString('en-IN', {
+                                      {formatDate(player.lastBonusDate, {
                                         year: 'numeric',
                                         month: 'short',
                                         day: 'numeric',
@@ -988,14 +968,7 @@ export default function AdminBonus() {
                                         </div>
                                         <p className="text-purple-300 text-sm">{txn.description}</p>
                                         <p className="text-purple-400 text-xs">
-                                          {new Date(txn.timestamp).toLocaleString('en-IN', {
-                                            year: 'numeric',
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                            second: '2-digit'
-                                          })}
+                                          {formatDate(txn.timestamp)}
                                         </p>
                                       </div>
                                       <div className="text-right ml-4">

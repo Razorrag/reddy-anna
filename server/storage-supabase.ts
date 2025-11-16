@@ -2116,177 +2116,195 @@ export class SupabaseStorage implements IStorage {
     console.log(`\n🔍 ========== getUserGameHistory START ==========`);
     console.log(`User ID: ${userId}`);
     
-    // First, check if user has any bets at all (diagnostic)
-    const { data: allBets, error: betsError } = await supabaseServer
-      .from('player_bets')
-      .select('id, game_id, amount, side, status, created_at')
-      .eq('user_id', userId);
-    
-    console.log(`📊 Total bets for user: ${allBets?.length || 0}`);
-    if (allBets && allBets.length > 0) {
-      console.log(`Sample bet:`, allBets[0]);
+    // ✅ PHASE 1 FIX: Add comprehensive null safety and data validation
+    try {
+      // First, check if user has any bets at all (diagnostic)
+      const { data: allBets, error: betsError } = await supabaseServer
+        .from('player_bets')
+        .select('id, game_id, amount, side, status, created_at')
+        .eq('user_id', userId);
       
-      // Check if game_sessions exist for these bets
-      const gameIds = Array.from(new Set(allBets.map(b => b.game_id)));
-      console.log(`🎮 Unique game IDs: ${gameIds.length}`);
+      console.log(`📊 Total bets for user: ${allBets?.length || 0}`);
+      if (allBets && allBets.length > 0) {
+        console.log(`Sample bet:`, allBets[0]);
+        
+        // Check if game_sessions exist for these bets
+        const gameIds = Array.from(new Set(allBets.map(b => b.game_id)));
+        console.log(`🎮 Unique game IDs: ${gameIds.length}`);
+        
+        const { data: sessions } = await supabaseServer
+          .from('game_sessions')
+          .select('game_id, status, winner')
+          .in('game_id', gameIds);
+        
+        console.log(`🎮 Game sessions found: ${sessions?.length || 0} out of ${gameIds.length}`);
+        
+        // Check game_history
+        const { data: history } = await supabaseServer
+          .from('game_history')
+          .select('game_id, winner')
+          .in('game_id', gameIds);
+        
+        console.log(`📜 Game history records found: ${history?.length || 0} out of ${gameIds.length}`);
+      }
       
-      const { data: sessions } = await supabaseServer
-        .from('game_sessions')
-        .select('game_id, status, winner')
-        .in('game_id', gameIds);
-      
-      console.log(`🎮 Game sessions found: ${sessions?.length || 0} out of ${gameIds.length}`);
-      
-      // Check game_history
-      const { data: history } = await supabaseServer
-        .from('game_history')
-        .select('game_id, winner')
-        .in('game_id', gameIds);
-      
-      console.log(`📜 Game history records found: ${history?.length || 0} out of ${gameIds.length}`);
-    }
-    
-    // Get user's bets and join with game sessions to get results
-    // ✅ FIX: Use LEFT JOIN instead of INNER JOIN to show all bets even if session is missing
-    const { data, error } = await supabaseServer
-      .from('player_bets')
-      .select(`
-        *,
-        game_sessions(
-          opening_card,
-          winner,
-          winning_card,
-          current_round,
-          status,
-          created_at
-        )
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      // Get user's bets and join with game sessions to get results
+      // ✅ FIX: Use LEFT JOIN instead of INNER JOIN to show all bets even if session is missing
+      const { data, error } = await supabaseServer
+        .from('player_bets')
+        .select(`
+          *,
+          game_sessions(
+            opening_card,
+            winner,
+            winning_card,
+            current_round,
+            status,
+            created_at
+          )
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('❌ Error getting user game history:', error);
-      console.log(`========== getUserGameHistory END (ERROR) ==========\n`);
-      return [];
-    }
+      if (error) {
+        console.error('❌ Error getting user game history:', error);
+        console.log(`========== getUserGameHistory END (ERROR) ==========\n`);
+        return [];
+      }
 
-    console.log(`✅ Joined query returned: ${data?.length || 0} results`);
+      console.log(`✅ Joined query returned: ${data?.length || 0} results`);
 
-    if (!data || data.length === 0) {
-      console.log(`⚠️ No results from joined query - bets exist but game_sessions might be missing`);
-      console.log(`========== getUserGameHistory END (EMPTY) ==========\n`);
-      return [];
-    }
+      if (!data || data.length === 0) {
+        console.log(`⚠️ No results from joined query`);
+        console.log(`========== getUserGameHistory END (EMPTY) ==========\n`);
+        return [];
+      }
 
-    // Group bets by game_id to get all bets per game
-    const gameBetsMap = new Map();
-    data.forEach((bet: any) => {
-      if (!gameBetsMap.has(bet.game_id)) {
-        gameBetsMap.set(bet.game_id, {
-          gameSession: bet.game_sessions,
-          bets: [],
-          totalBet: 0,
-          totalPayout: 0
+      // ✅ PHASE 1 FIX: Helper function to safely parse numeric values with fallback
+      const safeParseNumber = (value: any, fallback: number = 0): number => {
+        if (value === null || value === undefined) return fallback;
+        const parsed = typeof value === 'string' ? parseFloat(value) : Number(value);
+        return isNaN(parsed) ? fallback : parsed;
+      };
+
+      // Group bets by game_id to get all bets per game
+      const gameBetsMap = new Map();
+      data.forEach((bet: any) => {
+        if (!gameBetsMap.has(bet.game_id)) {
+          gameBetsMap.set(bet.game_id, {
+            gameSession: bet.game_sessions,
+            bets: [],
+            totalBet: 0,
+            totalPayout: 0
+          });
+        }
+        const gameData = gameBetsMap.get(bet.game_id);
+        gameData.bets.push(bet);
+        // ✅ FIX: Use safe parser for amounts
+        gameData.totalBet += safeParseNumber(bet.amount);
+        gameData.totalPayout += safeParseNumber(bet.actual_payout);
+      });
+
+      // Get dealt cards for all games
+      const gameIds = Array.from(gameBetsMap.keys());
+      const { data: cardsData, error: cardsError } = await supabaseServer
+        .from('dealt_cards')
+        .select('*')
+        .in('game_id', gameIds)
+        .order('position', { ascending: true });
+
+      if (cardsError) {
+        console.error('Error getting dealt cards for user history:', cardsError);
+      }
+
+      // Create cards map by game_id
+      const cardsMap = new Map();
+      if (cardsData) {
+        cardsData.forEach((card: any) => {
+          if (!cardsMap.has(card.game_id)) {
+            cardsMap.set(card.game_id, []);
+          }
+          cardsMap.get(card.game_id).push(card);
         });
       }
-      const gameData = gameBetsMap.get(bet.game_id);
-      gameData.bets.push(bet);
-      gameData.totalBet += parseFloat(bet.amount || '0');
-      // Add actual payout from database (already calculated correctly)
-      if (bet.actual_payout) {
-        gameData.totalPayout += parseFloat(bet.actual_payout);
+
+      // Get game history for winning round info and total cards
+      const { data: historyData, error: historyError } = await supabaseServer
+        .from('game_history')
+        .select('*')
+        .in('game_id', gameIds);
+
+      if (historyError) {
+        console.error('Error getting game history for user:', historyError);
       }
-    });
 
-    // Get dealt cards for all games
-    const gameIds = Array.from(gameBetsMap.keys());
-    const { data: cardsData, error: cardsError } = await supabaseServer
-      .from('dealt_cards')
-      .select('*')
-      .in('game_id', gameIds)
-      .order('position', { ascending: true });
+      const historyMap = new Map();
+      if (historyData) {
+        historyData.forEach((h: any) => historyMap.set(h.game_id, h));
+      }
 
-    if (cardsError) {
-      console.error('Error getting dealt cards for user history:', cardsError);
-    }
+      // ✅ PHASE 1 FIX: Transform data with comprehensive null safety
+      return Array.from(gameBetsMap.entries()).map(([gameId, gameData]) => {
+        const gameSession = gameData.gameSession;
+        const history = historyMap.get(gameId);
+        const cards = cardsMap.get(gameId) || [];
+        
+        // ✅ FIX: Ensure all numeric values have safe defaults
+        const totalBet = safeParseNumber(gameData.totalBet);
+        const totalPayout = safeParseNumber(gameData.totalPayout);
+        const netProfit = totalPayout - totalBet;
+        
+        // Determine result based on actual payouts
+        const won = totalPayout > totalBet;
+        const winner = gameSession?.winner || null;
 
-    // Create cards map by game_id
-    const cardsMap = new Map();
-    if (cardsData) {
-      cardsData.forEach((card: any) => {
-        if (!cardsMap.has(card.game_id)) {
-          cardsMap.set(card.game_id, []);
-        }
-        cardsMap.get(card.game_id).push(card);
+        return {
+          id: history?.id || gameData.bets[0]?.id || gameId,
+          gameId: gameId || 'unknown',
+          openingCard: gameSession?.opening_card || null,
+          winner: winner,
+          winningCard: gameSession?.winning_card || null,
+          winningRound: safeParseNumber(history?.winning_round || gameSession?.current_round, 1),
+          totalCards: safeParseNumber(history?.total_cards || cards.length),
+          // Include dealt cards
+          dealtCards: cards.map((c: any) => ({
+            id: c.id,
+            card: c.card || 'Unknown',
+            side: c.side || 'unknown',
+            position: safeParseNumber(c.position),
+            isWinningCard: c.is_winning_card || false,
+            createdAt: c.created_at || new Date().toISOString()
+          })),
+          // User's all bets with details - ✅ FIX: Ensure all amounts are valid numbers
+          yourBets: gameData.bets.map((bet: any) => ({
+            id: bet.id,
+            side: bet.side || 'unknown',
+            amount: safeParseNumber(bet.amount),
+            round: bet.round || '1',
+            payout: safeParseNumber(bet.actual_payout),
+            status: bet.status || 'unknown'
+          })),
+          // Summary for backward compatibility
+          yourBet: gameData.bets.length === 1 ? {
+            side: gameData.bets[0].side || 'unknown',
+            amount: safeParseNumber(gameData.bets[0].amount),
+            round: gameData.bets[0].round || '1'
+          } : null,
+          // ✅ CRITICAL FIX: Ensure these are NEVER null/undefined
+          yourTotalBet: totalBet,
+          yourTotalPayout: totalPayout,
+          yourNetProfit: netProfit,
+          result: won ? 'win' : (winner ? 'loss' : 'no_bet'),
+          payout: totalPayout,
+          round: safeParseNumber(history?.winning_round || gameSession?.current_round, 1),
+          createdAt: gameSession?.created_at || gameData.bets[0]?.created_at || new Date().toISOString()
+        };
       });
+    } catch (error) {
+      console.error('❌ Fatal error in getUserGameHistory:', error);
+      console.log(`========== getUserGameHistory END (FATAL ERROR) ==========\n`);
+      return [];
     }
-
-    // Get game history for winning round info and total cards
-    const { data: historyData, error: historyError } = await supabaseServer
-      .from('game_history')
-      .select('*')
-      .in('game_id', gameIds);
-
-    if (historyError) {
-      console.error('Error getting game history for user:', historyError);
-    }
-
-    const historyMap = new Map();
-    if (historyData) {
-      historyData.forEach((h: any) => historyMap.set(h.game_id, h));
-    }
-
-    // Transform data to include all user bets per game with cards
-    return Array.from(gameBetsMap.entries()).map(([gameId, gameData]) => {
-      const gameSession = gameData.gameSession;
-      const history = historyMap.get(gameId);
-      const cards = cardsMap.get(gameId) || [];
-      
-      // Determine result based on actual payouts
-      const won = gameData.totalPayout > 0;
-      const winner = gameSession?.winner;
-
-      return {
-        id: history?.id || gameData.bets[0]?.id || gameId,
-        gameId: gameId,
-        openingCard: gameSession?.opening_card,
-        winner: winner,
-        winningCard: gameSession?.winning_card,
-        winningRound: history?.winning_round || gameSession?.current_round || 1,
-        totalCards: history?.total_cards || cards.length,
-        // Include dealt cards
-        dealtCards: cards.map((c: any) => ({
-          id: c.id,
-          card: c.card,
-          side: c.side,
-          position: c.position,
-          isWinningCard: c.is_winning_card,
-          createdAt: c.created_at
-        })),
-        // User's all bets with details
-        yourBets: gameData.bets.map((bet: any) => ({
-          id: bet.id,
-          side: bet.side,
-          amount: parseFloat(bet.amount || '0'),
-          round: bet.round,
-          payout: parseFloat(bet.actual_payout || '0'),
-          status: bet.status
-        })),
-        // Summary for backward compatibility
-        yourBet: gameData.bets.length === 1 ? {
-          side: gameData.bets[0].side,
-          amount: gameData.bets[0].amount,
-          round: gameData.bets[0].round
-        } : null,
-        yourTotalBet: gameData.totalBet,
-        yourTotalPayout: gameData.totalPayout,
-        yourNetProfit: gameData.totalPayout - gameData.totalBet,
-        result: won ? 'win' : (winner ? 'loss' : 'no_bet'),
-        payout: gameData.totalPayout, // Use actual payout from database
-        round: history?.winning_round || gameSession?.current_round || 1,
-        createdAt: gameSession?.created_at || gameData.bets[0]?.created_at
-      };
-    });
   }
   
   // Analytics operations
