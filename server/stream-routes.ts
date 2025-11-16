@@ -852,8 +852,17 @@ router.post('/toggle-pause', requireAuth, validateAdminAccess, async (req, res) 
     // Broadcast pause/play state to all connected WebSocket clients
     const wss = (req.app as any).get('wss');
     if (wss) {
-      const message = JSON.stringify({
+      // Send both message types for compatibility
+      const pauseMessage = JSON.stringify({
         type: 'stream_pause_state',
+        data: {
+          isPaused,
+          timestamp: Date.now()
+        }
+      });
+
+      const statusMessage = JSON.stringify({
+        type: 'stream_status_updated',
         data: {
           isPaused,
           timestamp: Date.now()
@@ -862,7 +871,8 @@ router.post('/toggle-pause', requireAuth, validateAdminAccess, async (req, res) 
 
       wss.clients.forEach((client: any) => {
         if (client.readyState === 1) { // WebSocket.OPEN
-          client.send(message);
+          client.send(pauseMessage);
+          client.send(statusMessage); // Also send the new message type
         }
       });
 

@@ -1076,6 +1076,27 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         break;
       }
 
+      // ✅ FIX: Stream status update (pause/play) - instant notification to players
+      case 'stream_pause_state': {
+        const { isPaused, timestamp } = (data as any).data;
+        console.log(`⚡ [WebSocket] Stream ${isPaused ? 'PAUSED' : 'RESUMED'} by admin`);
+        
+        // Dispatch event for VideoArea to refetch config instantly
+        window.dispatchEvent(new CustomEvent('stream_status_updated', {
+          detail: { isPaused, timestamp }
+        }));
+        break;
+      }
+
+      // ✅ FIX: Alternative stream status update message (for compatibility)
+      case 'stream_status_updated': {
+        console.log('⚡ [WebSocket] Received stream_status_updated event!');
+        window.dispatchEvent(new CustomEvent('stream_status_updated', {
+          detail: (data as any).data
+        }));
+        break;
+      }
+
       // User status change notifications
       case 'status_update': {
         const { userId, status, reason, timestamp } = (data as any).data;

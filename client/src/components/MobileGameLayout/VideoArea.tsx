@@ -173,25 +173,18 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     // No cleanup needed - no interval to clear
   }, []);
 
-  // ✅ CRITICAL FIX: Listen for WebSocket pause/resume events for instant updates
+  // ✅ CRITICAL FIX: Listen for WebSocket stream status updates for instant pause/play
   // This replaces the slow 30-second polling with instant WebSocket-driven updates
   useEffect(() => {
-    const handleStreamPause = () => {
-      console.log('⚡ [WS] Pause signal received! Refetching config immediately...');
+    const handleStreamStatusUpdate = () => {
+      console.log('⚡ [WS] Stream status update received! Refetching config immediately...');
       loadStreamConfig(); // Instantly refetch the API
     };
 
-    const handleStreamResume = () => {
-      console.log('⚡ [WS] Resume signal received! Refetching config immediately...');
-      loadStreamConfig(); // Instantly refetch the API
-    };
-
-    window.addEventListener('webrtc_stream_pause', handleStreamPause);
-    window.addEventListener('webrtc_stream_resume', handleStreamResume);
+    window.addEventListener('stream_status_updated', handleStreamStatusUpdate);
 
     return () => {
-      window.removeEventListener('webrtc_stream_pause', handleStreamPause);
-      window.removeEventListener('webrtc_stream_resume', handleStreamResume);
+      window.removeEventListener('stream_status_updated', handleStreamStatusUpdate);
     };
   }, []); // Empty deps - loadStreamConfig is stable
 
