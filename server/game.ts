@@ -1,4 +1,3 @@
-
 import { broadcast, broadcastToRole, GameState, clients } from './routes';
 import { storage } from './storage-supabase';
 
@@ -27,12 +26,25 @@ import { storage } from './storage-supabase';
  *    - Batch balance fetching (80% faster)
  *    - Background async operations for non-critical paths
  *
+ * 5. IDEMPOTENCY GUARD:
+ *    - payoutsApplied flag prevents double execution
+ *    - Safe even if completeGame called twice by mistake
+ *
  * @param gameState - Current game state
  * @param winningSide - The winning side ('andar' or 'bahar')
  * @param winningCard - The card that won the game
  */
 export async function completeGame(gameState: GameState, winningSide: 'andar' | 'bahar', winningCard: string) {
+  // ✅ IDEMPOTENCY GUARD: Prevent double payout execution
+  if ((gameState as any).payoutsApplied) {
+    console.warn(`⚠️ Skipping completeGame - payouts already applied for gameId=${gameState.gameId}`);
+    return;
+  }
+  
   console.log(`Game complete! Winner: ${winningSide}, Card: ${winningCard}, Round: ${gameState.currentRound}`);
+  
+  // ✅ Mark payouts as applied IMMEDIATELY to prevent race conditions
+  (gameState as any).payoutsApplied = true;
   
   // ✅ CRITICAL FIX: Ensure valid game ID FIRST, before any database operations
   // This fixes the issue where gameId was 'default-game' or invalid, causing operations to be skipped

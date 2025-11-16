@@ -168,14 +168,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     loadStreamConfig();
   }, [loadStreamConfig]);
 
-  // ✅ NEW: Add 1-second polling fallback for instant pause/play updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadStreamConfig();
-    }, 1000); // Poll every 1 second
-    
-    return () => clearInterval(interval);
-  }, [loadStreamConfig]);
+  // ✅ FIX #4: Remove heavy 1-second polling - rely on WebSocket events only
+  // Polling causes unnecessary load and timing conflicts with WebSocket updates
+  // The stream_status_updated event (line ~181) handles real-time updates
 
   // ✅ CRITICAL FIX: Listen for WebSocket stream status updates for instant pause/play
   useEffect(() => {
@@ -260,57 +255,42 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => clearInterval(monitorStream);
   }, [streamConfig?.streamUrl, isPausedState]);
 
-  // ✅ WEBSOCKET LISTENER: Listen for pause/play state changes from admin
-  useEffect(() => {
-    const { ws } = (window as any).__wsContext || {};
-    
-    if (!ws) {
-      console.warn('⚠️ WebSocket not available for pause/play synchronization');
-      return;
-    }
+  // ✅ FIX #2: Remove dead WebSocket listener that expects window.__wsContext
+  // WebSocketContext already handles stream_pause_state and dispatches DOM events
+  // The stream_status_updated listener (line ~181) handles pause/play updates
+  // This eliminates the race condition and duplicate handling
 
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const message = JSON.parse(event.data);
-        if (message.type === 'stream_pause_state') {
-          const { isPaused } = message.data;
-          console.log(`🎬 Stream ${isPaused ? 'PAUSED' : 'RESUMED'} by admin`);
-          
-          setIsPausedState(isPaused);
-          
-          // Handle pause/resume for video element
-          const video = videoRef.current;
-          const hls = hlsRef.current;
-          
-          if (isPaused) {
-            // Pause video
-            if (video) {
-              video.pause();
-            }
-          } else {
-            // Resume video playback
-            if (video) {
-              video.play().catch(console.error);
-            }
-          }
-        }
-      } catch (error) {
-        // Ignore non-JSON messages
-      }
-    };
-
-    ws.addEventListener('message', handleMessage);
-    return () => ws.removeEventListener('message', handleMessage);
-  }, []);
-
-  // Handle pause effect when paused state changes
+  // ✅ FIX: Enhanced pause effect handler for video elements
   useEffect(() => {
     const video = videoRef.current;
+    const iframe = iframeRef.current;
     
-    if (isPausedState && video) {
-      video.pause();
-    } else if (!isPausedState && video) {
-      video.play().catch(console.error);
+    if (isPausedState) {
+      // Pause video element
+      if (video) {
+        video.pause();
+        console.log('⏸️ Video paused by admin');
+      }
+      // For iframe: src is cleared in render, so no action needed here
+      if (iframe) {
+        console.log('⏸️ Iframe paused (src cleared in render)');
+      }
+    } else {
+      // Resume video playback
+      if (video && !document.hidden) {
+        video.play().catch(err => {
+          console.error('❌ Failed to resume video:', err);
+          // Retry after short delay
+          setTimeout(() => {
+            video.play().catch(e => console.error('❌ Video resume retry failed:', e));
+          }, 500);
+        });
+        console.log('▶️ Video resumed by admin');
+      }
+      // For iframe: src is restored in render, will auto-reload
+      if (iframe) {
+        console.log('▶️ Iframe resumed (src restored in render)');
+      }
     }
   }, [isPausedState]);
 
@@ -510,10 +490,13 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     } else {
       // Use iframe for everything else (YouTube, custom players, RTMP players, etc.)
       console.log('✅ VideoArea: Rendering IFRAME stream:', streamConfig.streamUrl);
+      
+      // ✅ FIX #1: When paused, don't render iframe at all (or render with empty src)
+      // This prevents the iframe from continuing to play underneath the overlay
       return (
         <iframe
           ref={iframeRef}
-          src={streamConfig.streamUrl}
+          src={isPausedState ? '' : streamConfig.streamUrl}
           className="w-full h-full border-0"
           allow="autoplay; fullscreen; picture-in-picture; accelerometer; clipboard-write; encrypted-media; gyroscope"
           allowFullScreen
@@ -527,7 +510,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             width: '100%',
             height: '100%',
             border: 'none',
-            zIndex: 1
+            zIndex: 1,
+            display: isPausedState ? 'none' : 'block'
           }}
           title="Live Game Stream"
           onLoad={() => {

@@ -16,7 +16,7 @@ import { RefreshCw, Save, Eye, Link, Play, Square, Volume2, VolumeX } from 'luci
 
 interface StreamConfig {
   streamUrl: string;
-  streamType: 'youtube' | 'direct';
+  streamType: 'iframe' | 'video'; // ✅ FIX #5: Use same types as admin-stream-settings
   isActive: boolean;
   minViewers: number;
   maxViewers: number;
@@ -30,7 +30,7 @@ const StreamControlPanel: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<StreamConfig>({
     streamUrl: '',
-    streamType: 'youtube',
+    streamType: 'iframe', // ✅ FIX #5: Default to 'iframe' to match server validation
     isActive: false,
     minViewers: 1000,
     maxViewers: 1100,
@@ -50,7 +50,7 @@ const StreamControlPanel: React.FC = () => {
       if (response.success && response.data) {
         setConfig({
           streamUrl: response.data.streamUrl || '',
-          streamType: response.data.streamType || 'youtube',
+          streamType: response.data.streamType || 'iframe', // ✅ FIX #5: Default to 'iframe'
           isActive: response.data.isActive || false,
           minViewers: response.data.minViewers || 1000,
           maxViewers: response.data.maxViewers || 1100,
@@ -147,24 +147,24 @@ const StreamControlPanel: React.FC = () => {
           </label>
           <div className="flex gap-3">
             <button
-              onClick={() => setConfig({ ...config, streamType: 'youtube' })}
+              onClick={() => setConfig({ ...config, streamType: 'iframe' })}
               className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
-                config.streamType === 'youtube'
+                config.streamType === 'iframe'
                   ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg'
                   : 'bg-slate-800/50 text-gray-400 hover:bg-slate-700/50 border border-slate-600/50'
               }`}
             >
-              YouTube
+              iFrame (YouTube/Embed)
             </button>
             <button
-              onClick={() => setConfig({ ...config, streamType: 'direct' })}
+              onClick={() => setConfig({ ...config, streamType: 'video' })}
               className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
-                config.streamType === 'direct'
+                config.streamType === 'video'
                   ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
                   : 'bg-slate-800/50 text-gray-400 hover:bg-slate-700/50 border border-slate-600/50'
               }`}
             >
-              Direct Stream
+              Video (HLS/.m3u8)
             </button>
           </div>
         </div>
