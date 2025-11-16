@@ -169,15 +169,31 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     // Load immediately
     loadStreamConfig();
     
-    // ✅ Auto-refresh every 30 seconds to pick up stream changes without page refresh
-    const refreshInterval = setInterval(() => {
-      console.log('🔄 Auto-refreshing stream config...');
-      loadStreamConfig();
-    }, 30000); // 30 seconds
-    
-    // Cleanup interval on unmount
-    return () => clearInterval(refreshInterval);
+    // ✅ FIX: Removed 30-second polling - WebSocket events will trigger instant updates
+    // No cleanup needed - no interval to clear
   }, []);
+
+  // ✅ CRITICAL FIX: Listen for WebSocket pause/resume events for instant updates
+  // This replaces the slow 30-second polling with instant WebSocket-driven updates
+  useEffect(() => {
+    const handleStreamPause = () => {
+      console.log('⚡ [WS] Pause signal received! Refetching config immediately...');
+      loadStreamConfig(); // Instantly refetch the API
+    };
+
+    const handleStreamResume = () => {
+      console.log('⚡ [WS] Resume signal received! Refetching config immediately...');
+      loadStreamConfig(); // Instantly refetch the API
+    };
+
+    window.addEventListener('webrtc_stream_pause', handleStreamPause);
+    window.addEventListener('webrtc_stream_resume', handleStreamResume);
+
+    return () => {
+      window.removeEventListener('webrtc_stream_pause', handleStreamPause);
+      window.removeEventListener('webrtc_stream_resume', handleStreamResume);
+    };
+  }, []); // Empty deps - loadStreamConfig is stable
 
   // ✅ AUTO-RESUME: Page Visibility API - Auto-resume stream when user returns to app
   // ✅ FIX: Check isPausedState to prevent auto-resume when admin has paused
@@ -488,6 +504,28 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       {/* Embedded Video Stream - Runs independently in background, never interrupted */}
       <div className="absolute inset-0">
         {renderStream()}
+
+        {/* ✅ FIX: Mute/Unmute Button for video element */}
+        {streamConfig?.streamType === 'video' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent video from pausing
+              setIsMuted(!isMuted);
+              // Update video element immediately
+              if (videoRef.current) {
+                videoRef.current.muted = !isMuted;
+              }
+            }}
+            className="absolute bottom-4 right-4 p-3 rounded-full bg-black/70 hover:bg-black/90 text-white z-30 transition-all backdrop-blur-sm shadow-lg"
+            aria-label={isMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMuted ? (
+              <VolumeX className="w-5 h-5" />
+            ) : (
+              <Volume2 className="w-5 h-5" />
+            )}
+          </button>
+        )}
 
         {/* Overlay Gradient for better text visibility (no paused popup) */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" style={{ zIndex: 2 }} />

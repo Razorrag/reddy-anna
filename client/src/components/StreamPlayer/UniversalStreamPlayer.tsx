@@ -34,14 +34,33 @@ export default function UniversalStreamPlayer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch stream configuration
+  // ✅ FIX: Fetch stream configuration - removed 30-second polling to prevent server overload
+  // WebSocket events will trigger instant updates instead
   useEffect(() => {
     fetchStreamConfig();
-    
-    // Poll for config updates every 30 seconds
-    const interval = setInterval(fetchStreamConfig, 30000);
-    return () => clearInterval(interval);
   }, []);
+
+  // ✅ CRITICAL FIX: Listen for WebSocket pause/resume events for instant updates
+  // This replaces the slow 30-second polling with instant WebSocket-driven updates
+  useEffect(() => {
+    const handleStreamPause = () => {
+      console.log('⚡ [WS] Pause signal received! Refetching config immediately...');
+      fetchStreamConfig(); // Instantly refetch the API
+    };
+
+    const handleStreamResume = () => {
+      console.log('⚡ [WS] Resume signal received! Refetching config immediately...');
+      fetchStreamConfig(); // Instantly refetch the API
+    };
+
+    window.addEventListener('webrtc_stream_pause', handleStreamPause);
+    window.addEventListener('webrtc_stream_resume', handleStreamResume);
+
+    return () => {
+      window.removeEventListener('webrtc_stream_pause', handleStreamPause);
+      window.removeEventListener('webrtc_stream_resume', handleStreamResume);
+    };
+  }, []); // Empty deps - fetchStreamConfig is stable
 
   const fetchStreamConfig = async () => {
     try {

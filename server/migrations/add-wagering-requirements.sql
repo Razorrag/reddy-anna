@@ -43,3 +43,4 @@ COMMENT ON COLUMN users.bonus_locked IS 'Whether bonus is currently locked until
 
 
 
+
