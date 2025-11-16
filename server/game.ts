@@ -294,11 +294,9 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
         await Promise.all(
           batch.map(async (notification) => {
             try {
-              if (notification.payout > 0) {
-                // Add balance atomically
-                await storage.addBalanceAtomic(notification.userId, notification.payout);
-                console.log(`✅ Fallback: Added balance for user ${notification.userId}: ₹${notification.payout}`);
-              }
+              // ✅ CRITICAL FIX: DO NOT add balance again in fallback!
+              // The RPC function already added balance. Fallback should ONLY update bet statuses.
+              // This was causing DOUBLE PAYOUTS where users got 2x their winnings.
               
               // Update bet statuses for this user (using pre-fetched bets)
               for (const bet of allBetsForGame) {
@@ -312,9 +310,9 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
                 }
               }
               
-              console.log(`✅ Fallback: Processed payout for user ${notification.userId}: ₹${notification.payout}`);
+              console.log(`✅ Fallback: Updated bet statuses for user ${notification.userId} (balance already added by RPC)`);
             } catch (userError) {
-              console.error(`⚠️ Error processing payout for user ${notification.userId}:`, userError);
+              console.error(`⚠️ Error processing bet status update for user ${notification.userId}:`, userError);
               // Continue with other users even if one fails
             }
           })

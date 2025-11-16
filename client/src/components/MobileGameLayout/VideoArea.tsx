@@ -14,7 +14,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, VolumeX } from 'lucide-react';
+import Hls from 'hls.js';
 
 interface VideoAreaProps {
   className?: string;
@@ -39,14 +39,13 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // Refs for direct stream control
   const videoRef = useRef<HTMLVideoElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
   
-  // Canvas ref for capturing frozen frame when paused
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
+  // Pause state
   const [isPausedState, setIsPausedState] = useState(false);
   
-  // ✅ FIX: Add mute state for user control
-  const [isMuted, setIsMuted] = useState(true); // Start muted by default
+  // ✅ FIX: Mute state is now controlled by backend only (admin control)
+  const [isMuted, setIsMuted] = useState(true);
 
   // ✅ CRITICAL FIX: Move loadStreamConfig to component scope so it can be reused
   const loadStreamConfig = useCallback(async () => {
@@ -279,15 +278,19 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           
           setIsPausedState(isPaused);
           
-          // Capture frame when pausing
+          // Handle pause/resume for video element
+          const video = videoRef.current;
+          const hls = hlsRef.current;
+          
           if (isPaused) {
-            captureCurrentFrame();
+            // Pause video
+            if (video) {
+              video.pause();
+            }
           } else {
-            // Clear frozen frame when resuming
-            setFrozenFrame(null);
             // Resume video playback
-            if (videoRef.current) {
-              videoRef.current.play().catch(console.error);
+            if (video) {
+              video.play().catch(console.error);
             }
           }
         }
@@ -300,34 +303,14 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => ws.removeEventListener('message', handleMessage);
   }, []);
 
-  // Capture current video frame to canvas
-  const captureCurrentFrame = () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    if (video && canvas && video.readyState >= 2) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        canvas.width = video.videoWidth || 1280;
-        canvas.height = video.videoHeight || 720;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const frameData = canvas.toDataURL('image/jpeg', 0.9);
-        setFrozenFrame(frameData);
-        console.log('📸 Captured frozen frame');
-      }
-    } else {
-      console.warn('⚠️ Could not capture frame - video not ready');
-    }
-  };
-
   // Handle pause effect when paused state changes
   useEffect(() => {
-    if (isPausedState && videoRef.current) {
-      videoRef.current.pause();
-      captureCurrentFrame();
-    } else if (!isPausedState && videoRef.current) {
-      setFrozenFrame(null);
-      videoRef.current.play().catch(console.error);
+    const video = videoRef.current;
+    
+    if (isPausedState && video) {
+      video.pause();
+    } else if (!isPausedState && video) {
+      video.play().catch(console.error);
     }
   }, [isPausedState]);
 
@@ -361,9 +344,82 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return Math.max(0, (maxTime - localTimer) / maxTime);
   };
 
+  // ✅ HLS.js INITIALIZATION: Setup HLS player for .m3u8 streams
+  useEffect(() => {
+    const video = videoRef.current;
+    const streamUrl = streamConfig?.streamUrl;
+    
+    if (!video || !streamUrl) return;
+    
+    // Check if URL is HLS stream
+    const isHLS = streamUrl.toLowerCase().endsWith('.m3u8');
+    
+    if (isHLS && Hls.isSupported()) {
+      // Use HLS.js for HLS streams
+      console.log('🎥 Initializing HLS.js player for:', streamUrl);
+      
+      // Cleanup existing HLS instance
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+      }
+      
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 90
+      });
+      
+      hlsRef.current = hls;
+      hls.loadSource(streamUrl);
+      hls.attachMedia(video);
+      
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log('✅ HLS manifest parsed, starting playback');
+        if (!isPausedState) {
+          video.play().catch(err => console.error('HLS play error:', err));
+        }
+      });
+      
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        console.error('❌ HLS error:', data);
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.log('🔄 Fatal network error, trying to recover...');
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.log('🔄 Fatal media error, trying to recover...');
+              hls.recoverMediaError();
+              break;
+            default:
+              console.log('💥 Fatal error, destroying HLS instance');
+              hls.destroy();
+              break;
+          }
+        }
+      });
+      
+      return () => {
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+      };
+    } else if (isHLS && video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari native HLS support
+      console.log('🎥 Using Safari native HLS support');
+      video.src = streamUrl;
+      if (!isPausedState) {
+        video.play().catch(err => console.error('Safari HLS play error:', err));
+      }
+    }
+  }, [streamConfig?.streamUrl, isPausedState]);
+
   // Auto-detect stream type based on URL
   const url = streamConfig?.streamUrl?.toLowerCase() || '';
-  const isVideoFile = url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.ogg') || url.endsWith('.m3u8');
+  const isHLS = url.endsWith('.m3u8');
+  const isVideoFile = url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.ogg') || isHLS;
   const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
   const shouldUseVideo = streamConfig?.streamType === 'video' || (isVideoFile && !isYouTube);
 
@@ -405,10 +461,14 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
     if (shouldUseVideo) {
       console.log('✅ VideoArea: Rendering VIDEO stream:', streamConfig.streamUrl);
+      
+      // For HLS streams, don't set src directly (HLS.js will handle it)
+      const isHLS = streamConfig.streamUrl.toLowerCase().endsWith('.m3u8');
+      
       return (
         <video
           ref={videoRef}
-          src={streamConfig.streamUrl}
+          src={!isHLS ? streamConfig.streamUrl : undefined}
           className="w-full h-full object-cover"
           autoPlay
           muted={isMuted} // ✅ FIX: User-controlled mute state
@@ -495,36 +555,22 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
   return (
     <div className={`relative bg-black overflow-hidden ${className}`}>
-      {/* Hidden canvas for frame capture */}
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
-      
       {/* Embedded Video Stream - Runs independently in background, never interrupted */}
       <div className="absolute inset-0">
         {renderStream()}
 
-        {/* ✅ FIX: Mute/Unmute Button - Show whenever video element is used */}
-        {shouldUseVideo && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent video from pausing
-              setIsMuted(!isMuted);
-              // Update video element immediately
-              if (videoRef.current) {
-                videoRef.current.muted = !isMuted;
-              }
-            }}
-            className="absolute bottom-4 right-4 p-3 rounded-full bg-black/70 hover:bg-black/90 text-white z-30 transition-all backdrop-blur-sm shadow-lg"
-            aria-label={isMuted ? 'Unmute' : 'Mute'}
-          >
-            {isMuted ? (
-              <VolumeX className="w-5 h-5" />
-            ) : (
-              <Volume2 className="w-5 h-5" />
-            )}
-          </button>
+        {/* ✅ PAUSED OVERLAY: Show when stream is paused by admin */}
+        {isPausedState && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20">
+            <div className="text-center">
+              <div className="text-6xl mb-4">⏸️</div>
+              <p className="text-white text-2xl font-bold mb-2">Stream Paused</p>
+              <p className="text-gray-400">The stream has been temporarily paused by the administrator</p>
+            </div>
+          </div>
         )}
 
-        {/* Overlay Gradient for better text visibility (no paused popup) */}
+        {/* Overlay Gradient for better text visibility */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" style={{ zIndex: 2 }} />
       </div>
 

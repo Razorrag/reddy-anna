@@ -12,7 +12,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNotification } from '@/contexts/NotificationContext';
 import { apiClient } from '@/lib/api-client';
-import { RefreshCw, Save, Eye, Link, Play, Square } from 'lucide-react';
+import { RefreshCw, Save, Eye, Link, Play, Square, Volume2, VolumeX } from 'lucide-react';
 
 interface StreamConfig {
   streamUrl: string;
@@ -21,6 +21,7 @@ interface StreamConfig {
   minViewers: number;
   maxViewers: number;
   isPaused: boolean;
+  muted: boolean;
 }
 
 const StreamControlPanel: React.FC = () => {
@@ -34,6 +35,7 @@ const StreamControlPanel: React.FC = () => {
     minViewers: 1000,
     maxViewers: 1100,
     isPaused: false,
+    muted: true,
   });
 
   // Load current stream configuration
@@ -53,6 +55,7 @@ const StreamControlPanel: React.FC = () => {
           minViewers: response.data.minViewers || 1000,
           maxViewers: response.data.maxViewers || 1100,
           isPaused: response.data.isPaused || false,
+          muted: response.data.muted !== false,
         });
       }
     } catch (error) {
@@ -235,6 +238,39 @@ const StreamControlPanel: React.FC = () => {
             {config.isPaused
               ? 'Stream is currently paused for all players'
               : 'Stream is currently playing for all players'}
+          </p>
+        </div>
+
+        {/* Mute Control */}
+        <div>
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-2">
+            <Volume2 className="w-4 h-4" />
+            Stream Audio Control
+          </label>
+          <button
+            onClick={() => setConfig({ ...config, muted: !config.muted })}
+            className={`w-full px-4 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
+              config.muted
+                ? 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 text-white shadow-lg'
+                : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white shadow-lg'
+            }`}
+          >
+            {config.muted ? (
+              <>
+                <VolumeX className="w-5 h-5" />
+                🔇 Muted (Default)
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-5 h-5" />
+                🔊 Unmuted
+              </>
+            )}
+          </button>
+          <p className="text-xs text-gray-500 mt-2">
+            {config.muted
+              ? 'Stream audio is muted for all players by default'
+              : 'Stream audio is unmuted for all players'}
           </p>
         </div>
 
