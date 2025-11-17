@@ -1656,11 +1656,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 (global as any).currentGameState.timer = 0;
               }
 
-              // Broadcast reset to all clients
+              // Broadcast reset to all clients with complete state reset
               broadcast({
                 type: 'game_reset',
                 data: {
                   message: (message as any).data?.message || '🔄 Game reset. Ready for new game!',
+                  clearAllBets: true, // ✅ NEW: Explicit instruction to clear all player bets
                   gameState: {
                     gameId: (global as any).currentGameState?.gameId,
                     phase: 'idle',
@@ -1671,6 +1672,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     baharCards: [],
                     winner: null,
                     winningCard: null,
+                    // ✅ NEW: Explicitly specify empty bets for all players
+                    round1Bets: { andar: 0, bahar: 0 },
+                    round2Bets: { andar: 0, bahar: 0 },
+                    playerRound1Bets: { andar: [], bahar: [] },
+                    playerRound2Bets: { andar: [], bahar: [] },
                   },
                 },
               });

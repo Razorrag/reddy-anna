@@ -916,9 +916,28 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       case 'game_reset': {
-        const { message } = (data as GameResetMessage).data;
+        const { message, gameState: resetGameState } = (data as GameResetMessage).data;
+        
+        // ✅ CRITICAL: Clear ALL player bets when game resets
+        console.log('🔄 Game reset - clearing all bets and state');
+        clearRoundBets(1); // Clear Round 1 bets
+        clearRoundBets(2); // Clear Round 2 bets
+        
+        // Reset full game state
         resetGame();
-        console.log('🔄 Game reset:', message);
+        
+        // Hide celebration on reset
+        hideCelebration();
+        
+        // ✅ NEW: Explicitly refresh balance after game reset
+        // The payout_received message should have already updated the balance,
+        // but we dispatch a refresh event to ensure all UI components update
+        console.log('💰 Dispatching balance refresh event after game reset');
+        window.dispatchEvent(new CustomEvent('refresh-balance', {
+          detail: { source: 'game_reset' }
+        }));
+        
+        console.log('✅ Game reset complete:', message);
         break;
       }
 
