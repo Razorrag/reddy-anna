@@ -489,10 +489,48 @@ export async function handleStartGame(client: WSClient, data: any) {
   try {
     // Use the actual game state from routes.ts global variables
     if ((global as any).currentGameState) {
-      // ✅ CRITICAL FIX: Check if previous game was completed and ensure it's properly reset
+      // ✅ CRITICAL FIX: Check if previous game was completed and process payouts
       const currentPhase = (global as any).currentGameState.phase;
       if (currentPhase === 'complete') {
-        console.log('🔄 Previous game was completed, ensuring full reset before starting new game...');
+        console.log('🔄 Previous game was completed, processing payouts before starting new game...');
+        
+        // ✅ NEW: Process payouts from previous game BEFORE starting new game
+        const previousWinner = (global as any).currentGameState.winner;
+        if (previousWinner) {
+          try {
+            console.log(`💰 Processing payouts for previous game winner: ${previousWinner}`);
+            
+            // Get previous game state data
+            const previousWinningCard = (global as any).currentGameState.winningCard;
+            
+            if (!previousWinningCard) {
+              console.warn('⚠️ Previous winning card not found, skipping payout processing');
+            } else {
+              // Apply payouts to database and broadcast balance updates
+              await completeGame(
+                (global as any).currentGameState,
+                previousWinner,
+                previousWinningCard
+              );
+              
+              console.log('✅ Payouts applied and broadcasted for previous game');
+              
+              // ✅ CRITICAL FIX: Add delay to ensure WebSocket messages reach clients
+              // This prevents race condition where state is reset before clients receive payout messages
+              console.log('⏳ Waiting 500ms for payout messages to be delivered...');
+              await new Promise(resolve => setTimeout(resolve, 500));
+              console.log('✅ Payout message delivery window complete');
+            }
+          } catch (payoutError) {
+            console.error('❌ Error processing payouts:', payoutError);
+            // Don't fail game start if payout processing fails
+            // Admin can manually verify payouts
+            sendError(ws, 'Warning: Payout processing encountered an error. Please verify balances manually.');
+          }
+        } else {
+          console.log('ℹ️ Previous game had no winner, skipping payout processing');
+        }
+        
         // ✅ FIX: Wait for previous payouts to complete before starting new game
         if ((global as any).lastPayoutPromise) {
           try {

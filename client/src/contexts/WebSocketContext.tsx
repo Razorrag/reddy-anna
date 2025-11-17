@@ -677,7 +677,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         
         // Clear cards and bets from previous game
         clearCards();
-        clearRoundBets();
+        
+        // ✅ CRITICAL FIX: Clear ALL player bets (both rounds, both sides)
+        clearRoundBets(1); // Clear Round 1 bets (andar and bahar)
+        clearRoundBets(2); // Clear Round 2 bets (andar and bahar)
+        console.log('✅ Player bets cleared for new game');
+        
         setWinner(null);
         setWinningCard(null);
         
@@ -693,6 +698,40 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         setPhase(phase);
         setCurrentRound(round);
         setCountdown(timer);
+        
+        // ✅ NEW FIX: Explicitly refresh balance after game reset
+        // This ensures wallet shows updated balance with any payouts from previous game
+        setTimeout(async () => {
+          try {
+            console.log('💰 Refreshing balance after new game start...');
+            const balanceRes = await apiClient.get<{success: boolean, balance: number}>('/user/balance');
+            if (balanceRes.success && balanceRes.balance !== undefined) {
+              updatePlayerWallet(balanceRes.balance);
+              
+              // Dispatch event for other contexts
+              window.dispatchEvent(new CustomEvent('balance-websocket-update', {
+                detail: {
+                  balance: balanceRes.balance,
+                  type: 'game_start_refresh',
+                  timestamp: Date.now()
+                }
+              }));
+              
+              console.log(`✅ Balance refreshed after new game: ₹${balanceRes.balance}`);
+            }
+          } catch (error) {
+            console.error('⚠️ Error refreshing balance after new game:', error);
+            // Non-critical - balance will update via other mechanisms
+          }
+        }, 100);
+        
+        // ✅ NEW FIX: Re-fetch game state after delay to ensure consistency
+        // This fetches any server-side updates after state reset
+        setTimeout(() => {
+          console.log('🔄 Re-syncing game state after new game start...');
+          sendWebSocketMessage({ type: 'game_subscribe', data: {} });
+        }, 200);
+        
         break;
       }
 

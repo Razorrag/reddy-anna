@@ -40,12 +40,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   
   // Pause state
   const [isPausedState, setIsPausedState] = useState(false);
-  
-  // Store iframe src when paused (to restore later)
-  const [pausedIframeSrc, setPausedIframeSrc] = useState<string>('');
   
   // ✅ FIX: Mute state is now controlled by backend only (admin control)
   const [isMuted, setIsMuted] = useState(true);
@@ -189,40 +187,35 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     };
   }, [loadStreamConfig]);
 
-  // ✅ AUTO-RESUME: Page Visibility API - Auto-resume stream when user returns to app
-  // ✅ FIX: Check isPausedState to prevent auto-resume when admin has paused
+  // ✅ ENHANCED: Page Visibility API - Handle visibility changes WITHOUT auto-resume
+  // Only seek to live edge for HLS if stream is playing (not paused by admin)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      // ✅ CRITICAL FIX: Only auto-resume if NOT paused by admin
+      // Only handle if stream is active and NOT paused by admin
       if (!document.hidden && streamConfig?.streamUrl && !isPausedState) {
-        console.log('👁️ Page visible again - auto-resuming stream...');
+        console.log('👁️ Page visible again - checking stream state...');
         
-        // For VIDEO elements - auto-resume playback
         const videoElement = videoRef.current;
-        if (videoElement) {
-          console.log('🎥 Auto-resuming video playback...');
-          videoElement.play().catch(err => {
-            console.log('⚠️ Video play failed, retrying...', err);
-            // Retry after short delay
-            setTimeout(() => {
-              videoElement.play().catch(e => console.error('❌ Video play retry failed:', e));
-            }, 500);
-          });
-        }
+        const hls = hlsRef.current;
         
-        // For IFRAME elements - force reload to resume
-        const iframeElement = iframeRef.current;
-        if (iframeElement && iframeElement.src) {
-          console.log('🎬 Reloading iframe to resume stream...');
-          const currentSrc = iframeElement.src;
-          iframeElement.src = ''; // Clear
-          setTimeout(() => {
-            iframeElement.src = currentSrc; // Reload
-            console.log('✅ Iframe reloaded successfully');
-          }, 100);
+        // For HLS streams, seek to live edge when returning
+        if (videoElement && hls && videoElement.duration && isFinite(videoElement.duration)) {
+          const liveEdge = videoElement.duration - 1;
+          videoElement.currentTime = liveEdge;
+          console.log(`⚡ Seeked to live edge: ${liveEdge.toFixed(1)}s`);
+          
+          // Ensure playback continues
+          if (videoElement.paused) {
+            videoElement.play().catch(err => {
+              console.log('⚠️ Video play failed, retrying...', err);
+              setTimeout(() => {
+                videoElement.play().catch(e => console.error('❌ Video play retry failed:', e));
+              }, 500);
+            });
+          }
         }
       } else if (!document.hidden && isPausedState) {
-        console.log('⏸️ Page visible but stream is paused by admin - not auto-resuming');
+        console.log('⏸️ Page visible but stream is paused by admin - maintaining pause state');
       }
     };
     
@@ -230,30 +223,42 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [streamConfig?.streamUrl, isPausedState]);
 
-  // ✅ STREAM HEALTH MONITOR: Auto-recovery for paused or failed streams
-  // ✅ FIX: Check isPausedState to prevent auto-resume when admin has paused
+  // ✅ ENHANCED: Stream health monitor with HLS live edge sync
   useEffect(() => {
     const monitorStream = setInterval(() => {
-      if (document.hidden) return; // Don't check when page is hidden
+      if (document.hidden || isPausedState) return; // Skip when hidden or paused
       
       const videoElement = videoRef.current;
+      const hls = hlsRef.current;
+      
       if (videoElement && streamConfig?.streamUrl) {
-        // ✅ CRITICAL FIX: Only auto-resume if NOT paused by admin
+        // Auto-resume if unexpectedly paused (but not if admin paused)
         if (videoElement.paused && videoElement.readyState >= 2 && !isPausedState) {
-          console.log('🔄 Auto-resuming paused video...');
+          console.log('🔄 Auto-resuming unexpectedly paused video...');
           videoElement.play().catch(err => console.error('❌ Auto-resume failed:', err));
         }
         
-        // If video failed to load, reload it (but respect pause state)
-        if (videoElement.readyState === 0 || videoElement.error) {
-          console.log('🔄 Reloading failed video...');
-          videoElement.load();
-          if (!isPausedState) {
-            videoElement.play().catch(err => console.error('❌ Video reload failed:', err));
+        // For HLS: Keep at live edge
+        if (hls && videoElement.duration && isFinite(videoElement.duration)) {
+          const lag = videoElement.duration - videoElement.currentTime;
+          if (lag > 10) { // If more than 10 seconds behind
+            videoElement.currentTime = videoElement.duration - 2;
+            console.log(`⚡ Corrected ${lag.toFixed(1)}s lag to live edge`);
+          }
+        }
+        
+        // Handle error state
+        if (videoElement.error) {
+          console.error('🔄 Video error detected, attempting recovery...');
+          if (hls) {
+            hls.recoverMediaError();
+          } else {
+            videoElement.load();
+            videoElement.play().catch(err => console.error('❌ Recovery failed:', err));
           }
         }
       }
-    }, 1000); // Check every 1 second for tighter auto-refresh
+    }, 2000); // Check every 2 seconds
     
     return () => clearInterval(monitorStream);
   }, [streamConfig?.streamUrl, isPausedState]);
@@ -263,31 +268,35 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // The stream_status_updated listener (line ~181) handles pause/play updates
   // This eliminates the race condition and duplicate handling
 
-  // ✅ FIX: Enhanced pause effect handler for video elements + HLS + iframes
+  // ✅ ENHANCED: Pause handler for video + HLS control
+  // When paused by admin, we simply pause the <video> so the current
+  // frame stays visible. HLS continues loading in background so resume
+  // can always jump to the latest live edge without black frames.
   useEffect(() => {
     const video = videoRef.current;
-    const iframe = iframeRef.current;
     const hls = hlsRef.current;
     
     if (isPausedState) {
-      // Pause video element
+      // Pause video element so last rendered frame stays on screen
       if (video) {
-        video.pause();
-        console.log('⏸️ Video paused by admin');
+        try {
+          video.pause();
+          console.log('⏸️ Video paused by admin (frame frozen)');
+        } catch (error) {
+          console.error('❌ Failed to pause video on admin pause:', error);
+        }
       }
-      // ✅ CRITICAL FIX: Stop HLS loading when paused (for .m3u8 streams)
-      if (hls) {
-        hls.stopLoad();
-        console.log('⏸️ HLS loading stopped (no more segment downloads)');
-      }
-      // ✅ CRITICAL FIX: Store iframe src before clearing (for resume)
-      if (iframe && iframe.src && !pausedIframeSrc) {
-        setPausedIframeSrc(iframe.src);
-        console.log('⏸️ Iframe src stored:', iframe.src);
-      }
+      // Do NOT stop HLS loading here - keeping the playlist/segments
+      // up-to-date avoids black screen/errors when resuming.
     } else {
-      // Resume video playback
+      // Resume video playback and seek to live edge
       if (video && !document.hidden) {
+        if (hls && video.duration && isFinite(video.duration)) {
+          const liveEdge = video.duration - 1; // 1 second behind live
+          video.currentTime = liveEdge;
+          console.log(`⚡ Seeking to live edge on resume: ${liveEdge.toFixed(1)}s`);
+        }
+        
         video.play().catch(err => {
           console.error('❌ Failed to resume video:', err);
           // Retry after short delay
@@ -297,19 +306,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         });
         console.log('▶️ Video resumed by admin');
       }
-      // ✅ CRITICAL FIX: Restart HLS loading when resumed (for .m3u8 streams)
-      if (hls) {
-        hls.startLoad();
-        console.log('▶️ HLS loading restarted');
-      }
-      // ✅ CRITICAL FIX: Clear stored iframe src (render will handle restoration)
-      if (pausedIframeSrc) {
-        console.log('▶️ Clearing stored iframe src, render will restore it');
-        // Don't clear immediately - let render handle it first
-        setTimeout(() => setPausedIframeSrc(''), 100);
-      }
     }
-  }, [isPausedState, pausedIframeSrc]);
+  }, [isPausedState]);
 
   // Handle pulse effect when less than 5 seconds
   useEffect(() => {
@@ -341,7 +339,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return Math.max(0, (maxTime - localTimer) / maxTime);
   };
 
-  // ✅ HLS.js INITIALIZATION: Setup HLS player for .m3u8 streams
+  // ✅ ENHANCED HLS.js: Live edge streaming with aggressive configuration
   useEffect(() => {
     const video = videoRef.current;
     const streamUrl = streamConfig?.streamUrl;
@@ -360,10 +358,22 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         hlsRef.current.destroy();
       }
       
+      // ✅ ENHANCED CONFIG: Optimized for live streaming with minimal latency
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
-        backBufferLength: 90
+        liveSyncDurationCount: 3, // Sync to live edge
+        liveMaxLatencyDurationCount: 10,
+        maxBufferLength: 10, // Reduced buffer for live edge
+        maxMaxBufferLength: 15,
+        backBufferLength: 10, // Keep minimal back buffer
+        liveDurationInfinity: true,
+        startLevel: -1, // Auto quality
+        autoStartLoad: true,
+        maxBufferHole: 0.5,
+        maxFragLookUpTolerance: 0.2,
+        manifestLoadingTimeOut: 10000,
+        manifestLoadingMaxRetry: 3,
       });
       
       hlsRef.current = hls;
@@ -371,27 +381,61 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       hls.attachMedia(video);
       
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        console.log('✅ HLS manifest parsed, starting playback');
+        console.log('✅ HLS manifest parsed');
+        
+        // ⚡ CRITICAL: Seek to live edge immediately
+        video.addEventListener('loadedmetadata', () => {
+          if (video.duration && isFinite(video.duration)) {
+            const liveEdge = video.duration - 1;
+            video.currentTime = liveEdge;
+            console.log(`📡 Seeking to live edge: ${liveEdge.toFixed(1)}s`);
+          }
+        }, { once: true });
+        
         if (!isPausedState) {
           video.play().catch(err => console.error('HLS play error:', err));
         }
       });
       
+      // ⚡ KEEP STREAM AT LIVE EDGE: Jump forward if lagging
+      hls.on(Hls.Events.BUFFER_APPENDED, () => {
+        if (!isPausedState && video && video.duration && isFinite(video.duration)) {
+          const lag = video.duration - video.currentTime;
+          if (lag > 5) { // If more than 5 seconds behind live
+            video.currentTime = video.duration - 2; // Jump to 2s behind live
+            console.log(`⚡ Jumped forward ${lag.toFixed(1)}s to live edge`);
+          }
+        }
+      });
+      
+      // ✅ ENHANCED ERROR RECOVERY
       hls.on(Hls.Events.ERROR, (event, data) => {
         console.error('❌ HLS error:', data);
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log('🔄 Fatal network error, trying to recover...');
-              hls.startLoad();
+              console.log('🔄 Fatal network error, recovering...');
+              hls.startLoad(-1); // Start from live edge
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log('🔄 Fatal media error, trying to recover...');
+              console.log('🔄 Fatal media error, recovering...');
               hls.recoverMediaError();
+              setTimeout(() => {
+                if (video.duration && isFinite(video.duration)) {
+                  video.currentTime = video.duration - 1;
+                }
+              }, 500);
               break;
             default:
-              console.log('💥 Fatal error, destroying HLS instance');
+              console.log('💥 Unrecoverable error, destroying HLS instance');
               hls.destroy();
+              // Try to reload after 3 seconds
+              setTimeout(() => {
+                if (streamConfig?.streamUrl) {
+                  console.log('🔄 Attempting to reload stream...');
+                  setStreamConfig({...streamConfig});
+                }
+              }, 3000);
               break;
           }
         }
@@ -463,54 +507,80 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       const isHLS = streamConfig.streamUrl.toLowerCase().endsWith('.m3u8');
       
       return (
-        <video
-          ref={videoRef}
-          src={!isHLS ? streamConfig.streamUrl : undefined}
-          className="w-full h-full object-cover"
-          autoPlay
-          muted={isMuted} // ✅ FIX: User-controlled mute state
-          controls={streamConfig.controls || false}
-          loop
-          playsInline
-          preload="auto"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            zIndex: 1
-          }}
-          onPause={() => {
-            // ✅ CRITICAL FIX: Auto-resume if paused unexpectedly, but NOT if admin paused
-            if (!document.hidden && videoRef.current && !isPausedState) {
-              console.log('🔄 Video paused unexpectedly - auto-resuming...');
-              setTimeout(() => {
-                videoRef.current?.play().catch(err => console.error('❌ Auto-resume on pause failed:', err));
-              }, 100);
-            }
-          }}
-          onError={(e) => {
-            console.error('❌ Video error:', e);
-            // Try to reload after error
-            setTimeout(() => {
-              if (videoRef.current && !document.hidden && !isPausedState) {
-                console.log('🔄 Attempting to recover from video error...');
-                videoRef.current.load();
-                videoRef.current.play().catch(console.error);
+        <>
+          <video
+            ref={videoRef}
+            src={!isHLS ? streamConfig.streamUrl : undefined}
+            className="w-full h-full object-cover"
+            autoPlay
+            muted={isMuted}
+            controls={streamConfig.controls || false}
+            loop
+            playsInline
+            preload="auto"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              zIndex: 1
+            }}
+            onPause={() => {
+              // ✅ Auto-resume if paused unexpectedly (not by admin)
+              if (!document.hidden && videoRef.current && !isPausedState) {
+                console.log('🔄 Video paused unexpectedly - auto-resuming...');
+                setTimeout(() => {
+                  videoRef.current?.play().catch(err => console.error('❌ Auto-resume failed:', err));
+                }, 100);
               }
-            }, 1000);
-          }}
-        />
+            }}
+            onError={(e) => {
+              console.error('❌ Video error:', e);
+              const video = videoRef.current;
+              
+              if (video && video.error) {
+                console.error('Video error details:', {
+                  code: video.error.code,
+                  message: video.error.message
+                });
+              }
+              
+              // ✅ ENHANCED ERROR RECOVERY: Only if not paused by admin
+              if (!isPausedState) {
+                setTimeout(() => {
+                  if (videoRef.current && !document.hidden) {
+                    console.log('🔄 Attempting recovery...');
+                    
+                    // For HLS, destroy and recreate
+                    if (hlsRef.current) {
+                      hlsRef.current.destroy();
+                      hlsRef.current = null;
+                      // Re-trigger HLS initialization
+                      setStreamConfig({...streamConfig});
+                    } else {
+                      // For direct video, reload
+                      videoRef.current.load();
+                      videoRef.current.play().catch(console.error);
+                    }
+                  }
+                }, 2000);
+              }
+            }}
+          />
+          
+          {/* Hidden canvas kept for potential future use; not used for freezing */}
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
+        </>
       );
     } else {
       // Use iframe for everything else (YouTube, custom players, RTMP players, etc.)
       console.log('✅ VideoArea: Rendering IFRAME stream:', streamConfig.streamUrl, 'isPaused:', isPausedState);
       
-      // ✅ When paused, hide iframe completely and show overlay
-      // When playing, show iframe with the stream URL
-      const iframeSrc = isPausedState ? '' : streamConfig.streamUrl;
+      // ✅ CRITICAL FIX: NEVER clear iframe src - always keep it loaded
+      // Use CSS display/visibility to hide instead of removing source
+      const iframeSrc = streamConfig.streamUrl; // Always use actual URL
       
       return (
         <>
@@ -531,23 +601,20 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
               height: '100%',
               border: 'none',
               zIndex: 1,
-              display: isPausedState ? 'none' : 'block'
+              // ✅ CRITICAL: Use display:none + visibility:hidden to hide without removing src
+              display: isPausedState ? 'none' : 'block',
+              visibility: isPausedState ? 'hidden' : 'visible',
+              pointerEvents: isPausedState ? 'none' : 'auto'
             }}
             title="Live Game Stream"
             onLoad={() => {
-              console.log('✅ Iframe loaded successfully with src:', iframeSrc);
+              console.log('✅ Iframe loaded successfully');
             }}
             onError={(e) => {
               console.error('❌ Iframe error:', e);
             }}
           />
-          {/* When paused, show a dark overlay */}
-          {isPausedState && (
-            <div
-              className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-black"
-              style={{ zIndex: 2 }}
-            />
-          )}
+          {/* When paused, keep iframe as-is with no overlay; external player will handle visuals */}
         </>
       );
     }
