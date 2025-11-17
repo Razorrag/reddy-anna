@@ -39,8 +39,9 @@ const balanceReducer = (state: BalanceState, action: BalanceAction): BalanceStat
         const balanceDiff = Math.abs(action.payload.balance - state.currentBalance);
         const isSignificantChange = balanceDiff > 1000; // Allow changes > ₹1,000
         
-        // Only block if: recent WebSocket AND small balance change (likely duplicate)
-        if (timeSinceWebSocketUpdate < 1000 && balanceDiff < 100) {
+        // Only block if: recent WebSocket AND very small change (likely duplicate)
+        // Allow all significant changes including winnings
+        if (timeSinceWebSocketUpdate < 1000 && balanceDiff < 10) {  // Changed from 100 to 10
           console.log(`⚠️ Ignoring ${source} balance update - Likely duplicate (${timeSinceWebSocketUpdate}ms ago)`);
           return state;
         }

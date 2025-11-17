@@ -647,6 +647,16 @@ export async function handleStartGame(client: WSClient, data: any) {
             timer: timerDuration
           }
         });
+        
+        // ✅ NEW: Broadcast game reset event to clear client state
+        (global as any).broadcast({
+          type: 'game_reset',
+          data: {
+            gameId: (global as any).currentGameState.gameId,
+            timestamp: Date.now(),
+            message: 'New game started - all betting data cleared'
+          }
+        });
       }
 
       // ✅ FIX: Start betting timer using global startTimer

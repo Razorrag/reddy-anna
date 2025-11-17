@@ -112,8 +112,7 @@ const GameHistoryPage: React.FC = () => {
           // Fallback pagination
           paginationData.total = Array.isArray(games) ? games.length : 0;
           paginationData.pages = Math.ceil(paginationData.total / filters.limit);
-        }
-          
+            
           console.log('✅ Parsed games:', games.length, 'games');
           console.log('✅ Pagination:', paginationData);
           if (games.length > 0) {

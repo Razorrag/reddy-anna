@@ -693,15 +693,25 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         localStorage.removeItem('pendingBets');
         
         // ✅ ENHANCE: Dispatch global events for betting UI
-        window.dispatchEvent(new CustomEvent('new-game-started', { 
-          detail: { gameId, phase, round, timestamp: Date.now() } 
+        window.dispatchEvent(new CustomEvent('new-game-started', {
+          detail: { gameId, phase, round, timestamp: Date.now() }
         }));
-        window.dispatchEvent(new CustomEvent('bets-cleared', { 
-          detail: { round1: true, round2: true, totalCleared: true } 
+        window.dispatchEvent(new CustomEvent('bets-cleared', {
+          detail: { round1: true, round2: true, totalCleared: true }
         }));
         
         console.log('🆕 New game - localStorage cleared, events dispatched, bets reset to 0');
-
+        
+        // Set the game state after clearing
+        if (gameId) setGameId(gameId);
+        setPhase(phase as any);
+        setCountdown(timer || 0);
+        setCurrentRound(round as any);
+        setSelectedOpeningCard(parsed);
+        
+        break;
+      }
+        
       // Server confirmation just for admin; state is driven by opening_card_confirmed
       case 'game_started': {
         // No-op to avoid console warnings

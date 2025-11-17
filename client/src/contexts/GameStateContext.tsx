@@ -105,6 +105,7 @@ type GameStateAction =
   | { type: 'SET_COUNTDOWN'; payload: number }
   | { type: 'SET_WINNER'; payload: GameWinner }
   | { type: 'RESET_GAME' }
+  | { type: 'GAME_STATE_RESET' }  // ✅ NEW: Handle server-initiated game reset
   | { type: 'SET_GAME_ACTIVE'; payload: boolean }
   | { type: 'SET_BETTING_LOCKED'; payload: boolean }
   | { type: 'SET_CURRENT_ROUND'; payload: GameRound }
@@ -207,12 +208,38 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         username: state.username,
         playerWallet: state.playerWallet,
         userRole: state.userRole,
+        // ✅ FIX: Clear player bets and totals on reset to prevent persistence
+        playerRound1Bets: initialState.playerRound1Bets,
+        playerRound2Bets: initialState.playerRound2Bets,
+        round1Bets: initialState.round1Bets,
+        round2Bets: initialState.round2Bets,
         usedCards: [], // Clear used cards on game reset
         andarCards: [], // Clear cards from previous game
         baharCards: [], // Clear cards from previous game
         selectedOpeningCard: null, // Clear opening card
         showCelebration: false, // ✅ FIX: Explicitly clear celebration on reset
         lastCelebration: null, // ✅ FIX: Clear celebration data on reset
+      };
+    case 'GAME_STATE_RESET':
+      // ✅ NEW: Handle server-initiated game reset
+      console.log('🔄 GameState: Processing server-initiated game reset');
+      return {
+        ...initialState,
+        userId: state.userId,
+        username: state.username,
+        playerWallet: state.playerWallet,
+        userRole: state.userRole,
+        // Clear all game-specific state
+        playerRound1Bets: initialState.playerRound1Bets,
+        playerRound2Bets: initialState.playerRound2Bets,
+        round1Bets: initialState.round1Bets,
+        round2Bets: initialState.round2Bets,
+        usedCards: [],
+        andarCards: [],
+        baharCards: [],
+        selectedOpeningCard: null,
+        showCelebration: false,
+        lastCelebration: null,
       };
     case 'SET_GAME_ACTIVE':
       return { ...state, isGameActive: action.payload };
@@ -227,24 +254,34 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
     case 'SET_USER_ROLE':
       return { ...state, userRole: action.payload };
     case 'UPDATE_ROUND_BETS':
-      if (action.payload.round === 1) {
-        // ✅ FIX: Create new object to ensure React detects the change
-        const newRound1Bets = {
-          andar: action.payload.bets.andar || 0,
-          bahar: action.payload.bets.bahar || 0
-        };
-        console.log('🔄 GameState: Updating round1Bets from', state.round1Bets, 'to', newRound1Bets);
-        return { ...state, round1Bets: newRound1Bets };
-      } else if (action.payload.round === 2) {
-        // ✅ FIX: Create new object to ensure React detects the change
-        const newRound2Bets = {
-          andar: action.payload.bets.andar || 0,
-          bahar: action.payload.bets.bahar || 0
-        };
-        console.log('🔄 GameState: Updating round2Bets from', state.round2Bets, 'to', newRound2Bets);
-        return { ...state, round2Bets: newRound2Bets };
-      }
-      return state;
+        if (action.payload.round === 1) {
+          // ✅ FIX: Convert RoundBets to proper format for total bets
+          const andarTotal = typeof action.payload.bets.andar === 'number' ? action.payload.bets.andar :
+                           Array.isArray(action.payload.bets.andar) ? action.payload.bets.andar.reduce((sum: number, bet: number | BetInfo) => sum + (typeof bet === 'number' ? bet : bet.amount), 0) : 0;
+          const baharTotal = typeof action.payload.bets.bahar === 'number' ? action.payload.bets.bahar :
+                           Array.isArray(action.payload.bets.bahar) ? action.payload.bets.bahar.reduce((sum: number, bet: number | BetInfo) => sum + (typeof bet === 'number' ? bet : bet.amount), 0) : 0;
+          
+          const newRound1Bets = {
+            andar: andarTotal,
+            bahar: baharTotal
+          };
+          console.log('🔄 GameState: Updating round1Bets from', state.round1Bets, 'to', newRound1Bets);
+          return { ...state, round1Bets: newRound1Bets };
+        } else if (action.payload.round === 2) {
+          // ✅ FIX: Convert RoundBets to proper format for total bets
+          const andarTotal = typeof action.payload.bets.andar === 'number' ? action.payload.bets.andar :
+                           Array.isArray(action.payload.bets.andar) ? action.payload.bets.andar.reduce((sum: number, bet: number | BetInfo) => sum + (typeof bet === 'number' ? bet : bet.amount), 0) : 0;
+          const baharTotal = typeof action.payload.bets.bahar === 'number' ? action.payload.bets.bahar :
+                           Array.isArray(action.payload.bets.bahar) ? action.payload.bets.bahar.reduce((sum: number, bet: number | BetInfo) => sum + (typeof bet === 'number' ? bet : bet.amount), 0) : 0;
+          
+          const newRound2Bets = {
+            andar: andarTotal,
+            bahar: baharTotal
+          };
+          console.log('🔄 GameState: Updating round2Bets from', state.round2Bets, 'to', newRound2Bets);
+          return { ...state, round2Bets: newRound2Bets };
+        }
+        return state;
     case 'SET_WINNING_CARD':
       return { ...state, winningCard: action.payload };
     case 'SET_USER_DATA':
@@ -421,6 +458,7 @@ interface GameStateContextType {
   phase: GamePhase;
   setCelebration: (data: any) => void;
   hideCelebration: () => void;
+  handleGameStateReset: () => void;  // ✅ NEW: Add game reset handler to interface
 }
 
 const GameStateContext = createContext<GameStateContextType | undefined>(undefined);
@@ -589,10 +627,27 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     window.addEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
     window.addEventListener('balance-verified', handleBalanceVerified as EventListener);
 
+    // ✅ NEW: Handle game reset events from server
+    const handleGameReset = (event: CustomEvent) => {
+      const { gameId, message } = event.detail;
+      console.log('🔄 Game reset event received:', { gameId, message });
+      
+      // Trigger: game state reset
+      dispatch({ type: 'GAME_STATE_RESET' });
+      
+      // Also dispatch a custom event for other components
+      window.dispatchEvent(new CustomEvent('game-state-reset', {
+        detail: { gameId, message, timestamp: Date.now() }
+      }));
+    };
+
+    window.addEventListener('game_reset', handleGameReset as EventListener);
+
     return () => {
       window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
       window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
       window.removeEventListener('balance-verified', handleBalanceVerified as EventListener);
+      window.removeEventListener('game_reset', handleGameReset as EventListener);
     };
   }, [gameState.playerWallet]);
 
@@ -671,7 +726,13 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const updateTotalBets = (bets: RoundBets) => {
-    dispatch({ type: 'UPDATE_TOTAL_BETS', payload: bets });
+    // ✅ FIX: Convert RoundBets to proper format for UPDATE_TOTAL_BETS
+    const andarTotal = typeof bets.andar === 'number' ? bets.andar :
+                     Array.isArray(bets.andar) ? bets.andar.reduce((sum: number, bet: number | BetInfo) => sum + (typeof bet === 'number' ? bet : bet.amount), 0) : 0;
+    const baharTotal = typeof bets.bahar === 'number' ? bets.bahar :
+                     Array.isArray(bets.bahar) ? bets.bahar.reduce((sum: number, bet: number | BetInfo) => sum + (typeof bet === 'number' ? bet : bet.amount), 0) : 0;
+    
+    dispatch({ type: 'UPDATE_TOTAL_BETS', payload: { andar: andarTotal, bahar: baharTotal } });
   };
 
   const updatePlayerWallet = (wallet: number) => {
@@ -714,6 +775,11 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const hideCelebration = () => {
     dispatch({ type: 'HIDE_CELEBRATION' });
+  };
+
+  // ✅ NEW: Handle server-initiated game reset
+  const handleGameStateReset = () => {
+    dispatch({ type: 'GAME_STATE_RESET' });
   };
 
   const resetBettingData = () => {
@@ -816,6 +882,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     setScreenSharing,
     setCelebration,
     hideCelebration,
+    handleGameStateReset,  // ✅ NEW: Expose game reset handler
     phase: gameState.phase,
   };
 
