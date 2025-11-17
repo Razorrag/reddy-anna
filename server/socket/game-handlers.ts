@@ -12,7 +12,7 @@ import { completeGame } from '../game';
 interface WSClient {
   ws: WebSocket;
   userId: string;
-  role: 'player' | 'admin';
+  role: 'player' | 'admin' | 'super_admin';
   wallet: number;
 }
 
@@ -170,49 +170,79 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       return;
     }
     
+    // ✅ CRITICAL FIX: Create bet in DB FIRST, then deduct balance
+    // This prevents money loss if bet creation fails
+    
+    // Step 1: Validate gameId BEFORE any operations
+    const gameIdToUse = (global as any).currentGameState?.gameId;
+    if (!gameIdToUse || gameIdToUse === 'default-game') {
+      console.error('❌ CRITICAL: Invalid gameId');
+      sendError(ws, 'Invalid game session. Please refresh the page.');
+      return;
+    }
+    
+    // Step 2: Create bet record in database FIRST (no money deducted yet)
+    try {
+      await storage.createBet({
+        userId: userId,
+        gameId: gameIdToUse,
+        side,
+        amount: amount,
+        round: round.toString(),
+        status: 'pending'
+      });
+      console.log(`📊 Bet created in DB: ${userId} - ${amount} on ${side}`);
+    } catch (error) {
+      console.error('❌ Error creating bet:', error);
+      sendError(ws, 'Failed to create bet. Please try again.');
+      return; // Exit early - no money was deducted
+    }
+    
+    // Step 3: Deduct balance (bet already exists in DB)
     let newBalance: number;
     try {
       newBalance = await storage.deductBalanceAtomic(userId, amount);
     } catch (error: any) {
-      // Provide user-friendly error messages
-      let errorMessage = error.message || 'Failed to place bet';
+      console.error('❌ Balance deduction failed:', error);
       
-      if (error.message?.includes('temporarily unavailable')) {
-        errorMessage = 'Service temporarily unavailable. The system is experiencing high load. Please try again in a few moments.';
-      } else if (error.message?.includes('Insufficient balance')) {
-        errorMessage = error.message; // Keep the detailed balance message
-      } else if (error.message?.includes('connection failed') || error.message?.includes('network')) {
-        errorMessage = 'Database connection failed. Please check your internet connection and try again. If the problem persists, contact support.';
-      } else if (error.message?.includes('Database')) {
-        errorMessage = 'Database error. Please try again. If the problem persists, contact support.';
+      // Rollback: Delete the bet we just created
+      try {
+        const lastBet = await storage.getLastUserBet(userId, gameIdToUse);
+        if (lastBet && lastBet.id) {
+          await storage.deleteBet(lastBet.id);
+          console.log('🔄 Rolled back bet creation');
+        }
+      } catch (rollbackError) {
+        console.error('❌ CRITICAL: Failed to rollback bet:', rollbackError);
       }
       
+      // Send user-friendly error
+      let errorMessage = error.message || 'Failed to place bet';
+      if (error.message?.includes('Insufficient balance')) {
+        errorMessage = error.message;
+      } else if (error.message?.includes('temporarily unavailable')) {
+        errorMessage = 'Service temporarily unavailable. Please try again.';
+      }
       sendError(ws, errorMessage);
       return;
     }
 
-    // ✅ NEW: Track wagering for deposit bonuses (unified system)
+    // Step 4: Track wagering for bonuses (non-critical)
     try {
       await storage.updateDepositBonusWagering(userId, amount);
       await storage.checkBonusThresholds(userId);
       
-      // Send single unified event
       ws.send(JSON.stringify({
         type: 'bonus_update',
-        data: { 
-          message: 'Bonus status updated', 
-          timestamp: Date.now() 
-        }
+        data: { message: 'Bonus status updated', timestamp: Date.now() }
       }));
     } catch (wageringError) {
-      // Don't fail bet if wagering tracking fails
       console.error('⚠️ Error tracking wagering:', wageringError);
     }
 
-    // ✅ FIX: Add bet to current game state using proper methods (only after successful balance deduction)
+    // Step 5: Update in-memory game state (after DB operations succeed)
     if (round === 1) {
       if ((global as any).currentGameState?.userBets?.get) {
-        // Log BEFORE for debugging
         const beforeTotal = (global as any).currentGameState.round1Bets[side];
         console.log(`🔍 BEFORE BET - Round 1 ${side}:`, { globalTotal: beforeTotal, betToAdd: amount });
         
@@ -223,13 +253,11 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         userBets.round1[side] += amount;
         (global as any).currentGameState.addRound1Bet(side, amount);
         
-        // Log AFTER for debugging
         const afterTotal = (global as any).currentGameState.round1Bets[side];
-        console.log(`✅ AFTER BET - Round 1 ${side}:`, { globalTotal: afterTotal, added: amount, calculation: `${beforeTotal} + ${amount} = ${afterTotal}` });
+        console.log(`✅ AFTER BET - Round 1 ${side}:`, { globalTotal: afterTotal, added: amount });
       }
     } else if (round === 2) {
       if ((global as any).currentGameState?.userBets?.get) {
-        // Log BEFORE for debugging
         const beforeTotal = (global as any).currentGameState.round2Bets[side];
         console.log(`🔍 BEFORE BET - Round 2 ${side}:`, { globalTotal: beforeTotal, betToAdd: amount });
         
@@ -240,110 +268,14 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         userBets.round2[side] += amount;
         (global as any).currentGameState.addRound2Bet(side, amount);
         
-        // Log AFTER for debugging
         const afterTotal = (global as any).currentGameState.round2Bets[side];
-        console.log(`✅ AFTER BET - Round 2 ${side}:`, { globalTotal: afterTotal, added: amount, calculation: `${beforeTotal} + ${amount} = ${afterTotal}` });
+        console.log(`✅ AFTER BET - Round 2 ${side}:`, { globalTotal: afterTotal, added: amount });
       }
     }
-
-    // ✅ FIX: Store bet in database with proper transaction handling
-    // ✅ CRITICAL: Use ONLY server's gameId, never trust client
-    const gameIdToUse = (global as any).currentGameState?.gameId;
-    if (!gameIdToUse || gameIdToUse === 'default-game') {
-      // This should never happen due to earlier validation, but safety check
-      console.error('❌ CRITICAL: Invalid gameId at bet storage time');
-      sendError(ws, 'Invalid game session. Please refresh the page.');
-      // Refund the deducted balance
-      try {
-        await storage.addBalanceAtomic(userId, amount);
-      } catch (refundError) {
-        console.error('❌ Failed to refund balance:', refundError);
-      }
-      return;
-    }
     
-    // Declare newBalance outside try block for use in bet confirmation
-    let finalBalance = newBalance;
-    
-    try {
-      await storage.createBet({
-        userId: userId,
-        gameId: gameIdToUse,
-        side,
-        amount: amount,
-        round: round.toString(), // ✅ Convert to string only at DB boundary (DB uses varchar)
-        status: 'pending'
-      });
-      console.log(`📊 Bet recorded: ${userId} - ${amount} on ${side} for game ${gameIdToUse}`);
-    } catch (error) {
-        console.error('❌ CRITICAL: Error storing bet in database:', error);
-        
-        // ✅ FIX: Rollback balance AND game state if bet storage fails
-        try {
-          // Rollback game state bet
-          if (round === 1) {
-            (global as any).currentGameState.addRound1Bet(side, -amount); // Subtract the bet
-            const userBets = (global as any).currentGameState.getUserBets(userId);
-            if (userBets) {
-              userBets.round1[side] -= amount;
-            }
-          } else if (round === 2) {
-            (global as any).currentGameState.addRound2Bet(side, -amount); // Subtract the bet
-            const userBets = (global as any).currentGameState.getUserBets(userId);
-            if (userBets) {
-              userBets.round2[side] -= amount;
-            }
-          }
-          
-          // Refund the balance
-          const newBalance = await storage.addBalanceAtomic(userId, amount);
-          console.log(`💰 Refunded ${amount} to ${userId} and rolled back game state due to bet storage failure`);
-          
-          // ✅ FIX: Create transaction record for refund
-          try {
-            await storage.addTransaction({
-              userId: userId,
-              transactionType: 'refund',
-              amount: amount,
-              balanceBefore: newBalance - amount,
-              balanceAfter: newBalance,
-              referenceId: `bet-refund-${Date.now()}`,
-              description: 'Bet refunded due to storage error'
-            });
-            console.log(`✅ Refund transaction recorded for ${userId}`);
-          } catch (txError) {
-            console.error('⚠️ Failed to record refund transaction:', txError);
-            // Don't fail the refund if transaction record fails
-          }
-          
-          // ✅ FIX: Broadcast bet cancellation to notify other clients
-          if (typeof (global as any).broadcast !== 'undefined') {
-            (global as any).broadcast({
-              type: 'bet_cancelled',
-              data: {
-                userId,
-                side,
-                amount,
-                round,
-                reason: 'Storage error - bet cancelled and refunded'
-              }
-            });
-          }
-        } catch (refundError) {
-          console.error('❌ CRITICAL: Error refunding bet amount and rolling back state:', refundError);
-          // Even if refund fails, we need to notify the user
-        }
-        
-        // Send error to client - don't send confirmation
-        sendError(ws, 'Bet could not be processed due to system error. Your balance has been refunded. Please try again.');
-        return; // Exit function without sending confirmation
-    }
-
-    // ✅ FIX: Generate bet ID before storage attempt for consistency
+    // Step 6: All operations succeeded - send confirmation
     const betId = `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const betConfirmedAt = Date.now();
-    
-    // ONLY send confirmation after successful database storage
 
     ws.send(JSON.stringify({
       type: 'bet_confirmed',
@@ -489,22 +421,26 @@ export async function handleStartGame(client: WSClient, data: any) {
   try {
     // Use the actual game state from routes.ts global variables
     if ((global as any).currentGameState) {
-      // ✅ CRITICAL FIX: Check if previous game was completed and ensure it's properly reset
-      const currentPhase = (global as any).currentGameState.phase;
-      if (currentPhase === 'complete') {
-        console.log('🔄 Previous game was completed, ensuring full reset before starting new game...');
-        // ✅ FIX: Wait for previous payouts to complete before starting new game
-        if ((global as any).lastPayoutPromise) {
-          try {
-            console.log('⏳ Waiting for previous payout operations to complete...');
-            await (global as any).lastPayoutPromise;
-            console.log('✅ Previous payout operations completed');
-          } catch (error) {
-            console.warn('⚠️ Error waiting for previous payout operation:', error);
-          }
-          (global as any).lastPayoutPromise = null;
+      // Wait for previous game history save to complete (if any)
+      if ((global as any).lastHistorySavePromise) {
+        try {
+          console.log('⏳ Waiting for previous game history save...');
+          await (global as any).lastHistorySavePromise;
+          console.log('✅ Previous game history saved');
+        } catch (error) {
+          console.warn('⚠️ History save error (non-critical):', error);
+        } finally {
+          (global as any).lastHistorySavePromise = null;
         }
       }
+      
+      // Add synchronization lock to prevent concurrent game starts
+      if ((global as any).gameStartInProgress) {
+        sendError(ws, 'Game start already in progress. Please wait...');
+        return;
+      }
+      
+      (global as any).gameStartInProgress = true;
       
       // Start a new game (generates new game ID and resets state)
       // This will generate a new gameId and reset all state
@@ -640,6 +576,9 @@ export async function handleStartGame(client: WSClient, data: any) {
   } catch (error: any) {
     console.error('Start game error:', error);
     sendError(ws, error.message || 'Failed to start game');
+  } finally {
+    // ✅ FIX #4: Always release the lock, even if error occurs
+    (global as any).gameStartInProgress = false;
   }
 }
 

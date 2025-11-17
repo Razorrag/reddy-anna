@@ -272,12 +272,27 @@ class APIClient {
    * Notify balance update via API
    */
   async notifyBalanceUpdate(userId: string, balance: number, transactionType?: string, amount?: number): Promise<ApiResponse> {
-    return this.post<ApiResponse>('/user/balance-notify', {
-      userId,
-      balance,
-      transactionType: transactionType || 'unknown',
-      amount: amount || 0
-    });
+    if (balance === undefined || balance === null || Number.isNaN(balance)) {
+      console.error('❌ Invalid balance for notifyBalanceUpdate:', balance);
+      return { success: false, error: 'Invalid balance' };
+    }
+
+    if (!userId || userId === 'undefined' || userId === 'null') {
+      console.error('❌ Invalid userId for notifyBalanceUpdate:', userId);
+      return { success: false, error: 'Invalid userId' };
+    }
+
+    try {
+      return await this.post<ApiResponse>('/user/balance-notify', {
+        userId,
+        balance,
+        transactionType,
+        amount
+      });
+    } catch (error) {
+      console.error('❌ Error in notifyBalanceUpdate:', error);
+      throw error;
+    }
   }
 }
 

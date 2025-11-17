@@ -141,6 +141,17 @@ export interface IStorage {
   updateBet(gameId: string, userId: string, updates: Partial<UpdateBet>): Promise<void>;
   applyPayoutsAndupdateBets(payouts: { userId: string; amount: number }[], winningBets: string[], losingBets: string[]): Promise<void>;
   
+  // Simplified payout methods (idempotent)
+  updateBetWithPayout(betId: string, status: string, transactionId: string, payoutAmount: number): Promise<void>;
+  createTransaction(transaction: {
+    userId: string;
+    type: string;
+    amount: number;
+    reference_id: string;
+    payout_transaction_id: string;
+    description: string;
+  }): Promise<void>;
+  
   // Transaction operations
   getUserTransactions(
     userId: string,
@@ -2116,74 +2127,65 @@ export class SupabaseStorage implements IStorage {
     console.log(`\n🔍 ========== getUserGameHistory START ==========`);
     console.log(`User ID: ${userId}`);
     
-    // First, check if user has any bets at all (diagnostic)
-    const { data: allBets, error: betsError } = await supabaseServer
-      .from('player_bets')
-      .select('id, game_id, amount, side, status, created_at')
-      .eq('user_id', userId);
-    
-    console.log(`📊 Total bets for user: ${allBets?.length || 0}`);
-    if (allBets && allBets.length > 0) {
-      console.log(`Sample bet:`, allBets[0]);
-      
-      // Check if game_sessions exist for these bets
-      const gameIds = Array.from(new Set(allBets.map(b => b.game_id)));
-      console.log(`🎮 Unique game IDs: ${gameIds.length}`);
-      
-      const { data: sessions } = await supabaseServer
-        .from('game_sessions')
-        .select('game_id, status, winner')
-        .in('game_id', gameIds);
-      
-      console.log(`🎮 Game sessions found: ${sessions?.length || 0} out of ${gameIds.length}`);
-      
-      // Check game_history
-      const { data: history } = await supabaseServer
-        .from('game_history')
-        .select('game_id, winner')
-        .in('game_id', gameIds);
-      
-      console.log(`📜 Game history records found: ${history?.length || 0} out of ${gameIds.length}`);
-    }
-    
-    // Get user's bets and join with game sessions to get results
-    // ✅ FIX: Use LEFT JOIN instead of INNER JOIN to show all bets even if session is missing
-    const { data, error } = await supabaseServer
-      .from('player_bets')
-      .select(`
-        *,
-        game_sessions(
-          opening_card,
-          winner,
-          winning_card,
-          current_round,
-          status,
-          created_at
-        )
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    try {
+      // ✅ NEW APPROACH: Use RPC function instead of JOIN
+      // This bypasses foreign key issues and is more efficient
+      const { data, error } = await supabaseServer
+        .rpc('get_user_game_history', {
+          p_user_id: userId,
+          p_limit: 100
+        });
 
-    if (error) {
-      console.error('❌ Error getting user game history:', error);
+      if (error) {
+        console.error('❌ Error calling get_user_game_history RPC:', error);
+        console.log(`========== getUserGameHistory END (ERROR) ==========\n`);
+        return [];
+      }
+
+      console.log(`✅ RPC returned ${data?.length || 0} game history records`);
+
+      if (!data || data.length === 0) {
+        console.log(`⚠️ No game history found for user`);
+        console.log(`========== getUserGameHistory END (EMPTY) ==========\n`);
+        return [];
+      }
+
+      // RPC function already returns aggregated data, just format it
+      const formattedHistory = data.map((game: any) => ({
+        id: game.game_id,
+        gameId: game.game_id,
+        openingCard: game.opening_card,
+        winner: game.winner,
+        winningCard: game.winning_card,
+        winningRound: game.winning_round || 1,
+        totalCards: game.total_cards || 0,
+        yourTotalBet: parseFloat(game.total_bets || '0'),
+        yourTotalPayout: parseFloat(game.total_payout || '0'),
+        yourNetProfit: parseFloat(game.net_profit || '0'),
+        result: game.result || 'no_bet',
+        createdAt: game.created_at
+      }));
+
+      console.log(`✅ Formatted ${formattedHistory.length} game history records`);
+      console.log(`========== getUserGameHistory END (SUCCESS) ==========\n`);
+      
+      return formattedHistory;
+    } catch (error) {
+      console.error('❌ getUserGameHistory error:', error);
       console.log(`========== getUserGameHistory END (ERROR) ==========\n`);
       return [];
     }
+  }
 
-    console.log(`✅ Joined query returned: ${data?.length || 0} results`);
-
-    if (!data || data.length === 0) {
-      console.log(`⚠️ No results from joined query - bets exist but game_sessions might be missing`);
-      console.log(`========== getUserGameHistory END (EMPTY) ==========\n`);
-      return [];
-    }
-
+  // OLD CODE BELOW - KEEPING FOR REFERENCE BUT NOT USED
+  async getUserGameHistoryOLD(userId: string): Promise<any[]> {
     // Group bets by game_id to get all bets per game
     const gameBetsMap = new Map();
+    const data: any[] = []; // Placeholder
     data.forEach((bet: any) => {
       if (!gameBetsMap.has(bet.game_id)) {
         gameBetsMap.set(bet.game_id, {
-          gameSession: bet.game_sessions,
+          gameHistory: bet.game_history, // ✅ Changed from game_sessions to game_history
           bets: [],
           totalBet: 0,
           totalPayout: 0
@@ -2238,22 +2240,22 @@ export class SupabaseStorage implements IStorage {
 
     // Transform data to include all user bets per game with cards
     return Array.from(gameBetsMap.entries()).map(([gameId, gameData]) => {
-      const gameSession = gameData.gameSession;
+      const gameHistory = gameData.gameHistory; // ✅ Use game_history from JOIN
       const history = historyMap.get(gameId);
       const cards = cardsMap.get(gameId) || [];
       
       // Determine result based on actual payouts
       const won = gameData.totalPayout > 0;
-      const winner = gameSession?.winner;
+      const winner = gameHistory?.winner || history?.winner;
 
       return {
         id: history?.id || gameData.bets[0]?.id || gameId,
         gameId: gameId,
-        openingCard: gameSession?.opening_card,
+        openingCard: gameHistory?.opening_card || history?.opening_card,
         winner: winner,
-        winningCard: gameSession?.winning_card,
-        winningRound: history?.winning_round || gameSession?.current_round || 1,
-        totalCards: history?.total_cards || cards.length,
+        winningCard: gameHistory?.winning_card || history?.winning_card,
+        winningRound: gameHistory?.winning_round || history?.winning_round || 1,
+        totalCards: gameHistory?.total_cards || history?.total_cards || cards.length,
         // Include dealt cards
         dealtCards: cards.map((c: any) => ({
           id: c.id,
@@ -2283,8 +2285,8 @@ export class SupabaseStorage implements IStorage {
         yourNetProfit: gameData.totalPayout - gameData.totalBet,
         result: won ? 'win' : (winner ? 'loss' : 'no_bet'),
         payout: gameData.totalPayout, // Use actual payout from database
-        round: history?.winning_round || gameSession?.current_round || 1,
-        createdAt: gameSession?.created_at || gameData.bets[0]?.created_at
+        round: gameHistory?.winning_round || history?.winning_round || 1,
+        createdAt: gameHistory?.created_at || history?.created_at || gameData.bets[0]?.created_at
       };
     });
   }
@@ -2599,17 +2601,45 @@ export class SupabaseStorage implements IStorage {
   }
 
   async applyPayoutsAndupdateBets(payouts: { userId: string; amount: number }[], winningBets: string[], losingBets: string[]): Promise<void> {
-    // ✅ CRITICAL FIX: Pass payouts as array directly - Supabase will convert to JSONB
-    // DO NOT use JSON.stringify() as it causes double-stringification
-    const { error } = await supabaseServer.rpc('apply_payouts_and_update_bets', {
-      payouts: payouts,
-      winning_bets_ids: winningBets,
-      losing_bets_ids: losingBets,
+    // ⚠️ DEPRECATED: This function is being phased out in favor of individual atomic operations
+    // The RPC function has been removed from the database
+    throw new Error('applyPayoutsAndupdateBets is deprecated. Use individual atomic operations instead.');
+  }
+
+  // ✅ NEW: Simplified idempotent payout methods
+  async updateBetWithPayout(betId: string, status: string, transactionId: string, payoutAmount: number): Promise<void> {
+    const { error } = await supabaseServer.rpc('update_bet_with_payout', {
+      p_bet_id: betId,
+      p_status: status,
+      p_transaction_id: transactionId,
+      p_payout_amount: payoutAmount
     });
 
     if (error) {
-      console.error('Error applying payouts and updating bets:', error);
-      throw new Error('Failed to apply payouts');
+      console.error('Error updating bet with payout:', error);
+      throw error;
+    }
+  }
+
+  async createTransaction(transaction: {
+    userId: string;
+    type: string;
+    amount: number;
+    reference_id: string;
+    payout_transaction_id: string;
+    description: string;
+  }): Promise<void> {
+    const { error } = await supabaseServer.rpc('create_payout_transaction', {
+      p_user_id: transaction.userId,
+      p_amount: transaction.amount,
+      p_game_id: transaction.reference_id,
+      p_transaction_id: transaction.payout_transaction_id,
+      p_description: transaction.description
+    });
+
+    if (error) {
+      console.error('Error creating payout transaction:', error);
+      throw error;
     }
   }
 

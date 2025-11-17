@@ -759,9 +759,21 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           break;
         }
         
-        const { winner, winningCard, round, userPayout, winnerDisplay } = gameCompleteData as any;
+        const { winner, winningCard, round, userPayout, winnerDisplay, newBalance } = gameCompleteData as any;
         
-        console.log('🎊 game_complete parsed data:', { winner, winningCard, round, userPayout, winnerDisplay });
+        console.log('🎊 game_complete parsed data:', { winner, winningCard, round, userPayout, winnerDisplay, newBalance });
+        
+        // ✅ CRITICAL FIX: Update balance immediately for instant UI update
+        if (newBalance !== undefined && newBalance !== null) {
+          updatePlayerWallet(newBalance);
+          console.log(`✅ Balance updated instantly after game complete: ₹${newBalance}`);
+          
+          // Dispatch event for BalanceContext
+          const balanceEvent = new CustomEvent('balance-websocket-update', {
+            detail: { balance: newBalance, type: 'game_complete', timestamp: Date.now() }
+          });
+          window.dispatchEvent(balanceEvent);
+        }
         
         if (!winner || !winningCard) {
           console.error('❌ game_complete message missing winner or winningCard:', { winner, winningCard });
@@ -830,7 +842,16 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'game_reset': {
         const { message } = (data as GameResetMessage).data;
         resetGame();
-        console.log('🔄 Game reset:', message);
+        
+        // ✅ CRITICAL FIX: Clear all player bets when game resets
+        clearRoundBets(1);  // Clear round 1 bets
+        clearRoundBets(2);  // Clear round 2 bets
+        
+        // ✅ Reset betting UI to zero
+        updatePlayerRoundBets(1, { andar: 0, bahar: 0 });
+        updatePlayerRoundBets(2, { andar: 0, bahar: 0 });
+        
+        console.log('🔄 Game reset - bets cleared:', message);
         break;
       }
 

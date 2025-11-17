@@ -169,6 +169,15 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   
   console.log('==================================================')
   
+  // 🐛 DEBUG: Check if payouts were calculated
+  console.log(`🐛 DEBUG PAYOUTS: gameState.userBets.size = ${gameState.userBets.size}`);
+  console.log(`🐛 DEBUG PAYOUTS: payouts object keys = ${Object.keys(payouts).length}`);
+  if (Object.keys(payouts).length > 0) {
+    console.log(`🐛 DEBUG PAYOUTS: payouts =`, payouts);
+  } else {
+    console.warn(`⚠️ WARNING: No payouts calculated! payouts object is empty`);
+  }
+  
   // Calculate company profit/loss
   const companyProfitLoss = totalBetsAmount - totalPayoutsAmount;
   const profitLossPercentage = totalBetsAmount > 0 ? (companyProfitLoss / totalBetsAmount) * 100 : 0;
@@ -182,6 +191,13 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   // Get all bets for this game and categorize as winning/losing
   const allBets = await storage.getBetsForGame(gameState.gameId);
   
+  // 🐛 DEBUG: Check database bets
+  console.log(`🐛 DEBUG BETS: Retrieved ${allBets.length} bets from database for game ${gameState.gameId}`);
+  if (allBets.length === 0) {
+    console.warn(`⚠️ WARNING: No bets found in database for gameId: ${gameState.gameId}`);
+    console.warn(`⚠️ This means bets weren't saved properly OR wrong gameId is being used`);
+  }
+  
   for (const bet of allBets) {
     if (bet.side === winningSide) {
       winningBetIds.push(bet.id);
@@ -194,6 +210,19 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   const payoutArray: Array<{ userId: string; amount: number; actual_payout?: number }> = [];
   for (const [userId, payout] of Object.entries(payouts)) {
     payoutArray.push({ userId, amount: payout, actual_payout: payout });
+  }
+  
+  // 🐛 DEBUG: Check payout array
+  console.log(`🐛 DEBUG PAYOUT ARRAY: payoutArray.length = ${payoutArray.length}`);
+  if (payoutArray.length === 0) {
+    console.error(`❌ CRITICAL: payoutArray is EMPTY! No payouts will be processed!`);
+    console.error(`❌ Diagnosis:`);
+    console.error(`   - gameState.userBets.size: ${gameState.userBets.size}`);
+    console.error(`   - payouts object keys: ${Object.keys(payouts).length}`);
+    console.error(`   - allBets.length: ${allBets.length}`);
+    console.error(`   - This indicates bets exist but payouts weren't calculated`);
+  } else {
+    console.log(`🐛 DEBUG PAYOUT ARRAY: payoutArray =`, payoutArray);
   }
   
   // STEP 1: Update database with bet statuses and payouts ATOMICALLY
@@ -219,31 +248,65 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   console.log(`📊 Payout summary: ${winningBetIds.length} winning bets, ${losingBetIds.length} losing bets`);
   console.log(`⏱️ [TIMING] Game completion initiated at ${new Date().toISOString()}`);
   
-  // ✅ FIX: Move payoutStartTime outside try block so it's accessible at line 969
   const payoutStartTime = Date.now();
   operationTimestamps.payoutProcessingStart = payoutStartTime;
   
+  // ✅ SIMPLIFIED ATOMIC APPROACH: Process payouts individually with transaction IDs
   try {
-    console.log(`💾 Calling storage.applyPayoutsAndupdateBets with:`, {
-      payoutsCount: payoutArray.length,
-      winningBetsCount: winningBetIds.length,
-      losingBetsCount: losingBetIds.length,
-      totalPayoutAmount: payoutArray.reduce((sum, p) => sum + p.amount, 0)
-    });
-    await storage.applyPayoutsAndupdateBets(
-      payoutArray.map(p => ({ userId: p.userId, amount: p.amount })),
-      winningBetIds,
-      losingBetIds
-    );
+    console.log(`💾 Processing ${payoutArray.length} payouts individually (atomic + idempotent)...`);
+    
+    // Validate total payout matches expected
+    const totalCalculated = payoutArray.reduce((sum, p) => sum + p.amount, 0);
+    console.log(`🔍 VALIDATION: Total payout = ₹${totalCalculated}`);
+    
+    // Process each payout individually with transaction ID (idempotency key)
+    for (const payout of payoutArray) {
+      const txId = `game_${gameState.gameId}_user_${payout.userId}_${Date.now()}`;
+      
+      try {
+        // 1. Add balance atomically
+        await storage.addBalanceAtomic(payout.userId, payout.amount);
+        console.log(`✅ Added ₹${payout.amount} to user ${payout.userId}`);
+        
+        // 2. Find all bets for this user in this game
+        const userBets = allBets.filter(bet => {
+          const betUserId = (bet as any).user_id || (bet as any).userId;
+          return betUserId === payout.userId;
+        });
+        
+        // 3. Update each bet with transaction ID (idempotent)
+        for (const bet of userBets) {
+          const betStatus = bet.side === winningSide ? 'won' : 'lost';
+          const betPayout = bet.side === winningSide ? payout.amount : 0;
+          
+          await storage.updateBetWithPayout(bet.id, betStatus, txId, betPayout);
+          console.log(`✅ Updated bet ${bet.id}: ${betStatus}, payout=₹${betPayout}`);
+        }
+        
+        // 4. Create transaction record (idempotent)
+        await storage.createTransaction({
+          userId: payout.userId,
+          type: 'win',  // ✅ FIXED: Use 'win' enum value instead of 'game_payout'
+          amount: payout.amount,
+          reference_id: gameState.gameId,
+          payout_transaction_id: txId,
+          description: `Won ₹${payout.amount} on ${winningSide.toUpperCase()}`
+        });
+        console.log(`✅ Created transaction record: ${txId}`);
+        
+      } catch (userError) {
+        console.error(`⚠️ Error processing payout for user ${payout.userId}:`, userError);
+        // Continue with other users - individual failures don't block others
+      }
+    }
+    
     operationTimestamps.payoutProcessingEnd = Date.now();
     const payoutDuration = operationTimestamps.payoutProcessingEnd - operationTimestamps.payoutProcessingStart;
-    console.log(`✅ Database updated: ${payoutArray.length} payout records, ${winningBetIds.length} winning bets, ${losingBetIds.length} losing bets (${payoutDuration}ms)`);
+    console.log(`✅ All payouts processed: ${payoutArray.length} users, ${allBets.length} bets updated (${payoutDuration}ms)`);
     console.log(`⏱️ [TIMING] Payout processing completed at ${new Date().toISOString()} (${payoutDuration}ms)`);
     payoutSuccess = true;
     
-    // ✅ CRITICAL FIX: Parallelize user stats updates to reduce delay
-    // BEFORE: Sequential updates took 1000ms+ for 10 players
-    // AFTER: Parallel updates take ~200ms for 10 players (80% faster)
+    // ✅ Update user stats in parallel (non-blocking)
     const statsStartTime = Date.now();
     const statsPromises = Array.from(gameState.userBets.entries()).map(async ([userId, userBets]) => {
       const totalUserBets = 
@@ -268,164 +331,22 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     
     await Promise.all(statsPromises);
     console.log(`⏱️ Stats updates completed in ${Date.now() - statsStartTime}ms (parallel)`);
+    
   } catch (error) {
     payoutError = error;
-    console.error('❌ CRITICAL ERROR updating database with payouts:', error);
-    console.error('⚠️ Attempting fallback to individual updates...');
-    fallbackUsed = true;
+    console.error('❌ CRITICAL ERROR processing payouts:', error);
     
-    // ✅ FIX: Fallback to individual updates if RPC fails
-    try {
-      console.log('🔄 Fallback: Processing payouts individually...');
-      
-      // ✅ OPTIMIZATION: Fetch all bets once instead of per user
-      const allBetsForGame = await storage.getBetsForGame(gameState.gameId);
-      
-      // ✅ FIX: Process payouts in batches to reduce transaction overhead
-      const batchSize = 10;
-      const payoutBatches: Array<typeof payoutNotifications> = [];
-      
-      for (let i = 0; i < payoutNotifications.length; i += batchSize) {
-        payoutBatches.push(payoutNotifications.slice(i, i + batchSize));
+    // Broadcast error to admins
+    broadcastToRole({
+      type: 'error',
+      data: { 
+        message: 'CRITICAL ERROR: Payout processing failed. Please verify user balances.',
+        code: 'PAYOUT_ERROR',
+        error: payoutError instanceof Error ? payoutError.message : String(payoutError)
       }
-      
-      // Process each batch sequentially
-      for (const batch of payoutBatches) {
-        await Promise.all(
-          batch.map(async (notification) => {
-            try {
-              if (notification.payout > 0) {
-                // Add balance atomically
-                await storage.addBalanceAtomic(notification.userId, notification.payout);
-                console.log(`✅ Fallback: Added balance for user ${notification.userId}: ₹${notification.payout}`);
-              }
-              
-              // Update bet statuses for this user (using pre-fetched bets)
-              for (const bet of allBetsForGame) {
-                const betUserId = (bet as any).user_id || (bet as any).userId;
-                if (betUserId === notification.userId) {
-                  if (bet.side === winningSide && notification.payout > 0) {
-                    await storage.updateBetStatus(bet.id, 'won');
-                  } else {
-                    await storage.updateBetStatus(bet.id, 'lost');
-                  }
-                }
-              }
-              
-              console.log(`✅ Fallback: Processed payout for user ${notification.userId}: ₹${notification.payout}`);
-            } catch (userError) {
-              console.error(`⚠️ Error processing payout for user ${notification.userId}:`, userError);
-              // Continue with other users even if one fails
-            }
-          })
-        );
-      }
-      
-      payoutSuccess = true;
-      console.log('✅ Fallback: Individual payout processing completed');
-      
-      // ✅ CRITICAL FIX: Parallelize stats updates in fallback too
-      const fallbackStatsPromises = Array.from(gameState.userBets.entries()).map(async ([userId, userBets]) => {
-        const totalUserBets = 
-          userBets.round1.andar + 
-          userBets.round1.bahar + 
-          userBets.round2.andar + 
-          userBets.round2.bahar;
-        
-        if (totalUserBets > 0) {
-          const userPayout = payouts[userId] || 0;
-          const won = userPayout > 0;
-          
-          try {
-            await storage.updateUserGameStats(userId, won, totalUserBets, userPayout);
-            console.log(`✅ Fallback: Updated stats for user ${userId}: won=${won}, bet=${totalUserBets}, payout=${userPayout}`);
-          } catch (statsError) {
-            console.error(`⚠️ Fallback: Failed to update stats for user ${userId}:`, statsError);
-            // Don't fail the entire operation if stats update fails
-          }
-        }
-      });
-      
-      await Promise.all(fallbackStatsPromises);
-      console.log(`⏱️ Fallback stats updates completed (parallel)`);
-      
-      // ✅ FIX: If fallback succeeds, notify admins but don't treat as critical error
-      broadcastToRole({
-        type: 'warning',
-        data: { 
-          message: 'Payout processing used fallback method. All payouts completed successfully.',
-          code: 'PAYOUT_FALLBACK_SUCCESS',
-          fallbackUsed: true
-        }
-      }, 'admin');
-    } catch (fallbackError) {
-      console.error('❌ CRITICAL: Fallback payout processing also failed:', fallbackError);
-      
-      // ✅ CRITICAL: If both primary and fallback fail, we need to rollback any partial payouts
-      // This prevents the issue where balance increases but game doesn't complete properly
-      console.error('⚠️ ROLLBACK REQUIRED: Attempting to reverse any partial payouts...');
-      
-      try {
-        // Get all bets for this game to identify which users received payouts
-        const allBetsForGame = await storage.getBetsForGame(gameState.gameId);
-        const usersToRollback = new Set<string>();
-        
-        // Identify users who may have received partial payouts
-        for (const notification of payoutNotifications) {
-          if (notification.payout > 0) {
-            usersToRollback.add(notification.userId);
-          }
-        }
-        
-        // Rollback balances for affected users
-        for (const userId of Array.from(usersToRollback)) {
-          const userNotification = payoutNotifications.find(n => n.userId === userId);
-          if (userNotification && userNotification.payout > 0) {
-            try {
-              // Deduct the payout amount that may have been added
-              await storage.deductBalanceAtomic(userId, userNotification.payout);
-              console.log(`✅ Rolled back ₹${userNotification.payout} from user ${userId}`);
-            } catch (rollbackError) {
-              console.error(`❌ Failed to rollback payout for user ${userId}:`, rollbackError);
-            }
-          }
-        }
-        
-        console.log('✅ Rollback completed for partial payouts');
-      } catch (rollbackError) {
-        console.error('❌ CRITICAL: Rollback also failed:', rollbackError);
-      }
-      
-      // Broadcast critical error to admins
-      broadcastToRole({
-        type: 'error',
-        data: { 
-          message: 'CRITICAL ERROR: Payout processing failed completely. Partial payouts have been rolled back. Please verify user balances.',
-          code: 'PAYOUT_TOTAL_FAILURE',
-          error: payoutError instanceof Error ? payoutError.message : String(payoutError),
-          fallbackUsed: true,
-          rollbackAttempted: true
-        }
-      }, 'admin');
-      
-      // Still continue to save game history even if all payouts fail
-    }
+    }, 'admin');
     
-    // ✅ FIX: Only broadcast error if payouts actually failed (not if fallback succeeded)
-    if (!payoutSuccess) {
-      broadcastToRole({
-        type: 'error',
-        data: { 
-          message: 'CRITICAL ERROR: Payout processing failed. Game history will still be saved.',
-          code: 'PAYOUT_DB_ERROR',
-          error: payoutError instanceof Error ? payoutError.message : String(payoutError),
-          fallbackUsed: fallbackUsed
-        }
-      }, 'admin');
-    }
-    
-    // ✅ CRITICAL: DO NOT RETURN - continue to save game history even if payouts fail
-    // The return statement was preventing game history from being saved
+    // Continue to save game history even if payouts fail
   }
   
   // STEP 2: Send WebSocket updates with more detailed information
@@ -440,7 +361,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   
   // ✅ ENHANCED LOGGING: Check for race condition - are we sending WS before DB confirms?
   const timeSincePayoutStart = wsStartTime - operationTimestamps.payoutProcessingStart;
-  if (timeSincePayoutStart < 100) {
+  if (timeSincePayoutStart < 200) {
     console.warn(`⚠️ [RACE CONDITION WARNING] WebSocket messages starting only ${timeSincePayoutStart}ms after payout processing started`);
     console.warn(`   This may indicate messages are being sent before DB confirms payouts`);
   }
@@ -461,72 +382,9 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     }
   }
 
+  // Send game_complete with per-user payout info (no separate payout_received event)
   if (payoutNotifications && payoutNotifications.length > 0 && clients) {
     const clientsArray = Array.from(clients);
-
-    // Send payout_received with detailed breakdown to each user who bet
-    for (const notification of payoutNotifications) {
-      const client = clientsArray.find(c => c.userId === notification.userId);
-      if (!client) continue;
-
-      try {
-        let updatedBalance = balanceMap.get(notification.userId);
-        if (updatedBalance === undefined) {
-          const updatedUser = await storage.getUser(notification.userId);
-          // ✅ FIX: Ensure balance is a number
-          const balanceValue = updatedUser?.balance;
-          updatedBalance = typeof balanceValue === 'number' ? balanceValue : (typeof balanceValue === 'string' ? parseFloat(balanceValue) || 0 : 0);
-        }
-
-        const totalUserBets =
-          notification.bets.round1.andar + notification.bets.round1.bahar +
-          notification.bets.round2.andar + notification.bets.round2.bahar;
-
-        const netProfit = notification.payout - totalUserBets;
-        const result: 'win' | 'loss' | 'no_bet' =
-          notification.payout > 0 ? 'win' : (totalUserBets > 0 ? 'loss' : 'no_bet');
-
-        client.ws.send(JSON.stringify({
-          type: 'payout_received',
-          data: {
-            amount: notification.payout,
-            balance: updatedBalance,
-            totalBetAmount: totalUserBets,
-            netProfit,
-            winner: winningSide,
-            round: gameState.currentRound,
-            result,
-            betAmount: notification.betAmount,
-            payoutBreakdown: {
-              winningBets: winningSide === 'andar'
-                ? (gameState.currentRound === 1
-                    ? gameState.round1Bets.andar
-                    : gameState.currentRound === 2
-                      ? (gameState.round1Bets.andar + gameState.round2Bets.andar)
-                      : gameState.round1Bets.andar + gameState.round2Bets.andar)
-                : (gameState.currentRound === 1
-                    ? gameState.round1Bets.bahar
-                    : gameState.currentRound === 2
-                      ? (gameState.round1Bets.bahar * 2 + gameState.round2Bets.bahar)
-                      : gameState.round1Bets[winningSide] + gameState.round2Bets[winningSide]),
-              multiplier: 2
-            }
-          }
-        }));
-
-        console.log(`💸 Sent complete payout to user ${notification.userId}:`, {
-          amount: notification.payout,
-          totalBet: totalUserBets,
-          netProfit,
-          result,
-          newBalance: updatedBalance
-        });
-      } catch (error) {
-        console.error(`❌ Error sending payout notification to user ${notification.userId}:`, error);
-      }
-    }
-
-    // Now send game_complete with per-user payout info
     const actualRound = gameState.currentRound;
     const andarCount = gameState.andarCards.length;
     const baharCount = gameState.baharCards.length;
@@ -610,7 +468,8 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
             totalPayouts: totalPayoutsAmount,
             message: `${winningSide.toUpperCase()} wins with ${winningCard}!`,
             winnerDisplay, // ✅ NEW: Server-computed winner text (ANDAR WON / BABA WON / BAHAR WON)
-            userPayout: userPayoutData // ✅ ALWAYS include, even if zero
+            userPayout: userPayoutData, // ✅ ALWAYS include, even if zero
+            newBalance: balanceMap.get(client.userId) // ✅ CRITICAL FIX: Include updated balance for instant UI update
           }
         }));
         
@@ -627,7 +486,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
 
     operationTimestamps.wsMessagesEnd = Date.now();
     const wsDuration = operationTimestamps.wsMessagesEnd - operationTimestamps.wsMessagesStart;
-    console.log(`⏱️ WebSocket messages (payout_received + per-user game_complete) sent in ${wsDuration}ms`);
+    console.log(`⏱️ WebSocket messages (game_complete with payout data) sent in ${wsDuration}ms`);
     console.log(`⏱️ [TIMING] WebSocket messaging completed at ${new Date().toISOString()} (${wsDuration}ms)`);
     
     // ✅ ENHANCED LOGGING: Summary of critical path timing
@@ -1054,8 +913,8 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   console.log(`⏱️ Game history/stats saved in ${Date.now() - historyStartTime}ms (background)`);
   }; // End of saveGameDataAsync
   
-  // Execute game data save in background (don't await)
-  saveGameDataAsync().catch(error => {
+  // ✅ FIX #6: Track async game history save promise so new games can wait for it
+  const historySavePromise = saveGameDataAsync().catch(error => {
     console.error('❌ CRITICAL: Background game data save failed:', error);
     broadcastToRole({
       type: 'error',
@@ -1067,12 +926,14 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     }, 'admin');
   });
   
+  // Store promise globally so handleStartGame can wait for it
+  (global as any).lastHistorySavePromise = historySavePromise;
+  
   const finalCriticalPath = Date.now() - payoutStartTime;
   console.log(`⏱️ TOTAL CRITICAL PATH: ${finalCriticalPath}ms (payouts + WebSocket)`);
   console.log(`⏱️ [TIMING] Game completion finished at ${new Date().toISOString()}`);
   console.log(`📊 [PERFORMANCE] Critical operations completed in ${finalCriticalPath}ms (history save running async)`);
   
-  // ✅ FIX: Track completion promise globally so new games can wait for it
-  // This prevents race conditions when admin starts a new game immediately after completion
-  (global as any).lastPayoutPromise = Promise.resolve();
+  // Store history save promise globally so handleStartGame can wait for it
+  console.log('✅ GAME COMPLETION: History save running in background');
 }

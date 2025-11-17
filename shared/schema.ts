@@ -86,6 +86,8 @@ export const playerBets = pgTable("player_bets", {
   side: text("side").notNull(), // andar or bahar
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   status: text("status").notNull().default("active"), // active, won, lost, cancelled
+  payoutTransactionId: text("payout_transaction_id"), // Unique transaction ID for payout - prevents duplicate payouts
+  actualPayout: decimal("actual_payout", { precision: 15, scale: 2 }), // Actual payout amount for winning bets
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

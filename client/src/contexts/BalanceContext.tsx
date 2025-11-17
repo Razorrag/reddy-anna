@@ -85,6 +85,15 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const updateBalance = useCallback(async (newBalance: number, source: string = 'api', transactionType?: string, amount?: number) => {
     const timestamp = Date.now();
+    
+    // ✅ FIX: Validate balance is a valid number before processing
+    if (typeof newBalance !== 'number' || isNaN(newBalance)) {
+      console.error('❌ Invalid balance value:', newBalance);
+      return;
+    }
+    
+    const balanceChanged = Math.abs(newBalance - state.currentBalance) >= 0.01;
+
     dispatch({
       type: 'SET_BALANCE',
       payload: { balance: newBalance, source, timestamp }
@@ -92,7 +101,7 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     // Emit custom event for other contexts
     window.dispatchEvent(new CustomEvent('balance-updated', {
-      detail: { balance: newBalance, source, timestamp: Date.now(), transactionType, amount }
+      detail: { balance: newBalance, source, timestamp, transactionType, amount }
     }));
 
     // Update localStorage
@@ -102,20 +111,22 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         const user = JSON.parse(userStr);
         user.balance = newBalance;
         localStorage.setItem('user', JSON.stringify(user));
-        
-        // Notify server via API to broadcast to other WebSocket clients
-        if (source !== 'websocket') {
-          try {
-            await apiClient.notifyBalanceUpdate(user.id, newBalance, transactionType, amount);
-          } catch (error) {
-            console.error('Failed to notify balance update:', error);
-          }
-        }
+
+        // ✅ FIX: NEVER call balance-notify from client
+        // Server is the single source of truth for balance updates
+        // All balance changes come FROM server TO client via WebSocket
+        // This prevents duplicate payouts and race conditions
+        console.log('✅ Balance updated locally:', {
+          newBalance,
+          source,
+          balanceChanged,
+          transactionType
+        });
       } catch (error) {
         console.error('Failed to update localStorage balance:', error);
       }
     }
-  }, []);
+  }, [state.currentBalance]);
 
   const refreshBalance = useCallback(async () => {
     // Skip balance refresh for admin users

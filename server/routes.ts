@@ -170,7 +170,7 @@ import {
 interface WSClient {
   ws: WebSocket;
   userId: string;
-  role: 'player' | 'admin';
+  role: 'player' | 'admin' | 'super_admin';
   wallet: number;
   authenticatedAt?: number;
   lastActivity?: number;
@@ -1184,9 +1184,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               throw new Error('Token expired or about to expire');
             }
 
-            let user = null;
-
             // Handle admin users - they don't exist in regular users table
+            let user: any;
             if (decoded.role === 'admin' || decoded.role === 'super_admin') {
               // For admin users, create a proxy user object
               user = {
@@ -1215,11 +1214,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               // Enhanced client object with additional properties
               const nowMs = Date.now();
-              const clientRole = decoded.role || 'player';
+              const clientRole = (decoded.role || 'player') as 'player' | 'admin' | 'super_admin';
               const newClient: WSClient = {
                 ws,
                 userId: decoded.id,
-                role: clientRole,
+                role: clientRole as 'player' | 'admin' | 'super_admin',
                 wallet: parseFloat(user.balance as string) || 0,
                 authenticatedAt: nowMs,
                 lastActivity: nowMs,
@@ -1549,13 +1548,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 break;
               }
 
-              // ✅ CRITICAL FIX: Refund all player bets BEFORE resetting game
-              console.log('🔄 Game reset initiated - refunding all player bets...');
+              // ✅ CRITICAL FIX: Only refund bets if game was NOT completed
+              // If game was completed, payouts were already given - don't refund!
+              const gamePhase = (global as any).currentGameState?.phase;
+              const shouldRefund = gamePhase !== 'complete';
+              
+              console.log(`🔄 Game reset initiated - Phase: ${gamePhase}, Should refund: ${shouldRefund}`);
               const userBets = (global as any).currentGameState?.userBets;
               let totalRefunded = 0;
               let playersRefunded = 0;
               
-              if (userBets && userBets.size > 0) {
+              if (shouldRefund && userBets && userBets.size > 0) {
                 for (const [userId, bets] of userBets.entries()) {
                   let totalRefund = 0;
                   
@@ -1607,6 +1610,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   }
                 }
                 console.log(`💰 Total refunded: ₹${totalRefunded} to ${playersRefunded} players`);
+              } else if (!shouldRefund) {
+                console.log('ℹ️ Game was completed - skipping refund (payouts already given)');
               } else {
                 console.log('ℹ️ No bets to refund');
               }
@@ -5431,6 +5436,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // ✅ FIX #1: Validate balance before broadcasting to prevent NaN
+      const parsedBalance = parseFloat(balance);
+      if (isNaN(parsedBalance) || parsedBalance === undefined || parsedBalance === null) {
+        console.warn(`⚠️ Invalid balance notification attempt: userId=${userId}, balance=${balance}`);
+        // Fetch actual balance from database instead
+        try {
+          const user = await storage.getUser(userId);
+          const actualBalance = user ? parseFloat(user.balance as string) : 0;
+          console.log(`✅ Using actual balance from DB: ${actualBalance}`);
+          
+          // Broadcast with actual balance
+          clients.forEach(client => {
+            if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+              client.ws.send(JSON.stringify({
+                type: 'balance_update',
+                data: {
+                  userId,
+                  balance: actualBalance,
+                  transactionType: transactionType || 'unknown',
+                  amount: parseFloat(amount) || 0,
+                  timestamp: Date.now()
+                }
+              }));
+            }
+          });
+          
+          return res.json({
+            success: true,
+            message: 'Balance notification sent with DB value',
+            balance: actualBalance
+          });
+        } catch (dbError) {
+          console.error('Failed to fetch balance from DB:', dbError);
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid balance value and could not fetch from database'
+          });
+        }
+      }
+      
       // Broadcast balance update to all WebSocket clients for this user
       try {
         clients.forEach(client => {
@@ -5439,7 +5484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               type: 'balance_update',
               data: {
                 userId,
-                balance: parseFloat(balance),
+                balance: parsedBalance,
                 transactionType: transactionType || 'unknown',
                 amount: parseFloat(amount) || 0,
                 timestamp: Date.now()
@@ -5448,7 +5493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         });
         
-        console.log(`💰 Balance notification sent: ${userId} -> ${parseFloat(balance)} (${transactionType})`);
+        console.log(`💰 Balance notification sent: ${userId} -> ${parsedBalance} (${transactionType})`);
       } catch (broadcastError) {
         console.error('Failed to broadcast balance notification:', broadcastError);
       }

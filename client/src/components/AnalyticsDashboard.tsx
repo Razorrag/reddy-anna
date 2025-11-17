@@ -14,7 +14,6 @@ import {
   WifiOff
 } from "lucide-react";
 import { DailyAnalytics, MonthlyAnalytics, YearlyAnalytics, RealtimeStats } from '@/types/game';
-import { useAuth } from '@/contexts/AuthContext';
 import { apiClient } from '@/lib/api-client';
 
 interface AnalyticsDashboardProps {
@@ -48,25 +47,32 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
       // Fetch real-time stats
       try {
         const realtimeResult = await apiClient.get('/admin/realtime-stats') as any;
+        console.log('📊 Realtime Stats Response:', realtimeResult);
         if (realtimeResult.success && realtimeResult.data) {
           setRealtimeData(realtimeResult.data);
           setConnectionStatus('connected');
         } else {
+          console.warn('⚠️ Realtime stats not available');
           setConnectionStatus('disconnected');
         }
       } catch (error) {
-        console.error('Failed to fetch realtime stats:', error);
+        console.error('❌ Failed to fetch realtime stats:', error);
         setConnectionStatus('disconnected');
       }
       
       // Fetch daily stats
       try {
         const dailyResult = await apiClient.get('/admin/analytics?period=daily') as any;
+        console.log('📊 Daily Analytics Response:', dailyResult);
         if (dailyResult.success && dailyResult.data) {
           setDailyData(dailyResult.data);
+        } else {
+          console.warn('⚠️ Daily analytics data is null or unsuccessful');
+          setDailyData(null);
         }
       } catch (error) {
-        console.error('Failed to fetch daily stats:', error);
+        console.error('❌ Failed to fetch daily stats:', error);
+        setDailyData(null);
       }
       
       // Fetch monthly stats
@@ -74,27 +80,34 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
         const monthlyResult = await apiClient.get(`/admin/analytics?period=monthly&month=${selectedMonth}`) as any;
         console.log('📊 Monthly Analytics Response:', monthlyResult);
         if (monthlyResult.success && monthlyResult.data) {
-          console.log('📊 Monthly Data Received:', monthlyResult.data);
+          console.log('✅ Monthly Data Received:', monthlyResult.data);
           setMonthlyData(monthlyResult.data);
         } else {
-          console.log('❌ Monthly data missing or unsuccessful');
+          console.warn('⚠️ Monthly data is null or unsuccessful');
+          setMonthlyData(null);
         }
       } catch (error) {
-        console.error('Failed to fetch monthly stats:', error);
+        console.error('❌ Failed to fetch monthly stats:', error);
+        setMonthlyData(null);
       }
       
       // Fetch yearly stats
       try {
         const yearlyResult = await apiClient.get(`/admin/analytics?period=yearly&year=${selectedYear}`) as any;
+        console.log('📊 Yearly Analytics Response:', yearlyResult);
         if (yearlyResult.success && yearlyResult.data) {
           setYearlyData(yearlyResult.data);
+        } else {
+          console.warn('⚠️ Yearly data is null or unsuccessful');
+          setYearlyData(null);
         }
       } catch (error) {
-        console.error('Failed to fetch yearly stats:', error);
+        console.error('❌ Failed to fetch yearly stats:', error);
+        setYearlyData(null);
       }
       
     } catch (error) {
-      console.error('Error fetching analytics:', error);
+      console.error('❌ Error fetching analytics:', error);
       setError('Failed to fetch analytics data');
       setConnectionStatus('disconnected');
     } finally {
@@ -361,7 +374,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
           </Select>
         </div>
         
-        {monthlyData && (
+        {monthlyData ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Games"
@@ -399,6 +412,10 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
               icon={<Users className="h-6 w-6" />}
             />
           </div>
+        ) : (
+          <div className="bg-purple-900/30 border border-purple-400/30 rounded-lg p-6 text-center">
+            <p className="text-purple-300">No monthly data available for {selectedMonth}</p>
+          </div>
         )}
       </div>
 
@@ -423,7 +440,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
           </Select>
         </div>
         
-        {yearlyData && (
+        {yearlyData ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Games"
@@ -460,6 +477,10 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
               value={yearlyData.uniquePlayers || 0}
               icon={<Users className="h-6 w-6" />}
             />
+          </div>
+        ) : (
+          <div className="bg-purple-900/30 border border-purple-400/30 rounded-lg p-6 text-center">
+            <p className="text-purple-300">No yearly data available for {selectedYear}</p>
           </div>
         )}
       </div>

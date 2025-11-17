@@ -169,7 +169,18 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         selectedOpeningCard: action.payload,
         usedCards: updatedUsedCards
       };
-    case 'ADD_ANDAR_CARD':
+    case 'ADD_ANDAR_CARD': {
+      // ✅ FIX: Check for duplicate cards before adding
+      const isDuplicateAndar = state.andarCards.some(c => 
+        c.id === action.payload.id || 
+        (c.display === action.payload.display && c.suit === action.payload.suit)
+      );
+      
+      if (isDuplicateAndar) {
+        console.warn('⚠️ Duplicate Andar card detected, skipping:', action.payload.display);
+        return state;
+      }
+      
       // Add to usedCards if not already there
       const isAndarCardUsed = state.usedCards.some(c => c.id === action.payload.id);
       return { 
@@ -177,7 +188,19 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         andarCards: [...state.andarCards, action.payload],
         usedCards: isAndarCardUsed ? state.usedCards : [...state.usedCards, action.payload]
       };
-    case 'ADD_BAHAR_CARD':
+    }
+    case 'ADD_BAHAR_CARD': {
+      // ✅ FIX: Check for duplicate cards before adding
+      const isDuplicateBahar = state.baharCards.some(c => 
+        c.id === action.payload.id || 
+        (c.display === action.payload.display && c.suit === action.payload.suit)
+      );
+      
+      if (isDuplicateBahar) {
+        console.warn('⚠️ Duplicate Bahar card detected, skipping:', action.payload.display);
+        return state;
+      }
+      
       // Add to usedCards if not already there
       const isBaharCardUsed = state.usedCards.some(c => c.id === action.payload.id);
       return { 
@@ -185,6 +208,7 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         baharCards: [...state.baharCards, action.payload],
         usedCards: isBaharCardUsed ? state.usedCards : [...state.usedCards, action.payload]
       };
+    }
     case 'ADD_DEALT_CARD':
       return { ...state, dealtCards: [...state.dealtCards, action.payload] };
     case 'ADD_USED_CARD':
@@ -405,7 +429,7 @@ interface GameStateContextType {
   setGameActive: (active: boolean) => void;
   setBettingLocked: (locked: boolean) => void;
   setCurrentRound: (round: GameRound) => void;
-  updateTotalBets: (bets: RoundBets) => void;
+  updateTotalBets: (bets: { andar: number; bahar: number }) => void;
   updatePlayerWallet: (wallet: number) => void;
   setUserRole: (role: 'player' | 'admin') => void;
   updateRoundBets: (round: GameRound, bets: RoundBets) => void;
@@ -649,7 +673,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'SET_CURRENT_ROUND', payload: round });
   };
 
-  const updateTotalBets = (bets: RoundBets) => {
+  const updateTotalBets = (bets: { andar: number; bahar: number }) => {
     dispatch({ type: 'UPDATE_TOTAL_BETS', payload: bets });
   };
 

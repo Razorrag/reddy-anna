@@ -13,8 +13,6 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, VolumeX } from 'lucide-react';
 
 interface VideoAreaProps {
   className?: string;
@@ -44,9 +42,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
   const [isPausedState, setIsPausedState] = useState(false);
-  
-  // ✅ FIX: Add mute state for user control
-  const [isMuted, setIsMuted] = useState(true); // Start muted by default
 
   // ✅ CRITICAL FIX: Move loadStreamConfig to component scope so it can be reused
   const loadStreamConfig = useCallback(async () => {
@@ -108,8 +103,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         };
         setStreamConfig(config);
         setIsPausedState(config.isPaused || false);
-        // ✅ NEW: Initialize mute state from backend config
-        setIsMuted(config.muted !== false);
         
         console.log('🎥 VideoArea: Stream config loaded:', {
           streamUrl: streamUrl,
@@ -279,17 +272,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           
           setIsPausedState(isPaused);
           
-          // Capture frame when pausing
-          if (isPaused) {
-            captureCurrentFrame();
-          } else {
-            // Clear frozen frame when resuming
-            setFrozenFrame(null);
-            // Resume video playback
-            if (videoRef.current) {
-              videoRef.current.play().catch(console.error);
-            }
-          }
+          // Update pause state (actual pause/resume handled in useEffect)
+          // This just updates the state, the useEffect will handle the stream reload
         }
       } catch (error) {
         // Ignore non-JSON messages
@@ -320,16 +304,53 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     }
   };
 
-  // Handle pause effect when paused state changes
+  // Handle pause/resume effect when paused state changes
   useEffect(() => {
-    if (isPausedState && videoRef.current) {
-      videoRef.current.pause();
-      captureCurrentFrame();
-    } else if (!isPausedState && videoRef.current) {
+    const videoElement = videoRef.current;
+    const iframeElement = iframeRef.current;
+    
+    if (isPausedState) {
+      // PAUSE: Freeze on current frame
+      if (videoElement) {
+        videoElement.pause();
+        captureCurrentFrame();
+        console.log('⏸️ Stream paused - frame frozen');
+      }
+    } else {
+      // RESUME: Jump to latest live stream (reload to get latest)
       setFrozenFrame(null);
-      videoRef.current.play().catch(console.error);
+      
+      if (videoElement && streamConfig?.streamUrl) {
+        console.log('▶️ Resuming stream - reloading to get latest live feed...');
+        // For M3U8/HLS streams, reload to jump to live edge
+        const currentSrc = videoElement.src;
+        videoElement.src = ''; // Clear
+        setTimeout(() => {
+          videoElement.src = currentSrc; // Reload
+          videoElement.load();
+          videoElement.play().catch(err => {
+            console.error('❌ Resume play failed:', err);
+            // Retry after short delay
+            setTimeout(() => {
+              videoElement.play().catch(console.error);
+            }, 500);
+          });
+          console.log('✅ Stream resumed from latest live position');
+        }, 100);
+      }
+      
+      // For iframe streams, reload to get latest
+      if (iframeElement && streamConfig?.streamUrl) {
+        console.log('▶️ Resuming iframe stream - reloading...');
+        const currentSrc = iframeElement.src;
+        iframeElement.src = ''; // Clear to prevent black screen
+        setTimeout(() => {
+          iframeElement.src = currentSrc; // Reload
+          console.log('✅ Iframe stream resumed');
+        }, 100);
+      }
     }
-  }, [isPausedState]);
+  }, [isPausedState, streamConfig?.streamUrl]);
 
   // Handle pulse effect when less than 5 seconds
   useEffect(() => {
@@ -411,8 +432,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           src={streamConfig.streamUrl}
           className="w-full h-full object-cover"
           autoPlay
-          muted={isMuted} // ✅ FIX: User-controlled mute state
-          controls={streamConfig.controls || false}
+          muted={true} // Always muted (mute button removed)
+          controls={false} // No controls for cleaner UI
           loop
           playsInline
           preload="auto"
@@ -483,7 +504,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
   // Determine if stream is live
   const isLive = !!(streamConfig?.isActive && streamConfig?.streamUrl);
-  const showFrozenFrame = false;
   
   console.log('🎥 VideoArea render state:', {
     isLive,
@@ -495,34 +515,30 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
   return (
     <div className={`relative bg-black overflow-hidden ${className}`}>
-      {/* Hidden canvas for frame capture */}
+      {/* Hidden canvas for capturing frozen frame when paused */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
+      
+      {/* Show frozen frame overlay when paused */}
+      {isPausedState && frozenFrame && (
+        <div className="absolute inset-0 z-20">
+          <img 
+            src={frozenFrame} 
+            alt="Paused frame" 
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <div className="bg-black/80 backdrop-blur-sm px-6 py-3 rounded-full">
+              <span className="text-white text-lg font-semibold">⏸️ Stream Paused</span>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Embedded Video Stream - Runs independently in background, never interrupted */}
       <div className="absolute inset-0">
         {renderStream()}
 
-        {/* ✅ FIX: Mute/Unmute Button - Show whenever video element is used */}
-        {shouldUseVideo && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent video from pausing
-              setIsMuted(!isMuted);
-              // Update video element immediately
-              if (videoRef.current) {
-                videoRef.current.muted = !isMuted;
-              }
-            }}
-            className="absolute bottom-4 right-4 p-3 rounded-full bg-black/70 hover:bg-black/90 text-white z-30 transition-all backdrop-blur-sm shadow-lg"
-            aria-label={isMuted ? 'Unmute' : 'Mute'}
-          >
-            {isMuted ? (
-              <VolumeX className="w-5 h-5" />
-            ) : (
-              <Volume2 className="w-5 h-5" />
-            )}
-          </button>
-        )}
+        {/* Mute button removed as per user request */}
 
         {/* Overlay Gradient for better text visibility (no paused popup) */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" style={{ zIndex: 2 }} />

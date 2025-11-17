@@ -400,22 +400,13 @@ const PlayerGame: React.FC = () => {
       const customEvent = event as CustomEvent;
       console.log('Game complete celebration received:', customEvent.detail);
       
-      // ✅ FIX: Trigger the celebration state from context
-      // This ensures the celebration data is stored in GameStateContext
-      // and will persist until admin starts a new game
-      if (customEvent.detail) {
-        setCelebration(customEvent.detail);
-      }
-      
-      // ✅ FIX: Refresh balance immediately (no delay needed - WebSocket already updated it)
-      // The game_complete WebSocket message already includes balance update
-      // This is just a safety refresh to ensure consistency
-      updateBalance(undefined as any, 'api');
+      // Celebration is already set by WebSocketContext, no need to set again
+      // Balance is already updated by WebSocket, no need for API call
     };
 
     window.addEventListener('game-complete-celebration', handleGameComplete);
     return () => window.removeEventListener('game-complete-celebration', handleGameComplete);
-  }, [updateBalance, setCelebration]);
+  }, []);
 
   // Listen for payment notifications and balance refresh requests
   useEffect(() => {
