@@ -717,6 +717,94 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         break;
       }
 
+      case 'winner_declared': {
+        // ✅ NEW: Handle winner announcement with full payout preview data
+        // This shows complete celebration IMMEDIATELY when winning card is dealt
+        console.log('🎊 RECEIVED winner_declared event:', JSON.stringify(data, null, 2));
+        const winnerDeclaredData = (data as any).data;
+        if (!winnerDeclaredData) {
+          console.error('❌ winner_declared message missing data');
+          break;
+        }
+        
+        const { winner, winningCard, round, payoutPreviews } = winnerDeclaredData;
+        
+        console.log('🎊 winner_declared parsed data:', { winner, winningCard, round, payoutPreviewsCount: payoutPreviews?.length });
+        
+        if (!winner || !winningCard) {
+          console.error('❌ winner_declared message missing winner or winningCard:', { winner, winningCard });
+          break;
+        }
+        
+        // ✅ NEW: Find payout preview for current user
+        let payoutAmount = 0;
+        let totalBetAmount = 0;
+        let netProfit = 0;
+        let result: 'no_bet' | 'win' | 'loss' = 'no_bet';
+        
+        if (payoutPreviews && Array.isArray(payoutPreviews) && authState.user?.id) {
+          const userPayout = payoutPreviews.find((p: any) => p.userId === authState.user?.id);
+          if (userPayout) {
+            payoutAmount = userPayout.payoutAmount || 0;
+            totalBetAmount = userPayout.totalBet || 0;
+            netProfit = userPayout.netProfit || 0;
+            result = userPayout.result || 'no_bet';
+            
+            console.log('🎊 User payout preview found:', { payoutAmount, totalBetAmount, netProfit, result });
+          } else {
+            console.log('ℹ️ No payout preview for current user (no bets placed)');
+          }
+        }
+        
+        // Show winner with COMPLETE payout data immediately
+        const winnerDisplay = winner === 'andar'
+          ? 'ANDAR WON'
+          : round >= 3 ? 'BAHAR WON' : 'BABA WON';
+        
+        const celebrationData = {
+          winner,
+          winningCard,
+          round: round || gameState.currentRound,
+          winnerDisplay,
+          payoutAmount,
+          totalBetAmount,
+          netProfit,
+          result,
+          dataSource: 'winner_declared'
+        };
+        
+        console.log('🎊 Setting celebration with FULL payout preview data:', JSON.stringify(celebrationData, null, 2));
+        setCelebration(celebrationData);
+        
+        // Dispatch event for celebration component
+        const celebrationEvent = new CustomEvent('game-complete-celebration', {
+          detail: celebrationData
+        });
+        window.dispatchEvent(celebrationEvent);
+        
+        console.log('🎊 Setting phase to complete and winner to:', winner);
+        setPhase('complete');
+        setWinner(winner);
+        
+        if (round) {
+          setCurrentRound(round as any);
+        }
+        
+        try {
+          if (winningCard) {
+            const card = typeof winningCard === 'string'
+              ? parseDisplayCard(winningCard)
+              : winningCard;
+            setWinningCard(card);
+          }
+        } catch (error) {
+          console.error('❌ Error parsing winning card:', error);
+        }
+        
+        console.log('✅ Celebration shown with full payout preview - actual payouts will process when admin starts new game');
+        break;
+      }
+
       case 'timer_update': {
         const { seconds, phase, round, bettingLocked } = (data as TimerUpdateMessage).data;
         setCountdown(seconds);

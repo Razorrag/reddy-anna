@@ -1549,66 +1549,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 break;
               }
 
-              // ✅ CRITICAL FIX: Refund all player bets BEFORE resetting game
-              console.log('🔄 Game reset initiated - refunding all player bets...');
-              const userBets = (global as any).currentGameState?.userBets;
-              let totalRefunded = 0;
-              let playersRefunded = 0;
+              // ✅ NEW STREAMLINED FLOW: Check if game is complete with winner
+              const currentPhase = (global as any).currentGameState?.phase;
+              const winner = (global as any).currentGameState?.winner;
+              const winningCard = (global as any).currentGameState?.winningCard;
               
-              if (userBets && userBets.size > 0) {
-                for (const [userId, bets] of userBets.entries()) {
-                  let totalRefund = 0;
+              console.log('🔄 Game reset initiated by admin');
+              console.log(`Current phase: ${currentPhase}, Winner: ${winner}, Winning card: ${winningCard}`);
+              
+              // ✅ CRITICAL: Process payouts ONLY when admin clicks "Start New Game" for completed game
+              if (currentPhase === 'complete' && winner) {
+                console.log('🏆 Game complete with winner - processing payouts via admin action');
+                console.log(`Winner: ${winner}, Winning Card: ${winningCard}`);
+                
+                try {
+                  // Import and execute completeGame ONCE
+                  const { completeGame } = await import('./game');
+                  await completeGame((global as any).currentGameState, winner, winningCard);
                   
-                  // Calculate total bet amount from all rounds
-                  if (bets.round1) {
-                    totalRefund += (bets.round1.andar || 0) + (bets.round1.bahar || 0);
-                  }
-                  if (bets.round2) {
-                    totalRefund += (bets.round2.andar || 0) + (bets.round2.bahar || 0);
-                  }
-                  
-                  if (totalRefund > 0) {
-                    try {
-                      // Refund to user balance atomically
-                      const newBalance = await storage.addBalanceAtomic(userId, totalRefund);
-                      
-                      // Create transaction record for audit trail
-                      await storage.addTransaction({
-                        userId: userId,
-                        transactionType: 'refund',
-                        amount: totalRefund,
-                        balanceBefore: newBalance - totalRefund,
-                        balanceAfter: newBalance,
-                        referenceId: `game-reset-${Date.now()}-${userId}`,
-                        description: 'Bet refunded - Admin reset game before completion'
-                      });
-                      
-                      totalRefunded += totalRefund;
-                      playersRefunded++;
-                      
-                      // Notify user of refund via WebSocket
-                      const userClient = Array.from(clients.values()).find(c => c.userId === userId);
-                      if (userClient?.ws && userClient.ws.readyState === WebSocket.OPEN) {
-                        userClient.ws.send(JSON.stringify({
-                          type: 'bet_refunded',
-                          data: {
-                            amount: totalRefund,
-                            reason: 'Game reset by admin before completion',
-                            newBalance: newBalance
-                          }
-                        }));
+                  console.log('✅ Payouts processed successfully via admin "Start New Game" action');
+                } catch (payoutError) {
+                  console.error('❌ Failed to process payouts:', payoutError);
+                  sendError(ws, 'Failed to process payouts. Please try again.');
+                  break;
+                }
+                
+              } else if (currentPhase !== 'idle') {
+                // Game was incomplete (no winner) - refund bets only
+                console.log('⚠️ Game incomplete - refunding bets');
+                const userBets = (global as any).currentGameState?.userBets;
+                let totalRefunded = 0;
+                let playersRefunded = 0;
+                
+                if (userBets && userBets.size > 0) {
+                  for (const [userId, bets] of userBets.entries()) {
+                    let totalRefund = 0;
+                    
+                    // Calculate total bet amount from all rounds
+                    if (bets.round1) {
+                      totalRefund += (bets.round1.andar || 0) + (bets.round1.bahar || 0);
+                    }
+                    if (bets.round2) {
+                      totalRefund += (bets.round2.andar || 0) + (bets.round2.bahar || 0);
+                    }
+                    
+                    if (totalRefund > 0) {
+                      try {
+                        // Refund to user balance atomically
+                        const newBalance = await storage.addBalanceAtomic(userId, totalRefund);
+                        
+                        // Create transaction record for audit trail
+                        await storage.addTransaction({
+                          userId: userId,
+                          transactionType: 'refund',
+                          amount: totalRefund,
+                          balanceBefore: newBalance - totalRefund,
+                          balanceAfter: newBalance,
+                          referenceId: `game-reset-${Date.now()}-${userId}`,
+                          description: 'Bet refunded - Admin reset game before completion'
+                        });
+                        
+                        totalRefunded += totalRefund;
+                        playersRefunded++;
+                        
+                        // Notify user of refund via WebSocket
+                        const userClient = Array.from(clients.values()).find(c => c.userId === userId);
+                        if (userClient?.ws && userClient.ws.readyState === WebSocket.OPEN) {
+                          userClient.ws.send(JSON.stringify({
+                            type: 'bet_refunded',
+                            data: {
+                              amount: totalRefund,
+                              reason: 'Game reset by admin before completion',
+                              newBalance: newBalance
+                            }
+                          }));
+                        }
+                        
+                        console.log(`✅ Refunded ₹${totalRefund} to user ${userId} (new balance: ₹${newBalance})`);
+                      } catch (refundError) {
+                        console.error(`❌ Failed to refund ₹${totalRefund} to user ${userId}:`, refundError);
+                        // Continue with other refunds even if one fails
                       }
-                      
-                      console.log(`✅ Refunded ₹${totalRefund} to user ${userId} (new balance: ₹${newBalance})`);
-                    } catch (refundError) {
-                      console.error(`❌ Failed to refund ₹${totalRefund} to user ${userId}:`, refundError);
-                      // Continue with other refunds even if one fails
                     }
                   }
+                  console.log(`💰 Total refunded: ₹${totalRefunded} to ${playersRefunded} players`);
+                } else {
+                  console.log('ℹ️ No bets to refund');
                 }
-                console.log(`💰 Total refunded: ₹${totalRefunded} to ${playersRefunded} players`);
-              } else {
-                console.log('ℹ️ No bets to refund');
               }
 
               // Reset server-side game state

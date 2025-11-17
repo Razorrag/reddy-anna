@@ -175,8 +175,19 @@ const GlobalWinnerCelebration: React.FC = () => {
               <div className="text-lg text-gray-200">{winningCardDisplay} • Round {data.round}</div>
             </motion.div>
 
-            {/* Payout Information - Always shown when there's any bet or payout */}
-            {(data.totalBetAmount > 0 || data.payoutAmount > 0) ? (
+            {/* Payout Information - Show if user had bets OR if payout data is available */}
+            {(data.dataSource === 'winner_declared' && (data.totalBetAmount === 0 && data.payoutAmount === 0)) ? (
+              // Winner announced but no payout data yet (waiting for admin to click "Start New Game")
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="bg-black/50 rounded-xl p-5 border-2 border-white/30 text-center"
+              >
+                <div className="text-2xl font-semibold text-blue-400 mb-2">⏳ Waiting for results...</div>
+                <div className="text-sm text-gray-400">Admin will complete the game to show your winnings</div>
+              </motion.div>
+            ) : (data.totalBetAmount > 0 || data.payoutAmount > 0) ? (
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}

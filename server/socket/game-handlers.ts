@@ -859,45 +859,51 @@ export async function handleDealCard(client: WSClient, data: any) {
     );
     
     if (isWinningCard) {
-      // ✅ FIX: Game ends with winner regardless of round
+      // ✅ NEW FLOW: Mark winner and calculate payout preview for celebration
+      // Actual payout processing will happen when admin clicks "Start New Game"
       (global as any).currentGameState.winner = data.side === 'andar' ? 'andar' : 'bahar';
       (global as any).currentGameState.winningCard = data.card;
       (global as any).currentGameState.phase = 'complete';
       
-      // ✅ FIX: Don't persist here - completeGame will handle persistence
-      // Persisting here causes race condition with completeGame
-      // State will be persisted after completion finishes
-
-      // ✅ FIX: Complete the game with payouts and transition to new game
-      // Use the global completeGame function which includes transition logic
-      // CRITICAL: Must await to prevent race conditions and ensure completion before reset
-      try {
-        const globalCompleteGame = (global as any).completeGame;
-        if (globalCompleteGame && typeof globalCompleteGame === 'function') {
-          // ✅ FIX: Await completion to ensure all operations finish
-          await globalCompleteGame(data.side === 'andar' ? 'andar' : 'bahar', data.card);
-          console.log(`🏆 GAME COMPLETE: Winner is ${data.side} with card ${data.card}`);
-        } else {
-          console.error('❌ Global completeGame function not available, falling back to local function');
-          // ✅ FIX: Await local function as well
-          await completeGame((global as any).currentGameState, data.side === 'andar' ? 'andar' : 'bahar', data.card);
-          console.log(`🏆 GAME COMPLETE: Winner is ${data.side} with card ${data.card}`);
+      console.log(`🏆 WINNER DECLARED: ${data.side} wins with card ${data.card}`);
+      console.log(`💡 Calculating payout preview for celebration display...`);
+      
+      // Calculate payout preview for immediate celebration display (WITHOUT applying to DB)
+      const { calculatePayoutPreview } = await import('../game-payout-calculator');
+      const state = (global as any).currentGameState;
+      const payoutPreviews = calculatePayoutPreview(state, data.side);
+      
+      console.log(`✅ Payout preview calculated for ${payoutPreviews.size} users`);
+      
+      // Persist winner state to database
+      if (typeof (global as any).persistGameState === 'function') {
+        try {
+          await (global as any).persistGameState();
+          console.log(`✅ Winner state persisted to database`);
+        } catch (persistError) {
+          console.error('❌ Error persisting winner state:', persistError);
         }
-      } catch (error: any) {
-        console.error('❌ CRITICAL: Error completing game:', error);
-        // ✅ FIX: Send error notification to admin
-        sendError(ws, `Error completing game: ${error.message || 'Unknown error'}`);
-        // ✅ FIX: Still try to persist state even if completion fails
-        if (typeof (global as any).persistGameState === 'function') {
-          try {
-            await (global as any).persistGameState();
-          } catch (persistError) {
-            console.error('❌ CRITICAL: Error persisting state after completion failure:', persistError);
-          }
-        }
-        // Don't throw - game should still be marked as complete
-        return;
       }
+      
+      // Broadcast winner announcement WITH full payout preview data
+      if (typeof (global as any).broadcast !== 'undefined') {
+        (global as any).broadcast({
+          type: 'winner_declared',
+          data: {
+            winner: data.side,
+            winningCard: data.card,
+            round: finalRound,
+            payoutPreviews: Array.from(payoutPreviews.values()),
+            message: `${data.side.toUpperCase()} WINS!`
+          }
+        });
+        
+        console.log(`📢 Winner declared with payout preview data for celebration`);
+      }
+      
+      // Actual payouts will be processed when admin clicks "Start New Game"
+      console.log(`💡 Actual database payouts will be processed when admin starts new game`);
+      return;
     } else if (isRoundComplete && finalRound < 3) {
       // ✅ FIX: Round 1 or 2 complete without winner - move to next round
       if (finalRound === 1) {
