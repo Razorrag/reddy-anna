@@ -32,18 +32,21 @@ const balanceReducer = (state: BalanceState, action: BalanceAction): BalanceStat
       const timestamp = action.payload.timestamp || Date.now();
       const source = action.payload.source as 'websocket' | 'api' | 'localStorage';
       
-      // ✅ FIX: Race condition protection - Prioritize WebSocket updates over API/local updates
-      // If we have a recent WebSocket update and the new update is from API/localStorage, ignore it
-      // EXCEPTION: Allow 'api' updates if they're explicitly requested (like after game complete)
+      // ✅ FIX: Simplified race condition protection - Allow game completion balance updates
+      // CRITICAL: Balance updates after game completion must not be blocked
       if (source !== 'websocket' && state.lastWebSocketUpdate > 0) {
         const timeSinceWebSocketUpdate = timestamp - state.lastWebSocketUpdate;
-        // If WebSocket updated within last 1 second, ignore API/localStorage updates
-        // Reduced from 2 seconds to 1 second for faster updates after game complete
-        if (timeSinceWebSocketUpdate < 1000) {
-          console.log(`⚠️ Ignoring ${source} balance update - WebSocket update too recent (${timeSinceWebSocketUpdate}ms ago)`);
+        const balanceDiff = Math.abs(action.payload.balance - state.currentBalance);
+        const isSignificantChange = balanceDiff > 1000; // Allow changes > ₹1,000
+        
+        // Only block if: recent WebSocket AND small balance change (likely duplicate)
+        if (timeSinceWebSocketUpdate < 1000 && balanceDiff < 100) {
+          console.log(`⚠️ Ignoring ${source} balance update - Likely duplicate (${timeSinceWebSocketUpdate}ms ago)`);
           return state;
         }
       }
+      
+      console.log(`✅ Allowing ${source} balance update: ₹${action.payload.balance}`);
       
       return {
         ...state,
@@ -188,19 +191,19 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   // Listen for WebSocket balance updates
   useEffect(() => {
     const handleWebSocketBalanceUpdate = (event: CustomEvent) => {
-      const { balance: newBalance, timestamp } = event.detail;
+      const { balance: newBalance, timestamp, source: eventSource } = event.detail;
       // Use timestamp from event or current time for race condition tracking
       const updateTimestamp = timestamp || Date.now();
       dispatch({
         type: 'SET_BALANCE',
-        payload: { balance: newBalance, source: 'websocket', timestamp: updateTimestamp }
+        payload: { balance: newBalance, source: eventSource || 'websocket', timestamp: updateTimestamp }
       });
-      
+
       // Also emit the standard balance-updated event for other contexts
       window.dispatchEvent(new CustomEvent('balance-updated', {
-        detail: { balance: newBalance, source: 'websocket', timestamp: updateTimestamp }
+        detail: { balance: newBalance, source: eventSource || 'websocket', timestamp: updateTimestamp }
       }));
-      
+
       // Update localStorage
       const userStr = localStorage.getItem('user');
       if (userStr) {
@@ -214,18 +217,61 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
     };
 
+    const handleBalanceVerified = (event: CustomEvent) => {
+      // Handle balance-verified events which are high-priority balance confirmations
+      const { balance: newBalance, timestamp, source } = event.detail;
+      const updateTimestamp = timestamp || Date.now();
+
+      // This is a verification event - we trust these as authoritative
+      dispatch({
+        type: 'SET_BALANCE',
+        payload: { balance: newBalance, source: source || 'balance-verified', timestamp: updateTimestamp }
+      });
+
+      // Also emit the standard balance-updated event for other contexts
+      window.dispatchEvent(new CustomEvent('balance-updated', {
+        detail: { balance: newBalance, source: source || 'balance-verified', timestamp: updateTimestamp }
+      }));
+
+      // Update localStorage
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          user.balance = newBalance;
+          localStorage.setItem('user', JSON.stringify(user));
+        } catch (error) {
+          console.error('Failed to update localStorage balance:', error);
+        }
+      }
+    };
+
+    const handleBalanceVerificationRequired = (event: CustomEvent) => {
+      // When balance verification is required, fetch fresh balance from API
+      // This handles cases where we need to ensure balance consistency
+      if (!isAdmin) {
+        console.log('🔍 Balance verification required - refreshing from API...');
+        refreshBalance();
+      }
+    };
+
     const handleRefreshBalance = () => {
       // Refresh balance from API when requested (skip for admin users)
       if (!isAdmin) {
+        console.log('🔄 Balance refresh requested');
         refreshBalance();
       }
     };
 
     window.addEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+    window.addEventListener('balance-verified', handleBalanceVerified as EventListener);
+    window.addEventListener('balance-verification-required', handleBalanceVerificationRequired as EventListener);
     window.addEventListener('refresh-balance', handleRefreshBalance as EventListener);
-    
+
     return () => {
       window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+      window.removeEventListener('balance-verified', handleBalanceVerified as EventListener);
+      window.removeEventListener('balance-verification-required', handleBalanceVerificationRequired as EventListener);
       window.removeEventListener('refresh-balance', handleRefreshBalance as EventListener);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

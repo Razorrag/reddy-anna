@@ -536,13 +536,14 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     const handleBalanceUpdate = (event: CustomEvent) => {
       const { balance: newBalance, source } = event.detail;
-      
+
       // Convert to number if it's a string
-      const balanceAsNumber = typeof newBalance === 'string' 
-        ? parseFloat(newBalance) 
+      const balanceAsNumber = typeof newBalance === 'string'
+        ? parseFloat(newBalance)
         : Number(newBalance);
-      
+
       if (!isNaN(balanceAsNumber) && balanceAsNumber !== gameState.playerWallet) {
+        console.log('📊 BalanceContext balance-updated event received:', balanceAsNumber, `(source: ${source})`);
         dispatch({
           type: 'UPDATE_PLAYER_WALLET',
           payload: balanceAsNumber
@@ -551,14 +552,32 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     const handleWebSocketBalanceUpdate = (event: CustomEvent) => {
-      const { balance: newBalance } = event.detail;
-      
+      const { balance: newBalance, source } = event.detail;
+
       // Convert to number if it's a string
-      const balanceAsNumber = typeof newBalance === 'string' 
-        ? parseFloat(newBalance) 
+      const balanceAsNumber = typeof newBalance === 'string'
+        ? parseFloat(newBalance)
         : Number(newBalance);
-      
+
       if (!isNaN(balanceAsNumber) && balanceAsNumber !== gameState.playerWallet) {
+        console.log('📊 WebSocket balance-websocket-update event received:', balanceAsNumber, `(source: ${source})`);
+        dispatch({
+          type: 'UPDATE_PLAYER_WALLET',
+          payload: balanceAsNumber
+        });
+      }
+    };
+
+    const handleBalanceVerified = (event: CustomEvent) => {
+      const { balance: newBalance, source } = event.detail;
+
+      // Convert to number if it's a string
+      const balanceAsNumber = typeof newBalance === 'string'
+        ? parseFloat(newBalance)
+        : Number(newBalance);
+
+      if (!isNaN(balanceAsNumber)) {
+        console.log('📊 Balance verification event received:', balanceAsNumber, `(source: ${source})`);
         dispatch({
           type: 'UPDATE_PLAYER_WALLET',
           payload: balanceAsNumber
@@ -568,10 +587,12 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
     window.addEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
-    
+    window.addEventListener('balance-verified', handleBalanceVerified as EventListener);
+
     return () => {
       window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
       window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+      window.removeEventListener('balance-verified', handleBalanceVerified as EventListener);
     };
   }, [gameState.playerWallet]);
 

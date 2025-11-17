@@ -16,7 +16,7 @@ import {
 import { GameAnalytics } from '@/types/game';
 
 const GameHistoryPage: React.FC = () => {
-  const { token } = useAuth();
+  const { state: authState } = useAuth();
   const [history, setHistory] = useState<GameAnalytics[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,10 +64,17 @@ const GameHistoryPage: React.FC = () => {
       params.set('limit', filters.limit.toString());
       params.set('offset', ((filters.page - 1) * filters.limit).toString());
       params.set('_v', Date.now().toString()); // Cache buster
+
+      // ✅ FIX: Use player-specific endpoint for players, admin for admins
+      const endpoint = (authState.user?.role === 'admin' || authState.user?.role === 'super_admin')
+        ? '/api/admin/game-history'
+        : '/api/user/game-history';
       
-      const response = await fetch(`/api/admin/game-history?${params}`, {
+      console.log(`📊 Fetching game history from: ${endpoint} (role: ${authState.user?.role || 'unknown'})`);
+      
+      const response = await fetch(`${endpoint}?${params}`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${authState.token}`
         }
       });
       
@@ -75,16 +82,37 @@ const GameHistoryPage: React.FC = () => {
         const data = await response.json();
         console.log('📊 Game history API response:', data);
         
-        // ✅ FIX: Handle both response formats
-        // Backend returns: { success: true, data: { games: [...], pagination: {...} } }
-        if (data.success && data.data) {
-          const games = data.data.games || data.data || [];
-          const paginationData = data.data.pagination || {
-            page: filters.page,
-            limit: filters.limit,
-            total: Array.isArray(games) ? games.length : 0,
-            pages: Math.ceil((Array.isArray(games) ? games.length : 0) / filters.limit)
-          };
+        // ✅ FIX: Handle both response formats (admin vs player)
+        // Admin: { success: true, data: { games: [...], pagination: {...} } }
+        // Player: { success: true, games: [...], pagination: {...} } or similar
+        let games = [];
+        let paginationData = {
+          page: filters.page,
+          limit: filters.limit,
+          total: 0,
+          pages: 0
+        };
+
+        if (data.success) {
+          if (data.data && data.data.games) {
+            // Admin format
+            games = data.data.games;
+            paginationData = data.data.pagination || paginationData;
+          } else if (Array.isArray(data.games)) {
+            // Player format
+            games = data.games;
+            paginationData = data.pagination || paginationData;
+          } else if (Array.isArray(data)) {
+            // Simple array
+            games = data;
+          } else {
+            games = data.data || [];
+          }
+          
+          // Fallback pagination
+          paginationData.total = Array.isArray(games) ? games.length : 0;
+          paginationData.pages = Math.ceil(paginationData.total / filters.limit);
+        }
           
           console.log('✅ Parsed games:', games.length, 'games');
           console.log('✅ Pagination:', paginationData);
@@ -368,7 +396,7 @@ const GameHistoryPage: React.FC = () => {
           <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-purple-300 text-sm">Net Profit/Loss</p>
+                <p className="text-purple-300 text-sm">House Profit/Loss</p>
                 <p className={`text-2xl font-bold ${
                   history.reduce((sum, game) => sum + (game.profitLoss || (game as any).profit_loss || 0), 0) >= 0 
                     ? 'text-green-400' 
