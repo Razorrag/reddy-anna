@@ -11,7 +11,7 @@ const OpeningCardSelector: React.FC = () => {
   
   const [selectedCard, setSelectedCard] = useState<Card | null>(gameState.selectedOpeningCard);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [timerDuration, setTimerDuration] = useState(30);
+  const [timerDuration, setTimerDuration] = useState<number | undefined>(undefined); // undefined = use backend setting
   const [isStarting, setIsStarting] = useState(false);
 
   // Sync local state with game state (important for reset functionality and initial load)
@@ -72,6 +72,7 @@ const OpeningCardSelector: React.FC = () => {
     if (!selectedCard || isStarting) return;
     setIsStarting(true);
     try {
+      // Pass timer only if custom value is set, otherwise backend setting is used
       await startGame(timerDuration);
       setShowConfirmModal(false);
     } finally {
@@ -186,13 +187,28 @@ const OpeningCardSelector: React.FC = () => {
               </label>
               <input
                 type="number"
-                value={timerDuration}
-                onChange={(e) => setTimerDuration(Math.max(10, Math.min(300, parseInt(e.target.value) || 30)))}
+                value={timerDuration ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setTimerDuration(val === '' ? undefined : Math.max(10, Math.min(300, parseInt(val) || 30)));
+                }}
+                placeholder="Use backend setting"
                 min="10"
                 max="300"
-                className="w-full px-4 py-3 bg-black/40 border border-gold/30 rounded-lg text-white text-center text-xl font-bold focus:outline-none focus:border-gold"
+                className="w-full px-4 py-3 bg-black/40 border border-gold/30 rounded-lg text-white text-center text-xl font-bold focus:outline-none focus:border-gold placeholder:text-gray-600"
               />
-              <div className="text-gray-500 text-xs mt-1 text-center">Range: 10-300 seconds</div>
+              <div className="text-gray-500 text-xs mt-1 text-center">
+                Leave empty to use Backend Settings (default). Range: 10-300 seconds.
+              </div>
+            </div>
+            
+            <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-3 mb-4">
+              <div className="flex items-center gap-2 text-blue-400 text-xs">
+                <span className="text-sm">ℹ️</span>
+                <div>
+                  <span className="font-semibold">Tip:</span> You can set timer here OR configure default in Backend Settings page.
+                </div>
+              </div>
             </div>
             
             <div className="flex gap-3">

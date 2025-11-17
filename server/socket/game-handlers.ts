@@ -518,19 +518,23 @@ export async function handleStartGame(client: WSClient, data: any) {
         }
       }
 
-      // Get timer duration from data - check both timer and timerDuration fields
-      // Also check game settings if not provided
-      let timerDuration = data.timer || data.timerDuration || 30;
+      // ✅ FIX: Timer can be set from frontend OR backend settings
+      // Priority: Frontend timer > Backend setting > Default (30s)
+      let timerDuration = data.timer || data.timerDuration;
       
-      // If still default, try to get from game settings
-      if (timerDuration === 30) {
+      // If no timer provided from frontend, get from backend settings
+      if (!timerDuration) {
         try {
           const { storage } = await import('../storage-supabase');
           const timerSetting = await storage.getGameSetting('betting_timer_duration') || '30';
           timerDuration = parseInt(timerSetting) || 30;
+          console.log(`⏱️  Using backend timer setting: ${timerDuration}s`);
         } catch (error) {
-          console.warn('Could not fetch timer setting, using default:', error);
+          console.warn('⚠️  Could not fetch timer setting, using default 30s:', error);
+          timerDuration = 30;
         }
+      } else {
+        console.log(`⏱️  Using frontend timer: ${timerDuration}s`);
       }
 
       // Broadcast game start to all clients

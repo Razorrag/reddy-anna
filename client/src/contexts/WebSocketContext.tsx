@@ -1396,11 +1396,17 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     try {
       console.log('🎮 Starting game with opening card:', gameState.selectedOpeningCard);
+      if (timerDuration) {
+        console.log(`⏱️  Using custom timer: ${timerDuration}s`);
+      } else {
+        console.log('⏱️  Timer will use backend settings');
+      }
+      
       sendWebSocketMessage({
         type: 'start_game',
         data: {
           openingCard: gameState.selectedOpeningCard.display,
-          timerDuration: timerDuration || 30,
+          ...(timerDuration && { timerDuration }), // Only include if provided
         }
       });
 
