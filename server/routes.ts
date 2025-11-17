@@ -688,7 +688,23 @@ const getCurrentGameStateForUser = async (userId: string) => {
 
     // Get user's current bets from database (only for non-admin users)
     // CRITICAL FIX: Use getBetsForUser instead of getBetsForGame to only get current user's bets
-    const userBets = user.role === 'admin' ? [] : await storage.getBetsForUser(userId, currentGameState.gameId);
+    console.log(`🔍 [DEBUG] getCurrentGameStateForUser called for user ${userId}`);
+    console.log(`🔍 [DEBUG] Current gameId: ${currentGameState.gameId}, phase: ${currentGameState.phase}`);
+    const userBets = (user && user.role === 'admin') 
+      ? [] 
+      : await storage.getBetsForUser(userId, currentGameState.gameId);
+    console.log(`🔍 [DEBUG] Found ${userBets.length} bets for user ${userId}`);
+    if (userBets.length > 0) {
+      console.log(`🔍 [DEBUG] Bet details:`, userBets.map((b: any) => ({ 
+        id: b.id, 
+        gameId: b.game_id, 
+        amount: b.amount, 
+        side: b.side, 
+        round: b.round,
+        status: b.status,
+        createdAt: b.created_at
+      })));
+    }
     
     // Store individual bets as arrays (not cumulative totals)
     const round1Bets = { andar: [] as number[], bahar: [] as number[] };

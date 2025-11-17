@@ -444,7 +444,10 @@ export async function handleStartGame(client: WSClient, data: any) {
       
       // Start a new game (generates new game ID and resets state)
       // This will generate a new gameId and reset all state
+      const oldGameId = (global as any).currentGameState.gameId;
       (global as any).currentGameState.startNewGame();
+      const generatedGameId = (global as any).currentGameState.gameId;
+      console.log(`🔄 [DEBUG] Game ID changed: ${oldGameId} -> ${generatedGameId}`);
       
       // ✅ FIX: Ensure all game state is properly reset using proper methods
       (global as any).currentGameState.winner = null;

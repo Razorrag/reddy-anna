@@ -2157,12 +2157,14 @@ export class SupabaseStorage implements IStorage {
         openingCard: game.opening_card,
         winner: game.winner,
         winningCard: game.winning_card,
-        winningRound: game.winning_round || 1,
+        winningRound: game.round || 1,
         totalCards: game.total_cards || 0,
-        yourTotalBet: parseFloat(game.total_bets || '0'),
-        yourTotalPayout: parseFloat(game.total_payout || '0'),
-        yourNetProfit: parseFloat(game.net_profit || '0'),
+        yourBets: game.your_bets || [],
+        yourTotalBet: parseFloat(game.your_total_bet || '0'),
+        yourTotalPayout: parseFloat(game.your_total_payout || '0'),
+        yourNetProfit: parseFloat(game.your_net_profit || '0'),
         result: game.result || 'no_bet',
+        dealtCards: game.dealt_cards || [],
         createdAt: game.created_at
       }));
 

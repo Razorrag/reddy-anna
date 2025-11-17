@@ -20,8 +20,9 @@ const BonusOverviewCard: React.FC<BonusOverviewCardProps> = ({
   totalCredited,
   lifetimeEarnings
 }) => {
-  const formatCurrency = (amount: number) => {
-    return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const formatCurrency = (amount: number | null | undefined) => {
+    const safeAmount = amount ?? 0;
+    return `₹${safeAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   };
 
   const stats = [

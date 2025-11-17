@@ -216,8 +216,9 @@ export default function AdminBonus() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, activeTab]);
 
-  const formatCurrency = (amount: number) => {
-    return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatCurrency = (amount: number | null | undefined) => {
+    const safeAmount = amount ?? 0;
+    return '₹' + safeAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   const getStatusBadge = (status: string) => {
