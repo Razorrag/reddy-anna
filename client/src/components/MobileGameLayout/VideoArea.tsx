@@ -254,7 +254,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
         // Create HLS instance with low-latency settings
         const hls = new Hls({
-          // ✅ OPTIMIZED LOW LATENCY SETTINGS (Balanced for Stability)
+          // ✅ OPTIMIZED LOW LATENCY SETTINGS (Count-based for compatibility)
           liveSyncDurationCount: 2,        // Target 1.0s behind live (2 segments)
           liveMaxLatencyDurationCount: 4,  // Max 2s behind live before seeking
           maxBufferLength: 2,              // Allow 2s forward buffer
@@ -267,8 +267,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           lowLatencyMode: true,            // Enable LL-HLS
           backBufferLength: 0,             // No back buffer
           maxLiveSyncPlaybackRate: 1.2,    // Gentle catch-up (1.2x)
-          liveSyncDuration: 1.0,           // Target 1.0s behind live edge
-          liveBackBufferLength: 0,         // No live back buffer
         });
 
         hls.loadSource(streamUrl);

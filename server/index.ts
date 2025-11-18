@@ -136,12 +136,12 @@ app.use((req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
       "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "img-src 'self' data: blob: https:; " +
       "font-src 'self' data: https://fonts.gstatic.com; " +
       "connect-src 'self' ws: wss: http: https:; " +
-      "media-src 'self' blob:; " +
+      "media-src 'self' blob: https:; " +
       "frame-src 'self' https://player.restream.io https://www.youtube.com https://youtube.com;"
     );
   }
