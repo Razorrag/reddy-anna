@@ -206,17 +206,33 @@ export const getStatusBadgeClass = (status: string): string => {
   }
 };
 
-// Helper function to validate mobile number
+// Helper function to validate mobile number (international E.164 format)
 export const validateMobileNumber = (phone: string): boolean => {
-  const mobileRegex = /^[6-9]\d{9}$/;
-  return mobileRegex.test(phone.replace(/\D/g, ''));
+  // E.164 international format: 8-15 digits, cannot start with 0, optional +
+  // Supports: India (+91), Bangladesh (+880), Malaysia (+60), UAE (+971), etc.
+  const mobileRegex = /^\+?[1-9]\d{7,14}$/;
+  return mobileRegex.test(phone);
 };
 
-// Helper function to format mobile number
+// Helper function to format mobile number (smart international detection)
 export const formatMobileNumber = (phone: string): string => {
   const cleaned = phone.replace(/\D/g, '');
-  if (cleaned.length === 10) {
+  
+  // Detect country by length and prefix
+  if (cleaned.length === 10 && /^[6-9]/.test(cleaned)) {
+    // Indian number
     return `+91 ${cleaned.slice(0, 5)} ${cleaned.slice(5)}`;
+  } else if (cleaned.length === 12 && cleaned.startsWith('880')) {
+    // Bangladesh number
+    return `+880 ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
+  } else if (cleaned.length === 11 && cleaned.startsWith('60')) {
+    // Malaysia number
+    return `+60 ${cleaned.slice(2, 4)} ${cleaned.slice(4)}`;
+  } else if (cleaned.length === 12 && cleaned.startsWith('971')) {
+    // UAE number
+    return `+971 ${cleaned.slice(3, 5)} ${cleaned.slice(5)}`;
   }
-  return phone;
+  
+  // Generic fallback: add + prefix if not present
+  return phone.startsWith('+') ? phone : `+${cleaned}`;
 };

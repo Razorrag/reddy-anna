@@ -108,7 +108,7 @@ export default function AdminBonus() {
     try {
       setIsLoading(true);
       const response = await apiClient.get<{ success: boolean; data: BonusTransaction[] }>(
-        `/admin/bonus-transactions?status=${statusFilter}&type=${typeFilter}`
+        `/api/admin/bonus-transactions?status=${statusFilter}&type=${typeFilter}`
       );
       if (response.success && response.data) {
         setBonusTransactions(response.data);
@@ -126,7 +126,7 @@ export default function AdminBonus() {
     try {
       setIsLoading(true);
       const response = await apiClient.get<{ success: boolean; data: ReferralData[] }>(
-        `/admin/referral-data?status=${statusFilter === 'all' ? '' : statusFilter}`
+        `/api/admin/referral-data?status=${statusFilter === 'all' ? '' : statusFilter}`
       );
       if (response.success && response.data) {
         setReferralData(response.data);
@@ -164,7 +164,7 @@ export default function AdminBonus() {
     try {
       setIsLoading(true);
       const response = await apiClient.get<{ success: boolean; data: PlayerBonusAnalytics[] }>(
-        '/admin/player-bonus-analytics'
+        '/api/admin/player-bonus-analytics'
       );
       if (response.success && response.data) {
         setPlayerAnalytics(response.data);
@@ -309,7 +309,7 @@ export default function AdminBonus() {
     try {
       setIsLoading(true);
       const response = await apiClient.post<{ success: boolean; message?: string; error?: string }>(
-        `/admin/bonus-transactions/${transactionId}/apply`
+        `/api/admin/bonus-transactions/${transactionId}/apply`
       );
       if (response.success) {
         showNotification('Bonus applied successfully', 'success');
@@ -334,7 +334,7 @@ export default function AdminBonus() {
     try {
       setIsLoading(true);
       const response = await apiClient.post<{ success: boolean; message?: string; error?: string }>(
-        `/admin/bonus-transactions/${transactionId}/reject`,
+        `/api/admin/bonus-transactions/${transactionId}/reject`,
         { reason: reason || 'Admin rejected' }
       );
       if (response.success) {
@@ -360,7 +360,7 @@ export default function AdminBonus() {
     try {
       setIsLoading(true);
       const response = await apiClient.post<{ success: boolean; message?: string; error?: string }>(
-        `/admin/referrals/${referralId}/process`
+        `/api/admin/referrals/${referralId}/process`
       );
       if (response.success) {
         showNotification('Referral bonus processed successfully', 'success');

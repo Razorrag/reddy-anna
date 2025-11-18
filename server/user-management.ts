@@ -1,6 +1,6 @@
 // User Management System
 import { storage } from './storage-supabase';
-import { validateMobileNumber, validateEmail, sanitizeInput } from './validation';
+import { validateMobileNumber, normalizePhone, validateEmail, sanitizeInput } from './validation';
 import bcrypt from 'bcryptjs';
 
 export interface UserProfileUpdate {
@@ -349,13 +349,15 @@ export const createUserManually = async (
   }
 ): Promise<UserManagementResponse> => {
   try {
-    // Validate phone number
+    // Validate and normalize phone number
     if (!validateMobileNumber(userData.phone)) {
-      return { success: false, error: 'Invalid phone number format. Must be a 10-digit Indian mobile number.' };
+      return { success: false, error: 'Invalid phone number format (8-15 digits, international format supported)' };
     }
+    
+    const normalizedPhone = normalizePhone(userData.phone);
 
     // Check if user already exists
-    const existingUser = await storage.getUserByPhone(userData.phone);
+    const existingUser = await storage.getUserByPhone(normalizedPhone);
     if (existingUser) {
       return { success: false, error: 'User with this phone number already exists' };
     }
@@ -366,7 +368,7 @@ export const createUserManually = async (
 
     // Create user
     const newUser = await storage.createUser({
-      phone: userData.phone,
+      phone: normalizedPhone,
       password_hash: hashedPassword,
       full_name: userData.name,
       role: userData.role || 'player',
@@ -702,9 +704,8 @@ export const validateUserProfileUpdate = (updates: UserProfileUpdate): { isValid
   }
 
   if (updates.mobile !== undefined) {
-    const mobileRegex = /^[6-9]\d{9}$/;
-    if (!mobileRegex.test(updates.mobile)) {
-      errors.push('Invalid 10-digit Indian mobile number');
+    if (!validateMobileNumber(updates.mobile)) {
+      errors.push('Valid phone number required (8-15 digits, international format supported)');
     }
   }
 

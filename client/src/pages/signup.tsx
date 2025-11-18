@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,15 @@ export default function Signup() {
     confirmPassword: '',
     referralCode: ''
   });
+  
+  // Auto-fill referral code from URL parameter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const refCode = params.get('ref');
+    if (refCode) {
+      setFormData(prev => ({ ...prev, referralCode: refCode }));
+    }
+  }, []);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -37,8 +46,8 @@ export default function Signup() {
       newErrors.name = "Name must be at least 2 characters";
     }
     
-    if (!formData.phone || formData.phone.length < 10) {
-      newErrors.phone = "Please enter a valid 10-digit phone number";
+    if (!formData.phone || formData.phone.length < 8) {
+      newErrors.phone = "Please enter a valid phone number (8-15 digits, international format supported)";
     }
     
     if (formData.password !== formData.confirmPassword) {

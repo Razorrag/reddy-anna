@@ -2,7 +2,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { storage } from './storage-supabase';
-import { validateMobileNumber, sanitizeInput, validatePassword as validatePasswordFormat } from './validation';
+import { validateMobileNumber, normalizePhone, sanitizeInput, validatePassword as validatePasswordFormat } from './validation';
 import { User } from '@shared/schema';
 import { supabaseServer } from './lib/supabaseServer';
 
@@ -152,8 +152,11 @@ export const registerUser = async (userData: {
       return { success: false, error: 'Validation failed', errors: validation.errors };
     }
 
+    // Normalize phone to digits-only for consistent storage
+    const normalizedPhone = normalizePhone(sanitizedData.phone);
+    
     // Check if user already exists (using phone number)
-    const existingUser = await storage.getUserByPhone(sanitizedData.phone);
+    const existingUser = await storage.getUserByPhone(normalizedPhone);
     if (existingUser) {
       return { success: false, error: 'User already exists with this phone number' };
     }
@@ -192,7 +195,7 @@ export const registerUser = async (userData: {
     
     try {
       const newUser = await storage.createUser({
-        phone: sanitizedData.phone,
+        phone: normalizedPhone,
         password_hash: hashedPassword,
         full_name: sanitizedData.name,
         balance: defaultBalance.toString(),
@@ -257,8 +260,8 @@ export const registerUser = async (userData: {
 // 🔑 LOGIN USER WITH PHONE NUMBER
 export const loginUser = async (phone: string, password: string): Promise<AuthResult> => {
   try {
-    // Sanitize inputs
-    const sanitizedPhone = sanitizeInput(phone).replace(/[^0-9]/g, ''); // Keep only digits
+    // Sanitize and normalize phone to digits-only for consistent lookup
+    const sanitizedPhone = normalizePhone(sanitizeInput(phone));
 
     if (!sanitizedPhone || !password) {
       console.log('Login validation failed: missing phone or password');

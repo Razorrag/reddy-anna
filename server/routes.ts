@@ -3157,12 +3157,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get Bonus Summary (Cumulative)
   app.get("/api/user/bonus-summary", generalLimiter, async (req, res) => {
     try {
+      console.log('🎁 Bonus summary request - User:', req.user?.id);
+      
       if (!req.user || !req.user.id) {
+        console.log('❌ Bonus summary - No user authenticated');
         return res.status(401).json({ success: false, error: 'Authentication required' });
       }
       
       const userId = req.user.id;
+      console.log('🔍 Fetching bonus summary for user:', userId);
       const summary = await storage.getBonusSummary(userId);
+      console.log('📊 Bonus summary result:', JSON.stringify(summary, null, 2));
       
       res.json({
         success: true,
@@ -3197,12 +3202,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get Deposit Bonuses (Detailed List)
   app.get("/api/user/deposit-bonuses", generalLimiter, async (req, res) => {
     try {
+      console.log('💰 Deposit bonuses request - User:', req.user?.id);
+      
       if (!req.user || !req.user.id) {
+        console.log('❌ Deposit bonuses - No user authenticated');
         return res.status(401).json({ success: false, error: 'Authentication required' });
       }
       
       const userId = req.user.id;
+      console.log('🔍 Fetching deposit bonuses for user:', userId);
       const bonuses = await storage.getDepositBonuses(userId);
+      console.log(`📊 Found ${bonuses.length} deposit bonuses`);
       
       // Transform to camelCase for frontend
       const formattedBonuses = bonuses.map(bonus => ({

@@ -1,9 +1,15 @@
 // Validation System for Backend
 import validator from 'validator';
 
+// Normalize phone number to digits-only format for storage
+export const normalizePhone = (phone: string): string => {
+  return phone.replace(/[^0-9]/g, ''); // Strip everything except digits
+};
+
 export const validateMobileNumber = (mobile: string): boolean => {
-  // Indian mobile number validation: should be 10 digits, starting with 6-9
-  const mobileRegex = /^[6-9]\d{9}$/;
+  // E.164 international format: 8-15 digits, cannot start with 0, optional +
+  // Supports: India (+91), Bangladesh (+880), Malaysia (+60), UAE (+971), etc.
+  const mobileRegex = /^\+?[1-9]\d{7,14}$/;
   return mobileRegex.test(mobile);
 };
 
@@ -63,7 +69,7 @@ export const validateUserData = (userData: any): { isValid: boolean; errors: str
   }
   
   if (!userData.phone || !validateMobileNumber(userData.phone)) {
-    errors.push('Valid 10-digit Indian mobile number is required');
+    errors.push('Valid phone number required (8-15 digits, international format supported)');
   }
   
   if (!userData.password || !validatePassword(userData.password)) {
@@ -85,7 +91,7 @@ export const validateUserRegistrationData = (userData: any): { isValid: boolean;
   }
   
   if (!userData.phone || !validateMobileNumber(userData.phone)) {
-    errors.push('Valid 10-digit Indian mobile number is required');
+    errors.push('Valid phone number required (8-15 digits, international format supported)');
   }
   
   if (!userData.password || !validatePassword(userData.password)) {
@@ -107,7 +113,7 @@ export const validateLoginData = (loginData: any): { isValid: boolean; errors: s
   const errors: string[] = [];
   
   if (!loginData.phone || !validateMobileNumber(loginData.phone)) {
-    errors.push('Valid 10-digit Indian mobile number is required');
+    errors.push('Valid phone number required (8-15 digits, international format supported)');
   }
   
   if (!loginData.password) {
@@ -204,9 +210,12 @@ export const validateGameBetData = (betData: any): { isValid: boolean; errors: s
 export const validateContentUpdate = (contentData: any): { isValid: boolean; errors: string[] } => {
   const errors: string[] = [];
   
-  // Validate whatsapp number if provided
-  if (contentData.whatsappNumber && !validateMobileNumber(contentData.whatsappNumber.replace(/\D/g, ''))) {
-    errors.push('Valid WhatsApp number is required');
+  // Validate whatsapp number if provided (international format supported)
+  if (contentData.whatsappNumber) {
+    const normalized = normalizePhone(contentData.whatsappNumber);
+    if (!validateMobileNumber(normalized)) {
+      errors.push('Valid WhatsApp number required (8-15 digits, international format supported)');
+    }
   }
   
   // Validate email if provided in contact info
@@ -250,7 +259,7 @@ export const validateUserProfileUpdate = (profileData: any): { isValid: boolean;
   
   // Validate mobile if provided
   if (profileData.mobile && !validateMobileNumber(profileData.mobile)) {
-    errors.push('Valid 10-digit Indian mobile number is required');
+    errors.push('Valid phone number required (8-15 digits, international format supported)');
   }
   
   // Validate pincode if provided

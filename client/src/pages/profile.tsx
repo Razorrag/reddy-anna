@@ -170,21 +170,32 @@ const Profile: React.FC = () => {
             apiClient.get('/api/user/bonus-transactions?limit=20&offset=0')
           ]);
 
-          setBonusSummary(summaryRes.data || summaryRes);
-          setDepositBonuses(depositRes.data || depositRes);
-          setReferralBonuses(referralRes.data || referralRes);
+          // Extract data from API response
+          const summaryData = (summaryRes as any)?.data || (summaryRes as any);
+          const depositData = (depositRes as any)?.data || (depositRes as any);
+          const referralData = (referralRes as any)?.data || (referralRes as any);
+          
+          console.log('✅ Bonus data received:', {
+            summary: summaryData,
+            deposits: depositData,
+            referrals: referralData
+          });
+
+          setBonusSummary(summaryData);
+          setDepositBonuses(Array.isArray(depositData) ? depositData : []);
+          setReferralBonuses(Array.isArray(referralData) ? referralData : []);
           
           // ✅ FIX: Handle both wrapped and unwrapped API responses
           const transactionsArray = Array.isArray(transactionsRes)
             ? transactionsRes
-            : Array.isArray(transactionsRes.data)
-              ? transactionsRes.data
+            : Array.isArray((transactionsRes as any).data)
+              ? (transactionsRes as any).data
               : [];
           
           setBonusTransactions(transactionsArray);
           setBonusHasMore(
-            transactionsRes.hasMore ??
-            (transactionsRes.data?.hasMore) ??
+            (transactionsRes as any).hasMore ??
+            (transactionsRes as any).data?.hasMore ??
             false
           );
         } catch (error) {
@@ -215,14 +226,14 @@ const Profile: React.FC = () => {
               apiClient.get('/api/user/bonus-transactions?limit=20&offset=0')
             ]);
 
-            setBonusSummary(summaryRes.data || summaryRes);
-            setDepositBonuses(depositRes.data || depositRes);
-            setReferralBonuses(referralRes.data || referralRes);
+            setBonusSummary((summaryRes as any).data || summaryRes);
+            setDepositBonuses((depositRes as any).data || depositRes);
+            setReferralBonuses((referralRes as any).data || referralRes);
             
             const transactionsArray = Array.isArray(transactionsRes)
               ? transactionsRes
-              : Array.isArray(transactionsRes.data)
-                ? transactionsRes.data
+              : Array.isArray((transactionsRes as any).data)
+                ? (transactionsRes as any).data
                 : [];
             
             setBonusTransactions(transactionsArray);
