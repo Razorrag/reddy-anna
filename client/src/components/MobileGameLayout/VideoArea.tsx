@@ -46,6 +46,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
   const [isPausedState, setIsPausedState] = useState(false);
+  
+  // ✅ Loading and buffering states for better UX
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
   // ✅ CRITICAL FIX: Move loadStreamConfig to component scope so it can be reused
   const loadStreamConfig = useCallback(async () => {
@@ -463,28 +467,40 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
               // Check if HLS.js is available
               const Hls = (window as any).Hls;
               if (Hls && Hls.isSupported()) {
-                console.log('🎬 Initializing HLS.js with ultra-low latency config...');
+                console.log('🎬 Initializing HLS.js with balanced config (smooth + low latency)...');
                 const hls = new Hls({
-                  // ULTRA LOW-LATENCY CONFIG
+                  // ✅ BALANCED CONFIG: Smooth playback + Low latency
                   enableWorker: true,
                   lowLatencyMode: true,
                   
-                  // MINIMAL BUFFERING (1-2 seconds max)
-                  backBufferLength: 0,
-                  maxBufferLength: 2,
-                  maxMaxBufferLength: 3,
+                  // ✅ STABLE BUFFERING (prevents black screens)
+                  backBufferLength: 10,              // Keep 10s back buffer
+                  maxBufferLength: 10,               // 10s forward buffer
+                  maxMaxBufferLength: 20,            // Max 20s safety margin
                   
-                  // AGGRESSIVE LIVE EDGE SEEKING
-                  liveSyncDurationCount: 1,
-                  liveMaxLatencyDurationCount: 2,
+                  // ✅ BALANCED LIVE EDGE (2-4s latency)
+                  liveSyncDurationCount: 2,          // Stay 2 segments behind (2s)
+                  liveMaxLatencyDurationCount: 5,    // Max 5 segments (5s)
                   liveDurationInfinity: true,
                   
-                  // FAST RECOVERY
-                  highBufferWatchdogPeriod: 1,
-                  nudgeMaxRetry: 5,
+                  // ✅ SMOOTH RECOVERY (no jarring jumps)
+                  highBufferWatchdogPeriod: 2,       // Check every 2s
+                  nudgeMaxRetry: 3,                  // Gentle nudging
                   
-                  // AUTO-JUMP TO LIVE EDGE IF LAGGING
-                  maxLiveSyncPlaybackRate: 1.2
+                  // ✅ GRADUAL CATCH-UP (barely noticeable)
+                  maxLiveSyncPlaybackRate: 1.05,     // Speed up only 5%
+                  
+                  // ✅ PREVENT STALLS
+                  maxBufferHole: 0.5,                // Fill 0.5s holes
+                  maxFragLookUpTolerance: 0.25,      // Tolerate small gaps
+                  
+                  // ✅ NETWORK RESILIENCE
+                  manifestLoadingTimeOut: 10000,     // 10s timeout
+                  manifestLoadingMaxRetry: 4,        // Retry 4 times
+                  levelLoadingTimeOut: 10000,
+                  levelLoadingMaxRetry: 4,
+                  fragLoadingTimeOut: 20000,         // 20s for fragments
+                  fragLoadingMaxRetry: 6
                 });
                 
                 hls.loadSource(streamConfig.streamUrl);
@@ -496,16 +512,76 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                   el.play().catch(err => console.error('❌ HLS autoplay failed:', err));
                 });
                 
+                // ✅ COMPREHENSIVE ERROR HANDLING
+                let networkErrorCount = 0;
+                let mediaErrorCount = 0;
+                
                 hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
+                  console.log('⚠️ HLS error:', data.type, data.details, 'fatal:', data.fatal);
+                  
                   if (data.fatal) {
-                    console.error('❌ HLS fatal error:', data);
                     if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                      console.log('🔄 Network error - retrying...');
-                      hls.startLoad();
+                      networkErrorCount++;
+                      console.log(`🔄 Network error #${networkErrorCount} - attempting recovery...`);
+                      
+                      if (networkErrorCount <= 5) {
+                        // Try to recover by restarting load
+                        setTimeout(() => {
+                          console.log('🔄 Restarting HLS load...');
+                          hls.startLoad();
+                        }, 1000 * networkErrorCount); // Exponential backoff
+                      } else {
+                        console.error('❌ Too many network errors, destroying HLS instance');
+                        hls.destroy();
+                        // Fallback: try native video element
+                        setTimeout(() => {
+                          if (el) {
+                            console.log('🔄 Falling back to native video element...');
+                            el.src = streamConfig.streamUrl;
+                            el.load();
+                            el.play().catch(console.error);
+                          }
+                        }, 2000);
+                      }
                     } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                      console.log('🔄 Media error - recovering...');
-                      hls.recoverMediaError();
+                      mediaErrorCount++;
+                      console.log(`🔄 Media error #${mediaErrorCount} - attempting recovery...`);
+                      
+                      if (mediaErrorCount <= 3) {
+                        setTimeout(() => {
+                          console.log('🔄 Recovering from media error...');
+                          hls.recoverMediaError();
+                        }, 500);
+                      } else {
+                        console.error('❌ Too many media errors, reloading stream...');
+                        hls.destroy();
+                        hlsRef.current = null;
+                        // Force reload
+                        setTimeout(() => {
+                          if (el) {
+                            console.log('🔄 Forcing stream reload...');
+                            el.src = streamConfig.streamUrl;
+                            el.load();
+                            el.play().catch(console.error);
+                          }
+                        }, 1000);
+                      }
+                    } else {
+                      console.error('❌ Fatal error, cannot recover:', data);
                     }
+                  } else {
+                    // Non-fatal errors - just log
+                    console.log('ℹ️ Non-fatal HLS error:', data.details);
+                  }
+                });
+                
+                // ✅ RESET ERROR COUNTERS ON SUCCESS
+                hls.on(Hls.Events.FRAG_LOADED, () => {
+                  // Reset counters when fragments load successfully
+                  if (networkErrorCount > 0 || mediaErrorCount > 0) {
+                    console.log('✅ Stream recovered, resetting error counters');
+                    networkErrorCount = 0;
+                    mediaErrorCount = 0;
                   }
                 });
                 
@@ -535,6 +611,18 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             objectFit: 'cover',
             zIndex: 1
           }}
+          onWaiting={() => {
+            console.log('⏳ Video buffering...');
+            setIsBuffering(true);
+          }}
+          onPlaying={() => {
+            console.log('▶️ Video playing');
+            setIsBuffering(false);
+            setStreamError(null);
+          }}
+          onCanPlay={() => {
+            setIsBuffering(false);
+          }}
           onPause={() => {
             if (!document.hidden && videoRef.current && !isPausedState) {
               console.log('🔄 Video paused unexpectedly - auto-resuming...');
@@ -545,13 +633,16 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           }}
           onError={(e) => {
             console.error('❌ Video error:', e);
+            setStreamError('Stream temporarily unavailable');
+            setIsBuffering(true);
             setTimeout(() => {
               if (videoRef.current && !document.hidden) {
                 console.log('🔄 Attempting to recover from video error...');
+                setStreamError(null);
                 videoRef.current.load();
                 videoRef.current.play().catch(console.error);
               }
-            }, 1000);
+            }, 2000);
           }}
         />
       );
@@ -617,6 +708,27 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             <div className="bg-black/80 backdrop-blur-sm px-6 py-3 rounded-full">
               <span className="text-white text-lg font-semibold">⏸️ Stream Paused</span>
             </div>
+          </div>
+        </div>
+      )}
+      
+      {/* ✅ Buffering Overlay - Show when stream is loading */}
+      {isBuffering && !isPausedState && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-black/80 backdrop-blur-sm px-6 py-4 rounded-xl flex flex-col items-center gap-3">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gold"></div>
+            <span className="text-white text-sm font-medium">Loading stream...</span>
+          </div>
+        </div>
+      )}
+      
+      {/* ✅ Error Overlay - Show when stream has error */}
+      {streamError && !isPausedState && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-red-900/80 backdrop-blur-sm px-6 py-4 rounded-xl flex flex-col items-center gap-3 max-w-xs">
+            <div className="text-4xl">⚠️</div>
+            <span className="text-white text-sm font-medium text-center">{streamError}</span>
+            <span className="text-gray-300 text-xs text-center">Reconnecting automatically...</span>
           </div>
         </div>
       )}

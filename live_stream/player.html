@@ -86,26 +86,26 @@
         function initPlayer() {
             if (Hls.isSupported()) {
                 const hls = new Hls({
-                    // ULTRA LOW-LATENCY CONFIG
+                    // BALANCED CONFIG: Low latency + Smooth playback
                     enableWorker: true,
                     lowLatencyMode: true,
                     
-                    // MINIMAL BUFFERING (1-2 seconds max)
-                    backBufferLength: 0,              // No back buffer (saves memory)
-                    maxBufferLength: 2,               // Max 2s forward buffer
-                    maxMaxBufferLength: 3,            // Hard limit 3s
+                    // STABLE BUFFERING (prevents black screens)
+                    backBufferLength: 10,             // Keep 10s back buffer for seeking
+                    maxBufferLength: 10,              // 10s forward buffer (smooth playback)
+                    maxMaxBufferLength: 20,           // Max 20s (safety margin)
                     
-                    // AGGRESSIVE LIVE EDGE SEEKING
-                    liveSyncDurationCount: 1,         // Stay 1 segment behind live (0.5s)
-                    liveMaxLatencyDurationCount: 2,   // Max 2 segments latency (1s)
+                    // BALANCED LIVE EDGE (2-3s behind live)
+                    liveSyncDurationCount: 2,         // Stay 2 segments behind (2s)
+                    liveMaxLatencyDurationCount: 5,   // Max 5 segments latency (5s)
                     liveDurationInfinity: true,
                     
-                    // FAST RECOVERY
-                    highBufferWatchdogPeriod: 1,      // Check buffer every 1s
-                    nudgeMaxRetry: 5,                 // Retry nudging to live edge
+                    // SMOOTH RECOVERY (no jarring jumps)
+                    highBufferWatchdogPeriod: 2,      // Check buffer every 2s
+                    nudgeMaxRetry: 3,                 // Gentle nudging
                     
-                    // AUTO-JUMP TO LIVE EDGE IF LAGGING
-                    maxLiveSyncPlaybackRate: 1.2      // Speed up 20% to catch up
+                    // GRADUAL CATCH-UP (smooth, not jarring)
+                    maxLiveSyncPlaybackRate: 1.05     // Speed up only 5% (barely noticeable)
                 });
 
                 hls.loadSource(streamUrl);
