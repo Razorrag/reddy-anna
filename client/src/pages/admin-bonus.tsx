@@ -25,12 +25,15 @@ interface BonusTransaction {
   id: string;
   userId: string;
   username: string;
-  type: 'deposit_bonus' | 'referral_bonus' | 'bonus_applied';
+  bonusType: 'deposit_bonus' | 'referral_bonus' | 'conditional_bonus' | 'promotional_bonus';
   amount: number;
-  status: 'pending' | 'applied' | 'failed';
+  action: 'added' | 'locked' | 'unlocked' | 'credited' | 'expired' | 'forfeited' | 'wagering_progress';
   timestamp: string;
   description: string;
   relatedAmount?: number;
+  // Legacy support for old API responses
+  type?: string;
+  status?: string;
 }
 
 interface ReferralData {
@@ -41,8 +44,9 @@ interface ReferralData {
   referredUsername: string;
   depositAmount: number;
   bonusAmount: number;
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'credited' | 'expired';
   createdAt: string;
+  creditedAt?: string;
   bonusAppliedAt?: string;
 }
 
@@ -110,11 +114,16 @@ export default function AdminBonus() {
       const response = await apiClient.get<{ success: boolean; data: BonusTransaction[] }>(
         `/api/admin/bonus-transactions?status=${statusFilter}&type=${typeFilter}`
       );
+      console.log('📊 Bonus Transactions API Response:', response);
       if (response.success && response.data) {
+        console.log('✅ Bonus transactions loaded:', response.data.length);
         setBonusTransactions(response.data);
+      } else {
+        console.warn('⚠️ No bonus transactions data:', response);
+        setBonusTransactions([]);
       }
     } catch (error: any) {
-      console.error('Failed to fetch bonus transactions:', error);
+      console.error('❌ Failed to fetch bonus transactions:', error);
       showNotification(error.message || 'Failed to fetch bonus transactions', 'error');
     } finally {
       setIsLoading(false);
@@ -128,11 +137,16 @@ export default function AdminBonus() {
       const response = await apiClient.get<{ success: boolean; data: ReferralData[] }>(
         `/api/admin/referral-data?status=${statusFilter === 'all' ? '' : statusFilter}`
       );
+      console.log('👥 Referral Data API Response:', response);
       if (response.success && response.data) {
+        console.log('✅ Referral data loaded:', response.data.length);
         setReferralData(response.data);
+      } else {
+        console.warn('⚠️ No referral data:', response);
+        setReferralData([]);
       }
     } catch (error: any) {
-      console.error('Failed to fetch referral data:', error);
+      console.error('❌ Failed to fetch referral data:', error);
       showNotification(error.message || 'Failed to fetch referral data', 'error');
     } finally {
       setIsLoading(false);
@@ -144,7 +158,9 @@ export default function AdminBonus() {
     try {
       // Use unified API route for admin bonus settings
       const response = await apiClient.get<{ success: boolean; data: BonusSettings }>('/api/admin/bonus-settings');
+      console.log('📊 Bonus Settings API Response:', response);
       if (response.success && response.data) {
+        console.log('✅ Bonus settings loaded:', response.data);
         setBonusSettings({
           depositBonusPercent: parseFloat(response.data.depositBonusPercent?.toString() || '5'),
           referralBonusPercent: parseFloat(response.data.referralBonusPercent?.toString() || '1'),
@@ -152,9 +168,18 @@ export default function AdminBonus() {
           bonusClaimThreshold: parseFloat(response.data.bonusClaimThreshold?.toString() || '500'),
           adminWhatsappNumber: response.data.adminWhatsappNumber || ''
         });
+      } else {
+        console.warn('⚠️ No bonus settings data:', response);
+        setBonusSettings({
+          depositBonusPercent: 5,
+          referralBonusPercent: 1,
+          conditionalBonusThreshold: 30,
+          bonusClaimThreshold: 500,
+          adminWhatsappNumber: ''
+        });
       }
     } catch (error: any) {
-      console.error('Failed to fetch bonus settings:', error);
+      console.error('❌ Failed to fetch bonus settings:', error);
       showNotification(error.message || 'Failed to fetch bonus settings', 'error');
     }
   };
@@ -166,11 +191,16 @@ export default function AdminBonus() {
       const response = await apiClient.get<{ success: boolean; data: PlayerBonusAnalytics[] }>(
         '/api/admin/player-bonus-analytics'
       );
+      console.log('📊 Player Bonus Analytics API Response:', response);
       if (response.success && response.data) {
+        console.log('✅ Player bonus analytics loaded:', response.data.length);
         setPlayerAnalytics(response.data);
+      } else {
+        console.warn('⚠️ No player bonus analytics data:', response);
+        setPlayerAnalytics([]);
       }
     } catch (error: any) {
-      console.error('Failed to fetch player analytics:', error);
+      console.error('❌ Failed to fetch player analytics:', error);
       showNotification(error.message || 'Failed to fetch player analytics', 'error');
     } finally {
       setIsLoading(false);
@@ -221,15 +251,23 @@ export default function AdminBonus() {
     return '₹' + safeAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'applied':
-      case 'completed':
-        return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Applied</Badge>;
+  const getStatusBadge = (statusOrAction: string) => {
+    switch (statusOrAction) {
+      case 'credited':
+      case 'unlocked':
+      case 'applied':  // Legacy support
+      case 'completed':  // Legacy support
+        return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Credited</Badge>;
       case 'pending':
+      case 'added':
+      case 'locked':
         return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Pending</Badge>;
       case 'failed':
+      case 'expired':
+      case 'forfeited':
         return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Failed</Badge>;
+      case 'wagering_progress':
+        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">In Progress</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
@@ -241,7 +279,11 @@ export default function AdminBonus() {
         return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Deposit Bonus</Badge>;
       case 'referral_bonus':
         return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">Referral Bonus</Badge>;
-      case 'bonus_applied':
+      case 'conditional_bonus':
+        return <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30">Conditional Bonus</Badge>;
+      case 'promotional_bonus':
+        return <Badge className="bg-pink-500/20 text-pink-400 border-pink-500/30">Promotional</Badge>;
+      case 'bonus_applied':  // Legacy
         return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Applied</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
@@ -249,24 +291,52 @@ export default function AdminBonus() {
   };
 
   const filteredBonusTransactions = bonusTransactions.filter(transaction => {
-    const matchesSearch = transaction.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         transaction.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || transaction.status === statusFilter;
-    const matchesType = typeFilter === 'all' || transaction.type === typeFilter;
+    const matchesSearch = transaction.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         transaction.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    // Support both 'action' (database) and 'status' (legacy)
+    const transactionStatus = transaction.action || transaction.status || '';
+    const matchesStatus = statusFilter === 'all' || transactionStatus === statusFilter;
+    // Support both 'bonusType' (database) and 'type' (legacy)
+    const transactionType = transaction.bonusType || transaction.type || '';
+    const matchesType = typeFilter === 'all' || transactionType === typeFilter;
     return matchesSearch && matchesStatus && matchesType;
   });
 
+  // Count 'credited' and 'unlocked' as paid bonuses (matches database schema)
   const totalBonusPaid = bonusTransactions
-    .filter(t => t.status === 'applied')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .filter(t => {
+      const action: string = (t.action as string) || (t.status as string) || '';
+      return ['credited', 'unlocked', 'applied', 'completed'].includes(action);
+    })
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
 
+  // Count 'pending', 'added', 'locked' as pending bonuses
   const totalPendingBonus = bonusTransactions
-    .filter(t => t.status === 'pending')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .filter(t => {
+      const action: string = (t.action as string) || (t.status as string) || '';
+      return ['pending', 'added', 'locked'].includes(action);
+    })
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
 
+  // Count 'credited' referral bonuses (matches database schema)
   const totalReferralEarnings = referralData
-    .filter(r => r.status === 'completed')
-    .reduce((sum, r) => sum + r.bonusAmount, 0);
+    .filter(r => ['credited', 'completed', 'applied'].includes(r.status as string))
+    .reduce((sum, r) => sum + (r.bonusAmount || 0), 0);
+
+  // Debug logging for bonus calculations
+  console.log('🎁 Bonus Calculations Debug:', {
+    bonusTransactionsCount: bonusTransactions.length,
+    bonusTransactionsSample: bonusTransactions.slice(0, 2),
+    // ... rest of the code remains the same ...
+    appliedCount: bonusTransactions.filter(t => t.status === 'applied').length,
+    completedCount: bonusTransactions.filter(t => t.status === 'completed').length,
+    pendingCount: bonusTransactions.filter(t => t.status === 'pending').length,
+    totalBonusPaid,
+    totalPendingBonus,
+    referralDataCount: referralData.length,
+    referralDataSample: referralData.slice(0, 2),
+    totalReferralEarnings
+  });
 
   const handleSaveSettings = async () => {
     try {

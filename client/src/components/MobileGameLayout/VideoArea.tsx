@@ -268,7 +268,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           lowLatencyMode: true,            // Enable LL-HLS
           backBufferLength: 0,             // No back buffer
           maxLiveSyncPlaybackRate: 1.5,    // Speed up 1.5x to catch up to live
-          liveSyncDuration: 0.5,           // Target 0.5s behind live edge
           liveBackBufferLength: 0,         // No live back buffer
         });
         

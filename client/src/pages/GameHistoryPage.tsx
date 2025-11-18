@@ -52,6 +52,19 @@ const GameHistoryPage: React.FC = () => {
     });
   };
 
+  // Helper function to normalize field names from backend (snake_case) to frontend (camelCase)
+  const normalizeGameData = (game: any): GameAnalytics => {
+    return {
+      ...game,
+      housePayout: game.housePayout ?? game.house_payout ?? game.totalWinnings ?? game.total_winnings ?? 0,
+      profitLoss: game.profitLoss ?? game.profit_loss ?? 0,
+      totalBets: game.totalBets ?? game.total_bets ?? 0,
+      totalWinnings: game.totalWinnings ?? game.total_winnings ?? 0,
+      andarTotalBet: game.andarTotalBet ?? game.andar_total_bet ?? 0,
+      baharTotalBet: game.baharTotalBet ?? game.bahar_total_bet ?? 0,
+    };
+  };
+
   const fetchHistory = async () => {
     try {
       setLoading(true);
@@ -103,7 +116,9 @@ const GameHistoryPage: React.FC = () => {
             });
           }
           
-          setHistory(games);
+          // Normalize field names from snake_case to camelCase
+          const normalizedGames = games.map(normalizeGameData);
+          setHistory(normalizedGames);
           setPagination(paginationData);
         } else {
           console.warn('⚠️ Unexpected API response format:', data);
@@ -348,34 +363,37 @@ const GameHistoryPage: React.FC = () => {
           <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-purple-300 text-sm">Total Bets</p>
+                <p className="text-purple-300 text-sm">Total Bets (Current Page)</p>
                 <p className="text-2xl font-bold text-white">
                   {formatCurrency(history.reduce((sum, game) => sum + (game.totalBets || 0), 0))}
                 </p>
+                <p className="text-purple-400 text-xs">Page {filters.page} of {pagination.pages}</p>
               </div>
             </CardContent>
           </Card>
           <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-purple-300 text-sm">Total Payouts</p>
+                <p className="text-purple-300 text-sm">Total Payouts (Current Page)</p>
                 <p className="text-2xl font-bold text-white">
-                  {formatCurrency(history.reduce((sum, game) => sum + (game.housePayout || game.totalWinnings || 0), 0))}
+                  {formatCurrency(history.reduce((sum, game) => sum + (game.housePayout || 0), 0))}
                 </p>
+                <p className="text-purple-400 text-xs">Page {filters.page} of {pagination.pages}</p>
               </div>
             </CardContent>
           </Card>
           <Card className="bg-purple-950/60 border-purple-400/30 backdrop-blur-sm">
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-purple-300 text-sm">Net Profit/Loss</p>
+                <p className="text-purple-300 text-sm">Net Profit/Loss (Current Page)</p>
                 <p className={`text-2xl font-bold ${
-                  history.reduce((sum, game) => sum + (game.profitLoss || (game as any).profit_loss || 0), 0) >= 0 
+                  history.reduce((sum, game) => sum + (game.profitLoss || 0), 0) >= 0 
                     ? 'text-green-400' 
                     : 'text-red-400'
                 }`}>
-                  {formatCurrency(history.reduce((sum, game) => sum + (game.profitLoss || (game as any).profit_loss || 0), 0))}
+                  {formatCurrency(history.reduce((sum, game) => sum + (game.profitLoss || 0), 0))}
                 </p>
+                <p className="text-purple-400 text-xs">Page {filters.page} of {pagination.pages}</p>
               </div>
             </CardContent>
           </Card>
@@ -466,7 +484,7 @@ const GameHistoryPage: React.FC = () => {
                       </td>
                       <td className="p-3 text-right">
                         <span className="text-purple-200">
-                          {formatCurrency(game.housePayout || game.totalWinnings || 0)}
+                          {formatCurrency(game.housePayout || 0)}
                         </span>
                       </td>
                       <td className="p-3 text-right">

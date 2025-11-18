@@ -497,65 +497,118 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       // Fix 1: Use correct endpoint /api/user/game-history
       const response = await apiClient.get(`/api/user/game-history?limit=${limit}&offset=${append ? offset : 0}&result=all`) as any;
       
-      // Fix 2: Parse correct response shape (response.data.data.games)
-      const api = response?.data || response;
-      const container = api?.data || {};
-      const gamesRaw = container.games || [];
-      const hasMore = Boolean(container.hasMore);
+      console.log('🎮 Game History API Response:', response);
       
-      // Fix 3: Normalize each game entry with defensive fallbacks
-      const mappedGames: GameHistoryEntry[] = gamesRaw.map((g: any) => {
-        // Compute yourTotalBet: trust backend, fallback to sum of bets
-        const yourTotalBet = Number(
-          g.yourTotalBet ??
-          g.totalBet ??
-          (Array.isArray(g.yourBets)
-            ? g.yourBets.reduce((s: number, b: any) => s + Number(b.amount || 0), 0)
-            : 0)
-        );
+      // Fix 2: Improved response parsing with better error detection
+      let gamesRaw: any[] = [];
+      let hasMore = false;
+      
+      // Handle multiple possible response structures
+      if (response?.success && response?.data) {
+        // Structure: { success: true, data: { games: [...], hasMore: true } }
+        if (Array.isArray(response.data.games)) {
+          gamesRaw = response.data.games;
+          hasMore = Boolean(response.data.hasMore);
+          console.log('✅ Found games in response.data.games:', gamesRaw.length);
+        }
+        // Structure: { success: true, data: { data: { games: [...] } } }
+        else if (response.data.data && Array.isArray(response.data.data.games)) {
+          gamesRaw = response.data.data.games;
+          hasMore = Boolean(response.data.data.hasMore);
+          console.log('✅ Found games in response.data.data.games:', gamesRaw.length);
+        }
+        // Structure: { success: true, data: [...] } (direct array)
+        else if (Array.isArray(response.data)) {
+          gamesRaw = response.data;
+          hasMore = false;
+          console.log('✅ Found games as direct array:', gamesRaw.length);
+        }
+        else {
+          console.warn('⚠️ Unexpected response structure:', response);
+        }
+      } else {
+        console.error('❌ Invalid API response:', response);
+      }
+      
+      // Fix 3: Normalize field names from snake_case to camelCase
+      const normalizeGameFields = (g: any) => {
+        return {
+          ...g,
+          yourTotalBet: g.yourTotalBet ?? g.your_total_bet ?? g.totalBet ?? g.total_bet,
+          yourTotalPayout: g.yourTotalPayout ?? g.your_total_payout ?? g.payout ?? g.total_payout,
+          yourNetProfit: g.yourNetProfit ?? g.your_net_profit ?? g.netProfit ?? g.net_profit,
+          yourBets: g.yourBets ?? g.your_bets ?? [],
+        };
+      };
+      
+      const mappedGames: GameHistoryEntry[] = gamesRaw.map((g: any, index: number) => {
+        // Normalize field names first
+        const normalized = normalizeGameFields(g);
+        
+        // Fix 7: Improved bet calculation with logging
+        let yourTotalBet = 0;
+        if (normalized.yourTotalBet !== undefined && normalized.yourTotalBet !== null) {
+          yourTotalBet = Number(normalized.yourTotalBet);
+        } else if (Array.isArray(normalized.yourBets) && normalized.yourBets.length > 0) {
+          yourTotalBet = normalized.yourBets.reduce((s: number, b: any) => s + Number(b.amount || 0), 0);
+          console.log(`📊 Game ${index}: Calculated yourTotalBet from bets array: ₹${yourTotalBet}`);
+        } else {
+          console.warn(`⚠️ Game ${index}: No bet data found, using 0`);
+        }
 
-        // Compute yourTotalPayout: trust backend, fallback to sum of actual_payout
-        const yourTotalPayout = Number(
-          g.yourTotalPayout ??
-          g.payout ??
-          (Array.isArray(g.yourBets)
-            ? g.yourBets.reduce((s: number, b: any) => s + Number(b.payout || b.actual_payout || 0), 0)
-            : 0)
-        );
+        // Fix 8: Improved payout calculation with field name normalization
+        let yourTotalPayout = 0;
+        if (normalized.yourTotalPayout !== undefined && normalized.yourTotalPayout !== null) {
+          yourTotalPayout = Number(normalized.yourTotalPayout);
+        } else if (Array.isArray(normalized.yourBets) && normalized.yourBets.length > 0) {
+          yourTotalPayout = normalized.yourBets.reduce((s: number, b: any) => {
+            const payout = Number(b.payout ?? b.actual_payout ?? b.actualPayout ?? 0);
+            return s + payout;
+          }, 0);
+          console.log(`📊 Game ${index}: Calculated yourTotalPayout from bets array: ₹${yourTotalPayout}`);
+        } else {
+          console.warn(`⚠️ Game ${index}: No payout data found, using 0`);
+        }
 
-        // Compute yourNetProfit: trust backend, fallback to calculation
-        const yourNetProfit = Number(
-          g.yourNetProfit ??
-          (yourTotalPayout - yourTotalBet)
-        );
+        // Fix 9: Improved net profit calculation
+        let yourNetProfit = 0;
+        if (normalized.yourNetProfit !== undefined && normalized.yourNetProfit !== null) {
+          yourNetProfit = Number(normalized.yourNetProfit);
+        } else {
+          yourNetProfit = yourTotalPayout - yourTotalBet;
+          if (yourTotalBet > 0) {
+            console.log(`📊 Game ${index}: Calculated yourNetProfit: ₹${yourNetProfit} (payout: ₹${yourTotalPayout} - bet: ₹${yourTotalBet})`);
+          }
+        }
 
-        // Compute result: trust backend, fallback to logic
-        let result = g.result;
+        // Improved result classification with better logic
+        let result = g.result || normalized.result;
         if (!result) {
-          if (yourTotalBet === 0 && yourTotalPayout === 0) {
+          if (yourTotalBet === 0) {
             result = 'no_bet';
           } else if (yourNetProfit > 0) {
             result = 'win';
           } else if (yourNetProfit < 0) {
             result = 'loss';
           } else {
-            result = 'no_bet';
+            // Bet placed but no profit/loss (rare edge case)
+            result = 'draw';
           }
         }
 
-        return {
-          id: String(g.id || g.gameId),
-          gameId: String(g.gameId),
-          openingCard: g.openingCard || '',
+        const mappedGame = {
+          id: String(g.id || g.gameId || g.game_id),
+          gameId: String(g.gameId || g.game_id),
+          openingCard: g.openingCard || g.opening_card || '',
           winner: g.winner || 'andar',
-          yourBet: g.yourBet || null,
-          yourBets: Array.isArray(g.yourBets)
-            ? g.yourBets.map((b: any) => ({
+          yourBet: g.yourBet || g.your_bet || null,
+          yourBets: Array.isArray(normalized.yourBets)
+            ? normalized.yourBets.map((b: any) => ({
                 id: String(b.id),
                 side: b.side,
                 amount: Number(b.amount),
                 round: Number(b.round),
-                payout: Number(b.payout ?? b.actual_payout ?? 0),
+                payout: Number(b.payout ?? b.actual_payout ?? b.actualPayout ?? 0),
                 status: String(b.status || '')
               }))
             : [],
@@ -564,13 +617,29 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
           yourNetProfit,
           result,
           payout: yourTotalPayout,
-          totalCards: Number(g.totalCards ?? (g.dealtCards?.length ?? 0)),
-          round: Number(g.round || g.winningRound || 1),
-          createdAt: g.createdAt ? new Date(g.createdAt) : new Date()
+          totalCards: Number(g.totalCards ?? g.total_cards ?? (g.dealtCards?.length ?? 0)),
+          round: Number(g.round || g.winningRound || g.winning_round || 1),
+          createdAt: g.createdAt || g.created_at ? new Date(g.createdAt || g.created_at) : new Date()
         };
+        
+        // Log first game for debugging
+        if (index === 0) {
+          console.log('📋 First mapped game:', mappedGame);
+        }
+        
+        return mappedGame;
       });
       
-      if (response.success || api.success) {
+      console.log(`✅ Successfully mapped ${mappedGames.length} games`);
+      console.log('📊 Games breakdown:', {
+        total: mappedGames.length,
+        withBets: mappedGames.filter(g => g.yourTotalBet > 0).length,
+        wins: mappedGames.filter(g => g.result === 'win').length,
+        losses: mappedGames.filter(g => g.result === 'loss').length,
+        noBets: mappedGames.filter(g => g.result === 'no_bet').length
+      });
+      
+      if (response.success) {
         dispatch({
           type: 'SET_GAME_HISTORY',
           payload: {

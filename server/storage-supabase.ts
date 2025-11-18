@@ -1145,25 +1145,31 @@ export class SupabaseStorage implements IStorage {
       const gamesPlayed = (user.games_played || 0) + 1;
       const gamesWon = won ? (user.games_won || 0) + 1 : (user.games_won || 0);
       
-      // ✅ FIX: Track actual winnings and losses, not just profit/loss
+      // ✅ CRITICAL FIX: Track GROSS amounts, not NET profit/loss
+      // total_winnings = sum of all payouts received
+      // total_losses = sum of all bets that lost (where payout = 0 or payout < bet)
       const currentWinnings = parseFloat(user.total_winnings as any) || 0;
       const currentLosses = parseFloat(user.total_losses as any) || 0;
       
       let newWinnings = currentWinnings;
       let newLosses = currentLosses;
       
-      if (payoutAmount > betAmount) {
-        // Player won - add NET PROFIT to winnings
-        const profit = payoutAmount - betAmount;
-        newWinnings = currentWinnings + profit;
-        console.log(`✅ User ${userId} WON: Bet ₹${betAmount}, Payout ₹${payoutAmount}, Profit ₹${profit}`);
-      } else if (payoutAmount < betAmount) {
-        // Player lost - add NET LOSS to losses
-        const loss = betAmount - payoutAmount;
-        newLosses = currentLosses + loss;
-        console.log(`❌ User ${userId} LOST: Bet ₹${betAmount}, Payout ₹${payoutAmount}, Loss ₹${loss}`);
-      } else {
-        // Refund (1:0 payout) - no change to winnings/losses
+      if (won && payoutAmount > 0) {
+        // Player won - add GROSS PAYOUT to total_winnings
+        newWinnings = currentWinnings + payoutAmount;
+        console.log(`✅ User ${userId} WON: Bet ₹${betAmount}, Payout ₹${payoutAmount}, Total Winnings: ₹${newWinnings}`);
+      } else if (!won && payoutAmount === 0) {
+        // Player lost completely - add GROSS BET AMOUNT to total_losses
+        newLosses = currentLosses + betAmount;
+        console.log(`❌ User ${userId} LOST: Bet ₹${betAmount}, Payout ₹${payoutAmount}, Total Losses: ₹${newLosses}`);
+      } else if (payoutAmount > 0 && payoutAmount < betAmount) {
+        // Partial loss (e.g., round 1 won, round 2 lost) - track both
+        newWinnings = currentWinnings + payoutAmount;
+        const netLoss = betAmount - payoutAmount;
+        newLosses = currentLosses + netLoss;
+        console.log(`⚠️ User ${userId} PARTIAL: Bet ₹${betAmount}, Payout ₹${payoutAmount}, Net Loss ₹${netLoss}`);
+      } else if (payoutAmount === betAmount) {
+        // Refund (1:1 payout) - no change to winnings/losses
         console.log(`🔄 User ${userId} REFUND: Bet ₹${betAmount}, Payout ₹${payoutAmount}, No change`);
       }
       
@@ -2157,7 +2163,7 @@ export class SupabaseStorage implements IStorage {
         openingCard: game.opening_card,
         winner: game.winner,
         winningCard: game.winning_card,
-        winningRound: game.round || 1,
+        winningRound: game.winning_round || 1,  // Fixed: was game.round
         totalCards: game.total_cards || 0,
         yourBets: game.your_bets || [],
         yourTotalBet: parseFloat(game.your_total_bet || '0'),
@@ -2808,14 +2814,23 @@ export class SupabaseStorage implements IStorage {
       const currentProfitLoss = parseFloat((existing as any).profit_loss || '0');
       const currentPlayers = (existing as any).unique_players || 0;
       
+      // Calculate new totals
+      const newTotalBets = currentBets + (increments.totalBets || 0);
+      const newTotalPayouts = currentPayouts + (increments.totalPayouts || 0);
+      const newProfitLoss = currentProfitLoss + (increments.profitLoss || 0);
+      
+      // Recalculate profit_loss_percentage based on new totals
+      const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
+      
       const { error } = await supabaseServer
         .from('daily_game_statistics')
         .update({
           total_games: currentGames + (increments.totalGames || 0),
-          total_bets: currentBets + (increments.totalBets || 0),
-          total_payouts: currentPayouts + (increments.totalPayouts || 0),
+          total_bets: newTotalBets,
+          total_payouts: newTotalPayouts,
           total_revenue: currentRevenue + (increments.totalRevenue || 0),
-          profit_loss: currentProfitLoss + (increments.profitLoss || 0),
+          profit_loss: newProfitLoss,
+          profit_loss_percentage: newProfitLossPercentage,
           unique_players: currentPlayers + (increments.uniquePlayers || 0),
           updated_at: new Date()
         })
@@ -2917,14 +2932,23 @@ export class SupabaseStorage implements IStorage {
       const currentProfitLoss = parseFloat((existing as any).profit_loss || '0');
       const currentPlayers = (existing as any).unique_players || 0;
       
+      // Calculate new totals
+      const newTotalBets = currentBets + (increments.totalBets || 0);
+      const newTotalPayouts = currentPayouts + (increments.totalPayouts || 0);
+      const newProfitLoss = currentProfitLoss + (increments.profitLoss || 0);
+      
+      // Recalculate profit_loss_percentage based on new totals
+      const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
+      
       const { error } = await supabaseServer
         .from('monthly_game_statistics')
         .update({
           total_games: currentGames + (increments.totalGames || 0),
-          total_bets: currentBets + (increments.totalBets || 0),
-          total_payouts: currentPayouts + (increments.totalPayouts || 0),
+          total_bets: newTotalBets,
+          total_payouts: newTotalPayouts,
           total_revenue: currentRevenue + (increments.totalRevenue || 0),
-          profit_loss: currentProfitLoss + (increments.profitLoss || 0),
+          profit_loss: newProfitLoss,
+          profit_loss_percentage: newProfitLossPercentage,
           unique_players: currentPlayers + (increments.uniquePlayers || 0),
           updated_at: new Date()
         })
@@ -3025,14 +3049,23 @@ export class SupabaseStorage implements IStorage {
       const currentProfitLoss = parseFloat((existing as any).profit_loss || '0');
       const currentPlayers = (existing as any).unique_players || 0;
       
+      // Calculate new totals
+      const newTotalBets = currentBets + (increments.totalBets || 0);
+      const newTotalPayouts = currentPayouts + (increments.totalPayouts || 0);
+      const newProfitLoss = currentProfitLoss + (increments.profitLoss || 0);
+      
+      // Recalculate profit_loss_percentage based on new totals
+      const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
+      
       const { error } = await supabaseServer
         .from('yearly_game_statistics')
         .update({
           total_games: currentGames + (increments.totalGames || 0),
-          total_bets: currentBets + (increments.totalBets || 0),
-          total_payouts: currentPayouts + (increments.totalPayouts || 0),
+          total_bets: newTotalBets,
+          total_payouts: newTotalPayouts,
           total_revenue: currentRevenue + (increments.totalRevenue || 0),
-          profit_loss: currentProfitLoss + (increments.profitLoss || 0),
+          profit_loss: newProfitLoss,
+          profit_loss_percentage: newProfitLossPercentage,
           unique_players: currentPlayers + (increments.uniquePlayers || 0),
           updated_at: new Date()
         })

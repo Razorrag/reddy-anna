@@ -31,9 +31,9 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
-  const formatCurrency = (amount: number | undefined | null) => {
+  const formatCurrency = (amount: number | undefined | null, showNAForNull: boolean = false) => {
     if (amount === undefined || amount === null || isNaN(amount)) {
-      return '₹0.00';
+      return showNAForNull ? 'N/A' : '₹0.00';
     }
     return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
@@ -282,10 +282,11 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ showBelowContro
                 </p>
               </div>
               <div>
-                <p className="text-purple-300 text-sm">Total Bets</p>
+                <p className="text-purple-300 text-sm">Total Bets (Current Round)</p>
                 <p className="text-white font-semibold">
                   {formatCurrency(realtimeData.currentGame.andarTotal + realtimeData.currentGame.baharTotal)}
                 </p>
+                <p className="text-purple-400 text-xs">Round {realtimeData.currentGame.currentRound}</p>
               </div>
               <div>
                 <p className="text-purple-300 text-sm">Timer</p>
