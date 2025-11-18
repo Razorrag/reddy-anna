@@ -37,10 +37,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // Refs for direct stream control
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const hlsRef = useRef<any>(null); // Store HLS.js instance for direct control
-  const videoCallbackRef = useCallback((el: HTMLVideoElement | null) => {
-    videoRef.current = el;
-  }, []);
   
   // Canvas ref for capturing frozen frame when paused
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -50,6 +46,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // ✅ Loading and buffering states for better UX
   const [isBuffering, setIsBuffering] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  
+  // ✅ Prevent flicker: Keep previous frame visible during reload
+  const [isReloading, setIsReloading] = useState(false);
 
   // ✅ CRITICAL FIX: Move loadStreamConfig to component scope so it can be reused
   const loadStreamConfig = useCallback(async () => {
@@ -170,16 +169,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     loadStreamConfig();
   }, [loadStreamConfig]);
 
-  // ✅ CLEANUP: Destroy HLS instance on unmount or URL change
-  useEffect(() => {
-    return () => {
-      if (hlsRef.current) {
-        console.log('🧹 Cleaning up HLS.js instance...');
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-    };
-  }, [streamConfig?.streamUrl]);
 
   // ✅ NEW: Add 1-second polling fallback for instant pause/play updates
   useEffect(() => {
@@ -245,30 +234,42 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [streamConfig?.streamUrl, isPausedState]);
 
-  // ✅ STREAM HEALTH MONITOR: Auto-recovery for paused or failed streams
-  // ✅ FIX: Check isPausedState to prevent auto-resume when admin has paused
+  // ✅ AGGRESSIVE STREAM HEALTH MONITOR: Auto-recovery every 500ms
   useEffect(() => {
     const monitorStream = setInterval(() => {
-      if (document.hidden) return; // Don't check when page is hidden
+      if (document.hidden) return;
       
       const videoElement = videoRef.current;
-      if (videoElement && streamConfig?.streamUrl) {
-        // ✅ CRITICAL FIX: Only auto-resume if NOT paused by admin
-        if (videoElement.paused && videoElement.readyState >= 2 && !isPausedState) {
+      if (videoElement && streamConfig?.streamUrl && !isPausedState) {
+        // Auto-resume if paused unexpectedly
+        if (videoElement.paused && videoElement.readyState >= 2) {
           console.log('🔄 Auto-resuming paused video...');
           videoElement.play().catch(err => console.error('❌ Auto-resume failed:', err));
         }
         
-        // If video failed to load, reload it (but respect pause state)
+        // Reload if failed or stalled
         if (videoElement.readyState === 0 || videoElement.error) {
           console.log('🔄 Reloading failed video...');
+          const currentSrc = videoElement.src;
+          videoElement.src = '';
+          videoElement.src = currentSrc;
           videoElement.load();
-          if (!isPausedState) {
-            videoElement.play().catch(err => console.error('❌ Video reload failed:', err));
-          }
+          videoElement.play().catch(err => console.error('❌ Video reload failed:', err));
+        }
+        
+        // Check if video is stalled (not progressing)
+        const currentTime = videoElement.currentTime;
+        if (currentTime > 0 && !videoElement.paused && !videoElement.ended) {
+          setTimeout(() => {
+            if (videoElement.currentTime === currentTime && !videoElement.paused) {
+              console.log('🔄 Video stalled, forcing reload...');
+              videoElement.load();
+              videoElement.play().catch(console.error);
+            }
+          }, 2000);
         }
       }
-    }, 1000); // Check every 1 second for tighter auto-refresh
+    }, 500); // Check every 500ms for faster recovery
     
     return () => clearInterval(monitorStream);
   }, [streamConfig?.streamUrl, isPausedState]);
@@ -323,11 +324,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     }
   };
 
-  // ✅ CRITICAL FIX: Handle pause/resume WITHOUT reloading stream (prevents black screen)
+  // ✅ OPTIMIZED: Handle pause/resume with NO FLICKER
   useEffect(() => {
     const videoElement = videoRef.current;
     const iframeElement = iframeRef.current;
-    const hls = hlsRef.current;
     
     if (isPausedState) {
       // PAUSE: Freeze on current frame
@@ -337,44 +337,59 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         console.log('⏸️ Stream paused - frame frozen');
       }
     } else {
-      // RESUME: Jump to live edge WITHOUT reloading (prevents flicker)
+      // RESUME: Smooth resume with NO BLACK SCREEN
       setFrozenFrame(null);
-      
+
       if (videoElement && streamConfig?.streamUrl) {
-        console.log('▶️ Resuming stream - jumping to live edge...');
+        console.log('▶️ Resuming stream smoothly...');
         
-        // ✅ For HLS streams with HLS.js - jump to live edge instantly
-        if (hls && typeof hls.liveSyncPosition === 'number') {
-          try {
-            // Jump to live edge (no reload needed!)
-            videoElement.currentTime = hls.liveSyncPosition;
-            videoElement.play().catch(err => {
-              console.error('❌ Resume play failed:', err);
-            });
-            console.log('✅ Jumped to live edge at', hls.liveSyncPosition, 'seconds');
-          } catch (err) {
-            console.error('❌ Failed to jump to live edge:', err);
-            // Fallback: just resume playback
-            videoElement.play().catch(console.error);
-          }
-        } else {
-          // For non-HLS or native HLS - just resume
-          videoElement.play().catch(err => {
-            console.error('❌ Resume play failed:', err);
-          });
-          console.log('✅ Stream resumed');
+        // ✅ ANTI-FLICKER: Keep video visible during reload
+        setIsReloading(true);
+        
+        // Capture current frame before reload
+        if (videoElement.readyState >= 2) {
+          captureCurrentFrame();
         }
+        
+        // Smooth reload without black screen
+        const currentSrc = videoElement.src;
+        
+        // Create new video element in background
+        const tempVideo = document.createElement('video');
+        tempVideo.src = currentSrc;
+        tempVideo.muted = true;
+        tempVideo.playsInline = true;
+        tempVideo.preload = 'auto';
+        
+        // Once loaded, swap smoothly
+        tempVideo.addEventListener('loadeddata', () => {
+          videoElement.src = currentSrc;
+          videoElement.load();
+          videoElement.play().then(() => {
+            setIsReloading(false);
+            setFrozenFrame(null);
+            console.log('✅ Stream resumed smoothly');
+          }).catch(err => {
+            console.error('❌ Resume play failed:', err);
+            setIsReloading(false);
+            setTimeout(() => videoElement.play().catch(console.error), 200);
+          });
+        });
+        
+        // Start loading
+        tempVideo.load();
+        
+        // Fallback: Remove loading state after 2 seconds
+        setTimeout(() => setIsReloading(false), 2000);
       }
-      
-      // For iframe streams, reload to get latest (no better option for iframes)
+
+      // For iframe streams
       if (iframeElement && streamConfig?.streamUrl) {
-        console.log('▶️ Resuming iframe stream - reloading...');
+        console.log('▶️ Resuming iframe stream...');
         const currentSrc = iframeElement.src;
-        iframeElement.src = ''; // Clear
-        setTimeout(() => {
-          iframeElement.src = currentSrc; // Reload
-          console.log('✅ Iframe stream resumed');
-        }, 50); // Reduced delay from 100ms to 50ms
+        iframeElement.src = '';
+        iframeElement.src = currentSrc;
+        console.log('✅ Iframe stream resumed');
       }
     }
   }, [isPausedState, streamConfig?.streamUrl]);
@@ -454,69 +469,15 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     if (shouldUseVideo) {
       console.log('✅ VideoArea: Rendering VIDEO stream:', streamConfig.streamUrl);
       
-      // ✅ Initialize HLS.js for .m3u8 streams with ultra-low latency
-      const isHLS = streamConfig.streamUrl.toLowerCase().includes('.m3u8');
-      
       return (
         <video
-          ref={(el) => {
-            videoCallbackRef(el);
-            
-            // ✅ Initialize HLS.js for HLS streams
-            if (el && isHLS && !hlsRef.current) {
-              // Check if HLS.js is available
-              const Hls = (window as any).Hls;
-              if (Hls && Hls.isSupported()) {
-                console.log('🎬 Initializing HLS.js...');
-                const hls = new Hls({
-                  enableWorker: true,
-                  lowLatencyMode: true,
-                  backBufferLength: 90,
-                  maxBufferLength: 30,
-                  maxMaxBufferLength: 60,
-                  liveSyncDurationCount: 3,
-                  liveMaxLatencyDurationCount: 10,
-                  liveDurationInfinity: true,
-                  highBufferWatchdogPeriod: 2
-                });
-                
-                hls.loadSource(streamConfig.streamUrl);
-                hls.attachMedia(el);
-                hlsRef.current = hls;
-                
-                hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                  console.log('✅ HLS manifest parsed, starting playback');
-                  el.play().catch(err => console.error('❌ HLS autoplay failed:', err));
-                });
-                
-                hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
-                  if (data.fatal) {
-                    console.error('❌ HLS fatal error:', data);
-                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                      console.log('🔄 Network error - retrying...');
-                      hls.startLoad();
-                    } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                      console.log('🔄 Media error - recovering...');
-                      hls.recoverMediaError();
-                    }
-                  }
-                });
-                
-                console.log('✅ HLS.js initialized successfully');
-              } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
-                // Native HLS support (Safari)
-                console.log('🍎 Using native HLS support');
-                el.src = streamConfig.streamUrl;
-              }
-            } else if (el && !isHLS) {
-              // Direct video source for MP4/WebM
-              el.src = streamConfig.streamUrl;
-            }
-          }}
+          ref={videoRef}
+          src={streamConfig.streamUrl}
           className="w-full h-full object-cover"
           autoPlay
           muted={true}
           controls={false}
+          loop
           playsInline
           preload="auto"
           style={{
@@ -542,24 +503,66 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           }}
           onPause={() => {
             if (!document.hidden && videoRef.current && !isPausedState) {
-              console.log('🔄 Video paused unexpectedly - auto-resuming...');
-              setTimeout(() => {
-                videoRef.current?.play().catch(err => console.error('❌ Auto-resume on pause failed:', err));
-              }, 100);
+              console.log('🔄 Video paused unexpectedly - instant auto-resume...');
+              videoRef.current.play().catch(err => console.error('❌ Auto-resume failed:', err));
+            }
+          }}
+          onStalled={() => {
+            console.log('⚠️ Video stalled - smooth reload...');
+            if (videoRef.current && !isPausedState) {
+              // ✅ ANTI-FLICKER: Capture frame before reload
+              captureCurrentFrame();
+              setIsReloading(true);
+              
+              const currentSrc = videoRef.current.src;
+              videoRef.current.src = '';
+              videoRef.current.src = currentSrc;
+              videoRef.current.load();
+              videoRef.current.play().then(() => {
+                setIsReloading(false);
+                setFrozenFrame(null);
+              }).catch(console.error);
+            }
+          }}
+          onSuspend={() => {
+            console.log('⚠️ Video suspended - attempting resume...');
+            if (videoRef.current && !isPausedState) {
+              videoRef.current.play().catch(console.error);
             }
           }}
           onError={(e) => {
             console.error('❌ Video error:', e);
-            setStreamError('Stream temporarily unavailable');
+            setStreamError('Reconnecting...');
             setIsBuffering(true);
-            setTimeout(() => {
-              if (videoRef.current && !document.hidden) {
-                console.log('🔄 Attempting to recover from video error...');
-                setStreamError(null);
-                videoRef.current.load();
-                videoRef.current.play().catch(console.error);
-              }
-            }, 2000);
+            
+            if (videoRef.current && !document.hidden) {
+              console.log('🔄 Smooth error recovery...');
+              
+              // ✅ ANTI-FLICKER: Keep last frame visible
+              captureCurrentFrame();
+              setIsReloading(true);
+              
+              const currentSrc = videoRef.current.src;
+              videoRef.current.src = '';
+              
+              setTimeout(() => {
+                if (videoRef.current) {
+                  setStreamError(null);
+                  videoRef.current.src = currentSrc;
+                  videoRef.current.load();
+                  videoRef.current.play().then(() => {
+                    setIsReloading(false);
+                    setFrozenFrame(null);
+                  }).catch(console.error);
+                }
+              }, 500);
+            }
+          }}
+          onLoadedData={() => {
+            console.log('✅ Video loaded, starting playback...');
+            if (videoRef.current && !isPausedState) {
+              videoRef.current.play().catch(console.error);
+            }
           }}
         />
       );
@@ -613,8 +616,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       {/* Hidden canvas for capturing frozen frame when paused */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
       
-      {/* Show frozen frame overlay when paused */}
-      {isPausedState && frozenFrame && (
+      {/* Show frozen frame overlay when paused OR reloading (prevents flicker) */}
+      {(isPausedState || isReloading) && frozenFrame && (
         <div className="absolute inset-0 z-20">
           <img 
             src={frozenFrame} 
@@ -623,14 +626,16 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           />
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <div className="bg-black/80 backdrop-blur-sm px-6 py-3 rounded-full">
-              <span className="text-white text-lg font-semibold">⏸️ Stream Paused</span>
+              <span className="text-white text-lg font-semibold">
+                {isPausedState ? '⏸️ Stream Paused' : '🔄 Refreshing...'}
+              </span>
             </div>
           </div>
         </div>
       )}
       
-      {/* ✅ Buffering Overlay - Show when stream is loading */}
-      {isBuffering && !isPausedState && (
+      {/* ✅ Buffering Overlay - Show when stream is loading (but not if we have frozen frame) */}
+      {isBuffering && !isPausedState && !frozenFrame && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="bg-black/80 backdrop-blur-sm px-6 py-4 rounded-xl flex flex-col items-center gap-3">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gold"></div>
