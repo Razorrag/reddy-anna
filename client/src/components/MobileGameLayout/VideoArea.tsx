@@ -467,40 +467,17 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
               // Check if HLS.js is available
               const Hls = (window as any).Hls;
               if (Hls && Hls.isSupported()) {
-                console.log('🎬 Initializing HLS.js with balanced config (smooth + low latency)...');
+                console.log('🎬 Initializing HLS.js...');
                 const hls = new Hls({
-                  // ✅ BALANCED CONFIG: Smooth playback + Low latency
                   enableWorker: true,
                   lowLatencyMode: true,
-                  
-                  // ✅ STABLE BUFFERING (prevents black screens)
-                  backBufferLength: 10,              // Keep 10s back buffer
-                  maxBufferLength: 10,               // 10s forward buffer
-                  maxMaxBufferLength: 20,            // Max 20s safety margin
-                  
-                  // ✅ BALANCED LIVE EDGE (2-4s latency)
-                  liveSyncDurationCount: 2,          // Stay 2 segments behind (2s)
-                  liveMaxLatencyDurationCount: 5,    // Max 5 segments (5s)
+                  backBufferLength: 90,
+                  maxBufferLength: 30,
+                  maxMaxBufferLength: 60,
+                  liveSyncDurationCount: 3,
+                  liveMaxLatencyDurationCount: 10,
                   liveDurationInfinity: true,
-                  
-                  // ✅ SMOOTH RECOVERY (no jarring jumps)
-                  highBufferWatchdogPeriod: 2,       // Check every 2s
-                  nudgeMaxRetry: 3,                  // Gentle nudging
-                  
-                  // ✅ GRADUAL CATCH-UP (barely noticeable)
-                  maxLiveSyncPlaybackRate: 1.05,     // Speed up only 5%
-                  
-                  // ✅ PREVENT STALLS
-                  maxBufferHole: 0.5,                // Fill 0.5s holes
-                  maxFragLookUpTolerance: 0.25,      // Tolerate small gaps
-                  
-                  // ✅ NETWORK RESILIENCE
-                  manifestLoadingTimeOut: 10000,     // 10s timeout
-                  manifestLoadingMaxRetry: 4,        // Retry 4 times
-                  levelLoadingTimeOut: 10000,
-                  levelLoadingMaxRetry: 4,
-                  fragLoadingTimeOut: 20000,         // 20s for fragments
-                  fragLoadingMaxRetry: 6
+                  highBufferWatchdogPeriod: 2
                 });
                 
                 hls.loadSource(streamConfig.streamUrl);
@@ -512,76 +489,16 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                   el.play().catch(err => console.error('❌ HLS autoplay failed:', err));
                 });
                 
-                // ✅ COMPREHENSIVE ERROR HANDLING
-                let networkErrorCount = 0;
-                let mediaErrorCount = 0;
-                
                 hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
-                  console.log('⚠️ HLS error:', data.type, data.details, 'fatal:', data.fatal);
-                  
                   if (data.fatal) {
+                    console.error('❌ HLS fatal error:', data);
                     if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                      networkErrorCount++;
-                      console.log(`🔄 Network error #${networkErrorCount} - attempting recovery...`);
-                      
-                      if (networkErrorCount <= 5) {
-                        // Try to recover by restarting load
-                        setTimeout(() => {
-                          console.log('🔄 Restarting HLS load...');
-                          hls.startLoad();
-                        }, 1000 * networkErrorCount); // Exponential backoff
-                      } else {
-                        console.error('❌ Too many network errors, destroying HLS instance');
-                        hls.destroy();
-                        // Fallback: try native video element
-                        setTimeout(() => {
-                          if (el) {
-                            console.log('🔄 Falling back to native video element...');
-                            el.src = streamConfig.streamUrl;
-                            el.load();
-                            el.play().catch(console.error);
-                          }
-                        }, 2000);
-                      }
+                      console.log('🔄 Network error - retrying...');
+                      hls.startLoad();
                     } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                      mediaErrorCount++;
-                      console.log(`🔄 Media error #${mediaErrorCount} - attempting recovery...`);
-                      
-                      if (mediaErrorCount <= 3) {
-                        setTimeout(() => {
-                          console.log('🔄 Recovering from media error...');
-                          hls.recoverMediaError();
-                        }, 500);
-                      } else {
-                        console.error('❌ Too many media errors, reloading stream...');
-                        hls.destroy();
-                        hlsRef.current = null;
-                        // Force reload
-                        setTimeout(() => {
-                          if (el) {
-                            console.log('🔄 Forcing stream reload...');
-                            el.src = streamConfig.streamUrl;
-                            el.load();
-                            el.play().catch(console.error);
-                          }
-                        }, 1000);
-                      }
-                    } else {
-                      console.error('❌ Fatal error, cannot recover:', data);
+                      console.log('🔄 Media error - recovering...');
+                      hls.recoverMediaError();
                     }
-                  } else {
-                    // Non-fatal errors - just log
-                    console.log('ℹ️ Non-fatal HLS error:', data.details);
-                  }
-                });
-                
-                // ✅ RESET ERROR COUNTERS ON SUCCESS
-                hls.on(Hls.Events.FRAG_LOADED, () => {
-                  // Reset counters when fragments load successfully
-                  if (networkErrorCount > 0 || mediaErrorCount > 0) {
-                    console.log('✅ Stream recovered, resetting error counters');
-                    networkErrorCount = 0;
-                    mediaErrorCount = 0;
                   }
                 });
                 

@@ -86,26 +86,15 @@
         function initPlayer() {
             if (Hls.isSupported()) {
                 const hls = new Hls({
-                    // BALANCED CONFIG: Low latency + Smooth playback
                     enableWorker: true,
                     lowLatencyMode: true,
-                    
-                    // STABLE BUFFERING (prevents black screens)
-                    backBufferLength: 10,             // Keep 10s back buffer for seeking
-                    maxBufferLength: 10,              // 10s forward buffer (smooth playback)
-                    maxMaxBufferLength: 20,           // Max 20s (safety margin)
-                    
-                    // BALANCED LIVE EDGE (2-3s behind live)
-                    liveSyncDurationCount: 2,         // Stay 2 segments behind (2s)
-                    liveMaxLatencyDurationCount: 5,   // Max 5 segments latency (5s)
+                    backBufferLength: 90,
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60,
+                    liveSyncDurationCount: 3,
+                    liveMaxLatencyDurationCount: 10,
                     liveDurationInfinity: true,
-                    
-                    // SMOOTH RECOVERY (no jarring jumps)
-                    highBufferWatchdogPeriod: 2,      // Check buffer every 2s
-                    nudgeMaxRetry: 3,                 // Gentle nudging
-                    
-                    // GRADUAL CATCH-UP (smooth, not jarring)
-                    maxLiveSyncPlaybackRate: 1.05     // Speed up only 5% (barely noticeable)
+                    highBufferWatchdogPeriod: 2
                 });
 
                 hls.loadSource(streamUrl);

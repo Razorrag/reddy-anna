@@ -33,13 +33,7 @@ const config = {
       {
         app: 'live',
         hls: true,
-        // ✅ BALANCED LOW-LATENCY + STABILITY PROFILE:
-        // - hls_time=1            → 1s segments (good balance)
-        // - hls_list_size=3       → keep 3 segments (3s buffer for stability)
-        // - hls_flags=delete_segments+independent_segments → drop old + faster seeking
-        // - hls_segment_type=mpegts → faster than fmp4 for live
-        // Result: 2-4s latency with NO black screens
-        hlsFlags: '[hls_time=1:hls_list_size=3:hls_flags=delete_segments+independent_segments:hls_segment_type=mpegts]',
+        hlsFlags: '[hls_time=1:hls_list_size=4:hls_flags=delete_segments]',
         dash: false,
       },
     ],
