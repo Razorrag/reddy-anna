@@ -1546,7 +1546,7 @@ export class SupabaseStorage implements IStorage {
       .select('*')
       .eq('user_id', userId)
       .eq('game_id', gameId)
-      .neq('status', 'cancelled'); // ✅ FIX: Exclude cancelled bets from user's bet display
+      .eq('status', 'pending'); // ✅ CRITICAL FIX: Only return pending bets (active bets), not won/lost bets from completed games
 
     if (error) {
       console.error('Error getting bets for user:', error);

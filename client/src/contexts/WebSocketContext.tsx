@@ -847,9 +847,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         clearRoundBets(1);  // Clear round 1 bets
         clearRoundBets(2);  // Clear round 2 bets
         
-        // ✅ Reset betting UI to zero
-        updatePlayerRoundBets(1, { andar: 0, bahar: 0 });
-        updatePlayerRoundBets(2, { andar: 0, bahar: 0 });
+        // ✅ CRITICAL FIX: Reset betting UI to empty arrays (not 0)
+        updatePlayerRoundBets(1, { andar: [], bahar: [] });
+        updatePlayerRoundBets(2, { andar: [], bahar: [] });
         
         console.log('🔄 Game reset - bets cleared:', message);
         break;

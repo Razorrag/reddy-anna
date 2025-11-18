@@ -1,0 +1,131 @@
+═══════════════════════════════════════════════════════════════
+🎥 OBS QUICK SETUP - COPY & PASTE SETTINGS
+═══════════════════════════════════════════════════════════════
+
+📡 STREAM SETTINGS (Settings → Stream)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Service: Custom
+Server: rtmp://89.42.231.35:1935/live
+Stream Key: test
+
+
+📤 OUTPUT SETTINGS (Settings → Output → Streaming)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Output Mode: Advanced
+
+Encoder: x264
+Rate Control: CBR
+Bitrate: 2500
+Keyframe Interval: 1        ⚠️ CRITICAL! Must be 1
+CPU Usage Preset: veryfast
+Profile: main
+Tune: zerolatency           ⚠️ CRITICAL! Must be zerolatency
+
+
+🎬 VIDEO SETTINGS (Settings → Video)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Base Resolution: 1920x1080
+Output Resolution: 1280x720
+Downscale Filter: Lanczos
+FPS: 30
+
+
+🔊 AUDIO SETTINGS (Settings → Audio)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Sample Rate: 48 kHz
+Channels: Stereo
+
+
+⚙️ ADVANCED SETTINGS (Settings → Advanced)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Process Priority: High
+Color Format: NV12
+Color Space: 709
+Color Range: Partial
+Stream Delay: 0
+
+Automatically Reconnect: ✅ Enabled
+Retry Delay: 2
+Maximum Retries: 20
+
+Enable Dynamic Bitrate: ✅ Enabled
+
+
+📊 AUDIO BITRATE (Settings → Output → Audio)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Track 1 Audio Bitrate: 160
+
+
+═══════════════════════════════════════════════════════════════
+✅ DONE! Click "Start Streaming" in OBS
+═══════════════════════════════════════════════════════════════
+
+Expected Latency: 1-2 seconds from camera to browser
+
+Test Stream: Open https://rajugarikossu.com and wave hand
+
+
+═══════════════════════════════════════════════════════════════
+🔧 ALTERNATIVE SETTINGS (If you have issues)
+═══════════════════════════════════════════════════════════════
+
+LOW-END PC:
+  Encoder: x264
+  Preset: ultrafast
+  Resolution: 1280x720
+  FPS: 30
+  Bitrate: 2000
+
+NVIDIA GPU (GTX 1050+):
+  Encoder: NVENC H.264
+  Preset: Quality
+  Resolution: 1920x1080
+  FPS: 60
+  Bitrate: 6000
+
+SLOW INTERNET (<3 Mbps upload):
+  Bitrate: 1500
+  Resolution: 960x540
+  FPS: 30
+
+
+═══════════════════════════════════════════════════════════════
+⚠️ CRITICAL SETTINGS - DO NOT CHANGE!
+═══════════════════════════════════════════════════════════════
+
+✅ Keyframe Interval: 1
+✅ Tune: zerolatency
+✅ Rate Control: CBR
+✅ Stream Delay: 0
+
+These settings ensure ultra-low latency (1-2 seconds)
+
+
+═══════════════════════════════════════════════════════════════
+📝 TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════
+
+Can't connect?
+  → Check server: ssh root@89.42.231.35 'pm2 status'
+  → Verify URL: rtmp://89.42.231.35:1935/live
+  → Verify key: test
+
+Choppy stream?
+  → Lower bitrate: 2500 → 2000
+  → Lower resolution: 720p → 540p
+  → Enable Dynamic Bitrate
+
+High CPU?
+  → Change preset: veryfast → ultrafast
+  → Lower FPS: 30 → 24
+  → Use NVENC if you have NVIDIA GPU
+
+High latency (>3 seconds)?
+  → Verify Keyframe Interval = 1
+  → Verify Tune = zerolatency
+  → Restart streaming server: pm2 restart streaming-server
+
+
+═══════════════════════════════════════════════════════════════
+✅ READY TO STREAM!
+═══════════════════════════════════════════════════════════════

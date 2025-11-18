@@ -86,15 +86,26 @@
         function initPlayer() {
             if (Hls.isSupported()) {
                 const hls = new Hls({
+                    // ULTRA LOW-LATENCY CONFIG
                     enableWorker: true,
                     lowLatencyMode: true,
-                    backBufferLength: 90,
-                    maxBufferLength: 30,
-                    maxMaxBufferLength: 60,
-                    liveSyncDurationCount: 3,
-                    liveMaxLatencyDurationCount: 10,
+                    
+                    // MINIMAL BUFFERING (1-2 seconds max)
+                    backBufferLength: 0,              // No back buffer (saves memory)
+                    maxBufferLength: 2,               // Max 2s forward buffer
+                    maxMaxBufferLength: 3,            // Hard limit 3s
+                    
+                    // AGGRESSIVE LIVE EDGE SEEKING
+                    liveSyncDurationCount: 1,         // Stay 1 segment behind live (0.5s)
+                    liveMaxLatencyDurationCount: 2,   // Max 2 segments latency (1s)
                     liveDurationInfinity: true,
-                    highBufferWatchdogPeriod: 2
+                    
+                    // FAST RECOVERY
+                    highBufferWatchdogPeriod: 1,      // Check buffer every 1s
+                    nudgeMaxRetry: 5,                 // Retry nudging to live edge
+                    
+                    // AUTO-JUMP TO LIVE EDGE IF LAGGING
+                    maxLiveSyncPlaybackRate: 1.2      // Speed up 20% to catch up
                 });
 
                 hls.loadSource(streamUrl);

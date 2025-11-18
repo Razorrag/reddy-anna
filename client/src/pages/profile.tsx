@@ -17,7 +17,9 @@ import {
   Building2,
   CheckCircle2,
   Clock,
-  XCircle
+  XCircle,
+  Share2,
+  Link as LinkIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1558,38 +1560,107 @@ const Profile: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="bg-black/50 border-gold/30">
                 <CardHeader>
-                  <CardTitle className="text-gold">Your Referral Code</CardTitle>
+                  <CardTitle className="text-gold">Share & Earn</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="p-4 bg-gold/10 rounded-lg border border-gold/30">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-gold mb-2">
-                        {profileState.user?.referralCodeGenerated ||
-                          profileState.referralData?.referralCode ||
-                          'NO REFERRAL CODE YET'}
-                      </div>
-                      <Button
-                        onClick={() => {
-                          const codeToCopy =
-                            profileState.user?.referralCodeGenerated ||
+                  {/* Referral Code */}
+                  <div className="space-y-2">
+                    <Label className="text-white/80 text-sm">Your Referral Code</Label>
+                    <div className="p-4 bg-gold/10 rounded-lg border border-gold/30">
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-gold mb-3">
+                          {profileState.user?.referralCodeGenerated ||
                             profileState.referralData?.referralCode ||
-                            '';
-                          if (!codeToCopy) {
-                            showNotification('Referral code not available yet. Please contact support.', 'error');
-                            return;
-                          }
-                          void handleCopyToClipboard(codeToCopy);
-                        }}
-                        variant="outline"
-                        className="border-gold/30 text-gold hover:bg-gold/10"
-                      >
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copy Code
-                      </Button>
+                            'NO REFERRAL CODE YET'}
+                        </div>
+                        <Button
+                          onClick={() => {
+                            const codeToCopy =
+                              profileState.user?.referralCodeGenerated ||
+                              profileState.referralData?.referralCode ||
+                              '';
+                            if (!codeToCopy) {
+                              showNotification('Referral code not available yet. Please contact support.', 'error');
+                              return;
+                            }
+                            void handleCopyToClipboard(codeToCopy);
+                          }}
+                          variant="outline"
+                          className="border-gold/30 text-gold hover:bg-gold/10"
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          Copy Code
+                        </Button>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Referral Link */}
+                  <div className="space-y-2">
+                    <Label className="text-white/80 text-sm">Your Referral Link</Label>
+                    <div className="p-4 bg-gold/10 rounded-lg border border-gold/30">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 p-3 bg-black/30 rounded-lg border border-gold/20">
+                          <LinkIcon className="w-4 h-4 text-gold flex-shrink-0" />
+                          <div className="flex-1 text-white/80 text-sm truncate">
+                            {(() => {
+                              const referralCode = profileState.user?.referralCodeGenerated ||
+                                profileState.referralData?.referralCode;
+                              return referralCode
+                                ? `${window.location.origin}/signup?ref=${referralCode}`
+                                : 'No referral link available';
+                            })()}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => {
+                              const referralCode =
+                                profileState.user?.referralCodeGenerated ||
+                                profileState.referralData?.referralCode ||
+                                '';
+                              if (!referralCode) {
+                                showNotification('Referral code not available yet. Please contact support.', 'error');
+                                return;
+                              }
+                              const referralLink = `${window.location.origin}/signup?ref=${referralCode}`;
+                              void handleCopyToClipboard(referralLink);
+                            }}
+                            variant="outline"
+                            className="flex-1 border-gold/30 text-gold hover:bg-gold/10"
+                          >
+                            <Copy className="w-4 h-4 mr-2" />
+                            Copy Link
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              const referralCode =
+                                profileState.user?.referralCodeGenerated ||
+                                profileState.referralData?.referralCode ||
+                                '';
+                              if (!referralCode) {
+                                showNotification('Referral code not available yet. Please contact support.', 'error');
+                                return;
+                              }
+                              const referralLink = `${window.location.origin}/signup?ref=${referralCode}`;
+                              const message = `🎰 Join me on Andar Bahar and get 5% bonus on your first deposit! Use my referral link: ${referralLink}`;
+                              const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+                              window.open(whatsappUrl, '_blank');
+                            }}
+                            variant="outline"
+                            className="flex-1 border-green-500/30 text-green-400 hover:bg-green-500/10"
+                          >
+                            <Share2 className="w-4 h-4 mr-2" />
+                            Share via WhatsApp
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Benefits Info */}
                   <div className="text-sm text-white/80">
-                    <p className="mb-2">Share your referral code with friends and earn bonuses when they sign up and play!</p>
+                    <p className="mb-2 font-semibold text-gold">How it works:</p>
                     <ul className="list-disc list-inside space-y-1 text-white/60">
                       <li>Friend gets 5% bonus on their first deposit</li>
                       <li>You get 1% bonus when they make their first deposit</li>
