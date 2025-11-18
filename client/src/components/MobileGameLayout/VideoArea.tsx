@@ -153,6 +153,11 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     }
   }, []);
 
+  // ✅ CRITICAL FIX: Load stream config on mount
+  useEffect(() => {
+    loadStreamConfig();
+  }, [loadStreamConfig]);
+
   // Fake viewer count logic - ALWAYS uses a range (configured if available, otherwise defaults)
   useEffect(() => {
     const updateDisplayedCount = () => {
