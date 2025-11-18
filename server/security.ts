@@ -106,7 +106,9 @@ export const corsOptions = {
       'https://raju-gari-kossu.com',
       'https://raju-gari-kossu-7n83.onrender.com',
       'https://raju-gari-kossu.onrender.com',
-      'http://91.108.110.72:5000'
+      'http://91.108.110.72:5000',
+      'http://89.42.231.35:5000',
+      'http://89.42.231.35:8000'
     ];
 
     // Allow requests with no origin (like mobile apps, curl, or same-origin)

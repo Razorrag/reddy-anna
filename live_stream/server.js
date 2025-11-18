@@ -47,8 +47,8 @@ const config = {
 const nms = new NodeMediaServer(config);
 nms.run();
 console.log('✅ NodeMediaServer started!');
-console.log('RTMP URL: rtmp://91.108.110.72:1935/live');
-console.log('HLS URL: http://91.108.110.72:8000/live/test/index.m3u8');
+console.log('RTMP URL: rtmp://89.42.231.35:1935/live');
+console.log('HLS URL: http://89.42.231.35:8000/live/test/index.m3u8');
 
 // ------------------
 // Express server for HTML player
@@ -85,6 +85,6 @@ app.get('/health', (req, res) => {
 });
 
 app.listen(3000, () => {
-  console.log('✅ Player running at http://91.108.110.72:3000');
+  console.log('✅ Player running at http://89.42.231.35:3000');
   console.log('✅ CORS enabled for cross-origin requests');
 });
