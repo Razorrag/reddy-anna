@@ -255,18 +255,21 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         
         // Create HLS instance with low-latency settings
         const hls = new Hls({
-          // ✅ LOW LATENCY SETTINGS
-          liveSyncDurationCount: 1,        // Only buffer 1 segment (reduces latency)
-          liveMaxLatencyDurationCount: 3,  // Max 3 segments behind live edge
-          maxBufferLength: 3,              // Keep only 3 seconds buffered
-          maxMaxBufferLength: 6,           // Never exceed 6 seconds buffer
-          maxBufferSize: 10 * 1000 * 1000, // 10MB max buffer
-          maxBufferHole: 0.1,              // Tolerate tiny gaps
-          highBufferWatchdogPeriod: 1,     // Check buffer health every 1s
-          nudgeMaxRetry: 3,                // Retry stalls quickly
-          enableWorker: true,              // Use web worker for better performance
-          lowLatencyMode: true,            // Enable LL-HLS if available
-          backBufferLength: 0,             // Don't keep old segments
+          // ✅ ULTRA-LOW LATENCY SETTINGS (Target: 1-2s delay)
+          liveSyncDurationCount: 1,        // Stay 0.5s behind live (1 segment)
+          liveMaxLatencyDurationCount: 2,  // Max 1s behind live (2 segments)
+          maxBufferLength: 1,              // Only 1s forward buffer (AGGRESSIVE)
+          maxMaxBufferLength: 2,           // Hard limit 2s buffer
+          maxBufferSize: 5 * 1000 * 1000,  // 5MB max buffer
+          maxBufferHole: 0.05,             // Minimal gap tolerance
+          highBufferWatchdogPeriod: 0.5,   // Check buffer every 0.5s
+          nudgeMaxRetry: 5,                // More aggressive retry
+          enableWorker: true,              // Use web worker
+          lowLatencyMode: true,            // Enable LL-HLS
+          backBufferLength: 0,             // No back buffer
+          maxLiveSyncPlaybackRate: 1.5,    // Speed up 1.5x to catch up to live
+          liveSyncDuration: 0.5,           // Target 0.5s behind live edge
+          liveBackBufferLength: 0,         // No live back buffer
         });
         
         hls.loadSource(streamUrl);
