@@ -105,10 +105,18 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             console.log('🔄 Downgraded stream URL to:', streamUrl);
           }
           // If site is HTTPS but stream URL is HTTP, try to upgrade to HTTPS
+          // ❌ EXCEPTION: Do NOT upgrade IP addresses (they usually don't have SSL)
           else if (currentProtocol === 'https:' && streamUrl.startsWith('http://')) {
-            console.log('⚠️ Site is HTTPS but stream URL is HTTP, attempting to upgrade...');
-            streamUrl = streamUrl.replace('http://', 'https://');
-            console.log('🔄 Upgraded stream URL to:', streamUrl);
+            const isIpAddress = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(new URL(streamUrl).hostname);
+
+            if (!isIpAddress) {
+              console.log('⚠️ Site is HTTPS but stream URL is HTTP, attempting to upgrade...');
+              streamUrl = streamUrl.replace('http://', 'https://');
+              console.log('🔄 Upgraded stream URL to:', streamUrl);
+            } else {
+              console.warn('⚠️ Mixed Content Warning: Site is HTTPS but stream is HTTP (IP address). Browser may block this.');
+              console.log('ℹ️ Skipping HTTPS upgrade for IP address:', streamUrl);
+            }
           }
         }
 
