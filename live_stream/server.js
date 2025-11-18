@@ -33,7 +33,8 @@ const config = {
       {
         app: 'live',
         hls: true,
-        hlsFlags: '[hls_time=1:hls_list_size=4:hls_flags=delete_segments]',
+        // ✅ ULTRA-LOW LATENCY: 0.5s segments × 2 = 1s server buffer (was 4s)
+        hlsFlags: '[hls_time=0.5:hls_list_size=2:hls_flags=delete_segments+independent_segments:hls_segment_type=mpegts]',
         dash: false,
       },
     ],
