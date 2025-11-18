@@ -13,6 +13,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
+import Hls from 'hls.js';
 
 interface VideoAreaProps {
   className?: string;
@@ -37,6 +38,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // Refs for direct stream control
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
   
   // Canvas ref for capturing frozen frame when paused
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -234,6 +236,84 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [streamConfig?.streamUrl, isPausedState]);
 
+  // ✅ HLS.js SETUP: Low-latency configuration for .m3u8 streams
+  useEffect(() => {
+    const videoElement = videoRef.current;
+    const streamUrl = streamConfig?.streamUrl;
+    
+    if (!videoElement || !streamUrl || isPausedState) return;
+    
+    // Check if URL is HLS (.m3u8)
+    if (streamUrl.includes('.m3u8')) {
+      if (Hls.isSupported()) {
+        console.log('🎥 Setting up HLS.js with LOW LATENCY config...');
+        
+        // Destroy existing HLS instance
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+        }
+        
+        // Create HLS instance with low-latency settings
+        const hls = new Hls({
+          // ✅ LOW LATENCY SETTINGS
+          liveSyncDurationCount: 1,        // Only buffer 1 segment (reduces latency)
+          liveMaxLatencyDurationCount: 3,  // Max 3 segments behind live edge
+          maxBufferLength: 3,              // Keep only 3 seconds buffered
+          maxMaxBufferLength: 6,           // Never exceed 6 seconds buffer
+          maxBufferSize: 10 * 1000 * 1000, // 10MB max buffer
+          maxBufferHole: 0.1,              // Tolerate tiny gaps
+          highBufferWatchdogPeriod: 1,     // Check buffer health every 1s
+          nudgeMaxRetry: 3,                // Retry stalls quickly
+          enableWorker: true,              // Use web worker for better performance
+          lowLatencyMode: true,            // Enable LL-HLS if available
+          backBufferLength: 0,             // Don't keep old segments
+        });
+        
+        hls.loadSource(streamUrl);
+        hls.attachMedia(videoElement);
+        
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          console.log('✅ HLS manifest loaded, starting LOW LATENCY playback...');
+          videoElement.play().catch(err => console.error('❌ HLS play failed:', err));
+        });
+        
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            console.error('❌ Fatal HLS error:', data);
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                console.log('🔄 Network error, attempting recovery...');
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                console.log('🔄 Media error, attempting recovery...');
+                hls.recoverMediaError();
+                break;
+              default:
+                console.log('🔄 Unrecoverable error, destroying HLS...');
+                hls.destroy();
+                break;
+            }
+          }
+        });
+        
+        hlsRef.current = hls;
+        
+        return () => {
+          if (hlsRef.current) {
+            hlsRef.current.destroy();
+            hlsRef.current = null;
+          }
+        };
+      } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        console.log('🎥 Using native HLS support (Safari)...');
+        videoElement.src = streamUrl;
+        videoElement.play().catch(err => console.error('❌ Native HLS play failed:', err));
+      }
+    }
+  }, [streamConfig?.streamUrl, isPausedState]);
+
   // ✅ AGGRESSIVE STREAM HEALTH MONITOR: Auto-recovery every 500ms
   useEffect(() => {
     const monitorStream = setInterval(() => {
@@ -247,14 +327,16 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           videoElement.play().catch(err => console.error('❌ Auto-resume failed:', err));
         }
         
-        // Reload if failed or stalled
-        if (videoElement.readyState === 0 || videoElement.error) {
-          console.log('🔄 Reloading failed video...');
-          const currentSrc = videoElement.src;
-          videoElement.src = '';
-          videoElement.src = currentSrc;
-          videoElement.load();
-          videoElement.play().catch(err => console.error('❌ Video reload failed:', err));
+        // Reload if failed or stalled (only for non-HLS streams)
+        if (!streamConfig.streamUrl.includes('.m3u8')) {
+          if (videoElement.readyState === 0 || videoElement.error) {
+            console.log('🔄 Reloading failed video...');
+            const currentSrc = videoElement.src;
+            videoElement.src = '';
+            videoElement.src = currentSrc;
+            videoElement.load();
+            videoElement.play().catch(err => console.error('❌ Video reload failed:', err));
+          }
         }
         
         // Check if video is stalled (not progressing)
@@ -263,8 +345,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           setTimeout(() => {
             if (videoElement.currentTime === currentTime && !videoElement.paused) {
               console.log('🔄 Video stalled, forcing reload...');
-              videoElement.load();
-              videoElement.play().catch(console.error);
+              if (hlsRef.current) {
+                hlsRef.current.startLoad();
+              } else {
+                videoElement.load();
+                videoElement.play().catch(console.error);
+              }
             }
           }, 2000);
         }
@@ -480,6 +566,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           loop
           playsInline
           preload="auto"
+          // ✅ LOW LATENCY: Minimize buffering for HLS streams
+          x-webkit-airplay="allow"
+          webkit-playsinline="true"
           style={{
             position: 'absolute',
             top: 0,
