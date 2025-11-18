@@ -28,7 +28,7 @@ export const authLimiter = rateLimit({
 
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Increased limit for general requests (game updates, etc.)
+  max: 5000, // Increased limit for general requests (game updates, etc.)
   message: {
     success: false,
     error: 'Too many requests, please try again later.'
@@ -45,7 +45,7 @@ export const generalLimiter = rateLimit({
 
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 2000, // Increased limit for API requests
+  max: 10000, // Increased limit for API requests
   message: {
     success: false,
     error: 'Too many API requests, please try again later.'
@@ -62,7 +62,7 @@ export const apiLimiter = rateLimit({
 // Game-specific rate limiter (more lenient for real-time gaming)
 export const gameLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 300, // Allow 300 game requests per minute (5 per second)
+  max: 1000, // Allow 1000 game requests per minute
   message: {
     success: false,
     error: 'Too many game requests, please slow down.'
@@ -108,12 +108,12 @@ export const corsOptions = {
       'https://raju-gari-kossu.onrender.com',
       'http://91.108.110.72:5000'
     ];
-    
+
     // Allow requests with no origin (like mobile apps, curl, or same-origin)
     if (!origin) return callback(null, true);
-    
+
     // In production, do NOT allow unspecified origins
-    
+
     // Check against allowed origins list
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
@@ -164,18 +164,18 @@ export const securityMiddleware = [
 // Request logging middleware
 export const requestLogger = (req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
-  
+
   res.on('finish', () => {
     const duration = Date.now() - start;
     const log = `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms - ${req.ip}`;
-    
+
     if (res.statusCode >= 400) {
       console.error(`[ERROR] ${log}`);
     } else {
       console.log(`[INFO] ${log}`);
     }
   });
-  
+
   next();
 };
 
@@ -183,14 +183,14 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
 export const ipBlocker = (blockedIPs: string[] = []) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const clientIP = req.ip || req.connection.remoteAddress;
-    
+
     if (blockedIPs.includes(clientIP as string)) {
       return res.status(403).json({
         success: false,
         error: 'Access denied'
       });
     }
-    
+
     next();
   };
 };
@@ -204,10 +204,10 @@ export const suspiciousActivityDetector = (req: Request, res: Response, next: Ne
     /javascript:/i,  // JavaScript protocol
     /data:text\/html/i,  // Data URI HTML
   ];
-  
+
   const url = req.originalUrl;
   const userAgent = req.get('User-Agent') || '';
-  
+
   // Check for suspicious patterns in URL
   for (const pattern of suspiciousPatterns) {
     if (pattern.test(url)) {
@@ -218,7 +218,7 @@ export const suspiciousActivityDetector = (req: Request, res: Response, next: Ne
       });
     }
   }
-  
+
   // Check for suspicious user agents
   const suspiciousUserAgents = [
     /bot/i,
@@ -227,7 +227,7 @@ export const suspiciousActivityDetector = (req: Request, res: Response, next: Ne
     /curl/i,
     /wget/i,
   ];
-  
+
   for (const pattern of suspiciousUserAgents) {
     if (pattern.test(userAgent) && !userAgent.includes('Googlebot')) {
       console.warn(`[SUSPICIOUS] Suspicious user agent: ${userAgent} from IP: ${req.ip}`);
@@ -235,7 +235,7 @@ export const suspiciousActivityDetector = (req: Request, res: Response, next: Ne
       break;
     }
   }
-  
+
   next();
 };
 
@@ -281,14 +281,14 @@ export const sessionSecurity = {
 export const validateApiKey = (req: Request, res: Response, next: NextFunction) => {
   const apiKey = req.headers['x-api-key'] as string;
   const validApiKeys = process.env.VALID_API_KEYS?.split(',') || [];
-  
+
   if (!apiKey || !validApiKeys.includes(apiKey)) {
     return res.status(401).json({
       success: false,
       error: 'Invalid API key'
     });
   }
-  
+
   next();
 };
 
@@ -296,13 +296,13 @@ export const validateApiKey = (req: Request, res: Response, next: NextFunction) 
 // 🔐 SECURITY: NO BYPASSES - Admin access requires proper authentication
 export const validateAdminAccess = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
-  
-  console.log('🔍 validateAdminAccess check:', { 
-    hasUser: !!user, 
-    userId: user?.id, 
-    role: user?.role 
+
+  console.log('🔍 validateAdminAccess check:', {
+    hasUser: !!user,
+    userId: user?.id,
+    role: user?.role
   });
-  
+
   // 🔐 SECURITY: Check if user exists (NO DEV MODE BYPASS)
   if (!user) {
     console.log('❌ Admin access denied: No authenticated user');
@@ -311,7 +311,7 @@ export const validateAdminAccess = (req: Request, res: Response, next: NextFunct
       error: 'Authentication required. Please login as admin.'
     });
   }
-  
+
   // 🔐 SECURITY: Verify admin role (NO EXCEPTIONS)
   if (user.role !== 'admin' && user.role !== 'super_admin') {
     console.log(`❌ Admin access denied: User ${user.id} has role '${user.role}' (requires 'admin' or 'super_admin')`);
@@ -320,7 +320,7 @@ export const validateAdminAccess = (req: Request, res: Response, next: NextFunct
       error: 'Admin access required. Your role does not have permission.'
     });
   }
-  
+
   console.log(`✅ Admin access granted: ${user.id} (${user.role})`);
   next();
 };
@@ -336,37 +336,37 @@ export const fileUploadSecurity = {
 // Input validation helper
 export const validateInput = (input: any, rules: any) => {
   const errors: string[] = [];
-  
+
   for (const field in rules) {
     const rule = rules[field];
     const value = input[field];
-    
+
     if (rule.required && (!value || value.toString().trim() === '')) {
       errors.push(`${field} is required`);
       continue;
     }
-    
+
     if (value && rule.type && typeof value !== rule.type) {
       errors.push(`${field} must be of type ${rule.type}`);
     }
-    
+
     if (value && rule.minLength && value.length < rule.minLength) {
       errors.push(`${field} must be at least ${rule.minLength} characters`);
     }
-    
+
     if (value && rule.maxLength && value.length > rule.maxLength) {
       errors.push(`${field} must not exceed ${rule.maxLength} characters`);
     }
-    
+
     if (value && rule.pattern && !rule.pattern.test(value)) {
       errors.push(`${field} format is invalid`);
     }
-    
+
     if (value && rule.enum && !rule.enum.includes(value)) {
       errors.push(`${field} must be one of: ${rule.enum.join(', ')}`);
     }
   }
-  
+
   return {
     isValid: errors.length === 0,
     errors
@@ -391,7 +391,7 @@ export const handleSecurityError = (error: Error, req: Request, res: Response, n
     ip: req.ip,
     userAgent: req.get('User-Agent')
   });
-  
+
   // Don't expose sensitive error details
   res.status(500).json({
     success: false,
@@ -402,7 +402,7 @@ export const handleSecurityError = (error: Error, req: Request, res: Response, n
 // Rate limit exceeded handler
 export const rateLimitExceeded = (req: Request, res: Response) => {
   console.warn(`[RATE LIMIT] Rate limit exceeded for IP: ${req.ip} on ${req.originalUrl}`);
-  
+
   res.status(429).json({
     success: false,
     error: 'Too many requests, please try again later.',
@@ -420,9 +420,9 @@ export const auditLogger = (action: string, userId?: string, details?: any) => {
     ip: details?.ip,
     userAgent: details?.userAgent
   };
-  
+
   console.log(`[AUDIT] ${JSON.stringify(auditLog)}`);
-  
+
   // In production, send to secure logging service
   if (process.env.AUDIT_WEBHOOK) {
     // Send to webhook or logging service
@@ -432,14 +432,14 @@ export const auditLogger = (action: string, userId?: string, details?: any) => {
 // Database security helpers
 export const sanitizeQuery = (query: any) => {
   const sanitized: any = {};
-  
+
   for (const key in query) {
     if (key.startsWith('$') || key.includes('.')) {
       continue; // Skip MongoDB operators
     }
     sanitized[key] = query[key];
   }
-  
+
   return sanitized;
 };
 
@@ -462,15 +462,15 @@ export const validateSecurityConfig = () => {
     'JWT_SECRET',
     'ALLOWED_ORIGINS'
   ];
-  
+
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-  
+
   if (missingVars.length > 0) {
     console.error(`[SECURITY] Missing required environment variables: ${missingVars.join(', ')}`);
     return false;
   }
-  
+
   // No default secrets allowed
-  
+
   return true;
 };

@@ -22,7 +22,7 @@ interface VideoAreaProps {
 
 const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const { gameState } = useGameState();
-  
+
   // ✅ FIX: Use the gameState.countdownTimer directly (synced from server)
   // This ensures the timer is always in sync with the server
   const localTimer = gameState.countdownTimer || 0;
@@ -31,26 +31,32 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // Stream configuration from backend
   const [streamConfig, setStreamConfig] = useState<any>(null);
   const [streamLoading, setStreamLoading] = useState(true);
-  
+
   // Displayed viewer count - always fake based on configured range
   const [displayedViewerCount, setDisplayedViewerCount] = useState<number>(0);
-  
+
   // Refs for direct stream control
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  
+
   // Canvas ref for capturing frozen frame when paused
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
   const [isPausedState, setIsPausedState] = useState(false);
-  
+
   // ✅ Loading and buffering states for better UX
   const [isBuffering, setIsBuffering] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
-  
+
   // ✅ Prevent flicker: Keep previous frame visible during reload
   const [isReloading, setIsReloading] = useState(false);
+
+  // 🛠️ Debug Overlay State
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugStats, setDebugStats] = useState({ latency: 0, buffer: 0, dropped: 0, bandwidth: 0 });
+  const debugClickCount = useRef(0);
+  const debugTimer = useRef<NodeJS.Timeout | null>(null);
 
   // ✅ CRITICAL FIX: Move loadStreamConfig to component scope so it can be reused
   const loadStreamConfig = useCallback(async () => {
@@ -59,7 +65,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       const response = await fetch('/api/stream/simple-config');
       const data = await response.json();
       console.log('🔍 VideoArea: API Response:', data);
-      
+
       if (data.success && data.data) {
         // ✅ Fix mixed content: Match protocol to avoid blocking
         let streamUrl = data.data.streamUrl;
@@ -67,21 +73,21 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           // ✅ Convert Google Drive URLs to embed format
           if (streamUrl.includes('drive.google.com')) {
             console.log('🔍 Detected Google Drive URL, converting to embed format...');
-            
+
             let fileId = null;
-            
+
             // Extract file ID from /file/d/FILE_ID/ format
             const fileMatch = streamUrl.match(/\/file\/d\/([^\/]+)/);
             if (fileMatch) {
               fileId = fileMatch[1];
             }
-            
+
             // Extract file ID from ?id=FILE_ID format
             const idMatch = streamUrl.match(/[?&]id=([^&]+)/);
             if (idMatch) {
               fileId = idMatch[1];
             }
-            
+
             if (fileId) {
               streamUrl = `https://drive.google.com/file/d/${fileId}/preview`;
               console.log('✅ Converted Google Drive URL to:', streamUrl);
@@ -89,9 +95,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
               console.warn('⚠️ Could not extract Google Drive file ID from URL');
             }
           }
-          
+
           const currentProtocol = window.location.protocol; // 'http:' or 'https:'
-          
+
           // ✅ CRITICAL: If site is HTTP, downgrade HTTPS URLs to HTTP to avoid blocking
           if (currentProtocol === 'http:' && streamUrl.startsWith('https://')) {
             console.log('⚠️ Site is HTTP but stream URL is HTTPS, downgrading to HTTP...');
@@ -105,14 +111,14 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             console.log('🔄 Upgraded stream URL to:', streamUrl);
           }
         }
-        
+
         const config = {
           ...data.data,
           streamUrl: streamUrl
         };
         setStreamConfig(config);
         setIsPausedState(config.isPaused || false);
-        
+
         console.log('🎥 VideoArea: Stream config loaded:', {
           streamUrl: streamUrl,
           streamType: data.data.streamType,
@@ -121,7 +127,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           muted: config.muted,
           hasUrl: !!streamUrl
         });
-        
+
         // Debug: Check why stream might not show
         if (!data.data.isActive) {
           console.warn('⚠️ Stream is NOT ACTIVE! Toggle "Stream Active" in admin settings.');
@@ -166,21 +172,6 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     return () => clearInterval(interval);
   }, [streamConfig?.minViewers, streamConfig?.maxViewers]);
 
-  // ✅ FIX: Load stream configuration on mount
-  useEffect(() => {
-    loadStreamConfig();
-  }, [loadStreamConfig]);
-
-
-  // ✅ NEW: Add 1-second polling fallback for instant pause/play updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadStreamConfig();
-    }, 1000); // Poll every 1 second
-    
-    return () => clearInterval(interval);
-  }, [loadStreamConfig]);
-
   // ✅ CRITICAL FIX: Listen for WebSocket stream status updates for instant pause/play
   useEffect(() => {
     const handleStreamStatusUpdate = () => {
@@ -202,7 +193,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       // ✅ CRITICAL FIX: Only auto-resume if NOT paused by admin
       if (!document.hidden && streamConfig?.streamUrl && !isPausedState) {
         console.log('👁️ Page visible again - auto-resuming stream...');
-        
+
         // For VIDEO elements - auto-resume playback
         const videoElement = videoRef.current;
         if (videoElement) {
@@ -215,7 +206,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             }, 500);
           });
         }
-        
+
         // For IFRAME elements - force reload to resume
         const iframeElement = iframeRef.current;
         if (iframeElement && iframeElement.src) {
@@ -231,7 +222,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         console.log('⏸️ Page visible but stream is paused by admin - not auto-resuming');
       }
     };
-    
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [streamConfig?.streamUrl, isPausedState]);
@@ -240,45 +231,58 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   useEffect(() => {
     const videoElement = videoRef.current;
     const streamUrl = streamConfig?.streamUrl;
-    
+
     if (!videoElement || !streamUrl || isPausedState) return;
-    
+
     // Check if URL is HLS (.m3u8)
     if (streamUrl.includes('.m3u8')) {
       if (Hls.isSupported()) {
         console.log('🎥 Setting up HLS.js with LOW LATENCY config...');
-        
+
         // Destroy existing HLS instance
         if (hlsRef.current) {
           hlsRef.current.destroy();
         }
-        
+
         // Create HLS instance with low-latency settings
         const hls = new Hls({
-          // ✅ ULTRA-LOW LATENCY SETTINGS (Target: 1-2s delay)
-          liveSyncDurationCount: 1,        // Stay 0.5s behind live (1 segment)
-          liveMaxLatencyDurationCount: 2,  // Max 1s behind live (2 segments)
-          maxBufferLength: 1,              // Only 1s forward buffer (AGGRESSIVE)
-          maxMaxBufferLength: 2,           // Hard limit 2s buffer
-          maxBufferSize: 5 * 1000 * 1000,  // 5MB max buffer
-          maxBufferHole: 0.05,             // Minimal gap tolerance
-          highBufferWatchdogPeriod: 0.5,   // Check buffer every 0.5s
-          nudgeMaxRetry: 5,                // More aggressive retry
+          // ✅ OPTIMIZED LOW LATENCY SETTINGS (Balanced for Stability)
+          liveSyncDurationCount: 2,        // Target 1.0s behind live (2 segments)
+          liveMaxLatencyDurationCount: 4,  // Max 2s behind live before seeking
+          maxBufferLength: 2,              // Allow 2s forward buffer
+          maxMaxBufferLength: 4,           // Hard limit 4s buffer
+          maxBufferSize: 10 * 1000 * 1000, // 10MB max buffer
+          maxBufferHole: 0.1,              // Slight gap tolerance
+          highBufferWatchdogPeriod: 1,     // Check buffer every 1s
+          nudgeMaxRetry: 5,                // Retry nudging
           enableWorker: true,              // Use web worker
           lowLatencyMode: true,            // Enable LL-HLS
           backBufferLength: 0,             // No back buffer
-          maxLiveSyncPlaybackRate: 1.5,    // Speed up 1.5x to catch up to live
+          maxLiveSyncPlaybackRate: 1.2,    // Gentle catch-up (1.2x)
+          liveSyncDuration: 1.0,           // Target 1.0s behind live edge
           liveBackBufferLength: 0,         // No live back buffer
         });
-        
+
         hls.loadSource(streamUrl);
         hls.attachMedia(videoElement);
-        
+
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           console.log('✅ HLS manifest loaded, starting LOW LATENCY playback...');
           videoElement.play().catch(err => console.error('❌ HLS play failed:', err));
         });
-        
+
+        // 🛠️ Debug Stats Update
+        setInterval(() => {
+          if (hls && videoElement) {
+            setDebugStats({
+              latency: hls.latency,
+              buffer: videoElement.buffered.length > 0 ? videoElement.buffered.end(videoElement.buffered.length - 1) - videoElement.currentTime : 0,
+              dropped: videoElement.getVideoPlaybackQuality ? videoElement.getVideoPlaybackQuality().droppedVideoFrames : 0,
+              bandwidth: hls.bandwidthEstimate
+            });
+          }
+        }, 500);
+
         hls.on(Hls.Events.ERROR, (event, data) => {
           if (data.fatal) {
             console.error('❌ Fatal HLS error:', data);
@@ -298,9 +302,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             }
           }
         });
-        
+
         hlsRef.current = hls;
-        
+
         return () => {
           if (hlsRef.current) {
             hlsRef.current.destroy();
@@ -320,7 +324,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   useEffect(() => {
     const monitorStream = setInterval(() => {
       if (document.hidden) return;
-      
+
       const videoElement = videoRef.current;
       if (videoElement && streamConfig?.streamUrl && !isPausedState) {
         // Auto-resume if paused unexpectedly
@@ -328,7 +332,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           console.log('🔄 Auto-resuming paused video...');
           videoElement.play().catch(err => console.error('❌ Auto-resume failed:', err));
         }
-        
+
         // Reload if failed or stalled (only for non-HLS streams)
         if (!streamConfig.streamUrl.includes('.m3u8')) {
           if (videoElement.readyState === 0 || videoElement.error) {
@@ -340,7 +344,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             videoElement.play().catch(err => console.error('❌ Video reload failed:', err));
           }
         }
-        
+
         // Check if video is stalled (not progressing)
         const currentTime = videoElement.currentTime;
         if (currentTime > 0 && !videoElement.paused && !videoElement.ended) {
@@ -358,14 +362,14 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         }
       }
     }, 500); // Check every 500ms for faster recovery
-    
+
     return () => clearInterval(monitorStream);
   }, [streamConfig?.streamUrl, isPausedState]);
 
   // ✅ WEBSOCKET LISTENER: Listen for pause/play state changes from admin
   useEffect(() => {
     const { ws } = (window as any).__wsContext || {};
-    
+
     if (!ws) {
       console.warn('⚠️ WebSocket not available for pause/play synchronization');
       return;
@@ -377,9 +381,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         if (message.type === 'stream_pause_state') {
           const { isPaused } = message.data;
           console.log(`🎬 Stream ${isPaused ? 'PAUSED' : 'RESUMED'} by admin`);
-          
+
           setIsPausedState(isPaused);
-          
+
           // Update pause state (actual pause/resume handled in useEffect)
           // This just updates the state, the useEffect will handle the stream reload
         }
@@ -396,7 +400,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const captureCurrentFrame = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    
+
     if (video && canvas && video.readyState >= 2) {
       const ctx = canvas.getContext('2d');
       if (ctx) {
@@ -416,7 +420,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   useEffect(() => {
     const videoElement = videoRef.current;
     const iframeElement = iframeRef.current;
-    
+
     if (isPausedState) {
       // PAUSE: Freeze on current frame
       if (videoElement) {
@@ -430,25 +434,25 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
       if (videoElement && streamConfig?.streamUrl) {
         console.log('▶️ Resuming stream smoothly...');
-        
+
         // ✅ ANTI-FLICKER: Keep video visible during reload
         setIsReloading(true);
-        
+
         // Capture current frame before reload
         if (videoElement.readyState >= 2) {
           captureCurrentFrame();
         }
-        
+
         // Smooth reload without black screen
         const currentSrc = videoElement.src;
-        
+
         // Create new video element in background
         const tempVideo = document.createElement('video');
         tempVideo.src = currentSrc;
         tempVideo.muted = true;
         tempVideo.playsInline = true;
         tempVideo.preload = 'auto';
-        
+
         // Once loaded, swap smoothly
         tempVideo.addEventListener('loadeddata', () => {
           videoElement.src = currentSrc;
@@ -463,10 +467,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             setTimeout(() => videoElement.play().catch(console.error), 200);
           });
         });
-        
+
         // Start loading
         tempVideo.load();
-        
+
         // Fallback: Remove loading state after 2 seconds
         setTimeout(() => setIsReloading(false), 2000);
       }
@@ -556,7 +560,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
     if (shouldUseVideo) {
       console.log('✅ VideoArea: Rendering VIDEO stream:', streamConfig.streamUrl);
-      
+
       return (
         <video
           ref={videoRef}
@@ -604,7 +608,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
               // ✅ ANTI-FLICKER: Capture frame before reload
               captureCurrentFrame();
               setIsReloading(true);
-              
+
               const currentSrc = videoRef.current.src;
               videoRef.current.src = '';
               videoRef.current.src = currentSrc;
@@ -625,17 +629,17 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             console.error('❌ Video error:', e);
             setStreamError('Reconnecting...');
             setIsBuffering(true);
-            
+
             if (videoRef.current && !document.hidden) {
               console.log('🔄 Smooth error recovery...');
-              
+
               // ✅ ANTI-FLICKER: Keep last frame visible
               captureCurrentFrame();
               setIsReloading(true);
-              
+
               const currentSrc = videoRef.current.src;
               videoRef.current.src = '';
-              
+
               setTimeout(() => {
                 if (videoRef.current) {
                   setStreamError(null);
@@ -693,7 +697,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
   // Determine if stream is live
   const isLive = !!(streamConfig?.isActive && streamConfig?.streamUrl);
-  
+
   console.log('🎥 VideoArea render state:', {
     isLive,
     streamConfigExists: !!streamConfig,
@@ -706,13 +710,13 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     <div className={`relative bg-black overflow-hidden ${className}`}>
       {/* Hidden canvas for capturing frozen frame when paused */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
-      
+
       {/* Show frozen frame overlay when paused OR reloading (prevents flicker) */}
       {(isPausedState || isReloading) && frozenFrame && (
         <div className="absolute inset-0 z-20">
-          <img 
-            src={frozenFrame} 
-            alt="Paused frame" 
+          <img
+            src={frozenFrame}
+            alt="Paused frame"
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -724,7 +728,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           </div>
         </div>
       )}
-      
+
       {/* ✅ Buffering Overlay - Show when stream is loading (but not if we have frozen frame) */}
       {isBuffering && !isPausedState && !frozenFrame && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-sm">
@@ -734,7 +738,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           </div>
         </div>
       )}
-      
+
       {/* ✅ Error Overlay - Show when stream has error */}
       {streamError && !isPausedState && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -745,7 +749,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           </div>
         </div>
       )}
-      
+
       {/* Embedded Video Stream - Runs independently in background, never interrupted */}
       <div className="absolute inset-0">
         {renderStream()}
@@ -778,17 +782,41 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         </div>
       )}
 
+      {/* 🛠️ Debug Overlay (Hidden by default) */}
+      {showDebug && (
+        <div className="absolute top-12 left-3 z-50 bg-black/80 text-green-400 p-2 rounded text-xs font-mono pointer-events-none">
+          <div>Latency: {debugStats.latency.toFixed(2)}s</div>
+          <div>Buffer: {debugStats.buffer.toFixed(2)}s</div>
+          <div>Dropped: {debugStats.dropped}</div>
+          <div>BW: {(debugStats.bandwidth / 1000 / 1000).toFixed(2)} Mbps</div>
+        </div>
+      )}
+
+      {/* Invisible Click Area for Debug Toggle (Top Left) */}
+      <div
+        className="absolute top-0 left-0 w-20 h-20 z-50 cursor-default"
+        onClick={() => {
+          debugClickCount.current += 1;
+          if (debugTimer.current) clearTimeout(debugTimer.current);
+          debugTimer.current = setTimeout(() => { debugClickCount.current = 0; }, 1000);
+
+          if (debugClickCount.current >= 5) {
+            setShowDebug(prev => !prev);
+            debugClickCount.current = 0;
+          }
+        }}
+      />
+
       {/* Circular Timer Overlay - CENTERED - ONLY VISIBLE DURING BETTING */}
       {gameState.phase === 'betting' && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
-          <div className={`relative transition-all duration-300 ${
-            gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
-          }`}>
+          <div className={`relative transition-all duration-300 ${gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
+            }`}>
             {/* Large Circular Timer */}
             <div className="relative w-36 h-36 md:w-40 md:h-40 flex items-center justify-center">
-              <svg 
-                className="transform -rotate-90 w-full h-full absolute inset-0" 
-                viewBox="0 0 128 128" 
+              <svg
+                className="transform -rotate-90 w-full h-full absolute inset-0"
+                viewBox="0 0 128 128"
                 preserveAspectRatio="xMidYMid meet"
               >
                 {/* Background circle - Dark grey with transparency */}
@@ -822,18 +850,18 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
               <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
                 {/* Icon above number - Screen/Monitor icon */}
                 <div className="mb-0.5 opacity-90">
-                  <svg 
-                    className="w-5 h-5 md:w-6 md:h-6 text-cyan-400" 
-                    fill="none" 
-                    stroke="currentColor" 
+                  <svg
+                    className="w-5 h-5 md:w-6 md:h-6 text-cyan-400"
+                    fill="none"
+                    stroke="currentColor"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     viewBox="0 0 24 24"
                   >
-                    <rect x="2" y="4" width="20" height="14" rx="2" ry="2"/>
-                    <line x1="8" y1="21" x2="16" y2="21"/>
-                    <line x1="12" y1="17" x2="12" y2="21"/>
+                    <rect x="2" y="4" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
                   </svg>
                 </div>
                 {/* Timer number */}
