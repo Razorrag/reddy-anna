@@ -368,10 +368,10 @@ const AdminGamePanel: React.FC = () => {
                   {/* ✅ FIX: Use server's winnerDisplay for consistency with players */}
                   {(gameState as any).winnerDisplay || (
                     gameState.gameWinner === 'andar'
-                      ? 'ANDAR WINS!'
+                      ? 'ANDAR WON'
                       : (gameState.currentRound >= 3
-                        ? 'BAHAR WINS!'
-                        : 'BABA WINS!')
+                        ? 'BAHAR WON'
+                        : 'BABA WON')
                   )}
                 </div>
                 <div className="text-2xl text-gray-200 mb-6 font-semibold">

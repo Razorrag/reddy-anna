@@ -383,7 +383,8 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   }
 
   // Send game_complete with per-user payout info (no separate payout_received event)
-  if (payoutNotifications && payoutNotifications.length > 0 && clients) {
+  // ✅ CRITICAL FIX: Send to ALL connected clients, not just those with bets
+  if (clients && clients.size > 0) {
     const clientsArray = Array.from(clients);
     const actualRound = gameState.currentRound;
     const andarCount = gameState.andarCards.length;
@@ -408,6 +409,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     }
 
     console.log(`🎯 Game complete - Cards: ${totalCards} (${andarCount}A + ${baharCount}B + 1 opening), Round: ${actualRound}, Display: ${winnerDisplay}`);
+    console.log(`📤 Sending game_complete to ${clientsArray.length} connected clients (including those with no bets)`);
 
     for (const client of clientsArray) {
       try {

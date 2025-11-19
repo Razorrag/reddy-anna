@@ -69,10 +69,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       clearTimeout(bufferingTimeoutRef.current);
     }
 
-    // Only show buffering popup if it persists for 800ms
+    // Only show buffering popup if it persists for 3 seconds (prevents false positives)
     bufferingTimeoutRef.current = setTimeout(() => {
       setIsBuffering(true);
-    }, 800);
+    }, 3000); // ✅ Increased from 800ms to 3 seconds
   }, []);
 
   // ✅ Helper: Hide buffering immediately
