@@ -502,13 +502,26 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   
   // ✅ CRITICAL FIX: Broadcast game state to admin IMMEDIATELY after completion
   // This ensures admin panel updates even if there are no bets or history save fails
+  // Calculate winnerDisplay for consistency
+  const actualRound = gameState.currentRound;
+  let winnerDisplay = '';
+  if (actualRound === 1) {
+    winnerDisplay = winningSide === 'andar' ? 'ANDAR WON' : 'BABA WON';
+  } else if (actualRound === 2) {
+    winnerDisplay = winningSide === 'andar' ? 'ANDAR WON' : 'BABA WON';
+  } else {
+    winnerDisplay = winningSide === 'andar' ? 'ANDAR WON' : 'BAHAR WON';
+  }
+  
   broadcastToRole({
     type: 'game_state',
     data: {
+      gameId: gameState.gameId,
       phase: 'complete',
       currentRound: gameState.currentRound,
       winner: winningSide,
       winningCard: winningCard,
+      winnerDisplay: winnerDisplay,
       round1Bets: gameState.round1Bets,
       round2Bets: gameState.round2Bets,
       andarCards: gameState.andarCards,
@@ -517,7 +530,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
       bettingLocked: true
     }
   }, 'admin');
-  console.log('✅ Broadcasted game_state to admin panel (phase: complete)');
+  console.log(`✅ Broadcasted game_state to admin panel (phase: complete, winner: ${winnerDisplay})`);
 
   // STEP 4: Save game history to database with comprehensive analytics (ASYNC - NON-BLOCKING)
   // ✅ CRITICAL: This runs in background and doesn't block player notifications
@@ -930,14 +943,16 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   // The game state will be reset when admin clicks "Start New Game" button
   // This allows admin to see the "Start New Game" button and players to see celebration
   
-  // ✅ FIX: Broadcast game state to admin so they see "Start New Game" button
+  // ✅ FIX: Broadcast game state to admin so they see "Start New Game" button (redundant but ensures delivery)
   broadcastToRole({
     type: 'game_state',
     data: {
+      gameId: gameState.gameId,
       phase: 'complete',
       currentRound: gameState.currentRound,
       winner: winningSide,
       winningCard: winningCard,
+      winnerDisplay: winnerDisplay,
       round1Bets: gameState.round1Bets,
       round2Bets: gameState.round2Bets,
       andarCards: gameState.andarCards,
