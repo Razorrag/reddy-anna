@@ -519,37 +519,110 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         }, 100);
       }
     } else {
-      // ✅ RESUME LOGIC: Restart HLS and jump to LATEST live edge
-      if (videoElement && hlsRef.current) {
-         console.log('▶️ Resuming HLS stream from LATEST live edge...');
+      // ✅ IMPROVED RESUME LOGIC: Completely reload HLS stream for latest frame
+      if (videoElement && hlsRef.current && streamConfig?.streamUrl?.includes('.m3u8')) {
+         console.log('▶️ Resuming HLS stream - RELOADING from latest live edge...');
          
-         // Clear any old buffer first
+         // Clear frozen frame
          setFrozenFrame(null);
          
-         // Restart HLS loading
-         hlsRef.current.startLoad();
+         // ✅ CRITICAL: Destroy old HLS instance to clear all stale buffer
+         console.log('🔄 Destroying old HLS instance...');
+         hlsRef.current.destroy();
+         hlsRef.current = null;
          
-         // Wait for buffer to build, then jump to live
-         const jumpToLive = () => {
-            const liveEdge = hlsRef.current?.liveSyncPosition;
-            if (liveEdge && isFinite(liveEdge)) {
-               videoElement.currentTime = liveEdge;
-               console.log(`📍 Resumed at live edge: ${liveEdge.toFixed(2)}s`);
-            }
-         };
-         
-         // Jump to live when ready
-         videoElement.addEventListener('canplay', jumpToLive, { once: true });
-         
-         // Start playback
-         videoElement.play().catch(err => {
-            console.error('Resume play failed:', err);
-            // Retry with muted
-            videoElement.muted = true;
-            videoElement.play().catch(console.error);
+         // ✅ CRITICAL: Create fresh HLS instance with same config
+         console.log('🆕 Creating new HLS instance...');
+         const hls = new Hls({
+           // 🚀 VPS-POWERED: 1-2s latency + ZERO buffering
+           liveSyncDurationCount: 1,
+           liveMaxLatencyDurationCount: 6,
+           liveDurationInfinity: true,
+           
+           // Buffer settings
+           maxBufferLength: 10,
+           maxMaxBufferLength: 15,
+           maxBufferSize: 60 * 1000 * 1000,
+           maxBufferHole: 0.5,
+           
+           // Gentle catch-up
+           maxLiveSyncPlaybackRate: 1.02,
+           
+           // Monitoring
+           highBufferWatchdogPeriod: 2,
+           nudgeMaxRetry: 20,
+           nudgeOffset: 0.1,
+           
+           // Performance
+           enableWorker: true,
+           lowLatencyMode: true,
+           backBufferLength: 5,
+           
+           // Network resilience
+           manifestLoadingTimeOut: 10000,
+           manifestLoadingMaxRetry: 5,
+           levelLoadingTimeOut: 10000,
+           fragLoadingTimeOut: 15000,
+           fragLoadingMaxRetry: 8,
+           fragLoadingRetryDelay: 500,
+           
+           // Quality
+           startLevel: -1,
+           abrEwmaDefaultEstimate: 1000000,
          });
          
-         console.log('✅ Stream resumed - will jump to live edge when ready');
+         // Load fresh source and attach to video
+         hls.loadSource(streamConfig.streamUrl);
+         hls.attachMedia(videoElement);
+         
+         // When manifest is loaded, auto-jump to live edge
+         hls.on(Hls.Events.MANIFEST_PARSED, () => {
+           console.log('✅ HLS manifest reloaded, jumping to LIVE edge...');
+           
+           const seekToLive = () => {
+             if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
+               videoElement.currentTime = hls.liveSyncPosition;
+               console.log(`📍 Resumed at LATEST live edge: ${hls.liveSyncPosition.toFixed(2)}s`);
+             }
+           };
+           
+           // Seek to live when metadata loads
+           videoElement.addEventListener('loadedmetadata', seekToLive, { once: true });
+           
+           // Start playback
+           videoElement.play().catch(err => {
+             console.error('❌ Resume play failed:', err);
+             videoElement.muted = true;
+             videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
+           });
+         });
+         
+         // Set up error handling
+         hls.on(Hls.Events.ERROR, (_event, data) => {
+           if (data.fatal) {
+             console.error('❌ Fatal HLS error:', data);
+             
+             switch (data.type) {
+               case Hls.ErrorTypes.NETWORK_ERROR:
+                 console.log('🔄 Network error, attempting recovery...');
+                 hls.startLoad();
+                 break;
+               case Hls.ErrorTypes.MEDIA_ERROR:
+                 console.log('🔄 Media error, attempting recovery...');
+                 hls.recoverMediaError();
+                 break;
+               default:
+                 console.log('🔄 Unrecoverable error, destroying HLS...');
+                 hls.destroy();
+                 break;
+             }
+           }
+         });
+         
+         // Update ref
+         hlsRef.current = hls;
+         
+         console.log('✅ Stream completely reloaded - will show latest frame');
       }
       
       if (iframeElement && streamConfig?.streamUrl) {
