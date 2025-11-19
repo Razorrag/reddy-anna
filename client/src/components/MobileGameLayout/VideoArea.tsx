@@ -196,11 +196,13 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         const hls = hlsRef.current;
         
         if (videoElement && hls && hls.liveSyncPosition && !isPausedState) {
-          // 🔧 INSTANT LIVE JUMP: Always seek to live edge on visibility change
-          // This ensures page refresh/tab switch shows latest frame immediately
-          console.log('⚡ Page visible - jumping to LIVE edge immediately...');
-          videoElement.currentTime = hls.liveSyncPosition;
-          console.log(`📍 Jumped to live: ${hls.liveSyncPosition.toFixed(2)}s`);
+          const currentLatency = hls.liveSyncPosition - videoElement.currentTime;
+          
+          // 🔧 SMART JUMP: Only jump if >2s behind to avoid black screens
+          if (currentLatency > 2 && isFinite(hls.liveSyncPosition)) {
+            console.log(`⚡ Visibility recovery: ${currentLatency.toFixed(2)}s behind, jumping to live...`);
+            videoElement.currentTime = hls.liveSyncPosition;
+          }
         }
       }
     };
@@ -593,31 +595,30 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         }, 100);
       }
     } else {
-      // 🔧 OPTIMIZED RESUME: Instant jump to live edge with buffer flush
+      // 🔧 SAFE RESUME: Jump to live with validation
       if (videoElement && hlsRef.current && streamConfig?.streamUrl?.includes('.m3u8')) {
-        console.log('▶️ Resuming HLS stream at LIVE edge...');
+        console.log('▶️ Resuming HLS stream...');
         
-        // Clear frozen frame immediately
+        // Clear frozen frame
         setFrozenFrame(null);
         
-        // CRITICAL: Flush old buffer to prevent showing stale frames
-        hlsRef.current.stopLoad();
+        // Resume loading segments
+        hlsRef.current.startLoad();
         
-        // Seek to absolute live edge (latest frame available)
-        if (hlsRef.current.liveSyncPosition && isFinite(hlsRef.current.liveSyncPosition)) {
-          videoElement.currentTime = hlsRef.current.liveSyncPosition;
-          console.log(`📍 Instant jump to LIVE: ${hlsRef.current.liveSyncPosition.toFixed(2)}s`);
-        }
-        
-        // Start loading from this new live position (no delay)
-        hlsRef.current.startLoad(videoElement.currentTime);
-        
-        // Play immediately (removed artificial 100ms delay)
-        videoElement.play().catch(err => {
-          console.error('❌ Resume play failed:', err);
-          videoElement.muted = true;
-          videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
-        });
+        // Wait briefly for HLS to stabilize, then seek to live
+        setTimeout(() => {
+          if (hlsRef.current?.liveSyncPosition && isFinite(hlsRef.current.liveSyncPosition)) {
+            videoElement.currentTime = hlsRef.current.liveSyncPosition;
+            console.log(`📍 Resumed at live edge: ${hlsRef.current.liveSyncPosition.toFixed(2)}s`);
+          }
+          
+          // Start playback
+          videoElement.play().catch(err => {
+            console.error('❌ Resume play failed:', err);
+            videoElement.muted = true;
+            videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
+          });
+        }, 200);
       }
       
       if (iframeElement && streamConfig?.streamUrl) {
