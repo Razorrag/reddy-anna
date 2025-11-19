@@ -298,7 +298,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           setTimeout(async () => {
             try {
               // Fetch balance
-              const balanceRes = await apiClient.get<{success: boolean, balance: number}>('/api/user/balance');
+              const balanceRes = await apiClient.get<{success: boolean, balance: number}>('/user/balance');
               if (balanceRes.success && balanceRes.balance !== undefined) {
                 updatePlayerWallet(balanceRes.balance);
               }
