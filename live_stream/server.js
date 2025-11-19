@@ -33,19 +33,19 @@ const config = {
       {
         app: 'live',
         hls: true,
-        // 🚀 VPS-OPTIMIZED FOR 2-3s LATENCY WITH SMOOTH PLAYBACK:
+        // 🚀 ULTRA-LOW LATENCY OPTIMIZED FOR 2-3s TOTAL LATENCY:
         // - 1s segments = 1 GOP per segment (eliminates stuttering)
-        // - 10 segments in playlist = 10s VPS cache
+        // - 3 segments in playlist = minimal startup time
         // - Independent segments for instant seeking
         // - Target latency: 2-3s (1s GOP + 1-2s buffer)
-        hlsFlags: '[hls_time=1:hls_list_size=10:hls_flags=independent_segments+program_date_time:hls_segment_type=mpegts]',
+        hlsFlags: '[hls_time=1:hls_list_size=3:hls_flags=independent_segments+program_date_time+delete_segments:hls_segment_type=mpegts]',
         vc: 'libx264',
         vcParam: [
           '-preset', 'faster',        // Use VPS CPU power (faster than ultrafast quality)
           '-tune', 'zerolatency',     // Critical for low latency
-          '-g', '30',                 // 🔧 FIX: Keyframe every 30 frames (1s at 30fps) - eliminates stuttering
-          '-sc_threshold', '40',      // 🔧 FIX: Enable adaptive GOP for scene changes
-          '-keyint_min', '15',        // 🔧 FIX: Minimum 0.5s between keyframes
+          '-g', '30',                 // 🔧 CRITICAL: Keyframe every 30 frames (1s at 30fps)
+          '-sc_threshold', '0',       // 🔧 CRITICAL: Disable scene cut detection (force consistent GOP)
+          '-keyint_min', '30',        // 🔧 CRITICAL: Force minimum 1s between keyframes (no early keyframes)
           '-r', '30',                 // Force 30fps
           '-c:v', 'libx264',
           '-profile:v', 'high',       // 🔧 FIX: Better compression
@@ -69,10 +69,11 @@ const config = {
 // ------------------
 const nms = new NodeMediaServer(config);
 nms.run();
-console.log('✅ NodeMediaServer started with VPS-OPTIMIZED config (2-3s latency, ZERO stuttering)!');
-console.log('📊 Config: 1s GOP, 1s segments, 10-segment cache (10s VPS buffer)');
-console.log('🎯 Target latency: 2-3 seconds');
-console.log('✅ STUTTER FIX: 1 GOP per segment for smooth playback');
+console.log('✅ NodeMediaServer started with ULTRA-LOW LATENCY config!');
+console.log('📊 Config: 1s GOP, 1s segments, 3-segment playlist');
+console.log('🎯 Target latency: 2-3 seconds total (OBS to player)');
+console.log('✅ STUTTER FIX: 1 GOP = 1 segment (perfect alignment)');
+console.log('✅ GOP LOCK: scenecut=0, keyint_min=30 (force consistent keyframes)');
 console.log('💪 VPS-Powered: 4 CPU threads, 4Mbps bitrate, faster preset');
 console.log('RTMP URL: rtmp://89.42.231.35:1935/live');
 console.log('HLS URL: http://89.42.231.35:8000/live/test/index.m3u8');
@@ -114,14 +115,16 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     streaming: true, 
-    latencyMode: 'smooth-low-latency-2-3s',
+    latencyMode: 'ultra-low-latency-2-3s',
     config: {
       segmentDuration: '1s',
-      playlistSize: 10,
-      gopSize: '1s',
+      playlistSize: 3,
+      gopSize: '1s (locked)',
+      gopSettings: 'scenecut=0, keyint_min=30',
       bitrate: '4000k',
       cpuThreads: 4,
-      stutterFix: 'enabled'
+      stutterFix: 'enabled',
+      deleteOldSegments: true
     }
   });
 });

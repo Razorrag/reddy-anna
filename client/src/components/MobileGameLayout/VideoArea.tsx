@@ -68,10 +68,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       clearTimeout(bufferingTimeoutRef.current);
     }
 
-    // Only show buffering popup if it persists for 3 seconds (prevents false positives)
+    // Show buffering popup after 800ms (balanced UX)
     bufferingTimeoutRef.current = setTimeout(() => {
       setIsBuffering(true);
-    }, 3000); // ✅ Increased from 800ms to 3 seconds
+    }, 800); // ✅ OPTIMIZED: 800ms for better user feedback
   }, []);
 
   // ✅ Helper: Hide buffering immediately
@@ -195,11 +195,11 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         const videoElement = videoRef.current;
         const hls = hlsRef.current;
         
-        if (videoElement && hls && hls.liveSyncPosition && !isPausedState) {
+        if (videoElement && hls && hls.liveSyncPosition) {
           const currentLatency = hls.liveSyncPosition - videoElement.currentTime;
           
-          // 🔧 OPTIMIZED: Jump if >3s behind (allows natural HLS recovery for smaller drifts)
-          if (currentLatency > 3 && isFinite(hls.liveSyncPosition)) {
+          // 🔧 CRITICAL FIX: Only seek if NOT paused AND >3s behind
+          if (!isPausedState && currentLatency > 3 && isFinite(hls.liveSyncPosition)) {
             console.log(`⚡ Visibility: ${currentLatency.toFixed(2)}s behind, seeking to live...`);
             videoElement.currentTime = hls.liveSyncPosition;
           } else if (currentLatency > 0) {
@@ -308,14 +308,14 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           // Server: 1s segments with 1s GOP (perfect alignment)
           // Client: 1s behind live with minimal buffer
           
-          // Core latency settings - ultra-low latency mode
-          liveSyncDurationCount: 1,           // 🚀 Stay only 1 segment (1s) behind live
-          liveMaxLatencyDurationCount: 3,     // 🚀 Max 3s drift before seeking
+          // Core latency settings - optimized for 2-3s stable latency
+          liveSyncDurationCount: 3,           // 🚀 Stay 3 segments (3s) behind live (stable)
+          liveMaxLatencyDurationCount: 5,     // 🚀 Max 5s drift before seeking
           liveDurationInfinity: true,         // Treat as infinite live stream
           
-          // Buffer settings - minimal for low latency
-          maxBufferLength: 6,                 // 🚀 Only 6s forward buffer (minimal)
-          maxMaxBufferLength: 10,             // Hard limit 10s
+          // Buffer settings - balanced for stability
+          maxBufferLength: 4,                 // 🚀 Only 4s forward buffer (low latency)
+          maxMaxBufferLength: 6,              // Hard limit 6s
           maxBufferSize: 30 * 1000 * 1000,    // 30MB (reduced)
           maxBufferHole: 0.3,                 // Skip gaps up to 0.3s
           
@@ -330,7 +330,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           // Performance optimization
           enableWorker: true,
           lowLatencyMode: true,               // Critical for low latency
-          backBufferLength: 3,                // Keep only 3s back buffer
+          backBufferLength: 0,                // 🚀 No back buffer needed (save memory)
           
           // Network resilience - VPS caching makes segments instantly available
           manifestLoadingTimeOut: 5000,       // 5s timeout (fail fast)
@@ -602,22 +602,23 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         
         const hls = hlsRef.current;
         
-        // Resume loading segments
-        hls.startLoad();
+        // 🚀 CRITICAL FIX: Force load from LIVE edge immediately (-1 = live edge)
+        // This eliminates black screen by skipping old segments
+        hls.startLoad(-1);
         
-        // Event-driven approach: seek when fragment is loaded (no delay)
+        // Event-driven approach: seek to live when first fragment loads
         const handleFragLoaded = () => {
           if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
             videoElement.currentTime = hls.liveSyncPosition;
-            console.log(`📍 Resume: jumped to live ${hls.liveSyncPosition.toFixed(2)}s`);
+            console.log(`📍 Resume: instant jump to live ${hls.liveSyncPosition.toFixed(2)}s`);
           }
           hls.off(Hls.Events.FRAG_LOADED, handleFragLoaded);
         };
         
-        // If already has position, seek immediately
+        // If already has live position, seek immediately
         if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
           videoElement.currentTime = hls.liveSyncPosition;
-          console.log(`📍 Resume: immediate jump to ${hls.liveSyncPosition.toFixed(2)}s`);
+          console.log(`📍 Resume: immediate seek to ${hls.liveSyncPosition.toFixed(2)}s`);
           
           videoElement.play().catch(err => {
             console.error('❌ Resume play failed:', err);
@@ -625,7 +626,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
           });
         } else {
-          // Wait for fragment to load (event-driven, no setTimeout)
+          // Wait for first fragment from live edge (event-driven)
           hls.once(Hls.Events.FRAG_LOADED, handleFragLoaded);
           
           videoElement.play().catch(err => {
