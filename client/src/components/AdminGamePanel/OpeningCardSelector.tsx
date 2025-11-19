@@ -149,7 +149,7 @@ const OpeningCardSelector: React.FC = () => {
       </div>
       
       {/* Action Buttons */}
-      <div className="mt-4 flex gap-3">
+      <div className="mt-3 flex gap-3">
         <button
           onClick={() => setSelectedCard(null)}
           disabled={!selectedCard}
@@ -165,6 +165,16 @@ const OpeningCardSelector: React.FC = () => {
           ✅ Start Round 1
         </button>
       </div>
+      
+      {/* Selected Card Display - Below Buttons */}
+      {selectedCard && (
+        <div className="mt-3 bg-gradient-to-r from-gold/20 to-yellow-600/20 rounded-lg p-4 border-2 border-gold text-center shadow-xl">
+          <div className="text-sm text-gray-400 mb-2">🎴 Selected Opening Card</div>
+          <div className={`text-7xl font-bold ${selectedCard.color === 'red' ? 'text-red-500' : 'text-white'}`}>
+            {selectedCard.display}
+          </div>
+        </div>
+      )}
       
       {/* Confirmation Modal */}
       {showConfirmModal && selectedCard && (

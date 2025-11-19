@@ -260,40 +260,41 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           hlsRef.current.destroy();
         }
 
-        // Create HLS instance with OPTIMIZED ULTRA-LOW LATENCY
+        // Create HLS instance with BALANCED SMOOTH PLAYBACK + LOW LATENCY
         const hls = new Hls({
-          // 🚀 ULTRA-LOW LATENCY (Target: 2-3s stable)
+          // 🎯 BALANCED: 3-4s latency with ZERO buffering
           
-          // Core latency settings
-          liveSyncDurationCount: 1,           // Stay 1 segment behind live
-          liveMaxLatencyDurationCount: 2,     // Max 2 segments latency before seeking
+          // Core latency settings - optimized for smooth playback
+          liveSyncDurationCount: 2,           // Stay 2 segments behind live
+          liveMaxLatencyDurationCount: 4,     // Max 4 segments before seeking
           liveDurationInfinity: true,         // Treat as infinite live stream
           
-          // Buffer settings - OPTIMIZED for 2-3s latency
-          maxBufferLength: 2,                 // 2s forward buffer
-          maxMaxBufferLength: 4,              // Hard limit 4s
+          // Buffer settings - OPTIMIZED for smooth playback without delay
+          maxBufferLength: 6,                 // 6s forward buffer (sweet spot)
+          maxMaxBufferLength: 10,             // Hard limit 10s
           maxBufferSize: 60 * 1000 * 1000,    // 60MB
-          maxBufferHole: 0.1,                 // Tolerate 0.1s gaps
+          maxBufferHole: 0.3,                 // Tolerate 0.3s gaps
           
-          // Aggressive catch-up to live edge
-          maxLiveSyncPlaybackRate: 1.5,       // 50% speed-up to catch live edge
+          // Gentle catch-up to live edge (imperceptible)
+          maxLiveSyncPlaybackRate: 1.1,       // Only 10% speed-up
           
-          // Fast recovery
+          // Fast recovery with stability
           highBufferWatchdogPeriod: 1,        // Check buffer every 1s
           nudgeMaxRetry: 20,
           nudgeOffset: 0.1,
           
-          // Performance
+          // Performance optimization
           enableWorker: true,
-          lowLatencyMode: true,
-          backBufferLength: 0,                // Don't keep old segments
+          lowLatencyMode: true,               // Keep for responsiveness
+          backBufferLength: 5,                // Keep 5s back buffer
           
-          // Network optimization
+          // Network resilience - more forgiving timeouts
           manifestLoadingTimeOut: 10000,
           manifestLoadingMaxRetry: 4,
           levelLoadingTimeOut: 10000,
-          fragLoadingTimeOut: 20000,
-          fragLoadingMaxRetry: 6,
+          fragLoadingTimeOut: 25000,          // Generous timeout for stability
+          fragLoadingMaxRetry: 8,             // More retries
+          fragLoadingRetryDelay: 500,         // Quick retry on failure
         });
 
         hls.loadSource(streamUrl);
@@ -339,12 +340,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           if (data.fatal) {
             console.error('❌ Fatal HLS error:', data);
             
-            // 🛑 CRITICAL: Capture last frame on error to prevent black screen
-            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-              console.log('📸 Network error - Freezing last frame...');
-              captureCurrentFrame();
-              setIsPausedState(true);
-            }
+            // Note: Don't set isPausedState on network errors
+            // Only admin can pause the stream via stream settings
 
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
@@ -702,21 +699,16 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       {/* Hidden canvas for capturing frozen frame when paused */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      {/* Show frozen frame overlay when paused OR reloading (prevents flicker) */}
+      {/* ✅ REMOVED: No overlay text for players - they just see frozen frame
+          Admin sees pause status in admin-bets page instead */}
       {(isPausedState) && frozenFrame && (
         <div className="absolute inset-0 z-20">
           <img
             src={frozenFrame}
-            alt="Paused frame"
+            alt="Stream paused"
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40">    
-            <div className="bg-black/80 backdrop-blur-sm px-6 py-3 rounded-full">
-              <span className="text-white text-lg font-semibold">
-                {isPausedState ? '⏸️ Stream Paused' : '🔄 Refreshing...'}
-              </span>
-            </div>
-          </div>
+          {/* No "Stream Paused" text overlay - clean experience for players */}
         </div>
       )}
 

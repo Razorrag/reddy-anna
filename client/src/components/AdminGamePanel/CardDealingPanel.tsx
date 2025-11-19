@@ -218,16 +218,6 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
         ))}
       </div>
       
-      {/* Selected Card Display - Below Card Selector (Rounds 1 & 2) */}
-      {round < 3 && selectedCard && (
-        <div className="bg-gradient-to-r from-blue-900/30 to-red-900/30 rounded-lg p-3 border-2 border-gold/50 text-center mb-2 shadow-xl">
-          <div className="text-sm text-gray-400 mb-1">Next Card: {nextSide.toUpperCase()}</div>
-          <div className={`text-6xl font-bold ${selectedCard ? (selectedCard.color === 'red' ? 'text-red-500' : 'text-white') : 'text-gray-600'}`}>
-            {selectedCard?.display || '--'}
-          </div>
-        </div>
-      )}
-      
       {/* Action Buttons - Phase Aware */}
       <div className="flex gap-2">
         <button
@@ -256,6 +246,16 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
           </div>
         )}
       </div>
+      
+      {/* Selected Card Display - Below Buttons (Rounds 1 & 2) */}
+      {round < 3 && selectedCard && (
+        <div className="mt-3 bg-gradient-to-r from-blue-900/30 to-red-900/30 rounded-lg p-4 border-2 border-gold/50 text-center shadow-xl">
+          <div className="text-sm text-gray-400 mb-2">Next Card: {nextSide.toUpperCase()}</div>
+          <div className={`text-7xl font-bold ${selectedCard ? (selectedCard.color === 'red' ? 'text-red-500' : 'text-white') : 'text-gray-600'}`}>
+            {selectedCard?.display || '--'}
+          </div>
+        </div>
+      )}
       
       {/* Dealt Cards Display */}
       {(andarCards.length > 0 || baharCards.length > 0) && (
