@@ -33,15 +33,17 @@ const config = {
       {
         app: 'live',
         hls: true,
-        // OPTIMIZED: 1s segments x 6 in playlist = 6s cache (prevents 404s on pause/refresh)
-        // NO delete_segments = segments persist for smooth resume
-        // Target latency: 2-3s (1s GOP + 1-2s buffer)
+        // 🚀 ULTRA-LOW LATENCY CONFIG:
+        // - 1s segments for smooth playback
+        // - 6 segments in playlist = 6s cache (prevents 404s on pause/refresh)
+        // - NO delete_segments = segments persist for smooth resume
+        // - Target latency: 2-3s (0.5s GOP + 1.5-2s buffer)
         hlsFlags: '[hls_time=1:hls_list_size=6:hls_flags=independent_segments:hls_segment_type=mpegts]',
         vc: 'libx264',
         vcParam: [
           '-preset', 'ultrafast',
           '-tune', 'zerolatency',
-          '-g', '30', // Force keyframe every 30 frames (1s at 30fps)
+          '-g', '15', // 🚀 CRITICAL: Keyframe every 15 frames (0.5s at 30fps) for ultra-low latency
           '-sc_threshold', '0', // Disable scene change detection for constant GOP
           '-r', '30', // Force 30fps
           '-c:v', 'libx264',
@@ -62,7 +64,9 @@ const config = {
 // ------------------
 const nms = new NodeMediaServer(config);
 nms.run();
-console.log('✅ NodeMediaServer started!');
+console.log('✅ NodeMediaServer started with ULTRA-LOW LATENCY config!');
+console.log('📊 Config: 0.5s GOP, 1s segments, 6-segment cache');
+console.log('🎯 Target latency: 2-3 seconds');
 console.log('RTMP URL: rtmp://89.42.231.35:1935/live');
 console.log('HLS URL: http://89.42.231.35:8000/live/test/index.m3u8');
 
@@ -84,23 +88,26 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'player.html'));
 });
 
-// Serve media (HLS) files with proper MIME types
+// 🚀 Serve media (HLS) files with CACHE HEADERS for segment persistence
 app.use('/live', express.static(path.join(__dirname, 'media/live'), {
-  setHeaders: (res, path) => {
-    if (path.endsWith('.m3u8')) {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.m3u8')) {
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-    } else if (path.endsWith('.ts')) {
+      res.setHeader('Cache-Control', 'no-cache'); // Playlist always fresh
+    } else if (filePath.endsWith('.ts')) {
       res.setHeader('Content-Type', 'video/mp2t');
+      res.setHeader('Cache-Control', 'public, max-age=10'); // 🚀 Cache segments for 10s
     }
   }
 }));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', streaming: true });
+  res.json({ status: 'ok', streaming: true, latencyMode: 'ultra-low' });
 });
 
 app.listen(3000, () => {
   console.log('✅ Player running at http://89.42.231.35:3000');
   console.log('✅ CORS enabled for cross-origin requests');
+  console.log('✅ Segment caching enabled (10s TTL)');
 });

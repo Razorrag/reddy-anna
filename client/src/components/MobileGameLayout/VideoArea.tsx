@@ -137,7 +137,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             const isIpAddress = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(new URL(streamUrl).hostname);
 
             if (!isIpAddress) {
-              console.log('⚠️ Site is HTTPS but stream URL is HTTP, attempting to upgrade...'');
+              console.log('⚠️ Site is HTTPS but stream URL is HTTP, attempting to upgrade...');
               streamUrl = streamUrl.replace('http://', 'https://');
               console.log('🔄 Upgraded stream URL to:', streamUrl);
             } else {
@@ -253,116 +253,131 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     // Check if URL is HLS (.m3u8)
     if (streamUrl.includes('.m3u8')) {
       if (Hls.isSupported()) {
-        console.log('🎥 Setting up HLS.js with LOW LATENCY config...');
+        console.log('🎥 Setting up HLS.js with ULTRA-LOW LATENCY config...');
 
-  console.log('🎬 HLS Setup Effect - streamUrl:', streamUrl);
-
-  if (!videoElement || !streamUrl) {
-    if (!streamUrl) console.log('⚠️ No stream URL yet - waiting...');
-    return;
-  }
-
-  // Check if URL is HLS (.m3u8)
-  if (streamUrl.includes('.m3u8')) {
-    if (Hls.isSupported()) {
-      console.log('🎥 Setting up HLS.js with LOW LATENCY config...');
-
-      // Destroy existing HLS instance
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-      }
-
-      // Create HLS instance with OPTIMIZED LOW LATENCY
-      const hls = new Hls({
-        // 🚀 OPTIMIZED LATENCY (Target: 2-3s stable)
-
-        // Core latency settings
-        liveSyncDurationCount: 1,           // Stay 1 segment behind live
-        liveMaxLatencyDurationCount: 2,     // Max 2 segments latency before seeking       
-        liveDurationInfinity: true,         // Treat as infinite live stream
-
-        // Buffer settings - TIGHTER
-        maxBufferLength: 2,                 // 2s forward buffer (matches server list size)
-        maxMaxBufferLength: 4,              // Hard limit 4s
-        maxBufferSize: 60 * 1000 * 1000,    // 60MB
-        maxBufferHole: 0.1,                 // Tolerate 0.1s gaps
-
-        // Aggressive catch-up
-        maxLiveSyncPlaybackRate: 1.5,       // 50% speed-up to catch live edge
-          
-        // Fast recovery
-        highBufferWatchdogPeriod: 1,        // Check buffer every 1s
-        nudgeMaxRetry: 20,
-        nudgeOffset: 0.1,
-
-        // Performance
-        enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 0,
-      });
-
-      hls.loadSource(streamUrl);
-      hls.attachMedia(videoElement);
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        console.log('✅ HLS manifest loaded, starting LOW LATENCY playback...');
-        // Try to play immediately
-        videoElement.play().catch(err => {
-           console.error('❌ HLS initial play failed:', err);
-           videoElement.muted = true;
-           videoElement.play().catch(e => console.error('❌ HLS muted play failed:', e));  
-        });
-      });
-
-      // 🛠️ Debug Stats Update
-      setInterval(() => {
-        if (hls && videoElement) {
-           // ... existing debug logic ...
-        }
-      }, 500);
-
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) {
-          console.error('❌ Fatal HLS error:', data);
-            
-          // 🛑 CRITICAL FIX: Capture last frame on error before destroying
-          // This prevents black screen when stream stops/pauses abruptly
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-             console.log('📸 Stream stopped/network error - Freezing last frame...');
-             captureCurrentFrame();
-             setIsPausedState(true); // Force into paused state to show frozen frame
-          }
-
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log('🔄 Network error, attempting recovery in 2s...');
-              hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log('🔄 Media error, attempting recovery...');
-              hls.recoverMediaError();
-              break;
-            default:
-              console.log('🔄 Unrecoverable error, destroying HLS...');
-              hls.destroy();
-              break;
-          }
-        }
-      });
-
-      hlsRef.current = hls;
-
-      return () => {
+        // Destroy existing HLS instance
         if (hlsRef.current) {
           hlsRef.current.destroy();
-          hlsRef.current = null;
         }
-      };
-    } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS support (Safari)
-      console.log('🎥 Using native HLS support (Safari)...');
-      videoElement.src = streamUrl;
-      videoElement.play().catch(err => console.error('❌ Native HLS play failed:', err));  
+
+        // Create HLS instance with OPTIMIZED ULTRA-LOW LATENCY
+        const hls = new Hls({
+          // 🚀 ULTRA-LOW LATENCY (Target: 2-3s stable)
+          
+          // Core latency settings
+          liveSyncDurationCount: 1,           // Stay 1 segment behind live
+          liveMaxLatencyDurationCount: 2,     // Max 2 segments latency before seeking
+          liveDurationInfinity: true,         // Treat as infinite live stream
+          
+          // Buffer settings - OPTIMIZED for 2-3s latency
+          maxBufferLength: 2,                 // 2s forward buffer
+          maxMaxBufferLength: 4,              // Hard limit 4s
+          maxBufferSize: 60 * 1000 * 1000,    // 60MB
+          maxBufferHole: 0.1,                 // Tolerate 0.1s gaps
+          
+          // Aggressive catch-up to live edge
+          maxLiveSyncPlaybackRate: 1.5,       // 50% speed-up to catch live edge
+          
+          // Fast recovery
+          highBufferWatchdogPeriod: 1,        // Check buffer every 1s
+          nudgeMaxRetry: 20,
+          nudgeOffset: 0.1,
+          
+          // Performance
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 0,                // Don't keep old segments
+          
+          // Network optimization
+          manifestLoadingTimeOut: 10000,
+          manifestLoadingMaxRetry: 4,
+          levelLoadingTimeOut: 10000,
+          fragLoadingTimeOut: 20000,
+          fragLoadingMaxRetry: 6,
+        });
+
+        hls.loadSource(streamUrl);
+        hls.attachMedia(videoElement);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          console.log('✅ HLS manifest loaded, starting ULTRA-LOW LATENCY playback...');
+          videoElement.play().catch(err => {
+            console.error('❌ HLS initial play failed:', err);
+            videoElement.muted = true;
+            videoElement.play().catch(e => console.error('❌ HLS muted play failed:', e));
+          });
+        });
+
+        // 🛠️ Debug Stats Update with latency monitoring
+        const debugInterval = setInterval(() => {
+          if (hls && videoElement) {
+            const latency = hls.latency || 0;
+            const buffer = videoElement.buffered.length > 0
+              ? videoElement.buffered.end(videoElement.buffered.length - 1) - videoElement.currentTime
+              : 0;
+            
+            setDebugStats({
+              latency: latency,
+              buffer: buffer,
+              dropped: videoElement.getVideoPlaybackQuality ? videoElement.getVideoPlaybackQuality().droppedVideoFrames : 0,
+              bandwidth: hls.bandwidthEstimate || 0
+            });
+            
+            // Log every 5 seconds
+            if (Math.floor(Date.now() / 5000) !== Math.floor((Date.now() - 500) / 5000)) {
+              console.log('📊 Stream Stats:', {
+                latency: `${latency.toFixed(2)}s`,
+                buffer: `${buffer.toFixed(2)}s`,
+                liveSyncPos: hls.liveSyncPosition?.toFixed(2),
+                currentTime: videoElement.currentTime.toFixed(2)
+              });
+            }
+          }
+        }, 500);
+
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal) {
+            console.error('❌ Fatal HLS error:', data);
+            
+            // 🛑 CRITICAL: Capture last frame on error to prevent black screen
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+              console.log('📸 Network error - Freezing last frame...');
+              captureCurrentFrame();
+              setIsPausedState(true);
+            }
+
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                console.log('🔄 Network error, attempting recovery...');
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                console.log('🔄 Media error, attempting recovery...');
+                hls.recoverMediaError();
+                break;
+              default:
+                console.log('🔄 Unrecoverable error, destroying HLS...');
+                hls.destroy();
+                break;
+            }
+          }
+        });
+
+        hlsRef.current = hls;
+
+        return () => {
+          clearInterval(debugInterval);
+          if (hlsRef.current) {
+            hlsRef.current.destroy();
+            hlsRef.current = null;
+          }
+        };
+      } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        console.log('🎥 Using native HLS support (Safari)...');
+        videoElement.src = streamUrl;
+        videoElement.play().catch(err => console.error('❌ Native HLS play failed:', err));
+      }
     }
   }, [streamConfig?.streamUrl]);
 
