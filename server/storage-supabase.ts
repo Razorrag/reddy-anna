@@ -3552,40 +3552,21 @@ export class SupabaseStorage implements IStorage {
       return;
     }
 
-    // Get referral bonus percentage
+    // ✅ CRITICAL FIX: ONLY track referral relationship, DO NOT create bonus yet!
+    // Referral bonus will be created ONLY when deposit bonus is credited (via handleReferralForBonus)
+    // This ensures referral bonus is tied to wagering bonus, not instant deposit
+    
+    // Calculate expected referral bonus for tracking purposes
     const referralBonusPercent = await this.getGameSetting('referral_bonus_percent') || '1';
     const bonusPercentage = parseFloat(referralBonusPercent);
-    const bonusAmount = (depositAmount * bonusPercentage) / 100;
+    const expectedBonusAmount = (depositAmount * bonusPercentage) / 100;
 
-    // ✅ FIX: Track referral relationship first (creates user_referrals record)
-    await this.trackUserReferral(referrerData.id, userId, depositAmount, bonusAmount);
+    // Track referral relationship (creates user_referrals record)
+    await this.trackUserReferral(referrerData.id, userId, depositAmount, expectedBonusAmount);
 
-    // ✅ CRITICAL FIX: Use NEW referral_bonuses table instead of old addUserBonus
-    // Get the referral ID that was just created
-    const { data: referralRecord } = await supabaseServer
-      .from('user_referrals')
-      .select('id')
-      .eq('referrer_user_id', referrerData.id)
-      .eq('referred_user_id', userId)
-      .single();
-
-    try {
-      await this.createReferralBonus({
-        referrerUserId: referrerData.id,
-        referredUserId: userId,
-        referralId: referralRecord?.id,
-        depositAmount: depositAmount,
-        bonusAmount: bonusAmount,
-        bonusPercentage: bonusPercentage
-      });
-      console.log(`✅ Referral bonus record created in referral_bonuses table for referrer ${referrerData.id}`);
-    } catch (createError: any) {
-      console.error('⚠️ Failed to create referral bonus record:', createError);
-      // Fallback to old system if new table fails
-      await this.addUserBonus(referrerData.id, bonusAmount, 'referral_bonus', depositAmount);
-    }
-
-    console.log(`✅ Referral bonus of ₹${bonusAmount} applied to referrer ${referrerData.id} for user ${userId}'s first deposit of ₹${depositAmount}`);
+    console.log(`✅ Referral relationship tracked for referrer ${referrerData.id} and referred user ${userId}`);
+    console.log(`ℹ️ Referral bonus will be created when deposit bonus is credited (wagering threshold reached)`);
+    console.log(`ℹ️ Expected referral bonus: ₹${expectedBonusAmount} (${bonusPercentage}% of deposit ₹${depositAmount})`);
   }
 
   async applyConditionalBonus(userId: string): Promise<boolean> {
@@ -5403,7 +5384,9 @@ export class SupabaseStorage implements IStorage {
     const percent = parseFloat(setting || '0');
     if (percent <= 0) return;
 
-    const referralAmount = parseFloat(b.bonus_amount || '0') * (percent / 100);
+    // ✅ FIX: Referral bonus = 1% of DEPOSIT AMOUNT (not bonus amount)
+    // Example: Deposit ₹1000 → Referral gets ₹10 (1% of ₹1000)
+    const referralAmount = parseFloat(b.deposit_amount || '0') * (percent / 100);
     if (referralAmount <= 0) return;
 
     await this.createReferralBonus({

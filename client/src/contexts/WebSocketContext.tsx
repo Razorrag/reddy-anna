@@ -786,7 +786,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         let netProfit = 0;
         let result: 'no_bet' | 'refund' | 'mixed' | 'win' | 'loss' = 'no_bet';
         
-        if (userPayout) {
+        // ✅ CRITICAL FIX: Always process userPayout, even if all values are 0
+        if (userPayout && typeof userPayout === 'object') {
           console.log('🎊 User Payout data received:', JSON.stringify(userPayout, null, 2));
           payoutAmount = userPayout.amount || 0;
           totalBetAmount = userPayout.totalBet || 0;
@@ -795,9 +796,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           
           console.log('🎊 Game Complete - Server authoritative data:', { payoutAmount, totalBetAmount, netProfit, result });
         } else {
-          console.log('ℹ️ No userPayout in game_complete (user had no bets)');
+          // ✅ FIX: Even if no userPayout object, still show celebration with no_bet
+          console.log('ℹ️ No userPayout object - defaulting to no_bet celebration');
+          result = 'no_bet';
         }
 
+        // ✅ CRITICAL: ALWAYS create and dispatch celebration, even with no bets
         const celebrationData = {
           winner,
           winningCard,
@@ -807,9 +811,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           totalBetAmount,
           netProfit,
           result,
+          dataSource: 'game_complete_direct' as const
         };
         
         console.log('🎊 Setting celebration with data:', JSON.stringify(celebrationData, null, 2));
+        console.log('🎊 FORCING celebration display for result:', result);
+        
+        // ✅ CRITICAL: Set celebration in context (triggers component render)
         setCelebration(celebrationData);
 
         const celebrationEvent = new CustomEvent('game-complete-celebration', {

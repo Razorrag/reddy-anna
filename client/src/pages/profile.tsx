@@ -41,7 +41,8 @@ import {
   BonusOverviewCard,
   DepositBonusesList,
   ReferralBonusesList,
-  BonusHistoryTimeline
+  BonusHistoryTimeline,
+  BonusWallet
 } from '@/components/Bonus';
 
 const Profile: React.FC = () => {
@@ -1511,58 +1512,42 @@ const Profile: React.FC = () => {
 
           {/* Bonuses Tab */}
           <TabsContent value="bonuses" className="space-y-6">
-            {loadingBonuses ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold mx-auto"></div>
-                <p className="text-white/60 mt-4">Loading bonus data...</p>
-              </div>
-            ) : (
-              <>
-                {/* Bonus Overview */}
-                {bonusSummary && (
-                  <BonusOverviewCard
-                    totalAvailable={bonusSummary.totals?.available || 0}
-                    totalLocked={bonusSummary.depositBonuses?.locked || 0}
-                    totalCredited={bonusSummary.totals?.credited || 0}
-                    lifetimeEarnings={bonusSummary.totals?.lifetime || 0}
-                  />
-                )}
+            {/* ✅ NEW: Dedicated Bonus Wallet Component */}
+            <BonusWallet
+              bonusSummary={bonusSummary}
+              depositBonuses={depositBonuses}
+              referralBonuses={referralBonuses}
+              loading={loadingBonuses}
+            />
 
-                {/* Deposit Bonuses */}
-                <DepositBonusesList bonuses={depositBonuses} />
-
-                {/* Referral Bonuses */}
-                <ReferralBonusesList bonuses={referralBonuses} />
-
-                {/* Bonus History */}
-                <BonusHistoryTimeline
-                  transactions={bonusTransactions}
-                  hasMore={bonusHasMore}
-                  loading={loadingBonuses}
-                  onLoadMore={async () => {
-                    try {
-                      const offset = bonusTransactions.length;
-                      const res = await apiClient.get(`/api/user/bonus-transactions?limit=20&offset=${offset}`) as any;
-                      
-                      // ✅ FIX: Handle both wrapped and unwrapped API responses
-                      const moreTransactions = Array.isArray(res)
-                        ? res
-                        : Array.isArray(res.data)
-                          ? res.data
-                          : [];
-                      
-                      setBonusTransactions([...bonusTransactions, ...moreTransactions]);
-                      setBonusHasMore(
-                        res.hasMore ??
-                        (res.data?.hasMore) ??
-                        false
-                      );
-                    } catch (error) {
-                      console.error('Failed to load more transactions:', error);
-                    }
-                  }}
-                />
-              </>
+            {/* Bonus History Timeline */}
+            {!loadingBonuses && bonusTransactions.length > 0 && (
+              <BonusHistoryTimeline
+                transactions={bonusTransactions}
+                hasMore={bonusHasMore}
+                loading={loadingBonuses}
+                onLoadMore={async () => {
+                  try {
+                    const offset = bonusTransactions.length;
+                    const res = await apiClient.get(`/api/user/bonus-transactions?limit=20&offset=${offset}`) as any;
+                    
+                    const moreTransactions = Array.isArray(res)
+                      ? res
+                      : Array.isArray(res.data)
+                        ? res.data
+                        : [];
+                    
+                    setBonusTransactions([...bonusTransactions, ...moreTransactions]);
+                    setBonusHasMore(
+                      res.hasMore ??
+                      (res.data?.hasMore) ??
+                      false
+                    );
+                  } catch (error) {
+                    console.error('Failed to load more transactions:', error);
+                  }
+                }}
+              />
             )}
           </TabsContent>
 
@@ -1673,9 +1658,10 @@ const Profile: React.FC = () => {
                   <div className="text-sm text-white/80">
                     <p className="mb-2 font-semibold text-gold">How it works:</p>
                     <ul className="list-disc list-inside space-y-1 text-white/60">
-                      <li>Friend gets 5% bonus on their first deposit</li>
-                      <li>You get 1% bonus when they make their first deposit</li>
-                      <li>Bonus is automatically credited to your account</li>
+                      <li>Friend gets 5% bonus on their first deposit (locked until they play)</li>
+                      <li>You get 1% of their deposit amount when their bonus unlocks</li>
+                      <li>Referral bonus is automatically credited when they reach wagering threshold</li>
+                      <li>Example: Friend deposits ₹1000 → You get ₹10 when they unlock their ₹50 bonus</li>
                     </ul>
                   </div>
                 </CardContent>

@@ -410,6 +410,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
 
     console.log(`🎯 Game complete - Cards: ${totalCards} (${andarCount}A + ${baharCount}B + 1 opening), Round: ${actualRound}, Display: ${winnerDisplay}`);
     console.log(`📤 Sending game_complete to ${clientsArray.length} connected clients (including those with no bets)`);
+    console.log(`📊 Total bets in game: ₹${totalBetsAmount}, Total payouts: ₹${totalPayoutsAmount}, Players who bet: ${uniquePlayers}`);
 
     for (const client of clientsArray) {
       try {
@@ -460,7 +461,7 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
           console.error(`   Payouts map:`, payouts[client.userId]);
         }
 
-        client.ws.send(JSON.stringify({
+        const gameCompleteMessage = {
           type: 'game_complete',
           data: {
             winner: winningSide,
@@ -473,13 +474,16 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
             userPayout: userPayoutData, // ✅ ALWAYS include, even if zero
             newBalance: balanceMap.get(client.userId) // ✅ CRITICAL FIX: Include updated balance for instant UI update
           }
-        }));
+        };
         
-        console.log(`✅ Sent game_complete to user ${client.userId}:`, {
+        client.ws.send(JSON.stringify(gameCompleteMessage));
+        
+        console.log(`✅ Sent game_complete to user ${client.userId} (role: ${client.role || 'player'}):`, {
           totalBet: totalUserBets,
           payout: userPayout,
           netProfit,
-          result
+          result,
+          hasWinnerDisplay: !!winnerDisplay
         });
       } catch (error) {
         console.error(`❌ Error sending game_complete to user ${client.userId}:`, error);

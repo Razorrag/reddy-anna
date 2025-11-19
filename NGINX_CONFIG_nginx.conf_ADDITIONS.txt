@@ -1,0 +1,36 @@
+# ====================================================================
+# ADD THESE LINES TO /etc/nginx/nginx.conf
+# ====================================================================
+# Location: Inside the http { } block, BEFORE any server blocks
+# ====================================================================
+
+# HLS Streaming Cache Zone - Uses 500MB of VPS RAM
+proxy_cache_path /dev/shm/stream_cache 
+    levels=1:2 
+    keys_zone=stream_cache:100m    # 100MB for cache keys
+    max_size=500m                  # 500MB total cache size
+    inactive=10s                   # Remove segments not accessed for 10s
+    use_temp_path=off;             # Direct write to cache (faster)
+
+# Upstream to Node Media Server (HLS backend)
+upstream hls_backend {
+    server 127.0.0.1:8000;
+    keepalive 32;                  # Keep connections alive
+}
+
+# ====================================================================
+# DEPLOYMENT INSTRUCTIONS:
+# ====================================================================
+# 1. Open the main nginx config:
+#    sudo nano /etc/nginx/nginx.conf
+#
+# 2. Find the "http {" block
+#
+# 3. Add the above lines INSIDE the http block, BEFORE any server blocks
+#
+# 4. Save and test:
+#    sudo nginx -t
+#
+# 5. If test passes, reload:
+#    sudo systemctl reload nginx
+# ====================================================================

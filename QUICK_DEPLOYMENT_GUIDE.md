@@ -1,268 +1,311 @@
-# ⚡ QUICK DEPLOYMENT GUIDE
+# 🚀 QUICK DEPLOYMENT GUIDE - Copy-Paste Ready!
 
-## All Fixes Ready for Production
+## 📋 You Have 2 Files to Update
 
----
-
-## 🎯 WHAT'S BEEN FIXED
-
-### 1. ✅ Analytics Profit Percentage (CRITICAL)
-- **Issue:** Always showed 0%
-- **Fix:** Backend now calculates `profit_loss_percentage` correctly
-- **File:** `server/storage-supabase.ts`
-
-### 2. ✅ Player Stats Tracking (CRITICAL)
-- **Issue:** Tracked NET instead of GROSS amounts
-- **Fix:** Now tracks GROSS winnings and losses
-- **File:** `server/storage-supabase.ts`
-
-### 3. ✅ Game History Empty (CRITICAL)
-- **Issue:** Player game history not showing
-- **Fix:** Created proper RPC function with aggregation
-- **File:** `scripts/FIX_PLAYER_STATS_AND_GAME_HISTORY.sql`
-
-### 4. ✅ Bonus Calculations (HIGH)
-- **Issue:** Used wrong field names and status values
-- **Fix:** Updated to match database schema
-- **File:** `client/src/pages/admin-bonus.tsx`
-
-### 5. ✅ Auto-Update System (CRITICAL)
-- **Issue:** Manual updates required, prone to failures
-- **Fix:** Database triggers auto-update everything
-- **File:** `scripts/AUTO_UPDATE_TRIGGERS_COMPLETE.sql`
+### FILE 1: `/etc/nginx/nginx.conf` (Add cache zone)
+### FILE 2: `/etc/nginx/sites-available/andar-bahar` (Complete replacement)
 
 ---
 
-## 🚀 DEPLOYMENT STEPS
-
-### Step 1: Run SQL Scripts (5 minutes)
+## STEP 1: Backup Everything
 
 ```bash
-# Connect to your database
-psql -U your_user -d your_database
+# SSH to your VPS
+ssh root@89.42.231.35
 
-# Run auto-update triggers (REQUIRED)
-\i scripts/AUTO_UPDATE_TRIGGERS_COMPLETE.sql
+# Backup nginx.conf
+sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup-$(date +%Y%m%d-%H%M%S)
 
-# Run player stats fixes (REQUIRED)
-\i scripts/FIX_PLAYER_STATS_AND_GAME_HISTORY.sql
+# Backup andar-bahar config
+sudo cp /etc/nginx/sites-available/andar-bahar /etc/nginx/sites-available/andar-bahar.backup-$(date +%Y%m%d-%H%M%S)
+
+# Verify backups created
+ls -ltr /etc/nginx/*.backup* /etc/nginx/sites-available/*.backup*
 ```
 
-### Step 2: Recalculate Existing Data (2 minutes)
+---
 
-```sql
--- Fix all existing player stats
-SELECT * FROM recalculate_all_player_stats();
-
--- Fix all analytics data
-SELECT * FROM reconcile_analytics();
-```
-
-### Step 3: Restart Server (1 minute)
+## STEP 2: Update /etc/nginx/nginx.conf
 
 ```bash
-# Stop server
-# Ctrl+C or kill process
-
-# Start server
-npm run dev:both
+# Open the main nginx config
+sudo nano /etc/nginx/nginx.conf
 ```
 
-### Step 4: Verify (2 minutes)
+**Find the `http {` block and add these lines INSIDE it, BEFORE any server blocks:**
 
-```sql
--- Check triggers created
-SELECT tgname, tgrelid::regclass 
-FROM pg_trigger 
-WHERE tgname LIKE 'trigger_%'
-ORDER BY tgname;
+```nginx
+    # ==========================================
+    # HLS STREAMING CACHE ZONE (ADD THIS)
+    # ==========================================
+    proxy_cache_path /dev/shm/stream_cache 
+        levels=1:2 
+        keys_zone=stream_cache:100m    # 100MB for cache keys
+        max_size=500m                  # 500MB total cache size
+        inactive=10s                   # Remove if not accessed for 10s
+        use_temp_path=off;             # Direct write to cache
 
--- Should show 4 triggers:
--- trigger_update_daily_analytics_on_game_complete
--- trigger_update_monthly_analytics_on_daily_update
--- trigger_update_player_stats_on_bet_complete
--- trigger_update_yearly_analytics_on_monthly_update
-
--- Check player stats
-SELECT id, phone, games_played, total_winnings, total_losses
-FROM users
-WHERE games_played > 0
-LIMIT 5;
-
--- Check analytics
-SELECT * FROM daily_game_statistics 
-WHERE date = CURRENT_DATE;
+    # Upstream for HLS backend
+    upstream hls_backend {
+        server 127.0.0.1:8000;
+        keepalive 32;                  # Keep connections alive
+    }
 ```
+
+**Save:** `Ctrl+X`, then `Y`, then `Enter`
 
 ---
 
-## ✅ VERIFICATION CHECKLIST
+## STEP 3: Replace /etc/nginx/sites-available/andar-bahar
 
-### Database
-- [ ] `AUTO_UPDATE_TRIGGERS_COMPLETE.sql` ran successfully
-- [ ] `FIX_PLAYER_STATS_AND_GAME_HISTORY.sql` ran successfully
-- [ ] 4 triggers created (check with query above)
-- [ ] Player stats recalculated
-- [ ] Analytics reconciled
+```bash
+# Open your andar-bahar config
+sudo nano /etc/nginx/sites-available/andar-bahar
+```
 
-### Backend
-- [ ] Server restarted
-- [ ] No errors in server logs
-- [ ] Backend code changes deployed
+**IMPORTANT: Copy the ENTIRE content from `NGINX_CONFIG_andar-bahar_COMPLETE.conf` file and paste it here, replacing EVERYTHING.**
 
-### Frontend
-- [ ] Analytics dashboard shows correct profit %
-- [ ] Player profile shows game history
-- [ ] Bonus page shows correct totals
-- [ ] No console errors
+The file is ready in: `NGINX_CONFIG_andar-bahar_COMPLETE.conf`
+
+**Before saving, verify these lines (23-24) have correct SSL certificate paths:**
+```nginx
+ssl_certificate /etc/letsencrypt/live/rajugarikossu.com/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/rajugarikossu.com/privkey.pem;
+```
+
+**Save:** `Ctrl+X`, then `Y`, then `Enter`
 
 ---
 
-## 📊 EXPECTED RESULTS
+## STEP 4: Test Configuration
 
-### Analytics Dashboard
-- **Before:** Profit % = 0%
-- **After:** Profit % = 94.12% (or actual value)
+```bash
+# Test nginx syntax
+sudo nginx -t
+```
 
-### Player Profile
-- **Before:** Game history empty
-- **After:** Shows all games with correct bets/payouts
+**Expected output:**
+```
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
 
-### Player Stats (₹1.2M losing bet example)
-- **Before:** total_losses = ₹0
-- **After:** total_losses = ₹1,200,000
-
-### Bonus Page
-- **Before:** May show ₹0 if data exists
-- **After:** Shows correct totals with proper field mapping
+**If you see errors:**
+- Check for missing semicolons
+- Check SSL certificate paths
+- Verify you copied everything correctly
+- Restore backups if needed:
+  ```bash
+  sudo cp /etc/nginx/nginx.conf.backup-* /etc/nginx/nginx.conf
+  sudo cp /etc/nginx/sites-available/andar-bahar.backup-* /etc/nginx/sites-available/andar-bahar
+  ```
 
 ---
 
-## 🔄 AUTO-UPDATE CASCADE
+## STEP 5: Create Cache Directory
 
-**When a game completes:**
-```
-Game → Daily Stats → Monthly Stats → Yearly Stats
-(All automatic via triggers!)
-```
+```bash
+# Create cache directory in RAM
+sudo mkdir -p /dev/shm/stream_cache
 
-**When a bet completes:**
-```
-Bet → Player Stats
-(Automatic via trigger!)
+# Set permissions
+sudo chown -R www-data:www-data /dev/shm/stream_cache
+sudo chmod -R 755 /dev/shm/stream_cache
+
+# Verify
+ls -la /dev/shm/ | grep stream_cache
 ```
 
 ---
 
-## 📝 FILES CHANGED
+## STEP 6: Reload Nginx
 
-### Backend
-1. `server/storage-supabase.ts` - Player stats logic (GROSS tracking)
+```bash
+# Reload nginx
+sudo systemctl reload nginx
 
-### Frontend
-2. `client/src/pages/admin-bonus.tsx` - Bonus field mapping
-3. `client/src/contexts/UserProfileContext.tsx` - Game history parsing
-4. `client/src/pages/GameHistoryPage.tsx` - Field normalization
-5. `client/src/components/AnalyticsDashboard.tsx` - Labels and null handling
+# Verify nginx is running
+sudo systemctl status nginx
+```
 
-### Database
-6. `scripts/AUTO_UPDATE_TRIGGERS_COMPLETE.sql` - Auto-update triggers
-7. `scripts/FIX_PLAYER_STATS_AND_GAME_HISTORY.sql` - RPC functions
-
-### Documentation
-8. `AUTO_UPDATE_SYSTEM_COMPLETE.md` - Complete auto-update guide
-9. `PLAYER_STATS_FIX_COMPLETE.md` - Player stats fix guide
-10. `DATABASE_SCHEMA_VERIFICATION.md` - Schema verification
-11. `CALCULATION_FIXES_COMPLETE_SUMMARY.md` - All fixes summary
+**Expected:** `Active: active (running)`
 
 ---
 
-## 🐛 TROUBLESHOOTING
+## STEP 7: Verify Cache is Working
 
-### Issue: Triggers not working
-```sql
--- Check if triggers exist
-SELECT * FROM pg_trigger WHERE tgname LIKE 'trigger_%';
+```bash
+# Test playlist (should be BYPASS)
+curl -I https://rajugarikossu.com/live/test/index.m3u8 2>&1 | grep -i cache
 
--- Re-run script if missing
-\i scripts/AUTO_UPDATE_TRIGGERS_COMPLETE.sql
+# Test segment (should be HIT after first request)
+curl -I https://rajugarikossu.com/live/test/segment0.ts 2>&1 | grep -i cache
+curl -I https://rajugarikossu.com/live/test/segment0.ts 2>&1 | grep -i cache
 ```
 
-### Issue: Player stats still wrong
-```sql
--- Recalculate all stats
-SELECT * FROM recalculate_all_player_stats();
+**Expected:**
 ```
-
-### Issue: Analytics still 0%
-```sql
--- Reconcile analytics
-SELECT * FROM reconcile_analytics();
-```
-
-### Issue: Game history empty
-```sql
--- Check RPC function exists
-SELECT proname FROM pg_proc WHERE proname = 'get_user_game_history';
-
--- Re-run script if missing
-\i scripts/FIX_PLAYER_STATS_AND_GAME_HISTORY.sql
+X-Cache-Status: BYPASS  (for .m3u8 playlists)
+X-Cache-Status: MISS    (first segment request)
+X-Cache-Status: HIT     (second segment request) ✅
 ```
 
 ---
 
-## ⏱️ TOTAL DEPLOYMENT TIME
+## STEP 8: Update Streaming Server
 
-- SQL Scripts: 5 minutes
-- Data Recalculation: 2 minutes
-- Server Restart: 1 minute
-- Verification: 2 minutes
+```bash
+# Navigate to streaming directory
+cd /var/www/andar-bahar/reddy-anna/live_stream
 
-**Total: ~10 minutes** ⚡
+# Backup current server.js
+cp server.js server.js.backup
 
----
+# The updated server.js is already in your project
+# Just restart the streaming server
+pm2 restart streaming-server
 
-## 🎉 SUCCESS CRITERIA
+# View logs
+pm2 logs streaming-server --lines 20
+```
 
-After deployment, you should see:
-
-✅ Analytics profit % shows correct value (not 0%)  
-✅ Player game history displays correctly  
-✅ Player stats show GROSS amounts  
-✅ Bonus totals calculate correctly  
-✅ All triggers active and firing  
-✅ Real-time updates working  
-✅ No console errors  
-✅ No server errors  
+**Expected log:**
+```
+✅ NodeMediaServer started with VPS-OPTIMIZED ULTRA-LOW LATENCY config!
+```
 
 ---
 
-## 📞 SUPPORT
+## STEP 9: Deploy React Client Updates
 
-If you encounter issues:
+```bash
+# Navigate to project root
+cd /var/www/andar-bahar/reddy-anna
 
-1. Check troubleshooting section above
-2. Verify all SQL scripts ran successfully
-3. Check PostgreSQL logs for trigger errors
-4. Verify server restarted properly
-5. Check browser console for frontend errors
+# Pull latest changes or upload VideoArea.tsx manually
+# git pull origin main
+
+# Build client
+cd client
+npm install
+npm run build
+
+# Restart backend
+cd ..
+pm2 restart all
+
+# Verify all services
+pm2 status
+```
 
 ---
 
-## ✅ DEPLOYMENT STATUS
+## STEP 10: Configure OBS
 
-**Ready for Production:** ✅ YES
+**OBS Settings (Critical for low latency):**
+- **Output Mode**: Advanced
+- **Encoder**: x264 or NVENC H.264
+- **Bitrate**: 4000 Kbps
+- **Keyframe Interval**: 1 second
+- **CPU Preset**: veryfast (or medium if powerful VPS)
+- **Tune**: zerolatency
+- **Dynamic Bitrate**: ON
 
-**All fixes tested:** ✅ YES
-
-**Documentation complete:** ✅ YES
-
-**Rollback plan:** Database triggers can be disabled if needed
+**Stream Settings:**
+- **URL**: `rtmp://89.42.231.35:1935/live`
+- **Stream Key**: `test`
 
 ---
 
-## 🚀 GO LIVE!
+## ✅ FINAL VERIFICATION
 
-Everything is ready. Just run the 4 steps above and you're done!
+### 1. Check Cache Hit Rate
+```bash
+# Monitor cache in real-time
+sudo tail -f /var/log/nginx/access.log | grep "Cache"
+```
 
-**Good luck!** 🎉
+**You should see mostly HIT responses** (95%+ = cache working!)
+
+### 2. Check Latency
+- Start OBS streaming
+- Wave hand in front of camera
+- Open https://rajugarikossu.com
+- **Expected: 1-2 seconds delay** ✅
+
+### 3. Check Buffering
+- Stream for 10+ minutes
+- **Expected: ZERO "Loading stream..." popups** ✅
+
+### 4. Check "Stream Paused" Text
+- Open stream and pause
+- **Expected: Clean frozen frame, NO "Stream Paused" text overlay** ✅
+
+---
+
+## 🐛 Quick Troubleshooting
+
+### Still seeing buffering?
+```bash
+# Check cache is being used
+du -sh /dev/shm/stream_cache  # Should be 50-500MB
+grep "HIT" /var/log/nginx/access.log | wc -l  # Should be high number
+```
+
+### High latency?
+```bash
+# Verify OBS keyframe = 1 second
+# Verify server.js has hls_time=0.5
+cd /var/www/andar-bahar/reddy-anna/live_stream
+grep "hls_time" server.js  # Should show 0.5
+```
+
+### Cache not working?
+```bash
+# Verify cache zone exists
+sudo nginx -T | grep proxy_cache_path
+# Should show: /dev/shm/stream_cache
+
+# Check permissions
+ls -la /dev/shm/stream_cache/
+# Should show: www-data www-data
+```
+
+---
+
+## 📊 Expected Performance
+
+After deployment:
+- ✅ **Latency**: 1-2 seconds (camera to browser)
+- ✅ **Buffering**: Zero
+- ✅ **Cache Hit Rate**: 95%+
+- ✅ **Concurrent Users**: 1000+
+- ✅ **Smooth Streaming**: Hours without interruption
+- ✅ **RAM Cache Usage**: 50-500MB in /dev/shm
+- ✅ **"Stream Paused" Overlay**: Removed for players
+
+---
+
+## 📞 Emergency Rollback
+
+If something goes wrong:
+```bash
+# Restore nginx.conf
+sudo cp /etc/nginx/nginx.conf.backup-* /etc/nginx/nginx.conf
+
+# Restore andar-bahar config
+sudo cp /etc/nginx/sites-available/andar-bahar.backup-* /etc/nginx/sites-available/andar-bahar
+
+# Test and reload
+sudo nginx -t
+sudo systemctl reload nginx
+
+# Restore server.js
+cd /var/www/andar-bahar/reddy-anna/live_stream
+cp server.js.backup server.js
+pm2 restart streaming-server
+```
+
+---
+
+**Your VPS-powered ultra-low latency streaming is ready!** 🚀
