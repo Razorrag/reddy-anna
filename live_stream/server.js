@@ -33,8 +33,23 @@ const config = {
       {
         app: 'live',
         hls: true,
-        // ✅ ULTRA-LOW LATENCY: 0.5s segments × 6 = 3s server buffer (Stable)
-        hlsFlags: '[hls_time=0.5:hls_list_size=6:hls_flags=delete_segments+independent_segments:hls_segment_type=mpegts]',
+        // LOW LATENCY & STABLE: 1s segments x 3 = 3s buffer
+        // Transcoding ensures 1s GOP (Keyframes) for precise segmenting
+        hlsFlags: '[hls_time=1:hls_list_size=3:hls_flags=delete_segments+independent_segments:hls_segment_type=mpegts]',
+        vc: 'libx264',
+        vcParam: [
+          '-preset', 'ultrafast',
+          '-tune', 'zerolatency',
+          '-g', '30', // Force keyframe every 30 frames (1s at 30fps)
+          '-sc_threshold', '0', // Disable scene change detection for constant GOP
+          '-r', '30', // Force 30fps
+          '-c:v', 'libx264',
+          '-b:v', '2500k', // Bitrate cap
+          '-maxrate', '2500k',
+          '-bufsize', '5000k'
+        ],
+        ac: 'aac',
+        acParam: ['-ab', '128k', '-ac', '2', '-ar', '44100'],
         dash: false,
       },
     ],

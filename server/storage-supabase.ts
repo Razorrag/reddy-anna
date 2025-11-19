@@ -2134,50 +2134,167 @@ export class SupabaseStorage implements IStorage {
     console.log(`User ID: ${userId}`);
     
     try {
-      // ✅ NEW APPROACH: Use RPC function instead of JOIN
-      // This bypasses foreign key issues and is more efficient
-      const { data, error } = await supabaseServer
+      // ✅ TRY RPC FIRST - More efficient if it exists
+      const { data: rpcData, error: rpcError } = await supabaseServer
         .rpc('get_user_game_history', {
           p_user_id: userId,
           p_limit: 100
         });
 
-      if (error) {
-        console.error('❌ Error calling get_user_game_history RPC:', error);
-        console.log(`========== getUserGameHistory END (ERROR) ==========\n`);
+      // If RPC works, use it
+      if (!rpcError && rpcData && rpcData.length > 0) {
+        console.log(`✅ RPC returned ${rpcData.length} game history records`);
+        
+        const formattedHistory = rpcData.map((game: any) => ({
+          id: game.game_id,
+          gameId: game.game_id,
+          openingCard: game.opening_card,
+          winner: game.winner,
+          winningCard: game.winning_card,
+          winningRound: game.winning_round || 1,
+          totalCards: game.total_cards || 0,
+          yourBets: game.your_bets || [],
+          yourTotalBet: parseFloat(game.your_total_bet || '0'),
+          yourTotalPayout: parseFloat(game.your_total_payout || '0'),
+          yourNetProfit: parseFloat(game.your_net_profit || '0'),
+          result: game.result || 'no_bet',
+          dealtCards: game.dealt_cards || [],
+          createdAt: game.created_at
+        }));
+
+        console.log(`✅ Formatted ${formattedHistory.length} game history records via RPC`);
+        console.log(`========== getUserGameHistory END (SUCCESS - RPC) ==========\n`);
+        return formattedHistory;
+      }
+
+      // ✅ FALLBACK: Direct queries if RPC fails or doesn't exist
+      console.log(`⚠️ RPC failed or returned empty, using direct queries...`);
+      console.log(`RPC Error:`, rpcError);
+
+      // Step 1: Get all user's bets
+      const { data: betsData, error: betsError } = await supabaseServer
+        .from('player_bets')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1000);
+
+      if (betsError) {
+        console.error('❌ Error fetching player_bets:', betsError);
         return [];
       }
 
-      console.log(`✅ RPC returned ${data?.length || 0} game history records`);
-
-      if (!data || data.length === 0) {
-        console.log(`⚠️ No game history found for user`);
+      if (!betsData || betsData.length === 0) {
+        console.log(`⚠️ No bets found for user`);
         console.log(`========== getUserGameHistory END (EMPTY) ==========\n`);
         return [];
       }
 
-      // RPC function already returns aggregated data, just format it
-      const formattedHistory = data.map((game: any) => ({
-        id: game.game_id,
-        gameId: game.game_id,
-        openingCard: game.opening_card,
-        winner: game.winner,
-        winningCard: game.winning_card,
-        winningRound: game.winning_round || 1,  // Fixed: was game.round
-        totalCards: game.total_cards || 0,
-        yourBets: game.your_bets || [],
-        yourTotalBet: parseFloat(game.your_total_bet || '0'),
-        yourTotalPayout: parseFloat(game.your_total_payout || '0'),
-        yourNetProfit: parseFloat(game.your_net_profit || '0'),
-        result: game.result || 'no_bet',
-        dealtCards: game.dealt_cards || [],
-        createdAt: game.created_at
-      }));
+      console.log(`✅ Found ${betsData.length} bets for user`);
 
-      console.log(`✅ Formatted ${formattedHistory.length} game history records`);
-      console.log(`========== getUserGameHistory END (SUCCESS) ==========\n`);
+      // Step 2: Group bets by game_id
+      const gameBetsMap = new Map();
+      betsData.forEach((bet: any) => {
+        if (!gameBetsMap.has(bet.game_id)) {
+          gameBetsMap.set(bet.game_id, []);
+        }
+        gameBetsMap.get(bet.game_id).push(bet);
+      });
+
+      const gameIds = Array.from(gameBetsMap.keys());
+      console.log(`✅ Found ${gameIds.length} unique games`);
+
+      // Step 3: Get game_history for these games
+      const { data: historyData, error: historyError } = await supabaseServer
+        .from('game_history')
+        .select('*')
+        .in('game_id', gameIds)
+        .order('created_at', { ascending: false });
+
+      if (historyError) {
+        console.error('❌ Error fetching game_history:', historyError);
+      }
+
+      // Step 4: Get dealt_cards for these games
+      const { data: cardsData, error: cardsError } = await supabaseServer
+        .from('dealt_cards')
+        .select('*')
+        .in('game_id', gameIds)
+        .order('position', { ascending: true });
+
+      if (cardsError) {
+        console.error('❌ Error fetching dealt_cards:', cardsError);
+      }
+
+      // Step 5: Create maps for quick lookup
+      const historyMap = new Map();
+      if (historyData) {
+        historyData.forEach((h: any) => historyMap.set(h.game_id, h));
+      }
+
+      const cardsMap = new Map();
+      if (cardsData) {
+        cardsData.forEach((card: any) => {
+          if (!cardsMap.has(card.game_id)) {
+            cardsMap.set(card.game_id, []);
+          }
+          cardsMap.get(card.game_id).push(card);
+        });
+      }
+
+      // Step 6: Build final result
+      const result = Array.from(gameBetsMap.entries())
+        .map(([gameId, bets]: [string, any[]]) => {
+          const history = historyMap.get(gameId);
+          const cards = cardsMap.get(gameId) || [];
+
+          // Calculate totals
+          const totalBet = bets.reduce((sum, bet) => sum + parseFloat(bet.amount || '0'), 0);
+          const totalPayout = bets.reduce((sum, bet) => sum + parseFloat(bet.actual_payout || '0'), 0);
+          const netProfit = totalPayout - totalBet;
+
+          // Determine result
+          let result = 'no_bet';
+          if (totalPayout > totalBet) result = 'win';
+          else if (totalPayout === totalBet && totalBet > 0) result = 'refund';
+          else if (totalBet > 0) result = 'loss';
+
+          return {
+            id: history?.id || gameId,
+            gameId: gameId,
+            openingCard: history?.opening_card || null,
+            winner: history?.winner || null,
+            winningCard: history?.winning_card || null,
+            winningRound: history?.winning_round || 1,
+            totalCards: history?.total_cards || cards.length,
+            yourBets: bets.map(bet => ({
+              id: bet.id,
+              amount: parseFloat(bet.amount || '0'),
+              side: bet.side,
+              round: bet.round,
+              actual_payout: parseFloat(bet.actual_payout || '0'),
+              status: bet.status
+            })),
+            yourTotalBet: totalBet,
+            yourTotalPayout: totalPayout,
+            yourNetProfit: netProfit,
+            result: result,
+            dealtCards: cards.map((c: any) => ({
+              card: c.card,
+              side: c.side,
+              position: c.position
+            })),
+            createdAt: history?.created_at || bets[0]?.created_at
+          };
+        })
+        .filter(game => game.createdAt) // Only include games with valid timestamps
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 100); // Limit to 100 most recent
+
+      console.log(`✅ Built ${result.length} game history records via direct queries`);
+      console.log(`========== getUserGameHistory END (SUCCESS - DIRECT) ==========\n`);
       
-      return formattedHistory;
+      return result;
     } catch (error) {
       console.error('❌ getUserGameHistory error:', error);
       console.log(`========== getUserGameHistory END (ERROR) ==========\n`);
