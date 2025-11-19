@@ -530,13 +530,13 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         console.error('❌ Invalid API response:', response);
       }
       
-      // Fix 3: Normalize field names from snake_case to camelCase
+      // Normalize field names from snake_case to camelCase (backend should send camelCase)
       const normalizeGameFields = (g: any) => {
         return {
           ...g,
-          yourTotalBet: g.yourTotalBet ?? g.your_total_bet ?? g.totalBet ?? g.total_bet,
-          yourTotalPayout: g.yourTotalPayout ?? g.your_total_payout ?? g.payout ?? g.total_payout,
-          yourNetProfit: g.yourNetProfit ?? g.your_net_profit ?? g.netProfit ?? g.net_profit,
+          yourTotalBet: g.yourTotalBet ?? g.your_total_bet ?? 0,
+          yourTotalPayout: g.yourTotalPayout ?? g.your_total_payout ?? 0,
+          yourNetProfit: g.yourNetProfit ?? g.your_net_profit ?? 0,
           yourBets: g.yourBets ?? g.your_bets ?? [],
         };
       };
@@ -545,40 +545,20 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         // Normalize field names first
         const normalized = normalizeGameFields(g);
         
-        // Fix 7: Improved bet calculation with logging
-        let yourTotalBet = 0;
-        if (normalized.yourTotalBet !== undefined && normalized.yourTotalBet !== null) {
-          yourTotalBet = Number(normalized.yourTotalBet);
-        } else if (Array.isArray(normalized.yourBets) && normalized.yourBets.length > 0) {
-          yourTotalBet = normalized.yourBets.reduce((s: number, b: any) => s + Number(b.amount || 0), 0);
-          console.log(`📊 Game ${index}: Calculated yourTotalBet from bets array: ₹${yourTotalBet}`);
-        } else {
-          console.warn(`⚠️ Game ${index}: No bet data found, using 0`);
-        }
-
-        // Fix 8: Improved payout calculation with field name normalization
-        let yourTotalPayout = 0;
-        if (normalized.yourTotalPayout !== undefined && normalized.yourTotalPayout !== null) {
-          yourTotalPayout = Number(normalized.yourTotalPayout);
-        } else if (Array.isArray(normalized.yourBets) && normalized.yourBets.length > 0) {
-          yourTotalPayout = normalized.yourBets.reduce((s: number, b: any) => {
-            const payout = Number(b.payout ?? b.actual_payout ?? b.actualPayout ?? 0);
-            return s + payout;
-          }, 0);
-          console.log(`📊 Game ${index}: Calculated yourTotalPayout from bets array: ₹${yourTotalPayout}`);
-        } else {
-          console.warn(`⚠️ Game ${index}: No payout data found, using 0`);
-        }
-
-        // Fix 9: Improved net profit calculation
-        let yourNetProfit = 0;
-        if (normalized.yourNetProfit !== undefined && normalized.yourNetProfit !== null) {
-          yourNetProfit = Number(normalized.yourNetProfit);
-        } else {
-          yourNetProfit = yourTotalPayout - yourTotalBet;
-          if (yourTotalBet > 0) {
-            console.log(`📊 Game ${index}: Calculated yourNetProfit: ₹${yourNetProfit} (payout: ₹${yourTotalPayout} - bet: ₹${yourTotalBet})`);
-          }
+        // Trust backend calculations - no fallback recalculation needed
+        // Backend already calculates these correctly in storage-supabase.ts
+        const yourTotalBet = Number(normalized.yourTotalBet || 0);
+        const yourTotalPayout = Number(normalized.yourTotalPayout || 0);
+        const yourNetProfit = Number(normalized.yourNetProfit || 0);
+        
+        // Log only if values seem incorrect for debugging
+        if (index === 0) {
+          console.log(`📊 First game amounts:`, {
+            yourTotalBet,
+            yourTotalPayout,
+            yourNetProfit,
+            betsCount: normalized.yourBets?.length || 0
+          });
         }
 
         // Improved result classification with better logic
@@ -606,9 +586,9 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
             ? normalized.yourBets.map((b: any) => ({
                 id: String(b.id),
                 side: b.side,
-                amount: Number(b.amount),
-                round: Number(b.round),
-                payout: Number(b.payout ?? b.actual_payout ?? b.actualPayout ?? 0),
+                amount: Number(b.amount || 0),
+                round: Number(b.round || 1),
+                payout: Number(b.payout || 0), // Backend now consistently sends 'payout'
                 status: String(b.status || '')
               }))
             : [],
@@ -835,7 +815,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Listen for balance updates
   useEffect(() => {
     const handleBalanceUpdate = (event: CustomEvent) => {
-      const { balance, source } = event.detail;
+      const { balance } = event.detail;
       
       // Update analytics if balance changed
       if (state.analytics && state.analytics.currentBalance !== balance) {

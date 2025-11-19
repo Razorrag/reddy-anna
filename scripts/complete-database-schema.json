@@ -1,0 +1,21 @@
+{
+  "timestamp": "2025-11-19T12:07:06.745Z",
+  "supabase_url": "https://nliiasrfkenkkdlzkcum.supabase.co",
+  "metadata": {
+    "total_tables": 0,
+    "total_rpcs": 0,
+    "total_triggers": 0,
+    "total_views": 0,
+    "total_foreign_keys": 0,
+    "total_indexes": 0
+  },
+  "tables": null,
+  "rpcs": null,
+  "triggers": null,
+  "views": null,
+  "foreignKeys": null,
+  "primaryKeys": null,
+  "uniqueConstraints": null,
+  "indexes": null,
+  "tableStats": null
+}

@@ -13,6 +13,7 @@ import {
   type StreamSettings,
   type UserReferral,
 } from "@shared/schema";
+import { transformStatistics, type StatisticsData } from './utils/data-transformers';
 
 // Analytics interfaces
 export interface GameStatistics {
@@ -307,6 +308,7 @@ export interface IStorage {
   getDepositBonuses(userId: string, filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
   getReferralBonuses(userId: string, filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
   getBonusTransactions(userId: string, filters?: { limit?: number; offset?: number }): Promise<any[]>;
+  getUsersReferredBy(referrerId: string): Promise<any[]>;
   logBonusTransaction(data: {
     userId: string;
     bonusType: string;
@@ -345,6 +347,13 @@ export interface IStorage {
     startDate?: Date;
     endDate?: Date;
   }): Promise<any[]>;
+  
+  // Statistics methods with proper typing
+  getAllTimeStatistics(): Promise<StatisticsData>;
+  getDailyStatistics(): Promise<StatisticsData>;
+  getMonthlyStatistics(): Promise<StatisticsData>;
+  getYearlyStatistics(): Promise<StatisticsData>;
+  getRealtimeGameStats(): Promise<any>;
 }
 
 export class SupabaseStorage implements IStorage {
@@ -2138,7 +2147,8 @@ export class SupabaseStorage implements IStorage {
       const { data: rpcData, error: rpcError } = await supabaseServer
         .rpc('get_user_game_history', {
           p_user_id: userId,
-          p_limit: 100
+          p_limit: 100,
+          p_offset: 0
         });
 
       // If RPC works, use it
@@ -2272,7 +2282,7 @@ export class SupabaseStorage implements IStorage {
               amount: parseFloat(bet.amount || '0'),
               side: bet.side,
               round: bet.round,
-              actual_payout: parseFloat(bet.actual_payout || '0'),
+              payout: parseFloat(bet.actual_payout || '0'), // ✅ Map actual_payout to payout (camelCase)
               status: bet.status
             })),
             yourTotalBet: totalBet,
@@ -5428,6 +5438,51 @@ export class SupabaseStorage implements IStorage {
   }
 
   /**
+   * Get all users referred by a specific user
+   */
+  async getUsersReferredBy(referrerId: string): Promise<any[]> {
+    // First get the user's referral code
+    const referrer = await this.getUser(referrerId);
+    if (!referrer || !referrer.referral_code_generated) {
+      return [];
+    }
+
+    // Get all users who signed up with this referral code
+    const { data, error } = await supabaseServer
+      .from('users')
+      .select('id, phone, full_name, created_at')
+      .eq('referral_code', referrer.referral_code_generated)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching referred users:', error);
+      return [];
+    }
+
+    // For each referred user, get their referral bonus info
+    const referredUsersWithBonuses = await Promise.all(
+      (data || []).map(async (user: any) => {
+        // Get referral bonus for this referred user
+        const { data: bonusData } = await supabaseServer
+          .from('referral_bonuses')
+          .select('bonus_amount, status, created_at')
+          .eq('referrer_user_id', referrerId)
+          .eq('referred_user_id', user.id)
+          .single();
+
+        return {
+          ...user,
+          bonusEarned: bonusData?.bonus_amount || 0,
+          bonusStatus: bonusData?.status || 'pending',
+          hasDeposited: bonusData ? true : false
+        };
+      })
+    );
+
+    return referredUsersWithBonuses;
+  }
+
+  /**
    * Log a bonus transaction
    */
   async logBonusTransaction(data: {
@@ -5585,158 +5640,137 @@ export class SupabaseStorage implements IStorage {
   /**
    * Get all-time statistics from daily_game_statistics
    */
-  async getAllTimeStatistics(): Promise<any> {
-    const { data, error } = await supabaseServer
-      .from('daily_game_statistics')
-      .select('*');
+  async getAllTimeStatistics(): Promise<StatisticsData> {
+    try {
+      const { data, error } = await supabaseServer
+        .from('daily_game_statistics')
+        .select('*')
+        .order('date', { ascending: false });
 
-    if (error) {
-      console.error('Error getting all-time statistics:', error);
-      return {
-        totalGames: 0,
-        totalBets: 0,
-        totalPayouts: 0,
-        profitLoss: 0,
-        netHouseProfit: 0
-      };
+      if (error) {
+        console.error('Error fetching all-time statistics:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        return transformStatistics(null);
+      }
+
+      // Aggregate all daily statistics for all-time totals
+      const totals = data.reduce(
+        (acc, row) => ({
+          total_games: acc.total_games + (Number(row.total_games) || 0),
+          total_bets: acc.total_bets + (Number(row.total_bets) || 0),
+          total_payouts: acc.total_payouts + (Number(row.total_payouts) || 0),
+          total_revenue: acc.total_revenue + (Number(row.total_revenue) || 0),
+          unique_players: Math.max(acc.unique_players, Number(row.unique_players) || 0),
+        }),
+        { total_games: 0, total_bets: 0, total_payouts: 0, total_revenue: 0, unique_players: 0 }
+      );
+
+      return transformStatistics(totals);
+    } catch (error) {
+      console.error('Error in getAllTimeStatistics:', error);
+      return transformStatistics(null);
     }
-
-    if (!data || data.length === 0) {
-      return {
-        totalGames: 0,
-        totalBets: 0,
-        totalPayouts: 0,
-        profitLoss: 0,
-        netHouseProfit: 0
-      };
-    }
-
-    // Sum all daily statistics
-    const totals = data.reduce((acc: any, row: any) => {
-      return {
-        totalGames: acc.totalGames + parseInt(row.total_games || '0'),
-        totalBets: acc.totalBets + parseFloat(row.total_bets || '0'),
-        totalPayouts: acc.totalPayouts + parseFloat(row.total_payouts || '0'),
-        profitLoss: acc.profitLoss + parseFloat(row.profit_loss || '0'),
-        netHouseProfit: acc.netHouseProfit + parseFloat(row.net_house_profit || '0')
-      };
-    }, {
-      totalGames: 0,
-      totalBets: 0,
-      totalPayouts: 0,
-      profitLoss: 0,
-      netHouseProfit: 0
-    });
-
-    return totals;
   }
 
   /**
    * Get today's statistics from daily_game_statistics
    */
-  async getDailyStatistics(): Promise<any> {
-    const today = new Date().toISOString().split('T')[0];
+  async getDailyStatistics(): Promise<StatisticsData> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { data, error } = await supabaseServer
+        .from('daily_game_statistics')
+        .select('*')
+        .eq('date', today)
+        .single();
 
-    const { data, error } = await supabaseServer
-      .from('daily_game_statistics')
-      .select('*')
-      .eq('date', today)
-      .single();
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 is "not found" - that's ok, return zeros
+        console.error('Error fetching daily statistics:', error);
+        throw error;
+      }
 
-    if (error || !data) {
-      return {
-        totalGames: 0,
-        totalBets: 0,
-        totalPayouts: 0,
-        profitLoss: 0,
-        netHouseProfit: 0,
-        totalPlayerWinnings: 0,
-        totalPlayerLosses: 0
-      };
+      return transformStatistics(data);
+    } catch (error) {
+      console.error('Error in getDailyStatistics:', error);
+      return transformStatistics(null);
     }
-
-    return {
-      totalGames: parseInt(data.total_games || '0'),
-      totalBets: parseFloat(data.total_bets || '0'),
-      totalPayouts: parseFloat(data.total_payouts || '0'),
-      profitLoss: parseFloat(data.profit_loss || '0'),
-      netHouseProfit: parseFloat(data.net_house_profit || '0'),
-      totalPlayerWinnings: parseFloat(data.total_player_winnings || '0'),
-      totalPlayerLosses: parseFloat(data.total_player_losses || '0')
-    };
   }
 
   /**
    * Get current month's statistics from monthly_game_statistics
    */
-  async getMonthlyStatistics(): Promise<any> {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
+  async getMonthlyStatistics(): Promise<StatisticsData> {
+    try {
+      const now = new Date();
+      const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      const { data, error } = await supabaseServer
+        .from('monthly_game_statistics')
+        .select('*')
+        .eq('month_year', monthYear)
+        .single();
 
-    const { data, error } = await supabaseServer
-      .from('monthly_game_statistics')
-      .select('*')
-      .eq('year', year)
-      .eq('month', month)
-      .single();
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching monthly statistics:', error);
+        throw error;
+      }
 
-    if (error || !data) {
-      return {
-        totalGames: 0,
-        totalBets: 0,
-        totalPayouts: 0,
-        profitLoss: 0,
-        netHouseProfit: 0,
-        totalPlayerWinnings: 0,
-        totalPlayerLosses: 0
-      };
+      return transformStatistics(data);
+    } catch (error) {
+      console.error('Error in getMonthlyStatistics:', error);
+      return transformStatistics(null);
     }
-
-    return {
-      totalGames: parseInt(data.total_games || '0'),
-      totalBets: parseFloat(data.total_bets || '0'),
-      totalPayouts: parseFloat(data.total_payouts || '0'),
-      profitLoss: parseFloat(data.profit_loss || '0'),
-      netHouseProfit: parseFloat(data.net_house_profit || '0'),
-      totalPlayerWinnings: parseFloat(data.total_player_winnings || '0'),
-      totalPlayerLosses: parseFloat(data.total_player_losses || '0')
-    };
   }
 
   /**
    * Get current year's statistics from yearly_game_statistics
    */
-  async getYearlyStatistics(): Promise<any> {
-    const year = new Date().getFullYear();
+  async getYearlyStatistics(): Promise<StatisticsData> {
+    try {
+      const year = new Date().getFullYear();
+      
+      const { data, error } = await supabaseServer
+        .from('yearly_game_statistics')
+        .select('*')
+        .eq('year', year)
+        .single();
 
-    const { data, error } = await supabaseServer
-      .from('yearly_game_statistics')
-      .select('*')
-      .eq('year', year)
-      .single();
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching yearly statistics:', error);
+        throw error;
+      }
 
-    if (error || !data) {
-      return {
-        totalGames: 0,
-        totalBets: 0,
-        totalPayouts: 0,
-        profitLoss: 0,
-        netHouseProfit: 0,
-        totalPlayerWinnings: 0,
-        totalPlayerLosses: 0
-      };
+      return transformStatistics(data);
+    } catch (error) {
+      console.error('Error in getYearlyStatistics:', error);
+      return transformStatistics(null);
     }
+  }
 
-    return {
-      totalGames: parseInt(data.total_games || '0'),
-      totalBets: parseFloat(data.total_bets || '0'),
-      totalPayouts: parseFloat(data.total_payouts || '0'),
-      profitLoss: parseFloat(data.profit_loss || '0'),
-      netHouseProfit: parseFloat(data.net_house_profit || '0'),
-      totalPlayerWinnings: parseFloat(data.total_player_winnings || '0'),
-      totalPlayerLosses: parseFloat(data.total_player_losses || '0')
-    };
+  /**
+   * Get realtime game statistics
+   */
+  async getRealtimeGameStats(): Promise<any> {
+    try {
+      // Call the database function we created
+      const { data, error } = await supabaseServer
+        .rpc('get_realtime_game_stats');
+
+      if (error) {
+        console.error('Error fetching realtime game stats:', error);
+        throw error;
+      }
+
+      return data || { currentGame: null };
+    } catch (error) {
+      console.error('Error in getRealtimeGameStats:', error);
+      return { currentGame: null };
+    }
   }
 
   /**

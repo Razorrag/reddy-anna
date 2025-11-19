@@ -298,5 +298,64 @@ export const getUserBonusTransactions = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * GET /api/user/referral-data
+ * Returns user's referral code and referred users information
+ */
+export const getUserReferralData = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
+
+    const user = await storage.getUser(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Get referral code for this user
+    const referralCode = user.referral_code_generated || '';
+    
+    // Get users referred by this user
+    const referredUsers = await storage.getUsersReferredBy(req.user.id);
+    
+    // Calculate totals
+    const totalReferrals = referredUsers.length;
+    const totalReferralEarnings = referredUsers.reduce((sum, u) => {
+      return sum + parseFloat(String(u.bonusEarned || '0'));
+    }, 0);
+
+    res.json({
+      success: true,
+      data: {
+        referralCode,
+        totalReferrals,
+        totalReferralEarnings,
+        referredUsers: referredUsers.map(u => ({
+          id: u.id,
+          phone: u.phone,
+          fullName: u.full_name,
+          createdAt: u.created_at,
+          hasDeposited: u.hasDeposited || false,
+          bonusEarned: parseFloat(String(u.bonusEarned || '0')),
+          bonusStatus: u.bonusStatus || 'pending'
+        }))
+      }
+    });
+  } catch (error: any) {
+    console.error('Get user referral data error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve referral data'
+    });
+  }
+};
+
 // NOTE: Manual bonus claiming has been removed - bonuses are now auto-credited
 // based on gameplay and balance thresholds. No manual claim endpoint needed.

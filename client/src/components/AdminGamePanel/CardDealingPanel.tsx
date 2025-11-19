@@ -150,16 +150,6 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
         </div>
       </div>
       
-      {/* Current Selection (Rounds 1 & 2) */}
-      {round < 3 && selectedCard && (
-        <div className="bg-gradient-to-r from-blue-900/30 to-red-900/30 rounded-lg p-2 border-2 border-gold/50 text-center">
-          <div className="text-sm text-gray-400 mb-1">Next Card: {nextSide.toUpperCase()}</div>
-          <div className={`text-6xl font-bold ${selectedCard ? (selectedCard.color === 'red' ? 'text-red-500' : 'text-white') : 'text-gray-600'}`}>
-            {selectedCard?.display || '--'}
-          </div>
-        </div>
-      )}
-      
       {/* Card Selector Grid */}
       <div className="bg-black/30 rounded-lg p-2 mb-2">
         {/* Cards organized by suit - 13 cards per row */}
@@ -227,6 +217,16 @@ const CardDealingPanel: React.FC<CardDealingPanelProps> = ({
           </div>
         ))}
       </div>
+      
+      {/* Selected Card Display - Below Card Selector (Rounds 1 & 2) */}
+      {round < 3 && selectedCard && (
+        <div className="bg-gradient-to-r from-blue-900/30 to-red-900/30 rounded-lg p-3 border-2 border-gold/50 text-center mb-2 shadow-xl">
+          <div className="text-sm text-gray-400 mb-1">Next Card: {nextSide.toUpperCase()}</div>
+          <div className={`text-6xl font-bold ${selectedCard ? (selectedCard.color === 'red' ? 'text-red-500' : 'text-white') : 'text-gray-600'}`}>
+            {selectedCard?.display || '--'}
+          </div>
+        </div>
+      )}
       
       {/* Action Buttons - Phase Aware */}
       <div className="flex gap-2">

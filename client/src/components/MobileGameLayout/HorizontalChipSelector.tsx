@@ -106,13 +106,15 @@ const HorizontalChipSelector: React.FC<HorizontalChipSelectorProps> = ({
         <div
           ref={scrollContainerRef}
           className={`
-            flex gap-2 overflow-x-auto scrollbar-hide
-            scroll-smooth cursor-grab active:cursor-grabbing
-            ${isDragging ? 'scroll-behavior-auto' : 'scroll-behavior-smooth'}
+            flex gap-2 overflow-x-auto overflow-y-hidden scrollbar-hide
+            scroll-smooth select-none
+            ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}
           `}
           style={{
             scrollbarWidth: 'none', // Firefox
             msOverflowStyle: 'none', // IE and Edge
+            WebkitOverflowScrolling: 'touch', // iOS momentum scrolling
+            touchAction: 'pan-x', // Allow horizontal swipe only
           }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}

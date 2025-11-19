@@ -84,21 +84,24 @@ export default function AdminBetsPage() {
     return () => ws.removeEventListener('message', handleMessage);
   }, []);
 
-  // Calculate current round bets
-  const currentRoundBets = gameState.currentRound === 1 ? gameState.round1Bets : gameState.round2Bets;
-  const currentAndar = typeof currentRoundBets.andar === 'number' ? currentRoundBets.andar : 0;
-  const currentBahar = typeof currentRoundBets.bahar === 'number' ? currentRoundBets.bahar : 0;
+  // Calculate cumulative bets across all rounds (Round 1 + Round 2)
+  const round1Andar = typeof gameState.round1Bets.andar === 'number' ? gameState.round1Bets.andar : 0;
+  const round1Bahar = typeof gameState.round1Bets.bahar === 'number' ? gameState.round1Bets.bahar : 0;
+  const round2Andar = typeof gameState.round2Bets.andar === 'number' ? gameState.round2Bets.andar : 0;
+  const round2Bahar = typeof gameState.round2Bets.bahar === 'number' ? gameState.round2Bets.bahar : 0;
+  const cumulativeAndar = round1Andar + round2Andar;
+  const cumulativeBahar = round1Bahar + round2Bahar;
 
-  // Determine LOW BET side
-  const totalCurrentBets = currentAndar + currentBahar;
+  // Determine LOW BET side using cumulative totals
+  const totalCumulativeBets = cumulativeAndar + cumulativeBahar;
   const lowSide = 
-    totalCurrentBets === 0 ? null :
-    currentAndar < currentBahar ? 'andar' :
-    currentBahar < currentAndar ? 'bahar' :
+    totalCumulativeBets === 0 ? null :
+    cumulativeAndar < cumulativeBahar ? 'andar' :
+    cumulativeBahar < cumulativeAndar ? 'bahar' :
     'equal';
 
-  const lowBetAmount = lowSide === 'andar' ? currentAndar : lowSide === 'bahar' ? currentBahar : 0;
-  const betDifference = Math.abs(currentAndar - currentBahar);
+  const lowBetAmount = lowSide === 'andar' ? cumulativeAndar : lowSide === 'bahar' ? cumulativeBahar : 0;
+  const betDifference = Math.abs(cumulativeAndar - cumulativeBahar);
 
   return (
     <AdminLayout>
@@ -132,11 +135,11 @@ export default function AdminBetsPage() {
 
           {/* Single LOW BET Box */}
           <div className="mb-6">
-            {lowSide === null || totalCurrentBets === 0 ? (
+            {lowSide === null || totalCumulativeBets === 0 ? (
               <div className="bg-black/40 backdrop-blur-sm rounded-2xl border-2 border-gray-600/50 p-12 text-center">
                 <div className="mb-4 flex items-center justify-center gap-3 text-xs text-gray-400 uppercase tracking-wide">
                   <span className="px-3 py-1 rounded-full bg-gold/10 border border-gold/30 text-gold font-semibold">
-                    Round {gameState.currentRound}
+                    Current: Round {gameState.currentRound}
                   </span>
                   <span className="px-3 py-1 rounded-full bg-purple-600/20 border border-purple-500/40 text-purple-200 font-medium">
                     {gameState.phase}
@@ -154,7 +157,7 @@ export default function AdminBetsPage() {
               <div className="bg-black/40 backdrop-blur-sm rounded-2xl border-2 border-yellow-500/50 p-12 text-center">
                 <div className="mb-4 flex items-center justify-center gap-3 text-xs text-gray-400 uppercase tracking-wide">
                   <span className="px-3 py-1 rounded-full bg-gold/10 border border-gold/30 text-gold font-semibold">
-                    Round {gameState.currentRound}
+                    Current: Round {gameState.currentRound}
                   </span>
                   <span className="px-3 py-1 rounded-full bg-purple-600/20 border border-purple-500/40 text-purple-200 font-medium">
                     {gameState.phase}
@@ -165,7 +168,7 @@ export default function AdminBetsPage() {
                   Both sides have equal bets
                 </div>
                 <div className="text-gray-300 mt-2">
-                  ₹{currentAndar.toLocaleString('en-IN')} each
+                  ₹{cumulativeAndar.toLocaleString('en-IN')} each (Total Game)
                 </div>
               </div>
             ) : (
@@ -190,7 +193,7 @@ export default function AdminBetsPage() {
                 <div className="text-center mb-8">
                   <div className="mb-4 flex items-center justify-center gap-3 text-xs text-gray-300 uppercase tracking-wide">
                     <span className="px-3 py-1 rounded-full bg-black/40 border border-white/10 text-white font-semibold">
-                      Round {gameState.currentRound}
+                      Current: Round {gameState.currentRound}
                     </span>
                     <span className="px-3 py-1 rounded-full bg-purple-600/40 border border-purple-400/60 text-purple-100 font-medium">
                       {gameState.phase}
@@ -211,7 +214,7 @@ export default function AdminBetsPage() {
                   <div className={`text-sm uppercase tracking-wide mb-3 ${
                     lowSide === 'andar' ? 'text-red-200' : 'text-blue-200'
                   }`}>
-                    Current Round {gameState.currentRound} Bet
+                    Total Game Bets (All Rounds)
                   </div>
                   <div className={`text-8xl font-black mb-4 ${
                     lowSide === 'andar' ? 'text-red-300' : 'text-blue-300'
@@ -221,7 +224,12 @@ export default function AdminBetsPage() {
                   <div className={`text-2xl ${
                     lowSide === 'andar' ? 'text-red-100' : 'text-blue-100'
                   }`}>
-                    {((lowBetAmount / totalCurrentBets) * 100).toFixed(1)}% of current round
+                    {((lowBetAmount / totalCumulativeBets) * 100).toFixed(1)}% of total game
+                  </div>
+                  <div className={`text-sm mt-4 pt-4 border-t ${
+                    lowSide === 'andar' ? 'text-red-200/70 border-red-500/30' : 'text-blue-200/70 border-blue-500/30'
+                  }`}>
+                    R1: ₹{(lowSide === 'andar' ? round1Andar : round1Bahar).toLocaleString('en-IN')} • R2: ₹{(lowSide === 'andar' ? round2Andar : round2Bahar).toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
@@ -232,19 +240,25 @@ export default function AdminBetsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-red-500/30 p-6 text-center">
               <div className="text-xs text-gray-400 uppercase tracking-wide mb-2">
-                Total Andar Bet
+                Total Andar (All Rounds)
               </div>
               <div className="text-4xl font-bold text-red-300">
-                ₹{currentAndar.toLocaleString('en-IN')}
+                ₹{cumulativeAndar.toLocaleString('en-IN')}
+              </div>
+              <div className="text-xs text-gray-400 mt-2">
+                R1: ₹{round1Andar.toLocaleString('en-IN')} • R2: ₹{round2Andar.toLocaleString('en-IN')}
               </div>
             </div>
 
             <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-blue-500/30 p-6 text-center">
               <div className="text-xs text-gray-400 uppercase tracking-wide mb-2">
-                Total Bahar Bet
+                Total Bahar (All Rounds)
               </div>
               <div className="text-4xl font-bold text-blue-300">
-                ₹{currentBahar.toLocaleString('en-IN')}
+                ₹{cumulativeBahar.toLocaleString('en-IN')}
+              </div>
+              <div className="text-xs text-gray-400 mt-2">
+                R1: ₹{round1Bahar.toLocaleString('en-IN')} • R2: ₹{round2Bahar.toLocaleString('en-IN')}
               </div>
             </div>
 
@@ -263,7 +277,7 @@ export default function AdminBetsPage() {
 
           {/* Info Text */}
           <div className="mt-6 text-center text-sm text-gray-400">
-            <p>💡 Shows the side with lower betting for strategic decisions</p>
+            <p>💡 Shows cumulative game bets (Round 1 + Round 2) with LOW BET indicator for strategic decisions</p>
           </div>
         </div>
       </div>

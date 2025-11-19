@@ -6,7 +6,7 @@
  * Features the simplified unified StreamPlayer for both RTMP and WebRTC streaming.
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useGameState } from '../contexts/GameStateContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -22,12 +22,7 @@ import RoundNotification from '../components/RoundNotification';
 import NoWinnerTransition from '../components/NoWinnerTransition';
 import type { BetSide } from '../types/game';
 
-interface WhatsAppResponse {
-  success: boolean;
-  whatsappUrl?: string;
-}
-
-const PlayerGame: React.FC = () => {
+export default function PlayerGame() {
   const { showNotification } = useNotification();
   const { gameState, updatePlayerWallet, removeLastBet, clearRoundBets, setCelebration } = useGameState();
   const { placeBet: placeBetWebSocket, connectionStatus } = useWebSocket();
@@ -158,8 +153,9 @@ const PlayerGame: React.FC = () => {
         return;
       }
 
-      // Optimistically update balance
-      updateBalance(userBalance - selectedBetAmount, 'local');
+      // ✅ FIX: Removed optimistic balance update to prevent flickering
+      // WebSocket bet_confirmed will update balance authoritatively (~100-200ms)
+      // This eliminates race conditions between local and WebSocket updates
 
       // Place bet via WebSocket for game logic with retry
       await retryWithBackoff(
@@ -183,8 +179,8 @@ const PlayerGame: React.FC = () => {
         }
       );
     } catch (error: any) {
-      // Revert balance if bet fails
-      updateBalance(userBalance, 'local');
+      // ✅ FIX: Removed balance revert on error
+      // Balance is managed by WebSocket only - no local manipulation needed
       console.error('Failed to place bet:', error);
       
       // Provide better error messages
@@ -318,7 +314,7 @@ const PlayerGame: React.FC = () => {
       const response = await apiClient.get<{ success: boolean; bets: any[] }>('/api/user/last-game-bets');
       if (response.success && response.bets.length > 0) {
         for (const bet of response.bets) {
-          await handlePlaceBet(bet.side, bet.amount);
+          await handlePlaceBet(bet.side);
         }
         showNotification('Rebet placed successfully', 'success');
       } else {
@@ -523,6 +519,4 @@ const PlayerGame: React.FC = () => {
       />)}
     </div>
   );
-};
-
-export default PlayerGame;
+}

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { storage } from '../storage-supabase';
+import { transformRealtimeStats } from '../utils/data-transformers';
 
 /**
  * GET /api/admin/statistics
@@ -21,7 +22,8 @@ export const getAdminStatistics = async (req: Request, res: Response) => {
         activeUsers,
         totalBetsAllTime: allTimeStats.totalBets,
         totalPayoutsAllTime: allTimeStats.totalPayouts,
-        netHouseProfitAllTime: allTimeStats.netHouseProfit
+        netHouseProfitAllTime: allTimeStats.totalRevenue,
+        profitLossPercentage: allTimeStats.profitLossPercentage
       }
     });
   } catch (error: any) {
@@ -66,9 +68,9 @@ export const getAdminAnalytics = async (req: Request, res: Response) => {
         totalBets: stats.totalBets,
         totalPayouts: stats.totalPayouts,
         profitLoss: stats.profitLoss,
-        netHouseProfit: stats.netHouseProfit,
-        totalPlayerWinnings: stats.totalPlayerWinnings,
-        totalPlayerLosses: stats.totalPlayerLosses
+        profitLossPercentage: stats.profitLossPercentage,
+        totalRevenue: stats.totalRevenue,
+        uniquePlayers: stats.uniquePlayers
       }
     });
   } catch (error: any) {
@@ -95,7 +97,9 @@ export const getAdminAllTimeAnalytics = async (req: Request, res: Response) => {
         totalBets: stats.totalBets,
         totalPayouts: stats.totalPayouts,
         profitLoss: stats.profitLoss,
-        netHouseProfit: stats.netHouseProfit
+        profitLossPercentage: stats.profitLossPercentage,
+        totalRevenue: stats.totalRevenue,
+        uniquePlayers: stats.uniquePlayers
       }
     });
   } catch (error: any) {
@@ -103,6 +107,32 @@ export const getAdminAllTimeAnalytics = async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve all-time analytics'
+    });
+  }
+};
+
+/**
+ * GET /api/admin/realtime-stats
+ * Returns real-time game statistics
+ */
+export const getAdminRealtimeStats = async (req: Request, res: Response) => {
+  try {
+    const stats = await storage.getRealtimeGameStats();
+    const transformed = transformRealtimeStats(stats);
+
+    res.json({
+      success: true,
+      data: transformed
+    });
+  } catch (error: any) {
+    console.error('Get admin realtime stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve realtime statistics',
+      data: {
+        currentGame: null,
+        connected: false
+      }
     });
   }
 };

@@ -43,6 +43,8 @@ import {
 
     getAdminAllTimeAnalytics,
 
+    getAdminRealtimeStats,
+
     getAdminBonusTransactions,
 
     getAdminReferralData,
@@ -304,6 +306,8 @@ router.get('/statistics', getAdminStatistics);
 router.get('/analytics', getAdminAnalytics);
 
 router.get('/analytics/all-time', getAdminAllTimeAnalytics);
+
+router.get('/realtime-stats', getAdminRealtimeStats);
 
 // Bonus routes
 
