@@ -497,6 +497,25 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     console.log(`   - Total critical path: ${totalCriticalPath}ms`);
     console.log(`   - Race condition risk: ${timeSincePayoutStart < 100 ? 'HIGH' : timeSincePayoutStart < 200 ? 'MEDIUM' : 'LOW'}`);
   }
+  
+  // ✅ CRITICAL FIX: Broadcast game state to admin IMMEDIATELY after completion
+  // This ensures admin panel updates even if there are no bets or history save fails
+  broadcastToRole({
+    type: 'game_state',
+    data: {
+      phase: 'complete',
+      currentRound: gameState.currentRound,
+      winner: winningSide,
+      winningCard: winningCard,
+      round1Bets: gameState.round1Bets,
+      round2Bets: gameState.round2Bets,
+      andarCards: gameState.andarCards,
+      baharCards: gameState.baharCards,
+      openingCard: gameState.openingCard,
+      bettingLocked: true
+    }
+  }, 'admin');
+  console.log('✅ Broadcasted game_state to admin panel (phase: complete)');
 
   // STEP 4: Save game history to database with comprehensive analytics (ASYNC - NON-BLOCKING)
   // ✅ CRITICAL: This runs in background and doesn't block player notifications
@@ -909,7 +928,25 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
   // The game state will be reset when admin clicks "Start New Game" button
   // This allows admin to see the "Start New Game" button and players to see celebration
   
+  // ✅ FIX: Broadcast game state to admin so they see "Start New Game" button
+  broadcastToRole({
+    type: 'game_state',
+    data: {
+      phase: 'complete',
+      currentRound: gameState.currentRound,
+      winner: winningSide,
+      winningCard: winningCard,
+      round1Bets: gameState.round1Bets,
+      round2Bets: gameState.round2Bets,
+      andarCards: gameState.andarCards,
+      baharCards: gameState.baharCards,
+      openingCard: gameState.openingCard,
+      bettingLocked: true
+    }
+  }, 'admin');
+  
   console.log('✅ Game completed - state kept in "complete" phase until admin starts new game');
+  console.log('✅ Broadcasted game state to admin panel');
   console.log(`⏱️ Game history/stats saved in ${Date.now() - historyStartTime}ms (background)`);
   }; // End of saveGameDataAsync
   
