@@ -5390,57 +5390,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.get("/api/user/balance", async (req, res) => {
-    try {
-      // The unified requireAuth middleware should have set req.user
-      if (!req.user || !req.user.id) {
-        console.log("Balance endpoint - No authenticated user found");
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication required'
-        });
-      }
-
-      const userId = req.user.id;
-      console.log(`Balance endpoint - Fetching balance for user: ${userId} (role: ${req.user.role})`);
-
-      // Handle admin users differently - they don't have game balance
-      if (req.user.role === 'admin' || req.user.role === 'super_admin') {
-        console.log(`Balance endpoint - Admin user ${userId} requested balance, returning 0`);
-        return res.json({
-          success: true,
-          balance: 0,
-          message: 'Admin users do not have game balance'
-        });
-      }
-
-      // Lookup user in database for regular users
-      const user = await storage.getUser(userId);
-
-      if (!user) {
-        console.log(`Balance endpoint - User not found: ${userId}`);
-        return res.status(404).json({
-          success: false,
-          error: 'User not found'
-        });
-      }
-
-      // Balance is already a number from getUser() - no need to parse
-      const balance = Number(user.balance) || 0;
-      console.log(`Balance endpoint - Retrieved balance for ${userId}: ${balance}`);
-
-      res.json({
-        success: true,
-        balance: balance
-      });
-    } catch (error) {
-      console.error("Get balance error:", error);
-      res.status(500).json({
-        success: false,
-        error: "Failed to get balance"
-      });
-    }
-  });
+  // ❌ REMOVED: Duplicate /api/user/balance endpoint (already defined at line 4864)
+  // The first definition with requireAuth middleware is the correct one
 
   // Balance notification endpoint for WebSocket updates
   app.post("/api/user/balance-notify", async (req, res) => {
