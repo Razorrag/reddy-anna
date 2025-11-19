@@ -198,10 +198,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         if (videoElement && hls && hls.liveSyncPosition && !isPausedState) {
           const currentLatency = hls.liveSyncPosition - videoElement.currentTime;
           
-          // 🔧 SMART JUMP: Only jump if >2s behind to avoid black screens
-          if (currentLatency > 2 && isFinite(hls.liveSyncPosition)) {
-            console.log(`⚡ Visibility recovery: ${currentLatency.toFixed(2)}s behind, jumping to live...`);
+          // 🔧 OPTIMIZED: Jump if >3s behind (allows natural HLS recovery for smaller drifts)
+          if (currentLatency > 3 && isFinite(hls.liveSyncPosition)) {
+            console.log(`⚡ Visibility: ${currentLatency.toFixed(2)}s behind, seeking to live...`);
             videoElement.currentTime = hls.liveSyncPosition;
+          } else if (currentLatency > 0) {
+            console.log(`✅ Visibility: ${currentLatency.toFixed(2)}s behind (within acceptable range)`);
           }
         }
       }
@@ -300,73 +302,69 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           hlsRef.current.destroy();
         }
 
-        // Create HLS instance - OPTIMIZED FOR 2-3s LATENCY WITH ZERO STUTTERING
+        // Create HLS instance - ULTRA-LOW LATENCY (1-2s target)
         const hls = new Hls({
-          // 🔧 STUTTER FIX: Balanced settings for smooth playback at 2-3s latency
+          // 🚀 ULTRA-LOW LATENCY: Aggressive settings for 1-2s latency
           // Server: 1s segments with 1s GOP (perfect alignment)
-          // Client: 2s behind live with 15s buffer for smoothness
+          // Client: 1s behind live with minimal buffer
           
-          // Core latency settings - balanced for smooth playback
-          liveSyncDurationCount: 2,           // 🔧 Stay 2 segments (2s) behind live
-          liveMaxLatencyDurationCount: 5,     // 🔧 Allow up to 5s drift before seeking
+          // Core latency settings - ultra-low latency mode
+          liveSyncDurationCount: 1,           // 🚀 Stay only 1 segment (1s) behind live
+          liveMaxLatencyDurationCount: 3,     // 🚀 Max 3s drift before seeking
           liveDurationInfinity: true,         // Treat as infinite live stream
           
-          // Buffer settings - optimized for smooth playback without stuttering
-          maxBufferLength: 15,                // 15s forward buffer (smooth transitions)
-          maxMaxBufferLength: 20,             // Hard limit 20s
-          maxBufferSize: 60 * 1000 * 1000,    // 60MB
-          maxBufferHole: 0.5,                 // Skip gaps up to 0.5s without rebuffering
+          // Buffer settings - minimal for low latency
+          maxBufferLength: 6,                 // 🚀 Only 6s forward buffer (minimal)
+          maxMaxBufferLength: 10,             // Hard limit 10s
+          maxBufferSize: 30 * 1000 * 1000,    // 30MB (reduced)
+          maxBufferHole: 0.3,                 // Skip gaps up to 0.3s
           
-          // Gentle catch-up (barely noticeable)
-          maxLiveSyncPlaybackRate: 1.05,      // 🔧 5% speed-up when catching up
+          // Aggressive catch-up for low latency
+          maxLiveSyncPlaybackRate: 1.1,       // 🚀 10% speed-up when catching up
           
           // Monitoring optimized for 1s segments
-          highBufferWatchdogPeriod: 2,        // Check buffer every 2s
-          nudgeMaxRetry: 20,
-          nudgeOffset: 0.1,
+          highBufferWatchdogPeriod: 1,        // Check buffer every 1s (faster)
+          nudgeMaxRetry: 10,                  // Fewer retries (fail fast)
+          nudgeOffset: 0.05,                  // Smaller nudge
           
           // Performance optimization
           enableWorker: true,
-          lowLatencyMode: true,               // Keep enabled for responsiveness
-          backBufferLength: 5,                // Keep 5s back buffer
+          lowLatencyMode: true,               // Critical for low latency
+          backBufferLength: 3,                // Keep only 3s back buffer
           
           // Network resilience - VPS caching makes segments instantly available
-          manifestLoadingTimeOut: 10000,      // 10s timeout (VPS responds fast)
-          manifestLoadingMaxRetry: 5,         // Fewer retries needed (VPS cache reliable)
-          levelLoadingTimeOut: 10000,
-          fragLoadingTimeOut: 15000,          // 15s timeout for 1s segments
-          fragLoadingMaxRetry: 8,
-          fragLoadingRetryDelay: 500,         // Quick retry (VPS cache fast)
+          manifestLoadingTimeOut: 5000,       // 5s timeout (fail fast)
+          manifestLoadingMaxRetry: 3,         // Fewer retries (VPS is fast)
+          levelLoadingTimeOut: 5000,
+          fragLoadingTimeOut: 8000,           // 8s timeout for 1s segments
+          fragLoadingMaxRetry: 4,             // Fewer retries
+          fragLoadingRetryDelay: 300,         // Quick retry (VPS cache fast)
           
           // Quality selection
           startLevel: -1,                     // Auto quality selection
-          abrEwmaDefaultEstimate: 1000000,    // Higher estimate (VPS has good bandwidth)
+          abrEwmaDefaultEstimate: 2000000,    // Higher estimate for VPS
         });
 
         hls.loadSource(streamUrl);
         hls.attachMedia(videoElement);
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          console.log('✅ HLS manifest loaded, jumping to LIVE edge...');
+          console.log('✅ HLS manifest loaded, starting playback...');
           
-          // 🚀 CRITICAL: Always start from LIVE edge on load/refresh
-          // This ensures no black screen and no delayed stream
-          const seekToLive = () => {
-            if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
-              videoElement.currentTime = hls.liveSyncPosition;
-              console.log(`📍 Jumped to live edge: ${hls.liveSyncPosition.toFixed(2)}s`);
-            }
-          };
-          
-          // Seek to live immediately when metadata loads
-          videoElement.addEventListener('loadedmetadata', seekToLive, { once: true });
-          
-          // Start playback
+          // Start playback - HLS.js will automatically position at live edge
           videoElement.play().catch(err => {
             console.error('❌ HLS initial play failed:', err);
             videoElement.muted = true;
             videoElement.play().catch(e => console.error('❌ HLS muted play failed:', e));
           });
+        });
+        
+        // 🚀 OPTIMAL: Seek to live when first fragment loads (has buffer)
+        hls.on(Hls.Events.FRAG_LOADED, () => {
+          if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition) && videoElement.currentTime === 0) {
+            videoElement.currentTime = hls.liveSyncPosition;
+            console.log(`📍 Initial seek to live: ${hls.liveSyncPosition.toFixed(2)}s`);
+          }
         });
         
         // ✅ REMOVED: BUFFER_APPENDED auto-recovery - was causing stuttering
@@ -595,30 +593,47 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         }, 100);
       }
     } else {
-      // 🔧 SAFE RESUME: Jump to live with validation
+      // 🔧 OPTIMIZED RESUME: Immediate live jump with event-driven approach
       if (videoElement && hlsRef.current && streamConfig?.streamUrl?.includes('.m3u8')) {
         console.log('▶️ Resuming HLS stream...');
         
         // Clear frozen frame
         setFrozenFrame(null);
         
-        // Resume loading segments
-        hlsRef.current.startLoad();
+        const hls = hlsRef.current;
         
-        // Wait briefly for HLS to stabilize, then seek to live
-        setTimeout(() => {
-          if (hlsRef.current?.liveSyncPosition && isFinite(hlsRef.current.liveSyncPosition)) {
-            videoElement.currentTime = hlsRef.current.liveSyncPosition;
-            console.log(`📍 Resumed at live edge: ${hlsRef.current.liveSyncPosition.toFixed(2)}s`);
+        // Resume loading segments
+        hls.startLoad();
+        
+        // Event-driven approach: seek when fragment is loaded (no delay)
+        const handleFragLoaded = () => {
+          if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
+            videoElement.currentTime = hls.liveSyncPosition;
+            console.log(`📍 Resume: jumped to live ${hls.liveSyncPosition.toFixed(2)}s`);
           }
+          hls.off(Hls.Events.FRAG_LOADED, handleFragLoaded);
+        };
+        
+        // If already has position, seek immediately
+        if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
+          videoElement.currentTime = hls.liveSyncPosition;
+          console.log(`📍 Resume: immediate jump to ${hls.liveSyncPosition.toFixed(2)}s`);
           
-          // Start playback
           videoElement.play().catch(err => {
             console.error('❌ Resume play failed:', err);
             videoElement.muted = true;
             videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
           });
-        }, 200);
+        } else {
+          // Wait for fragment to load (event-driven, no setTimeout)
+          hls.once(Hls.Events.FRAG_LOADED, handleFragLoaded);
+          
+          videoElement.play().catch(err => {
+            console.error('❌ Resume play failed:', err);
+            videoElement.muted = true;
+            videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
+          });
+        }
       }
       
       if (iframeElement && streamConfig?.streamUrl) {
