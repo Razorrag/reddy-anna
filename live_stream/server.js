@@ -33,9 +33,10 @@ const config = {
       {
         app: 'live',
         hls: true,
-        // LOW LATENCY & STABLE: 1s segments x 3 = 3s buffer
-        // Transcoding ensures 1s GOP (Keyframes) for precise segmenting
-        hlsFlags: '[hls_time=1:hls_list_size=3:hls_flags=delete_segments+independent_segments:hls_segment_type=mpegts]',
+        // OPTIMIZED: 1s segments x 6 in playlist = 6s cache (prevents 404s on pause/refresh)
+        // NO delete_segments = segments persist for smooth resume
+        // Target latency: 2-3s (1s GOP + 1-2s buffer)
+        hlsFlags: '[hls_time=1:hls_list_size=6:hls_flags=independent_segments:hls_segment_type=mpegts]',
         vc: 'libx264',
         vcParam: [
           '-preset', 'ultrafast',
