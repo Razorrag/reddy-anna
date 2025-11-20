@@ -302,46 +302,51 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           hlsRef.current.destroy();
         }
 
-        // Create HLS instance - BALANCED: Smooth playback with acceptable latency
+        // Create HLS instance - ROCK SOLID: Maximum stability, zero stuttering
         const hls = new Hls({
-          // 🎯 BALANCED SETTINGS: 3-4s latency with zero stuttering
-          // Provides enough buffer for network variations while staying reasonably live
+          // 🎯 ROCK SOLID SETTINGS: Prioritize smooth playback over latency
+          // Maximum buffer and tolerance for perfect stability
 
-          // Core latency settings - balanced for stability
-          liveSyncDurationCount: 3,           // Stay 3 segments (3s) behind live - stable
-          liveMaxLatencyDurationCount: 6,     // Max 6s drift before seeking - room for jitter
+          // Core latency settings - maximum stability
+          liveSyncDurationCount: 4,           // Stay 4 segments (4s) behind live - very stable
+          liveMaxLatencyDurationCount: 10,    // Max 10s drift before seeking - huge tolerance
           liveDurationInfinity: true,         // Treat as infinite live stream
 
-          // Buffer settings - enough for smooth playback
-          maxBufferLength: 10,                // 10s forward buffer - prevents stuttering
-          maxMaxBufferLength: 15,             // Hard limit 15s - good safety margin
-          maxBufferSize: 60 * 1000 * 1000,    // 60MB - plenty of headroom
-          maxBufferHole: 0.5,                 // Skip gaps up to 0.5s
+          // Buffer settings - MAXIMUM for zero stuttering
+          maxBufferLength: 20,                // 20s forward buffer - eliminates all stuttering
+          maxMaxBufferLength: 30,             // Hard limit 30s - massive safety margin
+          maxBufferSize: 120 * 1000 * 1000,   // 120MB - huge headroom
+          maxBufferHole: 1.0,                 // Skip gaps up to 1s
 
-          // Moderate catch-up for smooth experience
-          maxLiveSyncPlaybackRate: 1.05,      // 5% speed-up - barely noticeable
+          // Very gentle catch-up - smooth as silk
+          maxLiveSyncPlaybackRate: 1.02,      // Only 2% speed-up - completely unnoticeable
 
-          // Monitoring optimized for stability
-          highBufferWatchdogPeriod: 2,        // Check buffer every 2s
-          nudgeMaxRetry: 3,                   // Conservative retries
-          nudgeOffset: 0.1,                   // Standard nudge
+          // Monitoring optimized for maximum stability
+          highBufferWatchdogPeriod: 3,        // Check buffer every 3s - less aggressive
+          nudgeMaxRetry: 2,                   // Minimal retries - let buffer handle it
+          nudgeOffset: 0.2,                   // Larger nudge - smoother adjustments
 
           // Performance optimization
           enableWorker: true,
-          lowLatencyMode: false,              // Disabled for stability
-          backBufferLength: 10,               // 10s back buffer for seeking
+          lowLatencyMode: false,              // Disabled for maximum stability
+          backBufferLength: 15,               // 15s back buffer for seeking
 
-          // Network resilience - generous timeouts
-          manifestLoadingTimeOut: 10000,      // 10s timeout
-          manifestLoadingMaxRetry: 6,         // More retries for reliability
-          levelLoadingTimeOut: 10000,
-          fragLoadingTimeOut: 20000,          // 20s timeout - very tolerant
-          fragLoadingMaxRetry: 6,             // More retries
-          fragLoadingRetryDelay: 1000,        // 1s retry delay
+          // Network resilience - ULTRA generous timeouts
+          manifestLoadingTimeOut: 20000,      // 20s timeout
+          manifestLoadingMaxRetry: 10,        // Maximum retries for bulletproof reliability
+          levelLoadingTimeOut: 20000,
+          fragLoadingTimeOut: 30000,          // 30s timeout - ultra tolerant
+          fragLoadingMaxRetry: 10,            // Maximum retries
+          fragLoadingRetryDelay: 2000,        // 2s retry delay - patient
 
           // Quality selection
           startLevel: -1,                     // Auto quality selection
-          abrEwmaDefaultEstimate: 2000000,    // Reasonable estimate
+          abrEwmaDefaultEstimate: 2500000,    // Higher estimate for better quality
+
+          // Additional stability settings
+          abrBandWidthFactor: 0.8,            // Conservative bandwidth usage
+          abrBandWidthUpFactor: 0.7,          // Slow quality increases
+          capLevelToPlayerSize: false,        // Don't limit quality by player size
         });
 
         hls.loadSource(streamUrl);
@@ -566,53 +571,70 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     const iframeElement = iframeRef.current;
 
     if (isPausedState) {
-      // PAUSE: Capture HLS frame and pause (NO buffer clearing for smooth resume)
-      if (videoElement) {
-        // ✅ FIX: Try to capture frame, but handle case where video isn't ready yet
+      // PAUSE: Capture frame FIRST, pause video immediately, keep buffer
+      if (videoElement && streamConfig?.streamUrl?.includes('.m3u8')) {
+        // ✅ Capture frame first
         const captured = captureCurrentFrame();
 
-        if (!captured && streamConfig?.streamUrl?.includes('.m3u8')) {
+        if (!captured) {
           // Video not ready yet (e.g., page refresh during pause)
           console.log('⏳ Video not ready for capture - will wait for it to load');
           setWaitingForVideoOnPause(true);
-          // The useEffect above will handle capturing when ready
           return;
         }
 
-        // Simply stop loading and pause - keep buffer intact for quick resume
+        // ✅ CRITICAL: Pause video IMMEDIATELY to show frozen frame
+        videoElement.pause();
+
+        // Then stop loading (but keep buffer intact)
         if (hlsRef.current) {
-          console.log('🛑 Stopping HLS load (keeping buffer for smooth resume)...');
+          console.log('🛑 Pausing stream (buffer preserved for instant resume)...');
           hlsRef.current.stopLoad();
         }
 
-        // Pause video to save bandwidth
-        videoElement.pause();
-        console.log('✅ Stream paused with frozen frame (buffer preserved)');
+        console.log('✅ Stream paused with frozen frame');
+      } else if (videoElement) {
+        // For non-HLS streams (iframe, etc.)
+        const captured = captureCurrentFrame();
+        if (captured) {
+          videoElement.pause();
+        }
       }
     } else {
-      // 🎯 SMOOTH RESUME: Simple restart from live edge
+      // 🎯 INSTANT RESUME: Ultra-fast resume with pre-loaded buffer
       if (videoElement && hlsRef.current && streamConfig?.streamUrl?.includes('.m3u8')) {
-        console.log('▶️ Resuming HLS stream...');
-
-        // Clear frozen frame
-        setFrozenFrame(null);
+        console.log('▶️ Resuming stream from live edge...');
 
         const hls = hlsRef.current;
 
-        // Simply restart loading from live edge
+        // Clear frozen frame first
+        setFrozenFrame(null);
+
+        // Resume loading from live edge
         hls.startLoad(-1);
 
-        // Play video
-        videoElement.play().catch(err => {
-          console.error('❌ Resume play failed:', err);
-          videoElement.muted = true;
-          videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
-        });
+        // Small delay to let buffer fill a bit (prevents initial stutter)
+        setTimeout(() => {
+          // Seek to live position for instant catch-up
+          if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
+            videoElement.currentTime = hls.liveSyncPosition;
+            console.log(`📍 Jumped to live: ${hls.liveSyncPosition.toFixed(2)}s`);
+          }
 
-        console.log('✅ Stream resumed smoothly');
+          // Play video
+          videoElement.play().catch(err => {
+            console.error('❌ Resume play failed:', err);
+            videoElement.muted = true;
+            videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
+          });
+
+          console.log('✅ Stream resumed to live edge');
+        }, 100); // 100ms delay for buffer
       }
 
-      if (iframeElement && streamConfig?.streamUrl) {
+      // Handle iframe resume
+      if (iframeElement && streamConfig?.streamUrl && !streamConfig.streamUrl.includes('.m3u8')) {
+        setFrozenFrame(null);
         iframeElement.src = iframeElement.src; // Refresh iframe
       }
     }

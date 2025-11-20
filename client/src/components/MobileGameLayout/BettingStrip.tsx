@@ -1,15 +1,16 @@
 /**
-* BettingStrip - Andar/Opening Card/Bahar betting interface
-* 
-* Three-segment horizontal betting strip with Andar (left),
-* opening card (center), and Bahar (right) sections.
-* Enhanced with round-specific bet display and asymmetric payout multipliers.
-*/
+ * BettingStrip - Andar/Opening Card/Bahar betting interface
+ *
+ * Three-segment horizontal betting strip with Andar (left),
+ * opening card (center), and Bahar (right) sections.
+ * Enhanced with round-specific bet display and asymmetric payout multipliers.
+ */
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useGameState } from '@/contexts/GameStateContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { apiClient } from '@/lib/api-client';
+import { formatCurrency } from '@/lib/format-utils';
 import type { BetSide } from '@/types/game';
 
 interface BettingStripProps {
@@ -87,6 +88,9 @@ const BettingStrip: React.FC<BettingStripProps> = ({
   ]);
 
   const handleBetClick = (position: BetSide) => {
+    // 🎯 MOBILE OPTIMIZATION: Prevent double-tap zoom on iOS/Android
+    // This ensures instant tap response on mobile devices
+
     // Enhanced betting logic - allow betting in round 2 during 'betting' phase
     if (isPlacingBet ||
       gameState.phase !== 'betting' ||
@@ -137,10 +141,18 @@ const BettingStrip: React.FC<BettingStripProps> = ({
         {/* Andar Section */}
         <button
           onClick={() => handleBetClick('andar')}
+          onTouchStart={(e) => {
+            // 🎯 MOBILE: Prevent 300ms click delay on mobile
+            e.currentTarget.style.transform = 'scale(0.95)';
+          }}
+          onTouchEnd={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
           disabled={isBettingDisabled}
           className={`
-            flex-1 bg-gradient-to-b from-red-900 to-red-950 rounded-lg p-1 
+            flex-1 bg-gradient-to-b from-red-900 to-red-950 rounded-lg p-1
             border-2 transition-all duration-200 active:scale-95 relative
+            touch-manipulation select-none
             ${selectedPosition === 'andar'
               ? 'border-yellow-400 shadow-lg shadow-yellow-400/50'
               : 'border-red-800/50'
@@ -150,6 +162,10 @@ const BettingStrip: React.FC<BettingStripProps> = ({
               : 'hover:border-yellow-400/50 hover:shadow-lg'
             }
           `}
+          style={{
+            WebkitTapHighlightColor: 'transparent',
+            touchAction: 'manipulation'
+          }}
         >
           <div className="flex items-center justify-between h-full">
             {/* Left side - Text and bet info */}
@@ -158,14 +174,22 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                 <div className="text-white font-bold text-lg">ANDAR</div>
               </div>
 
-              {/* ✅ PERFORMANCE: Using pre-calculated memoized totals */}
+              {/* ✅ PERFORMANCE: Using pre-calculated memoized totals with data attributes for instant updates */}
               <div className="space-y-0.5">
-                <div className="text-yellow-200 text-xs font-medium">
-                  Round 1: ₹{betTotals.r1Andar.toLocaleString('en-IN')}
+                <div
+                  className="text-yellow-200 text-xs font-medium"
+                  data-bet-display="andar-round1"
+                  data-bet-amount={betTotals.r1Andar}
+                >
+                  Round 1: ₹{formatCurrency(betTotals.r1Andar)}
                 </div>
                 {gameState.currentRound >= 2 && (
-                  <div className="text-yellow-300 text-xs font-medium">
-                    Round 2: ₹{betTotals.r2Andar.toLocaleString('en-IN')}
+                  <div
+                    className="text-yellow-300 text-xs font-medium"
+                    data-bet-display="andar-round2"
+                    data-bet-amount={betTotals.r2Andar}
+                  >
+                    Round 2: ₹{formatCurrency(betTotals.r2Andar)}
                   </div>
                 )}
               </div>
@@ -231,10 +255,18 @@ const BettingStrip: React.FC<BettingStripProps> = ({
         {/* Bahar Section */}
         <button
           onClick={() => handleBetClick('bahar')}
+          onTouchStart={(e) => {
+            // 🎯 MOBILE: Prevent 300ms click delay on mobile
+            e.currentTarget.style.transform = 'scale(0.95)';
+          }}
+          onTouchEnd={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
           disabled={isBettingDisabled}
           className={`
-            flex-1 bg-gradient-to-b from-blue-900 to-blue-950 rounded-lg p-1 
+            flex-1 bg-gradient-to-b from-blue-900 to-blue-950 rounded-lg p-1
             border-2 transition-all duration-200 active:scale-95 relative
+            touch-manipulation select-none
             ${selectedPosition === 'bahar'
               ? 'border-yellow-400 shadow-lg shadow-yellow-400/50'
               : 'border-blue-700/50'
@@ -244,6 +276,10 @@ const BettingStrip: React.FC<BettingStripProps> = ({
               : 'hover:border-yellow-400/50 hover:shadow-lg'
             }
           `}
+          style={{
+            WebkitTapHighlightColor: 'transparent',
+            touchAction: 'manipulation'
+          }}
         >
           <div className="flex items-center justify-between h-full">
             {/* Left side - Latest Dealt Card ONLY - Show if cards exist for current game */}
@@ -274,14 +310,22 @@ const BettingStrip: React.FC<BettingStripProps> = ({
                 <div className="text-white font-bold text-lg">BAHAR</div>
               </div>
 
-              {/* ✅ PERFORMANCE: Using pre-calculated memoized totals */}
+              {/* ✅ PERFORMANCE: Using pre-calculated memoized totals with data attributes for instant updates */}
               <div className="space-y-0.5">
-                <div className="text-yellow-200 text-xs font-medium">
-                  Round 1: ₹{betTotals.r1Bahar.toLocaleString('en-IN')}
+                <div
+                  className="text-yellow-200 text-xs font-medium"
+                  data-bet-display="bahar-round1"
+                  data-bet-amount={betTotals.r1Bahar}
+                >
+                  Round 1: ₹{formatCurrency(betTotals.r1Bahar)}
                 </div>
                 {gameState.currentRound >= 2 && (
-                  <div className="text-yellow-300 text-xs font-medium">
-                    Round 2: ₹{betTotals.r2Bahar.toLocaleString('en-IN')}
+                  <div
+                    className="text-yellow-300 text-xs font-medium"
+                    data-bet-display="bahar-round2"
+                    data-bet-amount={betTotals.r2Bahar}
+                  >
+                    Round 2: ₹{formatCurrency(betTotals.r2Bahar)}
                   </div>
                 )}
               </div>

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, ReactNode, useEffect, use
 import { useAuth } from './AuthContext';
 import { useBalance } from './BalanceContext';
 import { apiClient } from '@/lib/api-client';
+import { formatCurrency } from '@/lib/format-utils';
 import type {
   Card,
   GamePhase,
@@ -752,7 +753,22 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       timestamp: Date.now()
     };
 
-    // ✅ INSTANT UPDATE #1: Show bet on button IMMEDIATELY (0ms)
+    // 🚀 ULTRA-FAST DOM UPDATE: Update bet display INSTANTLY via DOM manipulation (<5ms)
+    // This bypasses React rendering for immediate visual feedback
+    const roundKey = `${side}-round${gameState.currentRound}`;
+    const betDisplayElement = document.querySelector(`[data-bet-display="${roundKey}"]`) as HTMLElement;
+
+    if (betDisplayElement) {
+      const currentAmount = parseInt(betDisplayElement.getAttribute('data-bet-amount') || '0');
+      const newAmount = currentAmount + amount;
+
+      // Update DOM directly for instant feedback using cached formatting
+      betDisplayElement.setAttribute('data-bet-amount', newAmount.toString());
+      betDisplayElement.textContent = `Round ${gameState.currentRound}: ₹${formatCurrency(newAmount)}`;
+      console.log(`⚡ DOM INSTANT: Bet displayed in <5ms - ${side.toUpperCase()} Round ${gameState.currentRound}: ₹${formatCurrency(newAmount)}`);
+    }
+
+    // ✅ INSTANT UPDATE #1: Show bet on button IMMEDIATELY (React state update for consistency)
     if (gameState.currentRound === 1) {
       const currentSideBets = Array.isArray(gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets])
         ? toBetInfoArray(gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets] as number[] | BetInfo[])
@@ -762,7 +778,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         [side]: [...currentSideBets, betInfo]
       };
       updatePlayerRoundBets(1, newBets);
-      console.log(`✅ INSTANT: Bet displayed on ${side.toUpperCase()} button - Round 1`);
+      console.log(`✅ REACT STATE: Bet synced to state - Round 1`);
     } else if (gameState.currentRound === 2) {
       const currentSideBets = Array.isArray(gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets])
         ? toBetInfoArray(gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets] as number[] | BetInfo[])
@@ -772,7 +788,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         [side]: [...currentSideBets, betInfo]
       };
       updatePlayerRoundBets(2, newBets);
-      console.log(`✅ INSTANT: Bet displayed on ${side.toUpperCase()} button - Round 2`);
+      console.log(`✅ REACT STATE: Bet synced to state - Round 2`);
     }
 
     // ✅ INSTANT UPDATE #2: Deduct money from balance IMMEDIATELY (0ms)

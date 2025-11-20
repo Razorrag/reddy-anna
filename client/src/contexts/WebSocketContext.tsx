@@ -688,7 +688,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
         // Clear cards and bets from previous game
         clearCards();
-        clearRoundBets();
+        clearRoundBets(1);  // Clear round 1 bets
+        clearRoundBets(2);  // Clear round 2 bets
         setWinner(null);
         setWinningCard(null);
 
