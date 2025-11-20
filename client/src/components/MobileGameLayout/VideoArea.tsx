@@ -44,7 +44,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [frozenFrame, setFrozenFrame] = useState<string | null>(null);
   const [isPausedState, setIsPausedState] = useState(false);
-  
+
   // ✅ FIX: Track if we're waiting for video to load during paused state
   const [waitingForVideoOnPause, setWaitingForVideoOnPause] = useState(false);
 
@@ -87,7 +87,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // ✅ CRITICAL FIX: Move loadStreamConfig to component scope so it can be reused
   const loadStreamConfig = useCallback(async () => {
     try {
-      console.log('🔍 VideoArea: Fetching stream config from /api/stream/simple-config...'); 
+      console.log('🔍 VideoArea: Fetching stream config from /api/stream/simple-config...');
       const response = await fetch('/api/stream/simple-config');
       const data = await response.json();
       console.log('🔍 VideoArea: API Response:', data);
@@ -98,7 +98,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         if (streamUrl) {
           // ✅ Convert Google Drive URLs to embed format
           if (streamUrl.includes('drive.google.com')) {
-            console.log('🔍 Detected Google Drive URL, converting to embed format...');      
+            console.log('🔍 Detected Google Drive URL, converting to embed format...');
 
             let fileId = null;
 
@@ -126,13 +126,13 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
           // ✅ CRITICAL: If site is HTTP, downgrade HTTPS URLs to HTTP to avoid blocking    
           if (currentProtocol === 'http:' && streamUrl.startsWith('https://')) {
-            console.log('⚠️ Site is HTTP but stream URL is HTTPS, downgrading to HTTP...');  
+            console.log('⚠️ Site is HTTP but stream URL is HTTPS, downgrading to HTTP...');
             streamUrl = streamUrl.replace('https://', 'http://');
             console.log('🔄 Downgraded stream URL to:', streamUrl);
           }
           // If site is HTTPS but stream URL is HTTP, try to upgrade to HTTPS
           // ❌ EXCEPTION: Do NOT upgrade IP addresses (they usually don't have SSL)
-          else if (currentProtocol === 'https:' && streamUrl.startsWith('http://')) {        
+          else if (currentProtocol === 'https:' && streamUrl.startsWith('http://')) {
             const isIpAddress = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(new URL(streamUrl).hostname);
 
             if (!isIpAddress) {
@@ -183,21 +183,21 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   useEffect(() => {
     console.log('🔄 VideoArea mounted - loading stream config...');
     loadStreamConfig();
-    
+
     // ✅ FIX #1: Handle page visibility changes to keep stream at live edge
     const handleVisibilityChange = () => {
       if (document.hidden) {
         console.log('📴 Page hidden - stream will continue buffering');
       } else {
         console.log('👁️ Page visible again - checking stream position...');
-        
+
         // If HLS stream is playing, jump to live edge if we've drifted
         const videoElement = videoRef.current;
         const hls = hlsRef.current;
-        
+
         if (videoElement && hls && hls.liveSyncPosition) {
           const currentLatency = hls.liveSyncPosition - videoElement.currentTime;
-          
+
           // 🔧 CRITICAL FIX: Only seek if NOT paused AND >3s behind
           if (!isPausedState && currentLatency > 3 && isFinite(hls.liveSyncPosition)) {
             console.log(`⚡ Visibility: ${currentLatency.toFixed(2)}s behind, seeking to live...`);
@@ -208,9 +208,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         }
       }
     };
-    
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
@@ -248,15 +248,15 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     const handleStreamStatusUpdate = async (event: Event) => {
       const customEvent = event as CustomEvent;
       const { isPaused: newPauseState } = customEvent.detail || {};
-      
+
       console.log('⚡ [WS] Stream status update received!', { newPauseState });
-      
+
       // ✅ CRITICAL: Update pause state immediately (sync)
       if (typeof newPauseState === 'boolean') {
         console.log(`🎬 Setting pause state to: ${newPauseState}`);
         setIsPausedState(newPauseState);
       }
-      
+
       // ✅ Then refetch full config in background (async) for other settings
       // This ensures pause state updates instantly without waiting for API
       loadStreamConfig();
@@ -307,31 +307,31 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           // 🚀 ULTRA-LOW LATENCY: Aggressive settings for 1-2s latency
           // Server: 1s segments with 1s GOP (perfect alignment)
           // Client: 1s behind live with minimal buffer
-          
-          // Core latency settings - optimized for 2-3s stable latency
-          liveSyncDurationCount: 3,           // 🚀 Stay 3 segments (3s) behind live (stable)
-          liveMaxLatencyDurationCount: 5,     // 🚀 Max 5s drift before seeking
+
+          // Core latency settings - optimized for instant resume
+          liveSyncDurationCount: 2,           // 🚀 Stay 2 segments (2s) behind live (was 3)
+          liveMaxLatencyDurationCount: 4,     // 🚀 Max 4s drift before seeking (was 5)
           liveDurationInfinity: true,         // Treat as infinite live stream
-          
-          // Buffer settings - balanced for stability
-          maxBufferLength: 4,                 // 🚀 Only 4s forward buffer (low latency)
-          maxMaxBufferLength: 6,              // Hard limit 6s
+
+          // Buffer settings - minimal for faster response
+          maxBufferLength: 3,                 // 🚀 Only 3s forward buffer (was 4)
+          maxMaxBufferLength: 5,              // Hard limit 5s (was 6)
           maxBufferSize: 30 * 1000 * 1000,    // 30MB (reduced)
           maxBufferHole: 0.3,                 // Skip gaps up to 0.3s
-          
+
           // Aggressive catch-up for low latency
-          maxLiveSyncPlaybackRate: 1.1,       // 🚀 10% speed-up when catching up
-          
+          maxLiveSyncPlaybackRate: 1.2,       // 🚀 20% speed-up when catching up (was 1.1)
+
           // Monitoring optimized for 1s segments
           highBufferWatchdogPeriod: 1,        // Check buffer every 1s (faster)
           nudgeMaxRetry: 10,                  // Fewer retries (fail fast)
           nudgeOffset: 0.05,                  // Smaller nudge
-          
+
           // Performance optimization
           enableWorker: true,
           lowLatencyMode: true,               // Critical for low latency
           backBufferLength: 0,                // 🚀 No back buffer needed (save memory)
-          
+
           // Network resilience - VPS caching makes segments instantly available
           manifestLoadingTimeOut: 5000,       // 5s timeout (fail fast)
           manifestLoadingMaxRetry: 3,         // Fewer retries (VPS is fast)
@@ -339,7 +339,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           fragLoadingTimeOut: 8000,           // 8s timeout for 1s segments
           fragLoadingMaxRetry: 4,             // Fewer retries
           fragLoadingRetryDelay: 300,         // Quick retry (VPS cache fast)
-          
+
           // Quality selection
           startLevel: -1,                     // Auto quality selection
           abrEwmaDefaultEstimate: 2000000,    // Higher estimate for VPS
@@ -350,7 +350,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           console.log('✅ HLS manifest loaded, starting playback...');
-          
+
           // Start playback - HLS.js will automatically position at live edge
           videoElement.play().catch(err => {
             console.error('❌ HLS initial play failed:', err);
@@ -358,7 +358,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             videoElement.play().catch(e => console.error('❌ HLS muted play failed:', e));
           });
         });
-        
+
         // 🚀 OPTIMAL: Seek to live when first fragment loads (has buffer)
         hls.on(Hls.Events.FRAG_LOADED, () => {
           if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition) && videoElement.currentTime === 0) {
@@ -366,7 +366,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             console.log(`📍 Initial seek to live: ${hls.liveSyncPosition.toFixed(2)}s`);
           }
         });
-        
+
         // ✅ REMOVED: BUFFER_APPENDED auto-recovery - was causing stuttering
         // With 1s GOP aligned to 1s segments, no need for aggressive recovery
         // HLS.js handles buffering naturally, visibility handler manages tab switches
@@ -378,14 +378,14 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             const buffer = videoElement.buffered.length > 0
               ? videoElement.buffered.end(videoElement.buffered.length - 1) - videoElement.currentTime
               : 0;
-            
+
             setDebugStats({
               latency: latency,
               buffer: buffer,
               dropped: videoElement.getVideoPlaybackQuality ? videoElement.getVideoPlaybackQuality().droppedVideoFrames : 0,
               bandwidth: hls.bandwidthEstimate || 0
             });
-            
+
             // Log every 5 seconds
             if (Math.floor(Date.now() / 5000) !== Math.floor((Date.now() - 500) / 5000)) {
               console.log('📊 Stream Stats:', {
@@ -401,7 +401,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (data.fatal) {
             console.error('❌ Fatal HLS error:', data);
-            
+
             // Note: Don't set isPausedState on network errors
             // Only admin can pause the stream via stream settings
 
@@ -523,14 +523,14 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       return false;
     }
   }, []);
-  
+
   // ✅ FIX #2: Retry frame capture when video becomes ready (for refresh during pause)
   useEffect(() => {
     if (waitingForVideoOnPause && isPausedState) {
       const video = videoRef.current;
-      
+
       if (!video) return;
-      
+
       const handleCanPlay = () => {
         console.log('✅ Video ready during pause - capturing frame now');
         const success = captureCurrentFrame();
@@ -538,13 +538,13 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           video.pause();
         }
       };
-      
+
       // Try to capture when video is ready
       if (video.readyState >= 2) {
         handleCanPlay();
       } else {
         video.addEventListener('canplay', handleCanPlay, { once: true });
-        
+
         // Fallback: try again after 1 second
         const timeout = setTimeout(() => {
           if (video.readyState >= 2) {
@@ -552,7 +552,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             video.pause();
           }
         }, 1000);
-        
+
         return () => {
           video.removeEventListener('canplay', handleCanPlay);
           clearTimeout(timeout);
@@ -567,11 +567,11 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     const iframeElement = iframeRef.current;
 
     if (isPausedState) {
-      // PAUSE: Capture HLS frame BEFORE pausing
+      // PAUSE: Capture HLS frame BEFORE pausing + clear buffer
       if (videoElement) {
         // ✅ FIX: Try to capture frame, but handle case where video isn't ready yet
         const captured = captureCurrentFrame();
-        
+
         if (!captured && streamConfig?.streamUrl?.includes('.m3u8')) {
           // Video not ready yet (e.g., page refresh during pause)
           console.log('⏳ Video not ready for capture - will wait for it to load');
@@ -580,63 +580,101 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           return;
         }
 
-        // For HLS, stop loading new segments to save bandwidth
+        // For HLS, stop loading AND clear buffer to prevent stale data
         if (hlsRef.current) {
-          console.log('🛑 Stopping HLS load (saving bandwidth)...');
+          console.log('🛑 Stopping HLS load + clearing buffer...');
           hlsRef.current.stopLoad();
+          // 🚀 CRITICAL: Detach media to clear stale buffer
+          hlsRef.current.detachMedia();
         }
+
+        // Clear video source to force buffer flush
+        videoElement.removeAttribute('src');
+        videoElement.load();
 
         // Then pause video
         setTimeout(() => {
           videoElement.pause();
-          console.log('✅ Stream paused with frozen frame');
+          console.log('✅ Stream paused with frozen frame + buffer cleared');
         }, 100);
       }
     } else {
-      // 🔧 OPTIMIZED RESUME: Immediate live jump with event-driven approach
+      // 🚀 ZERO-DELAY RESUME: Synchronous manifest reload + immediate seek
       if (videoElement && hlsRef.current && streamConfig?.streamUrl?.includes('.m3u8')) {
-        console.log('▶️ Resuming HLS stream...');
-        
+        console.log('▶️ Resuming HLS stream with zero-delay approach...');
+
         // Clear frozen frame
         setFrozenFrame(null);
-        
+
         const hls = hlsRef.current;
-        
-        // 🚀 CRITICAL FIX: Force load from LIVE edge immediately (-1 = live edge)
-        // This eliminates black screen by skipping old segments
-        hls.startLoad(-1);
-        
-        // Event-driven approach: seek to live when first fragment loads
-        const handleFragLoaded = () => {
-          if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
-            videoElement.currentTime = hls.liveSyncPosition;
-            console.log(`📍 Resume: instant jump to live ${hls.liveSyncPosition.toFixed(2)}s`);
-          }
-          hls.off(Hls.Events.FRAG_LOADED, handleFragLoaded);
-        };
-        
-        // If already has live position, seek immediately
-        if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
-          videoElement.currentTime = hls.liveSyncPosition;
-          console.log(`📍 Resume: immediate seek to ${hls.liveSyncPosition.toFixed(2)}s`);
-          
-          videoElement.play().catch(err => {
-            console.error('❌ Resume play failed:', err);
-            videoElement.muted = true;
-            videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
-          });
-        } else {
-          // Wait for first fragment from live edge (event-driven)
-          hls.once(Hls.Events.FRAG_LOADED, handleFragLoaded);
-          
-          videoElement.play().catch(err => {
-            console.error('❌ Resume play failed:', err);
-            videoElement.muted = true;
-            videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
-          });
-        }
+
+        // 🚀 CRITICAL: Re-attach media after buffer clear during pause
+        hls.attachMedia(videoElement);
+
+        // 🚀 CRITICAL: Force manifest refresh (eliminates stale position)
+        hls.loadSource(streamConfig.streamUrl);
+
+        // 🚀 ZERO-DELAY: Synchronous approach with manifest reload
+        hls.once(Hls.Events.MANIFEST_PARSED, () => {
+          console.log('✅ Manifest refreshed, jumping to live edge...');
+
+          // Force load from live edge
+          hls.startLoad(-1);
+
+          // Immediate seek when liveSyncPosition available
+          const jumpToLive = () => {
+            if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
+              videoElement.currentTime = hls.liveSyncPosition;
+              console.log(`📍 INSTANT JUMP to live: ${hls.liveSyncPosition.toFixed(2)}s`);
+
+              videoElement.play().catch(err => {
+                console.error('❌ Resume play failed:', err);
+                videoElement.muted = true;
+                videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
+              });
+
+              // 🚀 Start latency monitoring for 10 seconds
+              let monitorCount = 0;
+              const monitor = setInterval(() => {
+                monitorCount++;
+
+                if (hls.liveSyncPosition && videoElement.currentTime > 0) {
+                  const latency = hls.liveSyncPosition - videoElement.currentTime;
+
+                  if (latency > 5) {
+                    // More than 5s behind - force jump
+                    console.log(`⚡ LATENCY MONITOR: ${latency.toFixed(2)}s behind, forcing jump...`);
+                    videoElement.currentTime = hls.liveSyncPosition;
+                  } else if (latency > 3) {
+                    // 3-5s behind - speed up catchup
+                    console.log(`⚡ LATENCY MONITOR: ${latency.toFixed(2)}s behind, increasing playback rate...`);
+                    videoElement.playbackRate = 1.2;
+                  } else {
+                    // Within acceptable range - normal playback
+                    if (videoElement.playbackRate !== 1.0) {
+                      console.log(`✅ LATENCY MONITOR: ${latency.toFixed(2)}s behind (acceptable), normal playback`);
+                      videoElement.playbackRate = 1.0;
+                    }
+                  }
+                }
+
+                // Stop monitoring after 10 seconds
+                if (monitorCount >= 20) {
+                  clearInterval(monitor);
+                  videoElement.playbackRate = 1.0;
+                  console.log('✅ LATENCY MONITOR: Stopped after 10s');
+                }
+              }, 500);
+            } else {
+              // Retry quickly if not available yet
+              setTimeout(jumpToLive, 50);
+            }
+          };
+
+          jumpToLive();
+        });
       }
-      
+
       if (iframeElement && streamConfig?.streamUrl) {
         iframeElement.src = iframeElement.src; // Refresh iframe
       }
@@ -684,7 +722,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     if (streamLoading) {
       console.log('🔄 VideoArea: Still loading stream config...');
       return (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900">      
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold mx-auto mb-4"></div>
             <p className="text-gray-400">Loading stream...</p>
@@ -846,7 +884,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="bg-black/80 backdrop-blur-sm px-6 py-4 rounded-xl flex flex-col items-center gap-3">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gold"></div>
-            <span className="text-white text-sm font-medium">Loading stream...</span>        
+            <span className="text-white text-sm font-medium">Loading stream...</span>
           </div>
         </div>
       )}
@@ -862,7 +900,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         </div>
       )}
 
-      {/* Embedded Video Stream - Runs independently in background, never interrupted */}    
+      {/* Embedded Video Stream - Runs independently in background, never interrupted */}
       <div className="absolute inset-0">
         {renderStream()}
 
@@ -888,7 +926,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full">
             <span className="text-red-400 text-[10px]">👁</span>
             <span className="text-white text-xs font-medium">
-              {displayedViewerCount > 0 ? displayedViewerCount.toLocaleString() : '—'}       
+              {displayedViewerCount > 0 ? displayedViewerCount.toLocaleString() : '—'}
             </span>
           </div>
         </div>
@@ -910,7 +948,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         onClick={() => {
           debugClickCount.current += 1;
           if (debugTimer.current) clearTimeout(debugTimer.current);
-          debugTimer.current = setTimeout(() => { debugClickCount.current = 0; }, 1000);     
+          debugTimer.current = setTimeout(() => { debugClickCount.current = 0; }, 1000);
 
           if (debugClickCount.current >= 5) {
             setShowDebug(prev => !prev);
@@ -951,10 +989,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                     strokeWidth="10"
                     fill="none"
                     strokeDasharray={`${2 * Math.PI * 56}`}
-                    strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}      
+                    strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}
                     className="transition-all duration-1000 ease-linear"
                     strokeLinecap="round"
-                    style={{ filter: 'drop-shadow(0 0 4px rgba(255, 209, 0, 0.5))' }}        
+                    style={{ filter: 'drop-shadow(0 0 4px rgba(255, 209, 0, 0.5))' }}
                   />
                 )}
               </svg>

@@ -30,7 +30,7 @@ export default function PlayerGame() {
 
   // Get user data from AuthContext
   const { user, isAuthenticated } = useAuth();
-  
+
   // Ensure user has required properties (guard against undefined user during initial render)
   const userData = {
     id: user?.id || user?.phone || '',
@@ -38,7 +38,7 @@ export default function PlayerGame() {
     phone: user?.phone || '',
     balance: user?.balance || 0
   };
-  
+
   // Local state
   const [selectedBetAmount, setSelectedBetAmount] = useState(2500);
   const [selectedPosition, setSelectedPosition] = useState<BetSide | null>(null);
@@ -58,10 +58,10 @@ export default function PlayerGame() {
   // Update user balance from BalanceContext
   useEffect(() => {
     // Convert to number if it's a string
-    const balanceAsNumber = typeof balance === 'string' 
-      ? parseFloat(balance) 
+    const balanceAsNumber = typeof balance === 'string'
+      ? parseFloat(balance)
       : Number(balance);
-      
+
     if (!isNaN(balanceAsNumber) && balanceAsNumber !== userBalance) {
       setUserBalance(balanceAsNumber);
     }
@@ -72,12 +72,12 @@ export default function PlayerGame() {
   useEffect(() => {
     const handleBalanceUpdate = (event: CustomEvent) => {
       const { balance: newBalance } = event.detail;
-      
+
       // Convert to number if it's a string
-      const balanceAsNumber = typeof newBalance === 'string' 
-        ? parseFloat(newBalance) 
+      const balanceAsNumber = typeof newBalance === 'string'
+        ? parseFloat(newBalance)
         : Number(newBalance);
-      
+
       if (!isNaN(balanceAsNumber)) {
         setUserBalance(balanceAsNumber);
       }
@@ -112,92 +112,43 @@ export default function PlayerGame() {
     }
 
     setIsPlacingBet(true);
-    
-    // Import retry utility
-    const { retryWithBackoff } = await import('../lib/retry-utils');
-    
+
     try {
-      // Validate balance before placing bet with retry logic
-      const balanceCheck = await retryWithBackoff(
-        async () => {
-          return await apiClient.get<{success: boolean, balance: number | string, error?: string}>('/user/balance');
-        },
-        {
-          maxRetries: 3,
-          initialDelay: 100,
-          maxDelay: 1000,
-          retryableErrors: (error: any) => {
-            // Retry on network errors, but not on insufficient balance
-            return error.message?.includes('fetch failed') ||
-                   error.message?.includes('timeout') ||
-                   error.message?.includes('network') ||
-                   error.code === 'ECONNREFUSED' ||
-                   error.code === 'ETIMEDOUT' ||
-                   error.name === 'AbortError';
-          }
-        }
-      );
-      
-      // Convert balance to number if it's a string
-      const balanceAsNumber = typeof balanceCheck.balance === 'string' 
-        ? parseFloat(balanceCheck.balance) 
-        : Number(balanceCheck.balance);
-      
-      if (!balanceCheck.success || isNaN(balanceAsNumber) || balanceAsNumber < selectedBetAmount) {
+      // ✅ OPTIMIZED: Quick balance check without retry (50-100ms)
+      // Only validate once - no retries for faster UX
+      const balanceAsNumber = typeof balance === 'string'
+        ? parseFloat(balance)
+        : Number(balance);
+
+      if (isNaN(balanceAsNumber) || balanceAsNumber < selectedBetAmount) {
         showNotification('Insufficient balance', 'error');
-        // Update local balance if different
-        if (balanceCheck.success && !isNaN(balanceAsNumber)) {
-          updateBalance(balanceAsNumber, 'api');
-        }
         setIsPlacingBet(false);
         return;
       }
 
-      // ✅ FIX: Removed optimistic balance update to prevent flickering
-      // WebSocket bet_confirmed will update balance authoritatively (~100-200ms)
-      // This eliminates race conditions between local and WebSocket updates
+      // ✅ INSTANT: Bet shows immediately via GameStateContext.placeBet()
+      // No waiting, no API calls - just send WebSocket message
+      await placeBetWebSocket(position, selectedBetAmount);
 
-      // Place bet via WebSocket for game logic with retry
-      await retryWithBackoff(
-        async () => {
-          await placeBetWebSocket(position, selectedBetAmount);
-        },
-        {
-          maxRetries: 3,
-          initialDelay: 100,
-          maxDelay: 1000,
-          retryableErrors: (error: any) => {
-            // Retry on network/connection errors, but not on validation errors
-            return error.message?.includes('fetch failed') ||
-                   error.message?.includes('timeout') ||
-                   error.message?.includes('network') ||
-                   error.message?.includes('connection') ||
-                   error.code === 'ECONNREFUSED' ||
-                   error.code === 'ETIMEDOUT' ||
-                   error.name === 'AbortError';
-          }
-        }
-      );
+      // Server will confirm via WebSocket (400-600ms) and update balance
+      // No need for API polling - WebSocket handles everything
+
     } catch (error: any) {
-      // ✅ FIX: Removed balance revert on error
-      // Balance is managed by WebSocket only - no local manipulation needed
       console.error('Failed to place bet:', error);
-      
-      // Provide better error messages
+
+      // Provide specific error messages
       let errorMessage = 'Failed to place bet';
       if (error.message?.includes('Insufficient balance')) {
-        errorMessage = 'Insufficient balance. Please check your account balance.';
-      } else if (error.message?.includes('temporarily unavailable')) {
-        errorMessage = 'Service temporarily unavailable. Please try again in a moment.';
+        errorMessage = 'Insufficient balance';
       } else if (error.message?.includes('timeout') || error.message?.includes('network')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
+        errorMessage = 'Network error. Please check your connection.';
       }
-      
+
       showNotification(errorMessage, 'error');
     } finally {
       setIsPlacingBet(false);
     }
-  }, [selectedBetAmount, gameState, placeBetWebSocket, showNotification, balance, updateBalance, userBalance]);
+  }, [selectedBetAmount, gameState, placeBetWebSocket, showNotification, balance, isPlacingBet]);
 
   // Handle bet position selection
   const handlePositionSelect = useCallback((position: BetSide) => {
@@ -205,17 +156,17 @@ export default function PlayerGame() {
       showNotification(`Cannot select position - Current phase: ${gameState.phase}`, 'error');
       return;
     }
-    
+
     if (gameState.bettingLocked) {
       showNotification('Betting is locked - cannot select position', 'error');
       return;
     }
-    
+
     if (gameState.countdownTimer <= 0) {
       showNotification('Betting time is up!', 'error');
       return;
     }
-    
+
     setSelectedPosition(position);
     showNotification(`Selected position: ${position.toUpperCase()} (Round ${gameState.currentRound})`, 'info');
   }, [gameState.phase, gameState.bettingLocked, gameState.countdownTimer, gameState.currentRound, showNotification]);
@@ -279,14 +230,14 @@ export default function PlayerGame() {
 
       if (response.success && response.data) {
         const { refundedAmount, newBalance } = response.data;
-        
+
         // Update balance
         updateBalance(newBalance, 'api');
-        
+
         // ✅ FIX: DON'T remove bet here - WebSocket 'bet_undo_success' event will handle it
         // This prevents double removal (once from API, once from WebSocket)
         // The WebSocket handler in WebSocketContext.tsx line 535 will call removeLastBet()
-        
+
         showNotification(
           `Bet undone! ₹${refundedAmount?.toLocaleString('en-IN')} refunded`,
           'success'
@@ -395,7 +346,7 @@ export default function PlayerGame() {
     const handleGameComplete = (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log('Game complete celebration received:', customEvent.detail);
-      
+
       // Celebration is already set by WebSocketContext, no need to set again
       // Balance is already updated by WebSocket, no need for API call
     };
@@ -409,18 +360,18 @@ export default function PlayerGame() {
     const handlePaymentUpdate = (event: CustomEvent) => {
       const { message } = event.detail;
       showNotification(message || 'Payment request updated', 'success');
-      
+
       // Refresh balance
       updateBalance(undefined as any, 'api');
     };
-    
+
     const handleRefreshBalance = () => {
       updateBalance(undefined as any, 'api');
     };
-    
+
     window.addEventListener('payment-request-updated', handlePaymentUpdate as EventListener);
     window.addEventListener('refresh-balance', handleRefreshBalance as EventListener);
-    
+
     return () => {
       window.removeEventListener('payment-request-updated', handlePaymentUpdate as EventListener);
       window.removeEventListener('refresh-balance', handleRefreshBalance as EventListener);
@@ -454,27 +405,27 @@ export default function PlayerGame() {
       )}
 
       {(!shouldShowAuthLoading && !shouldShowWsLoading) && (
-      <div className="relative top-0">
-        <MobileGameLayout
-          gameState={gameState}
-          user={userData}
-          userBalance={userBalance || 0}
-          selectedBetAmount={selectedBetAmount}
-          selectedPosition={selectedPosition}
-          betAmounts={betAmounts}
-          onPositionSelect={handlePositionSelect}
-          onPlaceBet={handlePlaceBet}
-          onChipSelect={handleChipSelect}
-          onUndoBet={handleUndoBet}
-          onRebet={handleRebet}
-          onWalletClick={handleWalletClick}
-          onHistoryClick={handleHistoryClick}
-          onGameClick={handleGameClick} // ✅ NEW: Pass handler for card circle clicks
-          onShowChipSelector={handleShowChipSelector}
-          showChipSelector={showChipSelector}
-          isPlacingBet={isPlacingBet}
-        />
-      </div>
+        <div className="relative top-0">
+          <MobileGameLayout
+            gameState={gameState}
+            user={userData}
+            userBalance={userBalance || 0}
+            selectedBetAmount={selectedBetAmount}
+            selectedPosition={selectedPosition}
+            betAmounts={betAmounts}
+            onPositionSelect={handlePositionSelect}
+            onPlaceBet={handlePlaceBet}
+            onChipSelect={handleChipSelect}
+            onUndoBet={handleUndoBet}
+            onRebet={handleRebet}
+            onWalletClick={handleWalletClick}
+            onHistoryClick={handleHistoryClick}
+            onGameClick={handleGameClick} // ✅ NEW: Pass handler for card circle clicks
+            onShowChipSelector={handleShowChipSelector}
+            showChipSelector={showChipSelector}
+            isPlacingBet={isPlacingBet}
+          />
+        </div>
       )}
 
       {/* Game History Modal */}
@@ -507,16 +458,16 @@ export default function PlayerGame() {
 
       {/* Round Notification - Non-blocking toast for round changes */}
       {!shouldShowAuthLoading && !shouldShowWsLoading && (
-      <RoundNotification
-        show={showRoundNotification}
-        round={gameState.currentRound}
-        message={
-          gameState.currentRound === 2
-            ? 'Place additional bets!'
-            : ''
-        }
-        onComplete={() => setShowRoundNotification(false)}
-      />)}
+        <RoundNotification
+          show={showRoundNotification}
+          round={gameState.currentRound}
+          message={
+            gameState.currentRound === 2
+              ? 'Place additional bets!'
+              : ''
+          }
+          onComplete={() => setShowRoundNotification(false)}
+        />)}
     </div>
   );
 }

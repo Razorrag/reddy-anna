@@ -1,0 +1,27 @@
+id,setting_key,setting_value,description,created_at,updated_at
+0311298f-9a2f-46f7-8085-db93c1a6c92b,default_starting_balance,100000,Default starting balance for new users,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+1445c8c2-8e87-42ac-ac04-685183f84eb7,conditional_bonus_threshold,30,Conditional bonus threshold percentage,2025-11-07 14:21:39.275186+00,2025-11-19 10:46:29.830642+00
+1cdd1a5e-c4a4-42c2-aa0f-3a7297e936bf,min_bets_for_referral,5,Minimum number of bets required before referral bonus applies,2025-11-08 14:17:04.847193+00,2025-11-08 14:17:04.847193+00
+3850925b-dd60-4954-8792-b3ab0d1d055b,deposit_bonus,10,Default deposit bonus percentage,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+3a3021be-689d-4452-b4da-bd13aa6074b9,referral_bonus_percent,5,Referral bonus percentage,2025-11-07 14:21:39.275186+00,2025-11-19 10:46:29.631386+00
+463892e0-0bbc-4081-917b-a168609809b4,round_transition_delay,2,Round transition delay in seconds,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+471bf649-eecb-4593-bfc9-fd956a7ff40b,min_deposit_amount,100,Minimum deposit amount,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+489f79a1-4815-40fc-90f3-3c086330c695,house_commission_rate,0.05,House commission rate (5%),2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+49b89cea-5bbf-4134-ab6b-5af62a1792b0,bonus_claim_threshold,500,Bonus claim threshold amount,2025-11-07 14:21:39.275186+00,2025-11-16 14:42:55.439801+00
+55b9d0cb-7990-4ee5-a566-4e33dda8cbd5,referral_wagering_multiplier,0.1,Wagering multiplier for referral bonus (10% of bonus amount),2025-11-08 14:17:04.847193+00,2025-11-08 14:17:04.847193+00
+57e6a4f9-c2a7-45c7-9d6c-45bcf087e053,site_title,RAJU GARI KOSSU - Andar Bahar Game,Site title,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+6811f873-0649-4661-b6bf-1d3e375cecb8,wagering_multiplier,1,Wagering requirement multiplier (1x = same as deposit),2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+720ed890-b3a8-4aea-9d6a-dbe2f13d3d37,min_bet_amount,1000,Minimum bet amount,2025-11-07 14:21:39.275186+00,2025-11-19 10:46:28.908802+00
+763814b6-70e0-476a-b99c-0b2a2c99d195,whatsapp_number,+91 8686886632,WhatsApp number,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+84e49e66-8882-461d-ab0d-3d6ca8cbbd6f,min_withdraw_amount,500,Minimum withdrawal amount,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+8b5de60f-e04c-4e92-8378-c92b50392a55,admin_whatsapp_number,8801924438928,Admin WhatsApp number,2025-11-07 14:21:39.275186+00,2025-11-20 09:39:29.884306+00
+925a8ff1-587e-4389-9361-0712369949dc,max_withdraw_amount,50000,Maximum withdrawal amount,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+9448114f-0cc1-4ed1-be71-9d4543bd765e,betting_timer_duration,20,Betting timer duration in seconds,2025-11-07 14:21:39.275186+00,2025-11-19 10:46:28.641055+00
+a3c54fa0-610a-4047-bfaa-87c26e2b2774,min_deposit_for_referral,500,Minimum deposit amount (₹) to trigger referral bonus,2025-11-08 14:17:04.847193+00,2025-11-08 14:17:04.847193+00
+aba1e6cc-3cb6-4dd7-9cb3-03d87dad53c6,max_deposit_amount,100000,Maximum deposit amount,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+ad5f28bb-b1c2-4e6c-835d-7b66a30aca62,referral_commission,5,Referral commission percentage,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+b419701c-06f4-439b-ad93-b9116ea6c89b,max_referrals_per_month,50,Maximum number of referrals per user per month,2025-11-08 14:17:04.847193+00,2025-11-08 14:17:04.847193+00
+b5fd1013-c18e-44b0-a0c0-dd3d0319c0cd,max_bet_amount,100000,Maximum bet amount,2025-11-07 14:21:39.275186+00,2025-11-19 10:46:29.22604+00
+cddf42c2-7a9b-4885-b36e-dce5fd0f1381,contact_email,support@raju-gari-kossu.com,Contact email,2025-11-07 14:21:39.275186+00,2025-11-07 14:21:39.275186+00
+dc69b2d8-bd0e-4bf0-8f12-ebd656e65606,default_deposit_bonus_percent,5,Default deposit bonus percentage,2025-11-07 14:21:39.275186+00,2025-11-19 10:46:29.425402+00
+e8a0150a-3aff-48d0-a19d-4a6e21b63f26,max_referral_bonus_per_month,10000,Maximum referral bonus amount (₹) per user per month,2025-11-08 14:17:04.847193+00,2025-11-08 14:17:04.847193+00

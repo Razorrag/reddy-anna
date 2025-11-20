@@ -176,11 +176,11 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (data.type === 'error') {
       const errorData = data.data;
       const errorMessage = errorData.message || 'Operation failed';
-      
+
       // Suppress authentication errors during the authentication process or if user is not authenticated
-      const isAuthError = errorMessage.toLowerCase().includes('authentication') || 
-                         errorMessage.toLowerCase().includes('auth required');
-      
+      const isAuthError = errorMessage.toLowerCase().includes('authentication') ||
+        errorMessage.toLowerCase().includes('auth required');
+
       // Suppress auth errors if:
       // 1. User is not authenticated (expected), OR
       // 2. WebSocket is not yet authenticated (happening during auth process)
@@ -188,7 +188,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         console.log('⚠️ WebSocket auth error suppressed (auth in progress or user not authenticated):', errorMessage);
         return;
       }
-      
+
       console.error('WebSocket error:', errorData);
       showNotification(errorMessage, 'error');
       return;
@@ -200,14 +200,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         setIsWebSocketAuthenticated(true); // Mark as authenticated
         const gameState = data.data.gameState;
         const bufferedEvents = data.data.bufferedEvents;
-        
+
         if (gameState) {
           console.log('📊 Received game state sync:', {
             phase: gameState.phase,
             round: gameState.currentRound,
             hasOpeningCard: !!gameState.openingCard
           });
-          
+
           const {
             gameId,
             phase,
@@ -226,7 +226,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             userBalance,
             bettingLocked
           } = gameState;
-          
+
           // ✅ FIX: Set gameId from server
           if (gameId) setGameId(gameId);
           setPhase(phase as any);
@@ -262,7 +262,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           if (playerRound1Bets) updatePlayerRoundBets(1, playerRound1Bets);
           if (playerRound2Bets) updatePlayerRoundBets(2, playerRound2Bets);
           if (userBalance !== undefined) updatePlayerWallet(userBalance);
-          
+
           // Replay buffered events if any (filter out user-specific events)
           if (bufferedEvents && Array.isArray(bufferedEvents) && bufferedEvents.length > 0) {
             // Filter out user-specific events that shouldn't be replayed to other users
@@ -276,14 +276,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               }
               return true;
             });
-            
+
             // ✅ FIX: Sort buffered events by timestamp/sequence before replaying
             const sortedEvents = filteredEvents.sort((a: any, b: any) => {
               const timeA = a.timestamp || a.data?.timestamp || 0;
               const timeB = b.timestamp || b.data?.timestamp || 0;
               return timeA - timeB;
             });
-            
+
             console.log(`🔄 Replaying ${sortedEvents.length} buffered events in order (filtered ${bufferedEvents.length - filteredEvents.length} user-specific events)`);
             // Events will be handled by their respective handlers
             sortedEvents.forEach((event: any, index: number) => {
@@ -293,12 +293,12 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
               }, index * 100); // Stagger events to prevent overwhelming
             });
           }
-          
+
           // Fetch fresh data from API to ensure consistency
           setTimeout(async () => {
             try {
               // Fetch balance
-              const balanceRes = await apiClient.get<{success: boolean, balance: number}>('/user/balance');
+              const balanceRes = await apiClient.get<{ success: boolean, balance: number }>('/user/balance');
               if (balanceRes.success && balanceRes.balance !== undefined) {
                 updatePlayerWallet(balanceRes.balance);
               }
@@ -319,44 +319,44 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
         break;
       }
-        
+
       case 'token_refreshed':
         console.log('WebSocket token refreshed:', data.data);
         // Token was refreshed successfully, no action needed
         break;
-        
+
       case 'token_refresh_error':
         console.error('WebSocket token refresh error:', data.data);
         showNotification(data.data.message || 'Token refresh failed', 'error');
         logout();
         break;
-        
+
       case 'token_expiry_warning':
         console.warn('Token expiry warning:', data.data);
         showNotification(data.data.message || 'Token will expire soon', 'warning');
         break;
-        
+
       case 'token_expired':
         console.error('Token expired:', data.data);
         showNotification(data.data.message || 'Session expired', 'error');
         logout();
         break;
-        
+
       case 'activity_pong':
         // Update last activity timestamp from server
         console.log('Activity pong received:', data.data);
         break;
-        
+
       case 'inactivity_warning':
         console.warn('Inactivity warning:', data.data);
         showNotification(data.data.message || 'You have been inactive', 'warning');
         break;
-        
+
       case 'bet_error':
         console.error('Bet error:', data.data);
         const errorMessage = data.data.message || 'Bet failed';
         const errorType = data.data.code || 'BET_ERROR';
-        
+
         // Show specific error messages based on error code
         switch (errorType) {
           case 'AUTH_REQUIRED':
@@ -408,75 +408,86 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             showNotification(errorMessage, 'error');
         }
         break;
-        
+
       case 'bet_confirmed':
         // CRITICAL: Only process bet_confirmed if it's for the current user
-        // This prevents other users' bets from being displayed
         if (data.data.userId && authState.user?.id && data.data.userId !== authState.user.id) {
           console.log(`⚠️ Ignoring bet_confirmed for different user: ${data.data.userId} (current: ${authState.user.id})`);
           break;
         }
-        
-        console.log('Bet confirmed:', data.data);
-        
-        // ✅ FIX: Update bets FIRST (synchronous) for immediate UI update
-        // This ensures bets appear immediately in the UI
+
+        console.log('✅ SERVER CONFIRMED:', data.data);
+
+        // ✅ OPTIMISTIC UPDATE: Bet already shown instantly via GameStateContext.placeBet()
+        // This handler ONLY verifies and syncs with server state
+
         const currentBets = data.data.round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
         const currentSideBets = Array.isArray(currentBets[data.data.side as keyof typeof currentBets])
           ? (currentBets[data.data.side as keyof typeof currentBets] as any[])
           : [];
-        
-        // ✅ FIX: Normalize existing bets to BetInfo format
-        const normalizedCurrentBets = currentSideBets.map((bet: any) => 
-          typeof bet === 'number' 
+
+        // Normalize existing bets to BetInfo format
+        const normalizedCurrentBets = currentSideBets.map((bet: any) =>
+          typeof bet === 'number'
             ? { amount: bet, betId: `legacy-${Date.now()}`, timestamp: Date.now() }
             : bet
         );
-        
-        // Create BetInfo object with actual bet ID from server
+
+        // Create BetInfo with server's actual bet ID
         const betInfo = {
           amount: data.data.amount,
           betId: data.data.betId || `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           timestamp: data.data.timestamp || Date.now()
         };
-        
-        // ✅ CRITICAL FIX: Check for duplicate betId before adding (prevents accumulation bug)
-        const existingBetIndex = normalizedCurrentBets.findIndex(
-          (b: any) => b.betId === betInfo.betId
+
+        // ✅ CRITICAL: Replace temporary betId with server's actual betId
+        const tempBetIndex = normalizedCurrentBets.findIndex(
+          (b: any) => b.betId.startsWith('temp-') && b.amount === betInfo.amount
         );
-        
-        if (existingBetIndex === -1) {
-          // Only add if bet doesn't exist
+
+        if (tempBetIndex !== -1) {
+          // Replace temp bet with confirmed bet
+          normalizedCurrentBets[tempBetIndex] = betInfo;
           const newBets = {
             ...currentBets,
-            [data.data.side]: [...normalizedCurrentBets, betInfo],
+            [data.data.side]: normalizedCurrentBets,
           };
-          
-          console.log('📊 Updated bets:', newBets);
-          // ✅ FIX: Update bets synchronously FIRST
           updatePlayerRoundBets(data.data.round as any, newBets);
+          console.log(`✅ Replaced temp bet with server bet ID: ${betInfo.betId}`);
         } else {
-          console.log('⚠️ Duplicate bet_confirmed ignored:', betInfo.betId);
+          // Check if already exists (duplicate prevention)
+          const existingBetIndex = normalizedCurrentBets.findIndex(
+            (b: any) => b.betId === betInfo.betId
+          );
+
+          if (existingBetIndex === -1) {
+            // Add if doesn't exist (fallback for edge cases)
+            const newBets = {
+              ...currentBets,
+              [data.data.side]: [...normalizedCurrentBets, betInfo],
+            };
+            updatePlayerRoundBets(data.data.round as any, newBets);
+            console.log(`✅ Added bet: ${betInfo.betId}`);
+          } else {
+            console.log(`✅ Bet already exists: ${betInfo.betId}`);
+          }
         }
-        
-        // ✅ FIX: Update balance AFTER bets (for proper sequencing)
-        // Immediately update balance from WebSocket (highest priority)
+
+        // ✅ SYNC: Update balance from server (authoritative source)
         const betBalance = data.data.newBalance;
         if (betBalance !== undefined && betBalance !== null) {
           updatePlayerWallet(betBalance);
-          // Dispatch balance event for other contexts to update immediately
           const balanceEvent = new CustomEvent('balance-websocket-update', {
-            detail: { 
-              balance: betBalance, 
-              amount: -data.data.amount, // Negative for bet deduction
-              type: 'bet', 
-              timestamp: Date.now() 
+            detail: {
+              balance: betBalance,
+              amount: -data.data.amount,
+              type: 'bet',
+              timestamp: Date.now()
             }
           });
           window.dispatchEvent(balanceEvent);
+          console.log(`✅ Balance synced: ₹${betBalance.toLocaleString('en-IN')}`);
         }
-        
-        console.log('✅ Bet confirmed:', data.data);
         break;
 
       case 'bet_undo_success':
@@ -486,24 +497,24 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           console.log(`⚠️ Ignoring bet_undo_success for different user: ${data.data.userId} (current: ${authState.user.id})`);
           break;
         }
-        
+
         console.log('✅ BET UNDO SUCCESS:', data.data);
-        
+
         // Update balance if provided
         if (data.data.newBalance !== undefined && data.data.newBalance !== null) {
           updatePlayerWallet(data.data.newBalance);
           // Dispatch balance event for other contexts
           const balanceEvent = new CustomEvent('balance-websocket-update', {
-            detail: { 
-              balance: data.data.newBalance, 
+            detail: {
+              balance: data.data.newBalance,
               amount: data.data.refundedAmount,
-              type: 'bet_refund', 
-              timestamp: Date.now() 
+              type: 'bet_refund',
+              timestamp: Date.now()
             }
           });
           window.dispatchEvent(balanceEvent);
         }
-        
+
         // Remove only the last bet (not all bets)
         if (data.data.round && data.data.side) {
           removeLastBet(data.data.round as 1 | 2, data.data.side as 'andar' | 'bahar');
@@ -517,29 +528,29 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           console.log(`⚠️ Ignoring bet_cancelled for different user: ${data.data.userId} (current: ${authState.user.id})`);
           break;
         }
-        
+
         console.log('Bet cancelled:', data.data);
-        
+
         // Update balance if provided
         if (data.data.newBalance !== undefined && data.data.newBalance !== null) {
           updatePlayerWallet(data.data.newBalance);
           // Dispatch balance event for other contexts to update immediately
           const balanceEvent = new CustomEvent('balance-websocket-update', {
-            detail: { 
-              balance: data.data.newBalance, 
+            detail: {
+              balance: data.data.newBalance,
               amount: data.data.amount, // Positive for refund
-              type: 'bet_refund', 
-              timestamp: Date.now() 
+              type: 'bet_refund',
+              timestamp: Date.now()
             }
           });
           window.dispatchEvent(balanceEvent);
         }
-        
+
         // Remove the cancelled bet from local state
         const cancelledRound = parseInt(data.data.round || '1') as 1 | 2;
         const cancelledSide = data.data.side as BetSide;
         removeLastBet(cancelledRound, cancelledSide);
-        
+
         // ✅ KEEP: Important notification - User needs to know bet was cancelled
         showNotification(
           `Bet cancelled: ₹${data.data.amount?.toLocaleString('en-IN') || 0} on ${data.data.side?.toUpperCase() || ''}`,
@@ -552,13 +563,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'game:state':
       case 'game_state_sync': {
         const gameStateData = (data as any).data;
-        
+
         // Handle null/undefined game state gracefully
         if (!gameStateData) {
           console.log('📊 Received null game state - no active game');
           return;
         }
-        
+
         const {
           gameId,
           phase,
@@ -580,13 +591,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           userBalance,
           bettingLocked
         } = gameStateData;
-        
+
         // ✅ FIX: Set gameId from game_state for late-joining players
         if (gameId) {
           setGameId(gameId);
           console.log(`✅ Game ID set from game_state: ${gameId}`);
         }
-        
+
         if (phase) setPhase(phase as any);
         if (countdown !== undefined) setCountdown(countdown);
         if (countdownTimer !== undefined || timer !== undefined) setCountdown(countdownTimer || timer || 0);
@@ -594,7 +605,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         if (currentRound !== undefined) setCurrentRound(currentRound as any);
         // Handle betting locked state
         if (bettingLocked !== undefined) setBettingLocked(bettingLocked);
-        
+
         // Clear cards first, then set opening card so it doesn't get cleared
         if (andarCards || baharCards || openingCard) {
           clearCards();
@@ -656,7 +667,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           updatePlayerRoundBets(2, r2Bets);
         }
         if (userBalance !== undefined) updatePlayerWallet(userBalance);
-        
+
         console.log('✅ Game state synced on reconnect', {
           phase,
           round: currentRound,
@@ -666,21 +677,21 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         });
         break;
       }
-        
+
       case 'opening_card_confirmed': {
         const { gameId, openingCard, phase, round, timer } = (data as OpeningCardConfirmedMessage).data;
         const parsed = typeof openingCard === 'string' ? parseDisplayCard(openingCard) : openingCard;
-        
+
         // ✅ FIX: Clear game state for new game AND hide celebration
         // Celebration should be hidden when new game starts
         console.log('🎮 New game starting - clearing old state and hiding celebration');
-        
+
         // Clear cards and bets from previous game
         clearCards();
         clearRoundBets();
         setWinner(null);
         setWinningCard(null);
-        
+
         // Hide celebration when new game starts
         hideCelebration();
 
@@ -688,7 +699,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           setGameId(gameId);
           console.log(`✅ Game ID set from opening_card_confirmed: ${gameId}`);
         }
-        
+
         setSelectedOpeningCard(parsed);
         setPhase(phase);
         setCurrentRound(round);
@@ -701,7 +712,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         // No-op to avoid console warnings
         break;
       }
-        
+
       case 'card_dealt': {
         const { side, card, isWinningCard } = (data as CardDealtMessage).data;
         const parsedCard = typeof card === 'string' ? parseDisplayCard(card) : card;
@@ -724,7 +735,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         if (round) {
           setCurrentRound(round);
         }
-        
+
         // NEW: Update betting locked state from timer update
         if (bettingLocked !== undefined) {
           setBettingLocked(bettingLocked);
@@ -758,34 +769,34 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           console.error('❌ game_complete message missing data');
           break;
         }
-        
+
         const { winner, winningCard, round, userPayout, winnerDisplay, newBalance } = gameCompleteData as any;
-        
+
         console.log('🎊 game_complete parsed data:', { winner, winningCard, round, userPayout, winnerDisplay, newBalance });
-        
+
         // ✅ CRITICAL FIX: Update balance immediately for instant UI update
         if (newBalance !== undefined && newBalance !== null) {
           updatePlayerWallet(newBalance);
           console.log(`✅ Balance updated instantly after game complete: ₹${newBalance}`);
-          
+
           // Dispatch event for BalanceContext
           const balanceEvent = new CustomEvent('balance-websocket-update', {
             detail: { balance: newBalance, type: 'game_complete', timestamp: Date.now() }
           });
           window.dispatchEvent(balanceEvent);
         }
-        
+
         if (!winner || !winningCard) {
           console.error('❌ game_complete message missing winner or winningCard:', { winner, winningCard });
           break;
         }
-        
+
         // ✅ SINGLE SOURCE OF TRUTH: Only use server data from game_complete
         let payoutAmount = 0;
         let totalBetAmount = 0;
         let netProfit = 0;
         let result: 'no_bet' | 'refund' | 'mixed' | 'win' | 'loss' = 'no_bet';
-        
+
         // ✅ CRITICAL FIX: Always process userPayout, even if all values are 0
         if (userPayout && typeof userPayout === 'object') {
           console.log('🎊 User Payout data received:', JSON.stringify(userPayout, null, 2));
@@ -793,7 +804,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           totalBetAmount = userPayout.totalBet || 0;
           netProfit = userPayout.netProfit ?? (payoutAmount - totalBetAmount);
           result = userPayout.result || (totalBetAmount === 0 ? 'no_bet' : netProfit > 0 ? 'win' : netProfit === 0 ? 'refund' : 'loss');
-          
+
           console.log('🎊 Game Complete - Server authoritative data:', { payoutAmount, totalBetAmount, netProfit, result });
         } else {
           // ✅ FIX: Even if no userPayout object, still show celebration with no_bet
@@ -813,10 +824,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           result,
           dataSource: 'game_complete_direct' as const
         };
-        
+
         console.log('🎊 Setting celebration with data:', JSON.stringify(celebrationData, null, 2));
         console.log('🎊 FORCING celebration display for result:', result);
-        
+
         // ✅ CRITICAL: Set celebration in context (triggers component render)
         setCelebration(celebrationData);
 
@@ -824,19 +835,19 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           detail: celebrationData
         });
         window.dispatchEvent(celebrationEvent);
-        
+
         console.log('🎊 Setting phase to complete and winner to:', winner);
         setPhase('complete');
         setWinner(winner);
-        
+
         if (round) {
           setCurrentRound(round as any);
         }
-        
+
         try {
           if (winningCard) {
-            const card = typeof winningCard === 'string' 
-              ? parseDisplayCard(winningCard) 
+            const card = typeof winningCard === 'string'
+              ? parseDisplayCard(winningCard)
               : winningCard;
             setWinningCard(card);
           }
@@ -850,15 +861,15 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'game_reset': {
         const { message } = (data as GameResetMessage).data;
         resetGame();
-        
+
         // ✅ CRITICAL FIX: Clear all player bets when game resets
         clearRoundBets(1);  // Clear round 1 bets
         clearRoundBets(2);  // Clear round 2 bets
-        
+
         // ✅ CRITICAL FIX: Reset betting UI to empty arrays (not 0)
         updatePlayerRoundBets(1, { andar: [], bahar: [] });
         updatePlayerRoundBets(2, { andar: [], bahar: [] });
-        
+
         console.log('🔄 Game reset - bets cleared:', message);
         break;
       }
@@ -880,17 +891,17 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         // ✅ FIX: Handle Round 2 start with proper timer initialization
         const { phase, round, timer, bettingLocked, round1Bets, message } = (data as any).data;
         console.log(`🔄 ROUND 2 START: Timer=${timer}s, Phase=${phase}, BettingLocked=${bettingLocked}`);
-        
+
         setPhase(phase);
         setCurrentRound(round);
         setBettingLocked(bettingLocked || false);
-        
+
         // ✅ CRITICAL: Set timer from server (not 0)
         if (timer !== undefined && timer > 0) {
           setCountdown(timer);
           console.log(`✅ Round 2 timer initialized: ${timer}s`);
         }
-        
+
         if (message) {
           console.log('🔄 Round 2 message:', message);
         }
@@ -901,7 +912,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         const { phase, round, message, bettingLocked } = (data as PhaseChangeMessage).data;
         setPhase(phase);
         setCurrentRound(round);
-        
+
         // NEW: Properly update betting locked state
         if (bettingLocked !== undefined) {
           setBettingLocked(bettingLocked);
@@ -911,7 +922,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           const isBettingLocked = !isBettingPhase || gameState.countdownTimer <= 0;
           setBettingLocked(isBettingLocked);
         }
-        
+
         if (message) {
           console.log('🔄 Phase change:', message);
         }
@@ -923,19 +934,19 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         // bet_confirmed already handles balance updates, so this prevents duplicates
         // Check if we recently received a bet_confirmed to avoid duplicate updates
         const { balance, amount, type } = (data as BalanceUpdateMessage).data;
-        
+
         // Skip if this is a bet-related balance update (already handled by bet_confirmed)
         if (type === 'bet') {
           console.log('⚠️ Skipping duplicate balance_update from bet - already handled by bet_confirmed');
           break;
         }
-        
+
         // ✅ NEW: Immediately update wallet for game_complete_refresh (instant balance after game)
         if (type === 'game_complete_refresh' && balance !== undefined && balance !== null) {
           updatePlayerWallet(balance);
           console.log(`✅ Instant balance refresh after game complete: ₹${balance}`);
         }
-        
+
         const balanceEvent = new CustomEvent('balance-websocket-update', {
           detail: { balance, amount, type, timestamp: Date.now() }
         });
@@ -947,17 +958,17 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'payout_received': {
         const wsData = (data as any).data;
         console.log('💰 Payout received (balance update only):', wsData);
-        
+
         // Only update balance, celebration is handled by game_complete
         if (wsData.balance !== undefined && wsData.balance !== null) {
           updatePlayerWallet(wsData.balance);
-          
+
           const balanceEvent = new CustomEvent('balance-websocket-update', {
-            detail: { 
-              balance: wsData.balance, 
+            detail: {
+              balance: wsData.balance,
               amount: wsData.netProfit || 0,
-              type: 'payout', 
-              timestamp: Date.now() 
+              type: 'payout',
+              timestamp: Date.now()
             }
           });
           window.dispatchEvent(balanceEvent);
@@ -969,23 +980,23 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'balance_correction': {
         const wsData = (data as any).data;
         console.log('💰 Balance correction received:', wsData);
-        
+
         // Update balance from server correction (highest priority)
         if (wsData.balance !== undefined && wsData.balance !== null) {
           updatePlayerWallet(wsData.balance);
-          
+
           // Dispatch balance event for other contexts to update immediately
           const balanceEvent = new CustomEvent('balance-websocket-update', {
-            detail: { 
-              balance: wsData.balance, 
+            detail: {
+              balance: wsData.balance,
               amount: 0, // Correction, not a transaction
-              type: 'correction', 
+              type: 'correction',
               reason: wsData.reason || 'Balance correction',
-              timestamp: wsData.timestamp || Date.now() 
+              timestamp: wsData.timestamp || Date.now()
             }
           });
           window.dispatchEvent(balanceEvent);
-          
+
           // Show notification if reason is provided and it's not the default verification message
           if (wsData.reason && wsData.reason !== 'Balance correction after verification') {
             showNotification(`Balance corrected: ₹${wsData.balance.toLocaleString('en-IN')}`, 'info');
@@ -1006,13 +1017,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'admin_payment_notification': {
         const { message, reason, timestamp } = (data as any).data;
         showNotification(message, 'success');
-        
+
         // Refresh balance after payment approval
         const balanceEvent = new CustomEvent('refresh-balance', {
           detail: { source: 'payment-notification' }
         });
         window.dispatchEvent(balanceEvent);
-        
+
         // Update profile if on profile page
         const profileUpdateEvent = new CustomEvent('payment-request-updated', {
           detail: { message, reason, timestamp }
@@ -1025,7 +1036,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'stream_pause_state': {
         const { isPaused, timestamp } = (data as any).data;
         console.log(`⚡ [WebSocket] Stream ${isPaused ? 'PAUSED' : 'RESUMED'} by admin`);
-        
+
         // Dispatch event for VideoArea to refetch config instantly
         window.dispatchEvent(new CustomEvent('stream_status_updated', {
           detail: { isPaused, timestamp }
@@ -1047,7 +1058,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         const { userId, status, reason, timestamp } = (data as any).data;
         if (userId === authState.user?.id) {
           showNotification(`Account status changed to ${status}. ${reason || ''}`, 'warning');
-          
+
           // Redirect to login if banned/suspended
           if (status === 'banned' || status === 'suspended') {
             setTimeout(() => {
@@ -1059,13 +1070,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
         break;
       }
-      
+
       // Admin dashboards: real-time bet updates
       case 'admin_bet_update': {
         const betData = (data as any).data;
-        
+
         console.log('📨 Received admin_bet_update:', betData);
-        
+
         // ✅ FIX: Update GameState context with new bet totals so admin dashboard displays them
         // Create new objects to ensure React detects the change
         if (betData.round1Bets) {
@@ -1084,20 +1095,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           console.log('🔄 Updating round2Bets:', round2Bets);
           updateRoundBets(2, round2Bets);
         }
-        
+
         // Also dispatch event for other components that may listen
         const event = new CustomEvent('admin_bet_update', {
           detail: betData
         });
         window.dispatchEvent(event);
-        
+
         console.log('✅ Admin bet totals updated via WebSocket:', {
           round1: betData.round1Bets,
           round2: betData.round2Bets,
           totalAndar: betData.totalAndar,
           totalBahar: betData.totalBahar
         });
-        
+
         // ✅ CRITICAL: Force a re-render by dispatching a custom event
         // This ensures admin components update even if React doesn't detect the change
         window.dispatchEvent(new CustomEvent('gameStateUpdated', {
@@ -1112,7 +1123,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Analytics dashboard: real-time aggregate updates
       case 'analytics_update': {
         const wsData = (data as any).data;
-        
+
         // Check if this is a typed analytics update (daily/monthly/yearly)
         if (wsData?.type && (wsData.type === 'daily' || wsData.type === 'monthly' || wsData.type === 'yearly')) {
           // Preserve the type for typed updates (daily/monthly/yearly)
@@ -1129,7 +1140,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             detail: wsData
           });
           window.dispatchEvent(analyticsEvent);
-          
+
           // Also emit generic analytics-update for backward compatibility
           const genericEvent = new CustomEvent('analytics-update', {
             detail: { type: 'realtime', data: wsData }
@@ -1155,7 +1166,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           detail: (data as any).data
         });
         window.dispatchEvent(adminEvent);
-        
+
         // Also emit the regular game_history_update for backward compatibility
         const regularEvent = new CustomEvent('game_history_update', {
           detail: (data as any).data
@@ -1186,7 +1197,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       case 'conditional_bonus_applied': {
         const { message } = (data as any).data;
         showNotification(message, 'success');
-        
+
         // Refresh balance after bonus
         const balanceEvent = new CustomEvent('refresh-balance', {
           detail: { source: 'conditional-bonus' }
@@ -1196,7 +1207,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
 
-      
+
       case 'user_bets_update': {
         // ✅ FIX: user_bets_update is sent after DB fetch, but bet_confirmed already updated local state
         // This is a refresh from DB to ensure consistency, but we should avoid duplicate notifications
@@ -1230,7 +1241,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         updatePlayerWallet(newBalance);
         // Add new bet to array instead of cumulative total
         const currentBets = round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
-        const currentSideBets = Array.isArray(currentBets[side as keyof typeof currentBets]) 
+        const currentSideBets = Array.isArray(currentBets[side as keyof typeof currentBets])
           ? (currentBets[side as keyof typeof currentBets] as number[])
           : [];
         const newBets = {
@@ -1251,10 +1262,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           userRole: authState.user?.role
         });
         showNotification(`Authentication failed: ${message}`, 'error');
-        
+
         // Disconnect WebSocket before logout
         webSocketManagerRef.current?.disconnect();
-        
+
         logout();
         if (redirectTo) {
           setTimeout(() => {
@@ -1272,11 +1283,11 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         window.dispatchEvent(event);
         break;
       }
-      
+
       case 'notification': {
-          const { message, type } = (data as NotificationMessage).data;
-          showNotification(message, type);
-          break;
+        const { message, type } = (data as NotificationMessage).data;
+        showNotification(message, type);
+        break;
       }
 
       default:
@@ -1292,7 +1303,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const wsUrl = getWebSocketUrl();
     console.log('🔧 Initializing WebSocketManager with URL:', wsUrl);
-    
+
     webSocketManagerRef.current = WebSocketManager.getInstance({
       url: wsUrl,
       tokenProvider: getAuthToken,
@@ -1315,7 +1326,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       },
       onClose: (event) => {
         console.log('🔌 WebSocket closed:', event.code, event.reason);
-        
+
         // Handle different close codes
         if (event.code === 1008 || event.code === 4008) {
           console.log('⚠️ WebSocket auth failed (code ' + event.code + ')');
@@ -1339,7 +1350,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.log('📡 WebSocket status changed to:', status);
       setConnectionStatus(status);
     });
-    
+
     console.log('✅ WebSocketManager initialized successfully');
   }, [getAuthToken, handleWebSocketMessage, showNotification]);
 
@@ -1359,20 +1370,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       ...message,
       timestamp: new Date().toISOString()
     };
-    
+
     // Enhanced connection state check before sending
     if (!webSocketManagerRef.current) {
       console.error('WebSocketManager: Cannot send message, manager not initialized', message);
       return;
     }
-    
+
     const currentStatus = webSocketManagerRef.current.getStatus();
     if (currentStatus !== ConnectionStatus.CONNECTED) {
       console.error(`WebSocketManager: Cannot send message, not connected. Status: ${currentStatus}`, message);
       showNotification('Connection to game server lost. Please refresh the page.', 'error');
       return;
     }
-    
+
     webSocketManagerRef.current.send(messageWithTimestamp);
   }, [showNotification]);
 
@@ -1409,7 +1420,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       } else {
         console.log('⏱️  Timer will use backend settings');
       }
-      
+
       sendWebSocketMessage({
         type: 'start_game',
         data: {
@@ -1471,14 +1482,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         showNotification('Game session not ready. Please wait for admin to start the game.', 'error');
         return;
       }
-      
+
       console.log('📝 Placing bet:', {
         gameId: gameState.gameId,
         side,
         amount,
         round: gameState.currentRound
       });
-      
+
       // Add gameId to bet message
       sendWebSocketMessage({
         type: 'place_bet',
@@ -1531,13 +1542,13 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.log('🚀 Initializing WebSocket with authenticated user:', authState.user?.role);
       setIsWebSocketAuthenticated(false); // Reset auth state before connecting
       initWebSocketManager();
-      
+
       // Connect and authenticate immediately with available token
       webSocketManagerRef.current?.connect();
     };
-    
+
     initializeWebSocket();
-    
+
     // Only disconnect on unmount or when authentication is lost
     return () => {
       if (!authState.isAuthenticated) {
@@ -1555,7 +1566,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     if (connectionStatus === ConnectionStatus.CONNECTED && isWebSocketAuthenticated && webSocketManagerRef.current) {
       console.log('✅ WebSocket authenticated - subscribing to game state');
-      
+
       // ✅ CRITICAL FIX: Expose WebSocket in global context for components that need direct access
       // This allows VideoArea to receive pause/play messages from admin
       const ws = webSocketManagerRef.current.getWebSocket?.();
@@ -1563,20 +1574,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         (window as any).__wsContext = { ws };
         console.log('✅ WebSocket exposed in global context for pause/play sync');
       }
-      
+
       // ✅ FIX: Subscribe immediately (no delay) for faster state sync
       const subscribeToGameState = () => {
         sendWebSocketMessage({
           type: 'game_subscribe',
           data: {}
         });
-        
+
         console.log('📡 Game state subscription sent');
       };
-      
+
       // ✅ FIX: Subscribe immediately after auth, but also fetch via REST API as fallback
       subscribeToGameState();
-      
+
       // ✅ FIX: Also fetch game state via REST API as fallback for faster sync
       const fetchGameStateFallback = async () => {
         try {
@@ -1599,10 +1610,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           // Non-critical, WebSocket subscription will handle it
         }
       };
-      
+
       // Fetch fallback state after a short delay
       const fallbackTimer = setTimeout(fetchGameStateFallback, 100);
-      
+
       return () => clearTimeout(fallbackTimer);
     } else if (connectionStatus === ConnectionStatus.DISCONNECTED) {
       console.log('⏸️ WebSocket disconnected');
@@ -1614,26 +1625,26 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [connectionStatus, isWebSocketAuthenticated, sendWebSocketMessage]);
 
   const value: WebSocketContextType = {
-      sendWebSocketMessage,
-      startGame,
-      dealCard,
-      placeBet,
-      connectWebSocket,
-      disconnectWebSocket,
-      connectionStatus,
-    };
-  
-    return (
-      <WebSocketContext.Provider value={value}>
-        {children}
-      </WebSocketContext.Provider>
-    );
+    sendWebSocketMessage,
+    startGame,
+    dealCard,
+    placeBet,
+    connectWebSocket,
+    disconnectWebSocket,
+    connectionStatus,
   };
 
-  export const useWebSocket = () => {
-    const context = useContext(WebSocketContext);
-    if (context === undefined) {
-      throw new Error('useWebSocket must be used within a WebSocketProvider');
-    }
-    return context;
-  };
+  return (
+    <WebSocketContext.Provider value={value}>
+      {children}
+    </WebSocketContext.Provider>
+  );
+};
+
+export const useWebSocket = () => {
+  const context = useContext(WebSocketContext);
+  if (context === undefined) {
+    throw new Error('useWebSocket must be used within a WebSocketProvider');
+  }
+  return context;
+};

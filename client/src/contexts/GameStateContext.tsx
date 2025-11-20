@@ -20,10 +20,10 @@ interface GameState {
   // Game identification
   id: string;
   gameId: string;
-  
+
   // Game status
   status: 'waiting' | 'betting' | 'dealing' | 'revealing' | 'completed';
-  
+
   // Card state
   selectedOpeningCard: Card | null;
   andarCards: Card[];
@@ -32,7 +32,7 @@ interface GameState {
   usedCards: Card[]; // Track all cards used in the game
   andarCard?: Card;
   baharCard?: Card;
-  
+
   // Game flow
   phase: GamePhase;
   currentRound: GameRound;
@@ -40,30 +40,30 @@ interface GameState {
   countdownTimer: number;
   isGameActive: boolean;
   bettingLocked: boolean;
-  
+
   // Winner state
   gameWinner: GameWinner;
   winningSide?: 'andar' | 'bahar';
   winningCard: Card | null;
-  
+
   // Betting state - total from all players
   andarTotalBet: number;
   baharTotalBet: number;
   bets: Bet[];
-  
+
   // Round-specific total bets
   round1Bets: RoundBets;
   round2Bets: RoundBets;
-  
+
   // Game history
   history: GameHistoryEntry[];
-  
+
   // User-specific data
   userId: string | null;
   username: string | null;
   userRole: 'player' | 'admin';
   playerWallet: number;
-  
+
   // Player's individual bets per round (stored as arrays of BetInfo objects)
   playerRound1Bets: RoundBets;
   playerRound2Bets: RoundBets;
@@ -164,47 +164,47 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
       // Add opening card to usedCards if not already there
       const isOpeningCardUsed = state.usedCards.some(c => c.id === action.payload.id);
       const updatedUsedCards = isOpeningCardUsed ? state.usedCards : [...state.usedCards, action.payload];
-      return { 
-        ...state, 
+      return {
+        ...state,
         selectedOpeningCard: action.payload,
         usedCards: updatedUsedCards
       };
     case 'ADD_ANDAR_CARD': {
       // ✅ FIX: Check for duplicate cards before adding
-      const isDuplicateAndar = state.andarCards.some(c => 
-        c.id === action.payload.id || 
+      const isDuplicateAndar = state.andarCards.some(c =>
+        c.id === action.payload.id ||
         (c.display === action.payload.display && c.suit === action.payload.suit)
       );
-      
+
       if (isDuplicateAndar) {
         console.warn('⚠️ Duplicate Andar card detected, skipping:', action.payload.display);
         return state;
       }
-      
+
       // Add to usedCards if not already there
       const isAndarCardUsed = state.usedCards.some(c => c.id === action.payload.id);
-      return { 
-        ...state, 
+      return {
+        ...state,
         andarCards: [...state.andarCards, action.payload],
         usedCards: isAndarCardUsed ? state.usedCards : [...state.usedCards, action.payload]
       };
     }
     case 'ADD_BAHAR_CARD': {
       // ✅ FIX: Check for duplicate cards before adding
-      const isDuplicateBahar = state.baharCards.some(c => 
-        c.id === action.payload.id || 
+      const isDuplicateBahar = state.baharCards.some(c =>
+        c.id === action.payload.id ||
         (c.display === action.payload.display && c.suit === action.payload.suit)
       );
-      
+
       if (isDuplicateBahar) {
         console.warn('⚠️ Duplicate Bahar card detected, skipping:', action.payload.display);
         return state;
       }
-      
+
       // Add to usedCards if not already there
       const isBaharCardUsed = state.usedCards.some(c => c.id === action.payload.id);
-      return { 
-        ...state, 
+      return {
+        ...state,
         baharCards: [...state.baharCards, action.payload],
         usedCards: isBaharCardUsed ? state.usedCards : [...state.usedCards, action.payload]
       };
@@ -288,23 +288,23 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
     case 'REMOVE_LAST_BET': {
       const { round, side } = action.payload;
       console.log(`🔍 REMOVE_LAST_BET - Round: ${round}, Side: ${side}`);
-      
+
       if (round === 1) {
         const currentBets = state.playerRound1Bets[side];
         const betArray = Array.isArray(currentBets) ? toBetInfoArray(currentBets) : [];
         console.log(`📊 Round 1 ${side} - Current bets:`, betArray);
         console.log(`📊 Current bet amounts:`, betArray.map(b => b.amount));
-        
+
         if (betArray.length === 0) {
           console.log('⚠️ No bets to remove!');
           return state;
         }
-        
+
         const newBetArray = betArray.slice(0, -1); // Remove last bet
         console.log(`✅ After undo - New bets:`, newBetArray);
         console.log(`✅ New bet amounts:`, newBetArray.map(b => b.amount));
         console.log(`✅ New total: ₹${newBetArray.reduce((sum, b) => sum + b.amount, 0)}`);
-        
+
         return {
           ...state,
           playerRound1Bets: {
@@ -317,17 +317,17 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         const betArray = Array.isArray(currentBets) ? toBetInfoArray(currentBets) : [];
         console.log(`📊 Round 2 ${side} - Current bets:`, betArray);
         console.log(`📊 Current bet amounts:`, betArray.map(b => b.amount));
-        
+
         if (betArray.length === 0) {
           console.log('⚠️ No bets to remove!');
           return state;
         }
-        
+
         const newBetArray = betArray.slice(0, -1); // Remove last bet
         console.log(`✅ After undo - New bets:`, newBetArray);
         console.log(`✅ New bet amounts:`, newBetArray.map(b => b.amount));
         console.log(`✅ New total: ₹${newBetArray.reduce((sum, b) => sum + b.amount, 0)}`);
-        
+
         return {
           ...state,
           playerRound2Bets: {
@@ -387,11 +387,11 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
     case 'SET_SCREEN_SHARING':
       return { ...state, isScreenSharingActive: action.payload };
     case 'CLEAR_CARDS':
-      return { 
-        ...state, 
+      return {
+        ...state,
         selectedOpeningCard: null,  // ✅ Now clears opening card
-        andarCards: [], 
-        baharCards: [], 
+        andarCards: [],
+        baharCards: [],
         dealtCards: [],
         winningCard: null,  // ✅ Now clears winning card
         usedCards: [] // Clear used cards tracking
@@ -455,17 +455,17 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Initialize from AuthContext with improved error handling
   const auth = useAuth();
   const { balance, updateBalance, validateBalance } = useBalance();
-  
+
   useEffect(() => {
     // Initialize from auth state directly inside useEffect (no nested function)
     const { user, isAuthenticated } = auth;
-    
+
     if (isAuthenticated && user) {
       // Convert balance to number if it's a string
-      const balanceAsNumber = typeof user.balance === 'string' 
-        ? parseFloat(user.balance) 
+      const balanceAsNumber = typeof user.balance === 'string'
+        ? parseFloat(user.balance)
         : Number(user.balance);
-      
+
       dispatch({
         type: 'SET_USER_DATA',
         payload: {
@@ -478,11 +478,11 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         type: 'SET_USER_ROLE',
         payload: user.role === 'super_admin' ? 'admin' : (user.role || 'player')
       });
-      
+
       // Fetch fresh balance on mount/refresh
       const fetchBalance = async () => {
         try {
-          const balanceRes = await apiClient.get<{success: boolean, balance: number}>('/user/balance');
+          const balanceRes = await apiClient.get<{ success: boolean, balance: number }>('/user/balance');
           if (balanceRes.success && balanceRes.balance !== undefined) {
             const balanceNum = Number(balanceRes.balance);
             if (!isNaN(balanceNum)) {
@@ -496,7 +496,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
           console.error('Error fetching balance on mount:', error);
         }
       };
-      
+
       fetchBalance();
     } else {
       // Initialize with default guest user
@@ -518,13 +518,13 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Add separate effect to update balance when user balance changes
   useEffect(() => {
     const { user, isAuthenticated } = auth;
-    
+
     if (isAuthenticated && user && user.balance !== undefined) {
       // Convert to number if it's a string
-      const balanceAsNumber = typeof user.balance === 'string' 
-        ? parseFloat(user.balance) 
+      const balanceAsNumber = typeof user.balance === 'string'
+        ? parseFloat(user.balance)
         : Number(user.balance);
-      
+
       dispatch({
         type: 'UPDATE_PLAYER_WALLET',
         payload: isNaN(balanceAsNumber) ? 0 : balanceAsNumber
@@ -541,7 +541,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     try {
-      const response = await apiClient.get<{success: boolean, balance: number, error?: string}>('/user/balance');
+      const response = await apiClient.get<{ success: boolean, balance: number, error?: string }>('/user/balance');
       if (response.success && response.balance !== gameState.playerWallet) {
         dispatch({
           type: 'UPDATE_PLAYER_WALLET',
@@ -560,12 +560,12 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     const handleBalanceUpdate = (event: CustomEvent) => {
       const { balance: newBalance, source } = event.detail;
-      
+
       // Convert to number if it's a string
-      const balanceAsNumber = typeof newBalance === 'string' 
-        ? parseFloat(newBalance) 
+      const balanceAsNumber = typeof newBalance === 'string'
+        ? parseFloat(newBalance)
         : Number(newBalance);
-      
+
       if (!isNaN(balanceAsNumber) && balanceAsNumber !== gameState.playerWallet) {
         dispatch({
           type: 'UPDATE_PLAYER_WALLET',
@@ -576,12 +576,12 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const handleWebSocketBalanceUpdate = (event: CustomEvent) => {
       const { balance: newBalance } = event.detail;
-      
+
       // Convert to number if it's a string
-      const balanceAsNumber = typeof newBalance === 'string' 
-        ? parseFloat(newBalance) 
+      const balanceAsNumber = typeof newBalance === 'string'
+        ? parseFloat(newBalance)
         : Number(newBalance);
-      
+
       if (!isNaN(balanceAsNumber) && balanceAsNumber !== gameState.playerWallet) {
         dispatch({
           type: 'UPDATE_PLAYER_WALLET',
@@ -592,7 +592,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     window.addEventListener('balance-updated', handleBalanceUpdate as EventListener);
     window.addEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
-    
+
     return () => {
       window.removeEventListener('balance-updated', handleBalanceUpdate as EventListener);
       window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
@@ -728,6 +728,9 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const placeBet = async (side: BetSide, amount: number, betId?: string) => {
+    // ✅ CRITICAL FIX: Make bet appear INSTANTLY for real-time feel
+    console.log(`🎯 INSTANT BET: ₹${amount} on ${side.toUpperCase()} - Round ${gameState.currentRound}`);
+
     // Validate balance before placing bet
     const isValidBalance = await validateBalance();
     if (!isValidBalance) {
@@ -742,16 +745,14 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
-    // Create BetInfo object
+    // Create BetInfo object with unique ID
     const betInfo: BetInfo = {
       amount,
       betId: betId || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: Date.now()
     };
 
-    // This function now only updates local state optimistically
-    // The actual bet placement is handled by WebSocket messages
-    // Balance will be updated via WebSocket bet_confirmed message (prevents race conditions)
+    // ✅ INSTANT UPDATE #1: Show bet on button IMMEDIATELY (0ms)
     if (gameState.currentRound === 1) {
       const currentSideBets = Array.isArray(gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets])
         ? toBetInfoArray(gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets] as number[] | BetInfo[])
@@ -761,6 +762,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         [side]: [...currentSideBets, betInfo]
       };
       updatePlayerRoundBets(1, newBets);
+      console.log(`✅ INSTANT: Bet displayed on ${side.toUpperCase()} button - Round 1`);
     } else if (gameState.currentRound === 2) {
       const currentSideBets = Array.isArray(gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets])
         ? toBetInfoArray(gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets] as number[] | BetInfo[])
@@ -770,15 +772,28 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         [side]: [...currentSideBets, betInfo]
       };
       updatePlayerRoundBets(2, newBets);
+      console.log(`✅ INSTANT: Bet displayed on ${side.toUpperCase()} button - Round 2`);
     }
-    
-    // Update local balance optimistically for UI responsiveness
-    // This will be overridden by WebSocket bet_confirmed message (which is authoritative)
+
+    // ✅ INSTANT UPDATE #2: Deduct money from balance IMMEDIATELY (0ms)
     const newBalance = currentBalance - amount;
     updatePlayerWallet(newBalance);
-    
-    // Note: BalanceContext will be updated via WebSocket bet_confirmed message
-    // This ensures server is source of truth and prevents race conditions
+    console.log(`✅ INSTANT: Balance updated ₹${currentBalance.toLocaleString('en-IN')} → ₹${newBalance.toLocaleString('en-IN')}`);
+
+    // ✅ UPDATE: Dispatch immediate balance update for other components
+    const instantBalanceEvent = new CustomEvent('balance-instant-update', {
+      detail: {
+        balance: newBalance,
+        amount: -amount,
+        type: 'bet_optimistic',
+        timestamp: Date.now()
+      }
+    });
+    window.dispatchEvent(instantBalanceEvent);
+
+    // Server will confirm via WebSocket bet_confirmed (400-600ms later)
+    // If server rejects, WebSocket will revert the changes
+    console.log(`⏳ Waiting for server confirmation...`);
   };
 
   const removeLastBet = (round: GameRound, side: BetSide) => {
