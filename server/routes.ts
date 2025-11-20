@@ -2149,6 +2149,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+  // WhatsApp Request Endpoint - Send message via WhatsApp with pre-filled content
+  app.post("/api/whatsapp/send-request", paymentLimiter, async (req, res) => {
+    try {
+      const { userId, userPhone, requestType, message, amount, metadata } = req.body;
+      
+      // Validate required fields
+      if (!requestType) {
+        return res.status(400).json({
+          success: false,
+          error: 'Request type is required'
+        });
+      }
+      
+      // Get admin WhatsApp number from database
+      const adminWhatsappNumber = await storage.getGameSetting('admin_whatsapp_number');
+      
+      if (!adminWhatsappNumber) {
+        return res.status(500).json({
+          success: false,
+          error: 'Admin WhatsApp number not configured'
+        });
+      }
+      
+      // Clean the phone number (remove all non-digit characters)
+      const cleanNumber = adminWhatsappNumber.replace(/\D/g, '');
+      
+      // Validate cleaned number
+      if (!cleanNumber || cleanNumber.length < 10) {
+        return res.status(500).json({
+          success: false,
+          error: 'Invalid admin WhatsApp number format'
+        });
+      }
+      
+      // Build the message based on request type
+      let whatsappMessage = '';
+      
+      switch (requestType) {
+        case 'withdrawal':
+          whatsappMessage = `🔴 *Withdrawal Request*\n\n`;
+          whatsappMessage += `User ID: ${userId || 'Guest'}\n`;
+          whatsappMessage += `Phone: ${userPhone || 'Not provided'}\n`;
+          whatsappMessage += `Amount: ₹${amount || '___'}\n\n`;
+          whatsappMessage += `${message || 'I would like to withdraw money from my account.'}`;
+          break;
+          
+        case 'deposit':
+          whatsappMessage = `🟢 *Deposit Request*\n\n`;
+          whatsappMessage += `User ID: ${userId || 'Guest'}\n`;
+          whatsappMessage += `Phone: ${userPhone || 'Not provided'}\n`;
+          whatsappMessage += `Amount: ₹${amount || '___'}\n\n`;
+          whatsappMessage += `${message || 'I would like to deposit money to my account.'}`;
+          break;
+          
+        case 'balance':
+          whatsappMessage = `🔵 *Balance Inquiry*\n\n`;
+          whatsappMessage += `User ID: ${userId || 'Guest'}\n`;
+          whatsappMessage += `Phone: ${userPhone || 'Not provided'}\n\n`;
+          whatsappMessage += `${message || 'I would like to check my current balance.'}`;
+          break;
+          
+        case 'support':
+          whatsappMessage = `🟣 *Support Request*\n\n`;
+          whatsappMessage += `User ID: ${userId || 'Guest'}\n`;
+          whatsappMessage += `Phone: ${userPhone || 'Not provided'}\n\n`;
+          whatsappMessage += `${message || 'I need assistance with my account.'}`;
+          break;
+          
+        default:
+          whatsappMessage = `*Request from User*\n\n`;
+          whatsappMessage += `User ID: ${userId || 'Guest'}\n`;
+          whatsappMessage += `Phone: ${userPhone || 'Not provided'}\n\n`;
+          whatsappMessage += `${message || 'General inquiry'}`;
+      }
+      
+      // Add timestamp
+      whatsappMessage += `\n\n_Sent: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}_`;
+      
+      // URL encode the message
+      const encodedMessage = encodeURIComponent(whatsappMessage);
+      
+      // Build WhatsApp URL (works for both mobile and web)
+      // Format: https://wa.me/<country_code><phone_number>?text=<message>
+      const whatsappUrl = `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
+      
+      console.log(`📱 WhatsApp request created: ${requestType} for user ${userId} to number ${cleanNumber}`);
+      
+      res.json({
+        success: true,
+        whatsappUrl: whatsappUrl,
+        message: 'WhatsApp link generated successfully'
+      });
+    } catch (error) {
+      console.error('WhatsApp request error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to generate WhatsApp link'
+      });
+    }
+  });
+
   
   // Payment Routes - ADMIN ONLY APPROVAL SYSTEM
   app.post("/api/payment/process", paymentLimiter, async (req, res) => {
