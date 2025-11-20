@@ -50,6 +50,10 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
   // - bonusInfo (derived) kept for compatibility but not used for amount to avoid "latest-only" bug.
   const bonusSummary = (profileState as any).bonusSummary;
   const availableBonus = bonusSummary?.totals?.available || 0;
+  
+  // Get individual bonus amounts for breakdown display
+  const depositBonus = bonusSummary?.depositBonuses?.unlocked || 0;
+  const referralBonus = bonusSummary?.referralBonuses?.pending || 0;
 
   const bonusInfo = profileState.bonusInfo; // contains derived flags like bonusLocked/wageringProgress when provided
   const hasBonus = availableBonus > 0;
@@ -58,17 +62,27 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
     setLocation('/profile');
   };
 
-  // ✅ Bonuses are auto-credited - show info instead of claim button
+  // ✅ Bonuses are auto-credited - show detailed breakdown with cumulative info
   const handleBonusInfo = () => {
+    // Format bonus breakdown message
+    const breakdownParts = [];
+    if (depositBonus > 0) {
+      breakdownParts.push(`Deposit: ₹${depositBonus.toLocaleString('en-IN')}`);
+    }
+    if (referralBonus > 0) {
+      breakdownParts.push(`Referral: ₹${referralBonus.toLocaleString('en-IN')}`);
+    }
+    const breakdown = breakdownParts.length > 0 ? `\n• ${breakdownParts.join('\n• ')}` : '';
+    
     if (bonusInfo?.bonusLocked) {
       const progress = bonusInfo.wageringProgress || 0;
       showNotification(
-        `Bonus locked: ${progress.toFixed(0)}% wagering complete. Keep playing to unlock!`,
+        `🔒 Total Locked Bonus: ₹${availableBonus.toLocaleString('en-IN')}${breakdown}\n\nWagering Progress: ${progress.toFixed(0)}%\nKeep playing to unlock your bonuses!`,
         'info'
       );
     } else {
       showNotification(
-        `Total earned: ₹${availableBonus.toLocaleString('en-IN')}. Bonuses are auto-credited to your balance!`,
+        `💰 Total Available Bonus: ₹${availableBonus.toLocaleString('en-IN')}${breakdown}\n\n✅ Bonuses are auto-credited to your balance!`,
         'success'
       );
     }
@@ -114,42 +128,50 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
               <User className="w-5 h-5 text-gray-300" />
             </button>
 
-            {/* Bonus Chip - Shows total earned (auto-credited) */}
+            {/* Bonus Chip - Shows cumulative total (deposit + referral) */}
             {hasBonus && (
               <button
                 onClick={handleBonusInfo}
-                className={`flex items-center space-x-1.5 rounded-full px-3 py-1.5 transition-all active:scale-95 shadow-lg ${
+                className={`flex items-center space-x-1.5 rounded-xl px-3 py-2 transition-all active:scale-95 shadow-lg ${
                   bonusInfo?.bonusLocked
                     ? 'bg-gradient-to-r from-yellow-500/30 to-orange-600/30 border-2 border-yellow-400 hover:from-yellow-500/40 hover:to-orange-600/40 hover:border-yellow-300 shadow-yellow-500/20'
                     : 'bg-gradient-to-r from-green-500/30 to-green-600/30 border-2 border-green-400 hover:from-green-500/40 hover:to-green-600/40 hover:border-green-300 shadow-green-500/20'
                 }`}
-                title={
-                  bonusInfo?.bonusLocked && bonusInfo.wageringProgress !== undefined
-                    ? `Locked: ${bonusInfo.wageringProgress.toFixed(0)}% wagering complete`
-                    : 'Total bonus earned (auto-credited)'
-                }
+                title={`Total Bonus: ₹${availableBonus.toLocaleString('en-IN')}${depositBonus > 0 ? `\nDeposit: ₹${depositBonus.toLocaleString('en-IN')}` : ''}${referralBonus > 0 ? `\nReferral: ₹${referralBonus.toLocaleString('en-IN')}` : ''}\n\nClick for details`}
               >
-                {bonusInfo?.bonusLocked ? (
-                  <>
-                    <svg className="w-4 h-4 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <span className="text-yellow-300 font-bold text-sm">
-                      ₹{availableBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Gift className="w-4 h-4 text-green-300" />
-                    <span className="text-green-300 font-bold text-sm">
-                      ₹{availableBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                    </span>
-                  </>
-                )}
+                <div className="flex flex-col items-start leading-tight -space-y-0.5">
+                  {bonusInfo?.bonusLocked ? (
+                    <>
+                      <div className="flex items-center gap-1">
+                        <svg className="w-3 h-3 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
+                          <path
+                            fillRule="evenodd"
+                            d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <span className="text-yellow-300/70 text-[9px] uppercase tracking-wide font-semibold">
+                          Total Bonus
+                        </span>
+                      </div>
+                      <span className="text-yellow-300 font-bold text-sm">
+                        ₹{availableBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-1">
+                        <Gift className="w-3 h-3 text-green-300" />
+                        <span className="text-green-300/70 text-[9px] uppercase tracking-wide font-semibold">
+                          Total Bonus
+                        </span>
+                      </div>
+                      <span className="text-green-300 font-bold text-sm">
+                        ₹{availableBonus.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </span>
+                    </>
+                  )}
+                </div>
               </button>
             )}
 
