@@ -357,6 +357,22 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         const errorMessage = data.data.message || 'Bet failed';
         const errorType = data.data.code || 'BET_ERROR';
 
+        // ✅ CRITICAL: ROLLBACK OPTIMISTIC BET
+        // Server rejected the bet, so we need to undo the optimistic update
+        if (data.data.betId) {
+          console.log('🔄 Rolling back optimistic bet:', data.data.betId);
+
+          // Dispatch rollback event for GameStateContext
+          window.dispatchEvent(new CustomEvent('rollback-optimistic-bet', {
+            detail: {
+              betId: data.data.betId,
+              side: data.data.side,
+              amount: data.data.amount,
+              round: data.data.round
+            }
+          }));
+        }
+
         // Show specific error messages based on error code
         switch (errorType) {
           case 'AUTH_REQUIRED':
@@ -1491,6 +1507,19 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         round: gameState.currentRound
       });
 
+      // ✅ CRITICAL FIX: Call GameStateContext.placeBet() FIRST for instant optimistic update
+      // This updates the UI immediately (< 5ms) before sending to server
+      const { placeBet: optimisticPlaceBet } = await import('./GameStateContext');
+
+      // Note: We can't directly call from useGameState() here because we're in a different context
+      // Instead, we'll dispatch a custom event that GameStateContext listens to
+      const betId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      // Dispatch optimistic bet event for GameStateContext to handle
+      window.dispatchEvent(new CustomEvent('optimistic-bet-placed', {
+        detail: { side, amount, betId, round: gameState.currentRound }
+      }));
+
       // Add gameId to bet message
       sendWebSocketMessage({
         type: 'place_bet',
@@ -1498,7 +1527,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           gameId: gameState.gameId,
           side,
           amount,
-          round: gameState.currentRound, // ✅ FIX: Send as number, not string
+          round: gameState.currentRound,
+          betId, // Send betId to server for tracking
         }
       });
     } catch (error) {

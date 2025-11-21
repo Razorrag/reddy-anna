@@ -810,6 +810,8 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Server will confirm via WebSocket bet_confirmed (400-600ms later)
     // If server rejects, WebSocket will revert the changes
     console.log(`⏳ Waiting for server confirmation...`);
+
+    return betInfo.betId; // Return betId for tracking
   };
 
   const removeLastBet = (round: GameRound, side: BetSide) => {
@@ -819,6 +821,70 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
   const clearRoundBets = (round: GameRound, side?: BetSide) => {
     dispatch({ type: 'CLEAR_ROUND_BETS', payload: { round, side } });
   };
+
+  // ✅ NEW: Listen for optimistic bet events from WebSocketContext
+  useEffect(() => {
+    const handleOptimisticBet = (event: CustomEvent) => {
+      const { side, amount, betId, round } = event.detail;
+      console.log('🎯 Optimistic bet event received:', { side, amount, betId, round });
+
+      // Only process if it's for the current round
+      if (round === gameState.currentRound) {
+        placeBet(side, amount, betId);
+      }
+    };
+
+    window.addEventListener('optimistic-bet-placed', handleOptimisticBet as EventListener);
+    return () => window.removeEventListener('optimistic-bet-placed', handleOptimisticBet as EventListener);
+  }, [gameState.currentRound, placeBet]);
+
+  // ✅ NEW: Listen for bet rollback events from WebSocketContext
+  useEffect(() => {
+    const handleRollbackBet = (event: CustomEvent) => {
+      const { betId, side, amount, round } = event.detail;
+      console.log('🔄 Rollback bet event received:', { betId, side, amount, round });
+
+      // Find and remove the bet with matching betId
+      if (round === 1) {
+        const currentBets = gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets];
+        const betArray = Array.isArray(currentBets) ? toBetInfoArray(currentBets as number[] | BetInfo[]) : [];
+
+        // Remove bet with matching betId
+        const updatedBets = betArray.filter((bet: BetInfo) => bet.betId !== betId);
+
+        updatePlayerRoundBets(1, {
+          ...gameState.playerRound1Bets,
+          [side]: updatedBets
+        });
+
+        // Refund the amount
+        const currentBalance = Number(gameState.playerWallet);
+        updatePlayerWallet(currentBalance + amount);
+
+        console.log(`✅ Rolled back bet: ₹${amount} refunded`);
+      } else if (round === 2) {
+        const currentBets = gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets];
+        const betArray = Array.isArray(currentBets) ? toBetInfoArray(currentBets as number[] | BetInfo[]) : [];
+
+        // Remove bet with matching betId
+        const updatedBets = betArray.filter((bet: BetInfo) => bet.betId !== betId);
+
+        updatePlayerRoundBets(2, {
+          ...gameState.playerRound2Bets,
+          [side]: updatedBets
+        });
+
+        // Refund the amount
+        const currentBalance = Number(gameState.playerWallet);
+        updatePlayerWallet(currentBalance + amount);
+
+        console.log(`✅ Rolled back bet: ₹${amount} refunded`);
+      }
+    };
+
+    window.addEventListener('rollback-optimistic-bet', handleRollbackBet as EventListener);
+    return () => window.removeEventListener('rollback-optimistic-bet', handleRollbackBet as EventListener);
+  }, [gameState.playerRound1Bets, gameState.playerRound2Bets, gameState.playerWallet, updatePlayerRoundBets, updatePlayerWallet]);
 
   const value: GameStateContextType = {
     gameState,
