@@ -24,17 +24,20 @@ import ProtectedAdminRoute from "@/components/ProtectedAdminRoute.tsx";
 import ErrorBoundary from "@/components/ErrorBoundary.tsx";
 import AppProviders from "@/providers/AppProviders.tsx";
 
+// 📱 Import mobile performance optimizations
+import "@/styles/mobile-optimizations.css";
+
 function Router() {
   return (
     <Switch>
       {/* Homepage - Default route */}
       <Route path="/" component={Index} />
-      
+
       {/* Public routes */}
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/admin-login" component={AdminLogin} />
-      
+
       {/* Player Game Routes - Require authentication */}
       {/* Canonical game route */}
       <Route path="/game">
@@ -45,14 +48,14 @@ function Router() {
       {/* Legacy aliases redirect to /game */}
       <Route path="/play">{() => { window.history.replaceState(null, '', '/game'); return null; }}</Route>
       <Route path="/player-game">{() => { window.history.replaceState(null, '', '/game'); return null; }}</Route>
-      
+
       {/* Profile Routes - Protected */}
       <Route path="/profile">
         <ProtectedRoute>
           <Profile />
         </ProtectedRoute>
       </Route>
-      
+
       {/* Admin Routes - Protected */}
       <Route path="/admin">
         <ProtectedAdminRoute>
@@ -109,7 +112,7 @@ function Router() {
           <GameHistoryPage />
         </ProtectedAdminRoute>
       </Route>
-      
+
       <Route path="/unauthorized" component={Unauthorized} />
       <Route component={NotFound} />
     </Switch>

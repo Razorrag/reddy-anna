@@ -1,0 +1,196 @@
+/**
+ * Mobile Performance Optimizations
+ * 
+ * Ensures seamless betting experience on mobile devices by:
+ * - Removing 300ms click delay
+ * - Preventing double-tap zoom
+ * - Optimizing touch interactions
+ * - Enabling hardware acceleration
+ */
+
+/* ========================================
+   GLOBAL MOBILE TOUCH OPTIMIZATIONS
+   ======================================== */
+
+/* Remove 300ms tap delay on all interactive elements */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+[onclick] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Prevent text selection during betting (improves tap responsiveness) */
+.betting-strip,
+.chip-selector,
+.bet-button {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* ========================================
+   HARDWARE ACCELERATION FOR BETTING BUTTONS
+   ======================================== */
+
+/* Enable GPU acceleration for instant visual feedback */
+button[class*="bet"],
+button[class*="chip"],
+.betting-strip button {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+/* ========================================
+   MOBILE-SPECIFIC BUTTON OPTIMIZATIONS
+   ======================================== */
+
+/* Increase tap target size for better mobile UX (min 44x44px per iOS/Android guidelines) */
+@media (max-width: 768px) {
+    button {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Betting buttons: ensure instant feedback */
+    .betting-strip button {
+        transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Active state feedback (for touch devices) */
+    .betting-strip button:active:not(:disabled) {
+        transform: scale(0.95) translateZ(0);
+    }
+}
+
+/* ========================================
+   PREVENT MOBILE BROWSER ZOOM/SCROLL ISSUES
+   ======================================== */
+
+/* Disable zoom on input fields (prevents iOS zoom on focus) */
+@media (max-width: 768px) {
+
+    input,
+    select,
+    textarea {
+        font-size: 16px;
+        /* Prevents iOS auto-zoom */
+    }
+}
+
+/* Prevent pull-to-refresh during betting */
+@media (hover: none) and (pointer: coarse) {
+    body {
+        overscroll-behavior-y: contain;
+    }
+
+    .game-container {
+        overscroll-behavior: contain;
+    }
+}
+
+/* ========================================
+   SAFARI/iOS SPECIFIC FIXES
+   ======================================== */
+
+/* Fix for iOS Safari rendering issues */
+@supports (-webkit-touch-callout: none) {
+    button {
+        -webkit-appearance: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Fix for iOS Safari button active state */
+    button:active {
+        background-color: currentColor;
+        opacity: 0.8;
+    }
+}
+
+/* ========================================
+   ANDROID CHROME SPECIFIC FIXES
+   ======================================== */
+
+/* Remove Android Chrome tap highlight */
+@media (hover: none) {
+    * {
+        -webkit-tap-highlight-color: transparent;
+    }
+}
+
+/* ========================================
+   PERFORMANCE: REDUCE REPAINTS/REFLOWS
+   ======================================== */
+
+/* Isolate betting strip in its own layer for better performance */
+.betting-strip {
+    contain: layout style paint;
+    isolation: isolate;
+}
+
+/* Bet amount displays: optimize text rendering */
+[data-bet-display] {
+    contain: layout style;
+    font-variant-numeric: tabular-nums;
+    /* Prevents layout shift on number changes */
+}
+
+/* ========================================
+   SMOOTH ANIMATIONS ON MOBILE
+   ======================================== */
+
+/* Use 60fps animations only (avoid 30fps on mobile) */
+@media (prefers-reduced-motion: no-preference) {
+    button {
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 100ms;
+        /* Fast feedback */
+    }
+}
+
+/* Disable animations on low-end devices */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ========================================
+   MOBILE VIEWPORT OPTIMIZATION
+   ======================================== */
+
+/* Prevent mobile browser from resizing on orientation change */
+@media (max-width: 768px) {
+    html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+}
+
+/* ========================================
+   DEBUGGING: TOUCH PERFORMANCE ISSUES
+   ======================================== */
+
+/* Uncomment to visualize touch areas during development */
+/*
+@media (max-width: 768px) {
+  button:active::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 0, 0.3);
+    pointer-events: none;
+  }
+}
+*/
