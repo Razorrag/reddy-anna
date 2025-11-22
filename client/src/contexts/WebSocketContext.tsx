@@ -1510,12 +1510,25 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         betId
       });
 
-      // Dispatch optimistic bet event for GameStateContext to handle
-      window.dispatchEvent(new CustomEvent('optimistic-bet-placed', {
-        detail: { side, amount, betId, round: gameState.currentRound }
-      }));
+      // ⚡ INSTANT: Direct optimistic update (NO EVENT DISPATCH OVERHEAD)
+      // Calculate new totals immediately
+      const currentRoundBets = gameState.currentRound === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
+      const currentTotal = typeof currentRoundBets[side] === 'number' ? currentRoundBets[side] : 0;
+      const newTotal = currentTotal + amount;
 
-      // Add gameId to bet message
+      // Update state directly
+      updatePlayerRoundBets(gameState.currentRound as 1 | 2, {
+        ...currentRoundBets,
+        [side]: newTotal
+      });
+
+      // Update balance immediately
+      const currentBalance = typeof gameState.playerWallet === 'number' ? gameState.playerWallet : 0;
+      updatePlayerWallet(currentBalance - amount);
+
+      console.log(`⚡ INSTANT BET UPDATE: ${side} +₹${amount} = ₹${newTotal}, Balance: ₹${currentBalance - amount}`);
+
+      // Add gameId to bet message (send to server in parallel)
       sendWebSocketMessage({
         type: 'place_bet',
         data: {
