@@ -247,20 +247,34 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           // Do NOT update player bets with total bets - only use playerRound1Bets/playerRound2Bets
           // REMOVED: if (round1Bets) updateTotalBets(round1Bets); - total bets should not be sent to players
           // REMOVED: if (round2Bets) updateTotalBets(round2Bets); - total bets should not be sent to players
+
+          // ✅ FIX: Convert to numbers (server sends cumulative totals)
           if (userBets) {
             const r1Bets = {
-              andar: Array.isArray(userBets.round1?.andar) ? userBets.round1.andar : [],
-              bahar: Array.isArray(userBets.round1?.bahar) ? userBets.round1.bahar : []
+              andar: typeof userBets.round1?.andar === 'number' ? userBets.round1.andar : 0,
+              bahar: typeof userBets.round1?.bahar === 'number' ? userBets.round1.bahar : 0
             };
             const r2Bets = {
-              andar: Array.isArray(userBets.round2?.andar) ? userBets.round2.andar : [],
-              bahar: Array.isArray(userBets.round2?.bahar) ? userBets.round2.bahar : []
+              andar: typeof userBets.round2?.andar === 'number' ? userBets.round2.andar : 0,
+              bahar: typeof userBets.round2?.bahar === 'number' ? userBets.round2.bahar : 0
             };
             updatePlayerRoundBets(1, r1Bets);
             updatePlayerRoundBets(2, r2Bets);
           }
-          if (playerRound1Bets) updatePlayerRoundBets(1, playerRound1Bets);
-          if (playerRound2Bets) updatePlayerRoundBets(2, playerRound2Bets);
+          if (playerRound1Bets) {
+            const r1Bets = {
+              andar: typeof playerRound1Bets.andar === 'number' ? playerRound1Bets.andar : 0,
+              bahar: typeof playerRound1Bets.bahar === 'number' ? playerRound1Bets.bahar : 0
+            };
+            updatePlayerRoundBets(1, r1Bets);
+          }
+          if (playerRound2Bets) {
+            const r2Bets = {
+              andar: typeof playerRound2Bets.andar === 'number' ? playerRound2Bets.andar : 0,
+              bahar: typeof playerRound2Bets.bahar === 'number' ? playerRound2Bets.bahar : 0
+            };
+            updatePlayerRoundBets(2, r2Bets);
+          }
           if (userBalance !== undefined) updatePlayerWallet(userBalance);
 
           // Replay buffered events if any (filter out user-specific events)
@@ -434,59 +448,22 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
         console.log('✅ SERVER CONFIRMED:', data.data);
 
-        // ✅ OPTIMISTIC UPDATE: Bet already shown instantly via GameStateContext.placeBet()
-        // This handler ONLY verifies and syncs with server state
+        // ✅ CRITICAL FIX: Use server's cumulative totals (like balance)
+        // Server sends user's total bets, not arrays - simple and race-condition free
+        if (data.data.userRound1Total) {
+          updatePlayerRoundBets(1, {
+            andar: data.data.userRound1Total.andar,
+            bahar: data.data.userRound1Total.bahar
+          });
+          console.log(`✅ Round 1 totals updated: Andar ₹${data.data.userRound1Total.andar}, Bahar ₹${data.data.userRound1Total.bahar}`);
+        }
 
-        const currentBets = data.data.round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
-        const currentSideBets = Array.isArray(currentBets[data.data.side as keyof typeof currentBets])
-          ? (currentBets[data.data.side as keyof typeof currentBets] as any[])
-          : [];
-
-        // Normalize existing bets to BetInfo format
-        const normalizedCurrentBets = currentSideBets.map((bet: any) =>
-          typeof bet === 'number'
-            ? { amount: bet, betId: `legacy-${Date.now()}`, timestamp: Date.now() }
-            : bet
-        );
-
-        // Create BetInfo with server's actual bet ID
-        const betInfo = {
-          amount: data.data.amount,
-          betId: data.data.betId || `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          timestamp: data.data.timestamp || Date.now()
-        };
-
-        // ✅ CRITICAL: Replace temporary betId with server's actual betId
-        const tempBetIndex = normalizedCurrentBets.findIndex(
-          (b: any) => b.betId.startsWith('temp-') && b.amount === betInfo.amount
-        );
-
-        if (tempBetIndex !== -1) {
-          // Replace temp bet with confirmed bet
-          normalizedCurrentBets[tempBetIndex] = betInfo;
-          const newBets = {
-            ...currentBets,
-            [data.data.side]: normalizedCurrentBets,
-          };
-          updatePlayerRoundBets(data.data.round as any, newBets);
-          console.log(`✅ Replaced temp bet with server bet ID: ${betInfo.betId}`);
-        } else {
-          // Check if already exists (duplicate prevention)
-          const existingBetIndex = normalizedCurrentBets.findIndex(
-            (b: any) => b.betId === betInfo.betId
-          );
-
-          if (existingBetIndex === -1) {
-            // Add if doesn't exist (fallback for edge cases)
-            const newBets = {
-              ...currentBets,
-              [data.data.side]: [...normalizedCurrentBets, betInfo],
-            };
-            updatePlayerRoundBets(data.data.round as any, newBets);
-            console.log(`✅ Added bet: ${betInfo.betId}`);
-          } else {
-            console.log(`✅ Bet already exists: ${betInfo.betId}`);
-          }
+        if (data.data.userRound2Total) {
+          updatePlayerRoundBets(2, {
+            andar: data.data.userRound2Total.andar,
+            bahar: data.data.userRound2Total.bahar
+          });
+          console.log(`✅ Round 2 totals updated: Andar ₹${data.data.userRound2Total.andar}, Bahar ₹${data.data.userRound2Total.bahar}`);
         }
 
         // ✅ SYNC: Update balance from server (authoritative source)
@@ -654,31 +631,31 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           };
           updateRoundBets(2, newRound2Bets);
         }
-        // Ensure arrays are properly formatted when initializing from userBets
+        // ✅ FIX: Convert to numbers (server sends cumulative totals)
         if (userBets) {
           const r1Bets = {
-            andar: Array.isArray(userBets.round1?.andar) ? userBets.round1.andar : [],
-            bahar: Array.isArray(userBets.round1?.bahar) ? userBets.round1.bahar : []
+            andar: typeof userBets.round1?.andar === 'number' ? userBets.round1.andar : 0,
+            bahar: typeof userBets.round1?.bahar === 'number' ? userBets.round1.bahar : 0
           };
           const r2Bets = {
-            andar: Array.isArray(userBets.round2?.andar) ? userBets.round2.andar : [],
-            bahar: Array.isArray(userBets.round2?.bahar) ? userBets.round2.bahar : []
+            andar: typeof userBets.round2?.andar === 'number' ? userBets.round2.andar : 0,
+            bahar: typeof userBets.round2?.bahar === 'number' ? userBets.round2.bahar : 0
           };
           updatePlayerRoundBets(1, r1Bets);
           updatePlayerRoundBets(2, r2Bets);
         }
-        // Ensure arrays are properly formatted when initializing from game state
+        // ✅ FIX: Ensure numbers for playerRound bets
         if (playerRound1Bets) {
           const r1Bets = {
-            andar: Array.isArray(playerRound1Bets?.andar) ? playerRound1Bets.andar : [],
-            bahar: Array.isArray(playerRound1Bets?.bahar) ? playerRound1Bets.bahar : []
+            andar: typeof playerRound1Bets.andar === 'number' ? playerRound1Bets.andar : 0,
+            bahar: typeof playerRound1Bets.bahar === 'number' ? playerRound1Bets.bahar : 0
           };
           updatePlayerRoundBets(1, r1Bets);
         }
         if (playerRound2Bets) {
           const r2Bets = {
-            andar: Array.isArray(playerRound2Bets?.andar) ? playerRound2Bets.andar : [],
-            bahar: Array.isArray(playerRound2Bets?.bahar) ? playerRound2Bets.bahar : []
+            andar: typeof playerRound2Bets.andar === 'number' ? playerRound2Bets.andar : 0,
+            bahar: typeof playerRound2Bets.bahar === 'number' ? playerRound2Bets.bahar : 0
           };
           updatePlayerRoundBets(2, r2Bets);
         }
@@ -883,9 +860,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         clearRoundBets(1);  // Clear round 1 bets
         clearRoundBets(2);  // Clear round 2 bets
 
-        // ✅ CRITICAL FIX: Reset betting UI to empty arrays (not 0)
-        updatePlayerRoundBets(1, { andar: [], bahar: [] });
-        updatePlayerRoundBets(2, { andar: [], bahar: [] });
+        // ✅ CRITICAL FIX: Reset betting UI to zero (numbers, not arrays)
+        updatePlayerRoundBets(1, { andar: 0, bahar: 0 });
+        updatePlayerRoundBets(2, { andar: 0, bahar: 0 });
 
         console.log('🔄 Game reset - bets cleared:', message);
         break;
@@ -1230,17 +1207,20 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         // This is a refresh from DB to ensure consistency, but we should avoid duplicate notifications
         // CRITICAL: user_bets_update should only be received by the user who placed the bet
         // This is sent directly from server, but double-check it's not for another user
-        // Server sends individual bets as arrays instead of cumulative totals
+
+        // ✅ CRITICAL FIX: Server now sends cumulative totals (numbers), not arrays
         const { round1Bets, round2Bets } = (data as UserBetsUpdateMessage).data;
-        // Ensure arrays are properly formatted
+
+        // Convert to numbers (cumulative totals)
         const r1Bets = {
-          andar: Array.isArray(round1Bets?.andar) ? round1Bets.andar : [],
-          bahar: Array.isArray(round1Bets?.bahar) ? round1Bets.bahar : []
+          andar: typeof round1Bets?.andar === 'number' ? round1Bets.andar : 0,
+          bahar: typeof round1Bets?.bahar === 'number' ? round1Bets.bahar : 0
         };
         const r2Bets = {
-          andar: Array.isArray(round2Bets?.andar) ? round2Bets.andar : [],
-          bahar: Array.isArray(round2Bets?.bahar) ? round2Bets.bahar : []
+          andar: typeof round2Bets?.andar === 'number' ? round2Bets.andar : 0,
+          bahar: typeof round2Bets?.bahar === 'number' ? round2Bets.bahar : 0
         };
+
         // ✅ FIX: Silently update bets without showing notification (bet_confirmed already showed it)
         // This is just a refresh from DB to ensure consistency
         updatePlayerRoundBets(1, r1Bets);
@@ -1256,14 +1236,15 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         // Don't show notification - bet_confirmed already showed it (if it was sent)
         // Only update if bet_confirmed wasn't already processed
         updatePlayerWallet(newBalance);
-        // Add new bet to array instead of cumulative total
+
+        // ✅ CRITICAL FIX: Add to cumulative total (number), not array
         const currentBets = round === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
-        const currentSideBets = Array.isArray(currentBets[side as keyof typeof currentBets])
-          ? (currentBets[side as keyof typeof currentBets] as number[])
-          : [];
+        const currentTotal = typeof currentBets[side as keyof typeof currentBets] === 'number'
+          ? (currentBets[side as keyof typeof currentBets] as number)
+          : 0;
         const newBets = {
           ...currentBets,
-          [side]: [...currentSideBets, amount],
+          [side]: currentTotal + amount, // Simple addition
         };
         updatePlayerRoundBets(round, newBets);
         break;
@@ -1306,6 +1287,11 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         showNotification(message, type);
         break;
       }
+
+      case 'game_reset_ack':
+        // Acknowledgment from server that game reset was successful
+        console.log('✅ Game reset acknowledged by server');
+        break;
 
       default:
         console.log('Unknown message type:', data.type);
@@ -1415,7 +1401,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       userId: authState.user?.id,
       userRole: authState.user?.role,
       token: authState.token ? 'present' : 'missing',
-      isAuthenticated: authState.isAuthenticated
+      isAuthenticated: authState.isAuthenticated,
+      wsStatus: connectionStatus,
+      wsReadyState: webSocketManagerRef.current?.getWebSocket()?.readyState
     });
 
     // Check if we have a proper role before sending admin commands
@@ -1424,8 +1412,16 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
-    // Wait for WebSocket to be authenticated before sending
-    if (connectionStatus !== ConnectionStatus.CONNECTED) {
+    // ✅ FIX: Check BOTH connection status AND actual WebSocket ready state
+    const ws = webSocketManagerRef.current?.getWebSocket();
+    const isConnected = connectionStatus === ConnectionStatus.CONNECTED && ws?.readyState === WebSocket.OPEN;
+
+    if (!isConnected) {
+      console.error('❌ Cannot start game - WebSocket not ready:', {
+        connectionStatus,
+        wsReadyState: ws?.readyState,
+        wsReadyStateText: ws ? ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState] : 'null'
+      });
       showNotification('Connecting to game server... Please wait.', 'warning');
       return;
     }
@@ -1487,6 +1483,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  // ✅ FIX: Counter for unique bet IDs - NO BLOCKING
+  const betRequestCounterRef = useRef<number>(0);
+
   const placeBet = async (side: BetSide, amount: number) => {
     try {
       // ✅ FIX: Validate gameId before sending bet
@@ -1500,20 +1499,16 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         return;
       }
 
+      // ✅ FIX: Generate unique betId with counter for every click
+      const betId = `temp-${Date.now()}-${++betRequestCounterRef.current}-${Math.random().toString(36).substr(2, 9)}`;
+
       console.log('📝 Placing bet:', {
         gameId: gameState.gameId,
         side,
         amount,
-        round: gameState.currentRound
+        round: gameState.currentRound,
+        betId
       });
-
-      // ✅ CRITICAL FIX: Call GameStateContext.placeBet() FIRST for instant optimistic update
-      // This updates the UI immediately (< 5ms) before sending to server
-      const { placeBet: optimisticPlaceBet } = await import('./GameStateContext');
-
-      // Note: We can't directly call from useGameState() here because we're in a different context
-      // Instead, we'll dispatch a custom event that GameStateContext listens to
-      const betId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       // Dispatch optimistic bet event for GameStateContext to handle
       window.dispatchEvent(new CustomEvent('optimistic-bet-placed', {

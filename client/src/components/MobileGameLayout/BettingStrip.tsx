@@ -56,29 +56,21 @@ const BettingStrip: React.FC<BettingStripProps> = ({
     setMaxBet(100000);
   }, []);
 
-  // ✅ PERFORMANCE: Memoized bet totals calculation - prevents recalculation on every render
-  // Only recalculates when bet data actually changes
+  // ✅ CRITICAL FIX: Bets are now simple numbers from server (like balance)
+  // No complex array calculations needed - just use the values directly
   const betTotals = useMemo(() => {
-    // Optimized calculation function with simplified type checking
-    const calculateTotal = (bets: number | number[] | any[]): number => {
-      // Handle case where bets might be a single number (legacy/edge case)
-      if (typeof bets === 'number') return bets;
-
-      // Handle array case
-      if (!Array.isArray(bets)) return 0;
-
-      return bets.reduce((sum: number, bet: any) => {
-        // Simplified: single-line type check instead of nested conditionals
-        const amount = typeof bet === 'number' ? bet : (bet?.amount ?? 0);
-        return sum + (typeof amount === 'number' && amount > 0 ? amount : 0);
-      }, 0);
+    // Convert to number if needed (type safety)
+    const toNumber = (val: any): number => {
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string') return parseFloat(val) || 0;
+      return 0;
     };
 
     return {
-      r1Andar: calculateTotal(gameState.playerRound1Bets.andar),
-      r1Bahar: calculateTotal(gameState.playerRound1Bets.bahar),
-      r2Andar: calculateTotal(gameState.playerRound2Bets.andar),
-      r2Bahar: calculateTotal(gameState.playerRound2Bets.bahar)
+      r1Andar: toNumber(gameState.playerRound1Bets.andar),
+      r1Bahar: toNumber(gameState.playerRound1Bets.bahar),
+      r2Andar: toNumber(gameState.playerRound2Bets.andar),
+      r2Bahar: toNumber(gameState.playerRound2Bets.bahar)
     };
   }, [
     gameState.playerRound1Bets.andar,

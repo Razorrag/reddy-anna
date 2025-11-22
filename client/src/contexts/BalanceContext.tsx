@@ -31,7 +31,7 @@ const balanceReducer = (state: BalanceState, action: BalanceAction): BalanceStat
     case 'SET_BALANCE': {
       const timestamp = action.payload.timestamp || Date.now();
       const source = action.payload.source as 'websocket' | 'api' | 'localStorage';
-      
+
       // ✅ FIX: Race condition protection - Prioritize WebSocket updates over API/local updates
       // If we have a recent WebSocket update and the new update is from API/localStorage, ignore it
       // EXCEPTION: Allow 'api' updates if they're explicitly requested (like after game complete)
@@ -44,7 +44,7 @@ const balanceReducer = (state: BalanceState, action: BalanceAction): BalanceStat
           return state;
         }
       }
-      
+
       return {
         ...state,
         currentBalance: action.payload.balance,
@@ -85,13 +85,13 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const updateBalance = useCallback(async (newBalance: number, source: string = 'api', transactionType?: string, amount?: number) => {
     const timestamp = Date.now();
-    
+
     // ✅ FIX: Validate balance is a valid number before processing
     if (typeof newBalance !== 'number' || isNaN(newBalance)) {
       console.error('❌ Invalid balance value:', newBalance);
       return;
     }
-    
+
     const balanceChanged = Math.abs(newBalance - state.currentBalance) >= 0.01;
 
     dispatch({
@@ -133,11 +133,11 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (isAdmin) {
       return;
     }
-    
+
     dispatch({ type: 'REFRESH_BALANCE' });
-    
+
     try {
-      const response = await apiClient.get<{success: boolean, balance: number, error?: string}>('/user/balance');
+      const response = await apiClient.get<{ success: boolean, balance: number, error?: string }>('/user/balance');
       if (response.success) {
         updateBalance(response.balance, 'api');
       } else {
@@ -155,9 +155,9 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (isAdmin) {
       return true;
     }
-    
+
     try {
-      const response = await apiClient.get<{success: boolean, balance: number}>('/user/balance');
+      const response = await apiClient.get<{ success: boolean, balance: number }>('/user/balance');
       if (response.success) {
         const isValid = Math.abs(response.balance - state.currentBalance) < 0.01; // Allow for floating point
         if (!isValid) {
@@ -185,7 +185,7 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         console.error('Failed to parse user balance from localStorage:', error);
       }
     }
-    
+
     // ✅ FIX: Fetch fresh balance from API on mount (skip for admins)
     if (!isAdmin) {
       const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
@@ -206,13 +206,42 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
         type: 'SET_BALANCE',
         payload: { balance: newBalance, source: 'websocket', timestamp: updateTimestamp }
       });
-      
+
       // Also emit the standard balance-updated event for other contexts
       window.dispatchEvent(new CustomEvent('balance-updated', {
         detail: { balance: newBalance, source: 'websocket', timestamp: updateTimestamp }
       }));
-      
+
       // Update localStorage
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          user.balance = newBalance;
+          localStorage.setItem('user', JSON.stringify(user));
+        } catch (error) {
+          console.error('Failed to update localStorage balance:', error);
+        }
+      }
+    };
+
+    // ✅ CRITICAL FIX: Handle instant balance updates from optimistic bets
+    const handleInstantBalanceUpdate = (event: CustomEvent) => {
+      const { balance: newBalance, amount, type, timestamp } = event.detail;
+      console.log(`⚡ INSTANT balance update: ₹${newBalance.toLocaleString('en-IN')} (${type}, ${amount})`);
+
+      const updateTimestamp = timestamp || Date.now();
+      dispatch({
+        type: 'SET_BALANCE',
+        payload: { balance: newBalance, source: 'websocket', timestamp: updateTimestamp }
+      });
+
+      // Also emit the standard balance-updated event for other contexts
+      window.dispatchEvent(new CustomEvent('balance-updated', {
+        detail: { balance: newBalance, source: 'optimistic', timestamp: updateTimestamp, transactionType: type, amount }
+      }));
+
+      // Update localStorage immediately
       const userStr = localStorage.getItem('user');
       if (userStr) {
         try {
@@ -233,10 +262,12 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
 
     window.addEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+    window.addEventListener('balance-instant-update', handleInstantBalanceUpdate as EventListener);
     window.addEventListener('refresh-balance', handleRefreshBalance as EventListener);
-    
+
     return () => {
       window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
+      window.removeEventListener('balance-instant-update', handleInstantBalanceUpdate as EventListener);
       window.removeEventListener('refresh-balance', handleRefreshBalance as EventListener);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -247,7 +278,7 @@ export const BalanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (isAdmin) {
       return; // Don't set up interval for admins
     }
-    
+
     const interval = setInterval(() => {
       const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
       if (isLoggedIn && !state.isLoading) {

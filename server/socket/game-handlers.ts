@@ -273,9 +273,15 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       }
     }
 
-    // Step 6: All operations succeeded - send confirmation
+    // Step 6: All operations succeeded - send confirmation with user's cumulative totals
     const betId = data.betId || `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const betConfirmedAt = Date.now();
+
+    // ✅ FIX: Get user's cumulative bet totals (like admin sees totals)
+    const userBets = (global as any).currentGameState?.getUserBets?.(userId) || {
+      round1: { andar: 0, bahar: 0 },
+      round2: { andar: 0, bahar: 0 }
+    };
 
     ws.send(JSON.stringify({
       type: 'bet_confirmed',
@@ -286,7 +292,17 @@ export async function handlePlayerBet(client: WSClient, data: any) {
         side,
         amount,
         newBalance,
-        timestamp: betConfirmedAt
+        timestamp: betConfirmedAt,
+        // ✅ CRITICAL FIX: Send user's cumulative totals (not single bet)
+        // This is the player's total bets, NOT global totals
+        userRound1Total: {
+          andar: userBets.round1?.andar || 0,
+          bahar: userBets.round1?.bahar || 0
+        },
+        userRound2Total: {
+          andar: userBets.round2?.andar || 0,
+          bahar: userBets.round2?.bahar || 0
+        }
       }
     }));
 

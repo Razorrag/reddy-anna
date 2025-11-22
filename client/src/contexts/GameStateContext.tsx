@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { useBalance } from './BalanceContext';
 import { apiClient } from '@/lib/api-client';
@@ -65,9 +65,9 @@ interface GameState {
   userRole: 'player' | 'admin';
   playerWallet: number;
 
-  // Player's individual bets per round (stored as arrays of BetInfo objects)
-  playerRound1Bets: RoundBets;
-  playerRound2Bets: RoundBets;
+  // Player's individual bets per round (cumulative totals from server)
+  playerRound1Bets: RoundBets;  // Now stores numbers, not arrays
+  playerRound2Bets: RoundBets;  // Now stores numbers, not arrays
   isScreenSharingActive: boolean;
   lastCelebration?: any;
   showCelebration?: boolean;
@@ -150,8 +150,8 @@ const initialState: GameState = {
   username: null,
   userRole: 'player',
   playerWallet: 0,
-  playerRound1Bets: { andar: [], bahar: [] },
-  playerRound2Bets: { andar: [], bahar: [] },
+  playerRound1Bets: { andar: 0, bahar: 0 },  // Simple numbers
+  playerRound2Bets: { andar: 0, bahar: 0 },  // Simple numbers
   isScreenSharingActive: false,
   lastCelebration: null,
   showCelebration: false
@@ -724,12 +724,15 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'UPDATE_TOTAL_BETS', payload: { andar: 0, bahar: 0 } });
     dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round: 1, bets: { andar: 0, bahar: 0 } } });
     dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round: 2, bets: { andar: 0, bahar: 0 } } });
-    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 1, bets: { andar: [], bahar: [] } } });
-    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 2, bets: { andar: [], bahar: [] } } });
+    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 1, bets: { andar: 0, bahar: 0 } } });
+    dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 2, bets: { andar: 0, bahar: 0 } } });
   };
 
+  // ✅ FIX: Counter for unique bet IDs only - NO QUEUE BLOCKING
+  const betCounterRef = useRef<number>(0);
+
   const placeBet = async (side: BetSide, amount: number, betId?: string) => {
-    // ✅ CRITICAL FIX: Make bet appear INSTANTLY for real-time feel
+    // ✅ OPTIMISTIC UPDATE: Immediately add to local total
     console.log(`🎯 INSTANT BET: ₹${amount} on ${side.toUpperCase()} - Round ${gameState.currentRound}`);
 
     // Validate balance before placing bet
@@ -746,49 +749,25 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
-    // Create BetInfo object with unique ID
-    const betInfo: BetInfo = {
-      amount,
-      betId: betId || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: Date.now()
-    };
-
-    // 🚀 ULTRA-FAST DOM UPDATE: Update bet display INSTANTLY via DOM manipulation (<5ms)
-    // This bypasses React rendering for immediate visual feedback
-    const roundKey = `${side}-round${gameState.currentRound}`;
-    const betDisplayElement = document.querySelector(`[data-bet-display="${roundKey}"]`) as HTMLElement;
-
-    if (betDisplayElement) {
-      const currentAmount = parseInt(betDisplayElement.getAttribute('data-bet-amount') || '0');
-      const newAmount = currentAmount + amount;
-
-      // Update DOM directly for instant feedback using cached formatting
-      betDisplayElement.setAttribute('data-bet-amount', newAmount.toString());
-      betDisplayElement.textContent = `Round ${gameState.currentRound}: ₹${formatCurrency(newAmount)}`;
-      console.log(`⚡ DOM INSTANT: Bet displayed in <5ms - ${side.toUpperCase()} Round ${gameState.currentRound}: ₹${formatCurrency(newAmount)}`);
-    }
-
-    // ✅ INSTANT UPDATE #1: Show bet on button IMMEDIATELY (React state update for consistency)
+    // ✅ INSTANT UPDATE: Add to cumulative total immediately
     if (gameState.currentRound === 1) {
-      const currentSideBets = Array.isArray(gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets])
-        ? toBetInfoArray(gameState.playerRound1Bets[side as keyof typeof gameState.playerRound1Bets] as number[] | BetInfo[])
-        : [];
-      const newBets: RoundBets = {
+      const currentTotal = typeof gameState.playerRound1Bets[side] === 'number'
+        ? gameState.playerRound1Bets[side]
+        : 0;
+      updatePlayerRoundBets(1, {
         ...gameState.playerRound1Bets,
-        [side]: [...currentSideBets, betInfo]
-      };
-      updatePlayerRoundBets(1, newBets);
-      console.log(`✅ REACT STATE: Bet synced to state - Round 1`);
+        [side]: currentTotal + amount
+      });
+      console.log(`✅ INSTANT: Round 1 ${side} updated to ₹${currentTotal + amount}`);
     } else if (gameState.currentRound === 2) {
-      const currentSideBets = Array.isArray(gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets])
-        ? toBetInfoArray(gameState.playerRound2Bets[side as keyof typeof gameState.playerRound2Bets] as number[] | BetInfo[])
-        : [];
-      const newBets: RoundBets = {
+      const currentTotal = typeof gameState.playerRound2Bets[side] === 'number'
+        ? gameState.playerRound2Bets[side]
+        : 0;
+      updatePlayerRoundBets(2, {
         ...gameState.playerRound2Bets,
-        [side]: [...currentSideBets, betInfo]
-      };
-      updatePlayerRoundBets(2, newBets);
-      console.log(`✅ REACT STATE: Bet synced to state - Round 2`);
+        [side]: currentTotal + amount
+      });
+      console.log(`✅ INSTANT: Round 2 ${side} updated to ₹${currentTotal + amount}`);
     }
 
     // ✅ INSTANT UPDATE #2: Deduct money from balance IMMEDIATELY (0ms)
@@ -807,11 +786,10 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
     window.dispatchEvent(instantBalanceEvent);
 
-    // Server will confirm via WebSocket bet_confirmed (400-600ms later)
-    // If server rejects, WebSocket will revert the changes
+    // Server will confirm via WebSocket bet_confirmed with authoritative totals
     console.log(`⏳ Waiting for server confirmation...`);
 
-    return betInfo.betId; // Return betId for tracking
+    return `bet-${Date.now()}`; // Return betId for tracking
   };
 
   const removeLastBet = (round: GameRound, side: BetSide) => {

@@ -283,6 +283,8 @@ export type BetConfirmedMessage = WebSocketMessageBase<'bet_confirmed', {
   amount: number;
   newBalance: number;
   timestamp: number;
+  userRound1Total?: { andar: number; bahar: number };
+  userRound2Total?: { andar: number; bahar: number };
 }>;
 
 export type BalanceUpdateMessage = WebSocketMessageBase<'balance_update', {
