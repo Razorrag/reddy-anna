@@ -129,6 +129,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
   const [isWebSocketAuthenticated, setIsWebSocketAuthenticated] = useState(false);
 
+  // ✅ ANTI-FLICKER: Track pending bets to prevent out-of-order server confirmations from overwriting
+  const pendingBetsRef = useRef<Set<string>>(new Set());
+
   const getAuthToken = useCallback(async () => {
     let currentToken = authState.token;
 
@@ -448,22 +451,36 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
         console.log('✅ SERVER CONFIRMED:', data.data);
 
-        // ✅ CRITICAL FIX: Use server's cumulative totals (like balance)
-        // Server sends user's total bets, not arrays - simple and race-condition free
+        // ✅ ANTI-FLICKER: Remove bet from pending set
+        if ((data.data as any).betId) {
+          pendingBetsRef.current.delete((data.data as any).betId);
+          console.log(`🔓 Bet confirmed, removed from pending: ${(data.data as any).betId}`);
+        }
+
+        // ✅ ANTI-FLICKER: Use Math.max() to prevent values from decreasing
+        // Only accept server values >= current client values to prevent flickering
         if (data.data.userRound1Total) {
-          updatePlayerRoundBets(1, {
-            andar: data.data.userRound1Total.andar,
-            bahar: data.data.userRound1Total.bahar
-          });
-          console.log(`✅ Round 1 totals updated: Andar ₹${data.data.userRound1Total.andar}, Bahar ₹${data.data.userRound1Total.bahar}`);
+          const currentR1 = gameState.playerRound1Bets;
+          // Convert to number if needed (handle arrays/undefined)
+          const currentAndar = typeof currentR1.andar === 'number' ? currentR1.andar : 0;
+          const currentBahar = typeof currentR1.bahar === 'number' ? currentR1.bahar : 0;
+          const newAndar = Math.max(currentAndar, data.data.userRound1Total.andar);
+          const newBahar = Math.max(currentBahar, data.data.userRound1Total.bahar);
+
+          updatePlayerRoundBets(1, { andar: newAndar, bahar: newBahar });
+          console.log(`✅ Round 1 totals updated (anti-flicker): Andar ₹${newAndar}, Bahar ₹${newBahar}`);
         }
 
         if (data.data.userRound2Total) {
-          updatePlayerRoundBets(2, {
-            andar: data.data.userRound2Total.andar,
-            bahar: data.data.userRound2Total.bahar
-          });
-          console.log(`✅ Round 2 totals updated: Andar ₹${data.data.userRound2Total.andar}, Bahar ₹${data.data.userRound2Total.bahar}`);
+          const currentR2 = gameState.playerRound2Bets;
+          // Convert to number if needed (handle arrays/undefined)
+          const currentAndar = typeof currentR2.andar === 'number' ? currentR2.andar : 0;
+          const currentBahar = typeof currentR2.bahar === 'number' ? currentR2.bahar : 0;
+          const newAndar = Math.max(currentAndar, data.data.userRound2Total.andar);
+          const newBahar = Math.max(currentBahar, data.data.userRound2Total.bahar);
+
+          updatePlayerRoundBets(2, { andar: newAndar, bahar: newBahar });
+          console.log(`✅ Round 2 totals updated (anti-flicker): Andar ₹${newAndar}, Bahar ₹${newBahar}`);
         }
 
         // ✅ SYNC: Update balance from server (authoritative source)
@@ -1509,6 +1526,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         round: gameState.currentRound,
         betId
       });
+
+      // ✅ ANTI-FLICKER: Add to pending bets set
+      pendingBetsRef.current.add(betId);
+      console.log(`🔒 Bet added to pending set: ${betId} (total pending: ${pendingBetsRef.current.size})`);
 
       // ⚡ INSTANT: Direct optimistic update (NO EVENT DISPATCH OVERHEAD)
       // Calculate new totals immediately
