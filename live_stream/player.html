@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Stream Player</title>
+    <title>OvenMediaServer Live Stream Player</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         * {
@@ -76,23 +76,23 @@
         const video = document.getElementById('video');
         const status = document.getElementById('status');
 
-        // Stream URL for production (served via nginx over HTTPS)
-        // Public HLS URL (nginx proxies /live/ -> 127.0.0.1:8000/live/):
-        // OBS: rtmp://72.61.170.227:1935/live  |  Stream Key: test
-        // Player: use this HLS URL:
-        const streamUrl = 'https://rajugarikossu.com/live/test/index.m3u8';
-
+        // OMS HLS stream URL
+ //      const streamUrl = 'http://89.42.231.35:3333/app/stream/llhls.m3u8';
+     const streamUrl='https://rajugarikossu.com/app/stream/llhls.m3u8'
         function showStatus(message, type = 'loading') {
             status.textContent = message;
             status.className = `show ${type}`;
+        }
 
-            if (type === 'success') {
-                setTimeout(() => {
-                    status.classList.remove('show');
-                    console.log('✅ Manifest parsed, starting playback');
+        function initPlayer() {
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(streamUrl);
+                hls.attachMedia(video);
+
+                hls.on(Hls.Events.MANIFEST_PARSED, function () {
                     showStatus('Stream connected!', 'success');
-                    video.play().catch(err => {
-                        console.warn('Autoplay prevented, user interaction needed:', err);
+                    video.play().catch(() => {
                         showStatus('Click to play', 'loading');
                     });
                 });
@@ -101,17 +101,14 @@
                     if (data.fatal) {
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
-                                console.error('Network error encountered:', data);
                                 showStatus('Network error - Retrying...', 'error');
-                                setTimeout(() => hls.startLoad(), 1000);
+                                setTimeout(() => hls.startLoad(), 2000);
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
-                                console.error('Media error encountered:', data);
                                 showStatus('Media error - Recovering...', 'error');
                                 hls.recoverMediaError();
                                 break;
                             default:
-                                console.error('Fatal error:', data);
                                 showStatus('Stream unavailable', 'error');
                                 hls.destroy();
                                 break;
@@ -119,43 +116,38 @@
                     }
                 });
 
-                // Auto-unmute on user interaction
-                video.addEventListener('click', () => {
-                    video.muted = false;
-                    video.play();
-                });
-
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 // Native HLS support (Safari)
                 video.src = streamUrl;
-                video.addEventListener('loadedmetadata', function () {
-                    console.log('✅ Native HLS playback ready');
+                video.addEventListener('loadedmetadata', () => {
                     showStatus('Stream connected!', 'success');
                     video.play();
                 });
 
-                video.addEventListener('error', function () {
-                    console.error('Native HLS error');
+                video.addEventListener('error', () => {
                     showStatus('Stream unavailable', 'error');
                 });
             } else {
                 showStatus('HLS not supported in this browser', 'error');
-                console.error('HLS is not supported');
             }
         }
 
-        // Initialize player when page loads
+        // Initialize player
         initPlayer();
 
-        // Retry connection if stream stops
+        // Retry UI updates
         video.addEventListener('waiting', () => {
-            console.log('⏳ Buffering...');
             showStatus('Buffering...', 'loading');
         });
 
         video.addEventListener('playing', () => {
-            console.log('▶️ Playing');
             status.classList.remove('show');
+        });
+
+        // Auto-unmute on click
+        video.addEventListener('click', () => {
+            video.muted = false;
+            video.play();
         });
     </script>
 </body>
