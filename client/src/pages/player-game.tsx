@@ -201,13 +201,10 @@ export default function PlayerGame() {
       return;
     }
 
-    // Check if user has any bets to undo for current round
+    // ✅ FIXED: Check bet history instead of cumulative totals
     const currentRound = gameState.currentRound;
-    const currentRoundBets = currentRound === 1 ? gameState.playerRound1Bets : gameState.playerRound2Bets;
-    const hasBets = (
-      (Array.isArray(currentRoundBets.andar) && currentRoundBets.andar.length > 0) ||
-      (Array.isArray(currentRoundBets.bahar) && currentRoundBets.bahar.length > 0)
-    );
+    const betHistory = currentRound === 1 ? gameState.playerRound1BetHistory : gameState.playerRound2BetHistory;
+    const hasBets = betHistory.andar.length > 0 || betHistory.bahar.length > 0;
 
     if (!hasBets) {
       showNotification(`No bets in Round ${currentRound} to undo`, 'info');

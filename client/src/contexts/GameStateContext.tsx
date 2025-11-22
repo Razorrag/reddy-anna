@@ -66,8 +66,13 @@ interface GameState {
   playerWallet: number;
 
   // Player's individual bets per round (cumulative totals from server)
-  playerRound1Bets: RoundBets;  // Now stores numbers, not arrays
-  playerRound2Bets: RoundBets;  // Now stores numbers, not arrays
+  playerRound1Bets: RoundBets;  // Stores numbers (cumulative totals)
+  playerRound2Bets: RoundBets;  // Stores numbers (cumulative totals)
+
+  // ✅ NEW: Bet history for undo functionality (stores individual bets)
+  playerRound1BetHistory: { andar: BetInfo[]; bahar: BetInfo[] };
+  playerRound2BetHistory: { andar: BetInfo[]; bahar: BetInfo[] };
+
   isScreenSharingActive: boolean;
   lastCelebration?: any;
   showCelebration?: boolean;
@@ -116,6 +121,7 @@ type GameStateAction =
   | { type: 'SET_WINNING_CARD'; payload: Card }
   | { type: 'SET_USER_DATA'; payload: { userId: string; username: string; wallet: number } }
   | { type: 'UPDATE_PLAYER_ROUND_BETS'; payload: { round: GameRound; bets: RoundBets } }
+  | { type: 'ADD_BET_TO_HISTORY'; payload: { round: GameRound; side: BetSide; betInfo: BetInfo } }
   | { type: 'REMOVE_LAST_BET'; payload: { round: GameRound; side: BetSide } }
   | { type: 'CLEAR_ROUND_BETS'; payload: { round: GameRound; side?: BetSide } }
   | { type: 'SET_SCREEN_SHARING'; payload: boolean }
@@ -152,6 +158,11 @@ const initialState: GameState = {
   playerWallet: 0,
   playerRound1Bets: { andar: 0, bahar: 0 },  // Simple numbers
   playerRound2Bets: { andar: 0, bahar: 0 },  // Simple numbers
+
+  // ✅ NEW: Initialize bet history
+  playerRound1BetHistory: { andar: [], bahar: [] },
+  playerRound2BetHistory: { andar: [], bahar: [] },
+
   isScreenSharingActive: false,
   lastCelebration: null,
   showCelebration: false
@@ -238,6 +249,8 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         selectedOpeningCard: null, // Clear opening card
         showCelebration: false, // ✅ FIX: Explicitly clear celebration on reset
         lastCelebration: null, // ✅ FIX: Clear celebration data on reset
+        playerRound1BetHistory: { andar: [], bahar: [] }, // ✅ Clear bet history
+        playerRound2BetHistory: { andar: [], bahar: [] }, // ✅ Clear bet history
       };
     case 'SET_GAME_ACTIVE':
       return { ...state, isGameActive: action.payload };
@@ -286,61 +299,95 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
         return { ...state, playerRound2Bets: action.payload.bets };
       }
       return state;
+
+    case 'ADD_BET_TO_HISTORY': {
+      // ✅ NEW: Add bet to history for undo functionality
+      const { round, side, betInfo } = action.payload;
+      if (round === 1) {
+        return {
+          ...state,
+          playerRound1BetHistory: {
+            ...state.playerRound1BetHistory,
+            [side]: [...state.playerRound1BetHistory[side], betInfo]
+          }
+        };
+      } else if (round === 2) {
+        return {
+          ...state,
+          playerRound2BetHistory: {
+            ...state.playerRound2BetHistory,
+            [side]: [...state.playerRound2BetHistory[side], betInfo]
+          }
+        };
+      }
+      return state;
+    }
     case 'REMOVE_LAST_BET': {
+      // ✅ FIXED: Remove last bet from history and update cumulative total
       const { round, side } = action.payload;
       console.log(`🔍 REMOVE_LAST_BET - Round: ${round}, Side: ${side}`);
 
       if (round === 1) {
-        const currentBets = state.playerRound1Bets[side];
-        const betArray = Array.isArray(currentBets) ? toBetInfoArray(currentBets) : [];
-        console.log(`📊 Round 1 ${side} - Current bets:`, betArray);
-        console.log(`📊 Current bet amounts:`, betArray.map(b => b.amount));
+        const betHistory = state.playerRound1BetHistory[side];
 
-        if (betArray.length === 0) {
+        if (betHistory.length === 0) {
           console.log('⚠️ No bets to remove!');
           return state;
         }
 
-        const newBetArray = betArray.slice(0, -1); // Remove last bet
-        console.log(`✅ After undo - New bets:`, newBetArray);
-        console.log(`✅ New bet amounts:`, newBetArray.map(b => b.amount));
-        console.log(`✅ New total: ₹${newBetArray.reduce((sum, b) => sum + b.amount, 0)}`);
+        const lastBet = betHistory[betHistory.length - 1];
+        const newBetHistory = betHistory.slice(0, -1);
+        const currentTotal = typeof state.playerRound1Bets[side] === 'number'
+          ? state.playerRound1Bets[side]
+          : 0;
+        const newTotal = Math.max(0, currentTotal - lastBet.amount);
+
+        console.log(`✅ Removed bet: ₹${lastBet.amount}, New total: ₹${newTotal}`);
 
         return {
           ...state,
+          playerRound1BetHistory: {
+            ...state.playerRound1BetHistory,
+            [side]: newBetHistory
+          },
           playerRound1Bets: {
             ...state.playerRound1Bets,
-            [side]: newBetArray
+            [side]: newTotal
           }
         };
       } else if (round === 2) {
-        const currentBets = state.playerRound2Bets[side];
-        const betArray = Array.isArray(currentBets) ? toBetInfoArray(currentBets) : [];
-        console.log(`📊 Round 2 ${side} - Current bets:`, betArray);
-        console.log(`📊 Current bet amounts:`, betArray.map(b => b.amount));
+        const betHistory = state.playerRound2BetHistory[side];
 
-        if (betArray.length === 0) {
+        if (betHistory.length === 0) {
           console.log('⚠️ No bets to remove!');
           return state;
         }
 
-        const newBetArray = betArray.slice(0, -1); // Remove last bet
-        console.log(`✅ After undo - New bets:`, newBetArray);
-        console.log(`✅ New bet amounts:`, newBetArray.map(b => b.amount));
-        console.log(`✅ New total: ₹${newBetArray.reduce((sum, b) => sum + b.amount, 0)}`);
+        const lastBet = betHistory[betHistory.length - 1];
+        const newBetHistory = betHistory.slice(0, -1);
+        const currentTotal = typeof state.playerRound2Bets[side] === 'number'
+          ? state.playerRound2Bets[side]
+          : 0;
+        const newTotal = Math.max(0, currentTotal - lastBet.amount);
+
+        console.log(`✅ Removed bet: ₹${lastBet.amount}, New total: ₹${newTotal}`);
 
         return {
           ...state,
+          playerRound2BetHistory: {
+            ...state.playerRound2BetHistory,
+            [side]: newBetHistory
+          },
           playerRound2Bets: {
             ...state.playerRound2Bets,
-            [side]: newBetArray
+            [side]: newTotal
           }
         };
       }
       return state;
     }
     case 'CLEAR_ROUND_BETS': {
-      // ✅ NEW: Clear ALL bets for a specific round and side (or both sides if side not specified)
+      // ✅ FIXED: Clear bets and history for a specific round and side
       const { round, side } = action.payload;
       if (round === 1) {
         if (side) {
@@ -349,6 +396,10 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
             ...state,
             playerRound1Bets: {
               ...state.playerRound1Bets,
+              [side]: 0
+            },
+            playerRound1BetHistory: {
+              ...state.playerRound1BetHistory,
               [side]: []
             }
           };
@@ -356,10 +407,8 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
           // Clear both sides
           return {
             ...state,
-            playerRound1Bets: {
-              andar: [],
-              bahar: []
-            }
+            playerRound1Bets: { andar: 0, bahar: 0 },
+            playerRound1BetHistory: { andar: [], bahar: [] }
           };
         }
       } else if (round === 2) {
@@ -369,6 +418,10 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
             ...state,
             playerRound2Bets: {
               ...state.playerRound2Bets,
+              [side]: 0
+            },
+            playerRound2BetHistory: {
+              ...state.playerRound2BetHistory,
               [side]: []
             }
           };
@@ -376,10 +429,8 @@ const gameReducer = (state: GameState, action: GameStateAction): GameState => {
           // Clear both sides
           return {
             ...state,
-            playerRound2Bets: {
-              andar: [],
-              bahar: []
-            }
+            playerRound2Bets: { andar: 0, bahar: 0 },
+            playerRound2BetHistory: { andar: [], bahar: [] }
           };
         }
       }
@@ -437,6 +488,7 @@ interface GameStateContextType {
   setWinningCard: (card: Card) => void;
   setUserData: (userData: { userId: string; username: string; wallet: number }) => void;
   updatePlayerRoundBets: (round: GameRound, bets: RoundBets) => void;
+  addBetToHistory: (round: GameRound, side: BetSide, betInfo: BetInfo) => void;
   clearCards: () => void;
   placeBet: (side: BetSide, amount: number, betId?: string) => void;
   removeLastBet: (round: GameRound, side: BetSide) => void;
@@ -720,6 +772,11 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'HIDE_CELEBRATION' });
   };
 
+  // ✅ NEW: Add bet to history for undo functionality
+  const addBetToHistory = (round: GameRound, side: BetSide, betInfo: BetInfo) => {
+    dispatch({ type: 'ADD_BET_TO_HISTORY', payload: { round, side, betInfo } });
+  };
+
   const resetBettingData = () => {
     dispatch({ type: 'UPDATE_TOTAL_BETS', payload: { andar: 0, bahar: 0 } });
     dispatch({ type: 'UPDATE_ROUND_BETS', payload: { round: 1, bets: { andar: 0, bahar: 0 } } });
@@ -749,6 +806,9 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
+    // ✅ Generate betId for tracking
+    const finalBetId = betId || `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
     // ✅ INSTANT UPDATE: Add to cumulative total immediately
     if (gameState.currentRound === 1) {
       const currentTotal = typeof gameState.playerRound1Bets[side] === 'number'
@@ -758,6 +818,14 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         ...gameState.playerRound1Bets,
         [side]: currentTotal + amount
       });
+
+      // ✅ Add to bet history for undo
+      addBetToHistory(1, side, {
+        amount,
+        betId: finalBetId,
+        timestamp: Date.now()
+      });
+
       console.log(`✅ INSTANT: Round 1 ${side} updated to ₹${currentTotal + amount}`);
     } else if (gameState.currentRound === 2) {
       const currentTotal = typeof gameState.playerRound2Bets[side] === 'number'
@@ -767,6 +835,14 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
         ...gameState.playerRound2Bets,
         [side]: currentTotal + amount
       });
+
+      // ✅ Add to bet history for undo
+      addBetToHistory(2, side, {
+        amount,
+        betId: finalBetId,
+        timestamp: Date.now()
+      });
+
       console.log(`✅ INSTANT: Round 2 ${side} updated to ₹${currentTotal + amount}`);
     }
 
@@ -789,7 +865,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Server will confirm via WebSocket bet_confirmed with authoritative totals
     console.log(`⏳ Waiting for server confirmation...`);
 
-    return `bet-${Date.now()}`; // Return betId for tracking
+    return finalBetId; // Return betId for tracking
   };
 
   const removeLastBet = (round: GameRound, side: BetSide) => {
@@ -885,6 +961,7 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     updateRoundBets,
     setWinningCard,
     setUserData,
+    addBetToHistory,
     updatePlayerRoundBets,
     clearCards,
     placeBet,
