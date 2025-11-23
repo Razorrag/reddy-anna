@@ -11,20 +11,18 @@ import { apiClient } from '@/lib/api-client';
 
 export default function AdminStreamSettings() {
   const [, setLocation] = useLocation();
+
+  // ✅ MODE SELECTOR: Stream or Loop
+  const [mode, setMode] = useState<'stream' | 'loop'>('stream');
+
+  // Stream mode settings
   const [streamUrl, setStreamUrl] = useState('');
   const [isPaused, setIsPaused] = useState(false);
-
-  // NEW: Let admin choose how to play the URL
-  // "iframe" for YouTube/embed players
-  // "video" for direct MP4/HLS (.m3u8)
   const [streamType, setStreamType] = useState<'iframe' | 'video'>('iframe');
-
-  // NEW: Viewer range for fake viewer count display
   const [minViewers, setMinViewers] = useState<number>(1000);
   const [maxViewers, setMaxViewers] = useState<number>(1100);
 
-  // NEW: Loop video maintenance mode
-  const [loopMode, setLoopMode] = useState(false);
+  // Loop mode settings
   const [loopNextGameDate, setLoopNextGameDate] = useState('');
   const [loopNextGameTime, setLoopNextGameTime] = useState('');
 
@@ -45,10 +43,13 @@ export default function AdminStreamSettings() {
       const response = await apiClient.get<any>('/stream/simple-config');
       if (response.success && response.data) {
         const cfg = response.data;
+
+        // Set mode based on loopMode
+        setMode(cfg.loopMode ? 'loop' : 'stream');
+
+        // Stream settings
         setStreamUrl(cfg.streamUrl || '');
         setIsPaused(cfg.isPaused || false);
-
-        // If backend has streamType, use it, else infer from URL
         if (cfg.streamType === 'video' || cfg.streamType === 'iframe') {
           setStreamType(cfg.streamType);
         } else if (cfg.streamUrl && cfg.streamUrl.toLowerCase().endsWith('.m3u8')) {
@@ -56,13 +57,10 @@ export default function AdminStreamSettings() {
         } else {
           setStreamType('iframe');
         }
-
-        // Load viewer range settings
         setMinViewers(cfg.minViewers ?? 1000);
         setMaxViewers(cfg.maxViewers ?? 1100);
 
-        // Load loop video settings
-        setLoopMode(cfg.loopMode || false);
+        // Loop settings
         setLoopNextGameDate(cfg.loopNextGameDate || '');
         setLoopNextGameTime(cfg.loopNextGameTime || '');
       }
@@ -78,10 +76,9 @@ export default function AdminStreamSettings() {
     setMessage(null);
 
     try {
-      // ✅ Stream URL is optional - can be empty if using loop mode only
       const payload = {
-        streamUrl: streamUrl || '',
-        streamType, // 'iframe' or 'video' from UI toggle
+        streamUrl: mode === 'stream' ? streamUrl : '',
+        streamType,
         isPaused,
         streamTitle: 'Live Game Stream',
         autoplay: true,
@@ -89,11 +86,9 @@ export default function AdminStreamSettings() {
         controls: streamType === 'video' ? false : true,
         minViewers,
         maxViewers,
-
-        // Loop video maintenance mode
-        loopMode,
-        loopNextGameDate,
-        loopNextGameTime,
+        loopMode: mode === 'loop',
+        loopNextGameDate: mode === 'loop' ? loopNextGameDate : '',
+        loopNextGameTime: mode === 'loop' ? loopNextGameTime : '',
         loopVideoUrl: '/shared/uhd_30fps.mp4'
       };
 
@@ -158,7 +153,7 @@ export default function AdminStreamSettings() {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-gold to-yellow-600 bg-clip-text text-transparent drop-shadow-lg mb-2">
             🎥 Stream Settings
           </h1>
-          <p className="text-gray-400">Configure your live stream URL - Simple and easy!</p>
+          <p className="text-gray-400">Configure your live stream or maintenance loop video</p>
         </div>
 
         {/* Main Settings Card */}
@@ -170,202 +165,179 @@ export default function AdminStreamSettings() {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Stream URL Input */}
-              <div>
-                <label className="block text-sm font-semibold text-gold mb-2">
-                  Stream URL *
-                </label>
-                <input
-                  type="text"
-                  value={streamUrl}
-                  onChange={(e) => setStreamUrl(e.target.value)}
-                  placeholder="Enter your stream URL (HLS .m3u8, MP4, or YouTube embed)"
-                  className="w-full px-4 py-3 bg-black/50 border border-green-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 transition-colors"
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  For HLS use: https://yourserver.com/live/stream/index.m3u8
-                </p>
-              </div>
-
-              {/* Stream Type Selector */}
-              <div>
-                <label className="block text-sm font-semibold text-gold mb-2">
-                  How should we play this URL?
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setStreamType('iframe')}
-                    className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all ${streamType === 'iframe'
-                      ? 'bg-gold text-black shadow-lg'
-                      : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-gold/40'
-                      }`}
-                  >
-                    iFrame (YouTube / Embed)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStreamType('video')}
-                    className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all ${streamType === 'video'
-                      ? 'bg-green-500 text-black shadow-lg'
-                      : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-green-400/40'
-                      }`}
-                  >
-                    Video (MP4 / HLS .m3u8)
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Select "Video" for HLS (.m3u8) or direct MP4 links. Use "iFrame" only for embed URLs.
-                </p>
-              </div>
-
-              {/* Viewer Range Configuration */}
-              <div className="space-y-4 p-4 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 rounded-lg border border-indigo-500/30">
-                <div>
-                  <h3 className="text-lg font-semibold text-indigo-300 mb-2">👥 Live Viewer Count Settings</h3>
-                  <p className="text-sm text-gray-400 mb-4">
-                    Configure the fake viewer count range that will be displayed to players. Leave both at default to show real player count.
-                  </p>
-                </div>
-
+              {/* ✅ MODE SELECTOR */}
+              <div className="p-4 bg-gradient-to-r from-blue-900/40 to-purple-900/40 rounded-lg border border-blue-500/30">
+                <h3 className="text-lg font-semibold text-white mb-3">📺 Select Mode</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-indigo-300 mb-2">
-                      Min Viewers
-                    </label>
-                    <input
-                      type="number"
-                      value={minViewers}
-                      onChange={(e) => setMinViewers(Number(e.target.value))}
-                      min={0}
-                      className="w-full px-4 py-3 bg-black/50 border border-indigo-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-400/50 transition-colors"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-indigo-300 mb-2">
-                      Max Viewers
-                    </label>
-                    <input
-                      type="number"
-                      value={maxViewers}
-                      onChange={(e) => setMaxViewers(Number(e.target.value))}
-                      min={0}
-                      className="w-full px-4 py-3 bg-black/50 border border-indigo-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-400/50 transition-colors"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMode('stream')}
+                    className={`px-6 py-4 rounded-lg font-semibold transition-all ${mode === 'stream'
+                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg scale-105'
+                        : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-green-400/40'
+                      }`}
+                  >
+                    <div className="text-2xl mb-1">📡</div>
+                    <div>Stream Mode</div>
+                    <div className="text-xs mt-1 opacity-75">Show live stream</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('loop')}
+                    className={`px-6 py-4 rounded-lg font-semibold transition-all ${mode === 'loop'
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105'
+                        : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-purple-400/40'
+                      }`}
+                  >
+                    <div className="text-2xl mb-1">🔁</div>
+                    <div>Loop Mode</div>
+                    <div className="text-xs mt-1 opacity-75">Show maintenance video</div>
+                  </button>
                 </div>
-
-                <p className="text-xs text-gray-400">
-                  💡 A random number between Min and Max will be shown every 2 seconds. Set both to 0 to display real player count.
-                </p>
               </div>
 
-              {/* Loop Video Maintenance Mode */}
-              <div className="space-y-4 p-4 bg-gradient-to-r from-purple-900/40 to-pink-900/40 rounded-lg border border-purple-500/30">
-                <div className="flex items-center justify-between">
+              {/* ✅ STREAM MODE SETTINGS */}
+              {mode === 'stream' && (
+                <>
                   <div>
-                    <h3 className="text-lg font-semibold text-purple-300 mb-1">🔁 Loop Video Mode</h3>
-                    <p className="text-sm text-gray-400">
-                      Toggle ON to show loop video with custom message. Toggle OFF to show stream.
+                    <label className="block text-sm font-semibold text-gold mb-2">
+                      Stream URL *
+                    </label>
+                    <input
+                      type="text"
+                      value={streamUrl}
+                      onChange={(e) => setStreamUrl(e.target.value)}
+                      placeholder="Enter your stream URL (HLS .m3u8, MP4, or YouTube embed)"
+                      className="w-full px-4 py-3 bg-black/50 border border-green-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 transition-colors"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      For HLS use: https://yourserver.com/live/stream/index.m3u8
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setLoopMode(!loopMode)}
-                    className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${loopMode ? 'bg-purple-500' : 'bg-gray-600'}`}
-                  >
-                    <span
-                      className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${loopMode ? 'translate-x-7' : 'translate-x-1'}`}
-                    />
-                  </button>
-                </div>
 
-                {loopMode && (
-                  <div className="space-y-4 mt-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gold mb-2">
+                      Stream Type
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setStreamType('iframe')}
+                        className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all ${streamType === 'iframe'
+                            ? 'bg-gold text-black shadow-lg'
+                            : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-gold/40'
+                          }`}
+                      >
+                        iFrame (YouTube / Embed)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStreamType('video')}
+                        className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all ${streamType === 'video'
+                            ? 'bg-green-500 text-black shadow-lg'
+                            : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-green-400/40'
+                          }`}
+                      >
+                        Video (MP4 / HLS .m3u8)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 p-4 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 rounded-lg border border-indigo-500/30">
+                    <h3 className="text-lg font-semibold text-indigo-300 mb-2">👥 Viewer Count Range</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-semibold text-purple-300 mb-2">
-                          📅 Next Game Date
-                        </label>
+                        <label className="block text-sm font-semibold text-indigo-300 mb-2">Min</label>
                         <input
-                          type="text"
-                          value={loopNextGameDate}
-                          onChange={(e) => setLoopNextGameDate(e.target.value)}
-                          placeholder="e.g., 25 Nov 2025"
-                          className="w-full px-4 py-3 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-400/50"
+                          type="number"
+                          value={minViewers}
+                          onChange={(e) => setMinViewers(Number(e.target.value))}
+                          min={0}
+                          className="w-full px-4 py-3 bg-black/50 border border-indigo-500/30 rounded-lg text-white"
                         />
                       </div>
-
                       <div>
-                        <label className="block text-sm font-semibold text-purple-300 mb-2">
-                          🕐 Next Game Time
-                        </label>
+                        <label className="block text-sm font-semibold text-indigo-300 mb-2">Max</label>
                         <input
-                          type="text"
-                          value={loopNextGameTime}
-                          onChange={(e) => setLoopNextGameTime(e.target.value)}
-                          placeholder="e.g., 7:00 PM"
-                          className="w-full px-4 py-3 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-400/50"
+                          type="number"
+                          value={maxViewers}
+                          onChange={(e) => setMaxViewers(Number(e.target.value))}
+                          min={0}
+                          className="w-full px-4 py-3 bg-black/50 border border-indigo-500/30 rounded-lg text-white"
                         />
                       </div>
                     </div>
-
-                    <div className="p-3 bg-purple-900/20 rounded border border-purple-500/20">
-                      <p className="text-xs text-purple-300">
-                        ℹ️ Loop Video: <code className="bg-black/40 px-1 py-0.5 rounded">D:\nextjs projects\game\shared\uhd_30fps.mp4</code>
-                      </p>
-                      <p className="text-xs text-purple-300 mt-2">
-                        📺 Message shown to players: <strong>"Next game at {loopNextGameDate || '[date]'} at {loopNextGameTime || '[time]'}"</strong>
-                      </p>
-                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Pause/Play Control - Only show when NOT in loop mode and has stream URL */}
-              {!loopMode && streamUrl && (
-                <div className="p-4 bg-gradient-to-r from-purple-900/40 to-blue-900/40 rounded-lg border border-purple-500/30">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-semibold text-white flex items-center gap-2">
+                  {streamUrl && (
+                    <div className="p-4 bg-gradient-to-r from-purple-900/40 to-blue-900/40 rounded-lg border border-purple-500/30">
+                      <p className="font-semibold text-white flex items-center gap-2 mb-3">
                         <span className="text-2xl">{isPaused ? '⏸️' : '▶️'}</span>
-                        Stream Playback Control
+                        Stream Control
                       </p>
-                      <p className="text-sm text-gray-400 mt-1">
-                        {isPaused
-                          ? 'Stream is currently PAUSED for all players (frozen frame visible)'
-                          : 'Stream is currently PLAYING for all players'}
-                      </p>
+                      <button
+                        onClick={togglePausePlay}
+                        disabled={toggling}
+                        className={`w-full px-6 py-3 rounded-lg font-bold transition-all hover:scale-105 shadow-lg disabled:opacity-50 ${isPaused
+                            ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white'
+                            : 'bg-gradient-to-r from-amber-600 to-orange-600 text-white'
+                          }`}
+                      >
+                        {toggling ? 'Processing...' : isPaused ? '▶️ Resume Stream' : '⏸️ Pause Stream'}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ✅ LOOP MODE SETTINGS */}
+              {mode === 'loop' && (
+                <div className="space-y-4 p-4 bg-gradient-to-r from-purple-900/40 to-pink-900/40 rounded-lg border border-purple-500/30">
+                  <h3 className="text-lg font-semibold text-purple-300 mb-2">🔁 Loop Video Message</h3>
+                  <p className="text-sm text-gray-400 mb-4">
+                    Configure the message shown to players during maintenance
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-purple-300 mb-2">
+                        📅 Next Game Date
+                      </label>
+                      <input
+                        type="text"
+                        value={loopNextGameDate}
+                        onChange={(e) => setLoopNextGameDate(e.target.value)}
+                        placeholder="e.g., 25 Nov 2025"
+                        className="w-full px-4 py-3 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-purple-300 mb-2">
+                        🕐 Next Game Time
+                      </label>
+                      <input
+                        type="text"
+                        value={loopNextGameTime}
+                        onChange={(e) => setLoopNextGameTime(e.target.value)}
+                        placeholder="e.g., 7:00 PM"
+                        className="w-full px-4 py-3 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500"
+                      />
                     </div>
                   </div>
 
-                  <button
-                    onClick={togglePausePlay}
-                    disabled={toggling}
-                    className={`w-full px-6 py-3 rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isPaused
-                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'
-                      : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white'
-                      }`}
-                  >
-                    {toggling ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        {isPaused ? 'Resuming...' : 'Pausing...'}
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-xl">{isPaused ? '▶️' : '⏸️'}</span>
-                        {isPaused ? 'Resume Stream for All Players' : 'Pause Stream for All Players'}
-                      </>
-                    )}
-                  </button>
-
-                  <p className="text-xs text-gray-400 mt-2 text-center">
-                    💡 {isPaused
-                      ? 'Click to resume playback - players will see the live stream again'
-                      : 'Click to pause - players will see a frozen frame (no black screen)'}
-                  </p>
+                  <div className="p-3 bg-purple-900/20 rounded border border-purple-500/20 mt-4">
+                    <p className="text-xs text-purple-300">
+                      📺 Preview: Players will see the loop video with message overlay
+                    </p>
+                    <div className="mt-2 p-2 bg-black/40 rounded">
+                      <p className="text-sm text-white text-center font-semibold">
+                        {loopNextGameDate || '[Date]'}
+                      </p>
+                      <p className="text-lg text-gold text-center font-bold">
+                        {loopNextGameTime || '[Time]'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 

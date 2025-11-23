@@ -690,7 +690,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       );
     }
 
-    // ✅ SIMPLIFIED: Check loopMode - if ON, show loop video; if OFF, show stream
+    // ✅ Loop Mode: Show loop video with professional message card
     if (streamConfig?.loopMode) {
       console.log('🔁 VideoArea: Loop mode ON - showing loop video', {
         loopMode: streamConfig.loopMode,
@@ -698,10 +698,11 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         nextGameTime: streamConfig.loopNextGameTime
       });
       return (
-        <div className="relative w-full h-full">
+        <div className="relative w-full h-full bg-black">
+          {/* Loop Video - Background - Always use /shared/uhd_30fps.mp4 */}
           <video
             key="loop-video"
-            src="/uhd_30fps.mp4"
+            src="/shared/uhd_30fps.mp4"
             className="w-full h-full object-cover"
             autoPlay
             loop
@@ -709,22 +710,21 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             playsInline
             style={{ position: 'absolute', inset: 0, zIndex: 1 }}
             onLoadedData={(e) => {
-              console.log('✅ Loop video loaded, starting playback...');
+              console.log('✅ Loop video loaded from /shared/uhd_30fps.mp4');
               const video = e.currentTarget;
               video.play().catch(err => {
                 console.error('❌ Loop video autoplay failed:', err);
-                // Try muted play as fallback
                 video.muted = true;
                 video.play().catch(e => console.error('❌ Loop video muted play failed:', e));
               });
             }}
-            onError={(e) => console.error('❌ Loop video error:', e)}
-            onCanPlay={() => console.log('✅ Loop video can play')}
-            onPlaying={() => console.log('▶️ Loop video is playing')}
+            onError={(e) => console.error('❌ Loop video error - check /shared/uhd_30fps.mp4 exists:', e)}
           />
+
+          {/* Simple Text Message Overlay - No Background */}
           <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
             <div className="text-center space-y-4 px-6">
-              {/* Only show configurable message from admin - no hardcoded text */}
+              {/* Date */}
               {streamConfig?.loopNextGameDate && (
                 <p
                   className="text-4xl md:text-5xl font-bold text-white"
@@ -733,6 +733,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                   {streamConfig.loopNextGameDate}
                 </p>
               )}
+
+              {/* Time */}
               {streamConfig?.loopNextGameTime && (
                 <p
                   className="text-6xl md:text-7xl font-bold text-gold"
@@ -741,6 +743,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                   {streamConfig.loopNextGameTime}
                 </p>
               )}
+
+              {/* Fallback message */}
               {(!streamConfig?.loopNextGameDate && !streamConfig?.loopNextGameTime) && (
                 <p
                   className="text-4xl md:text-5xl font-bold text-white"

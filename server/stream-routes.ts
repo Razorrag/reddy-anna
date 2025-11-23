@@ -142,7 +142,10 @@ router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res)
   try {
     let { streamUrl, streamType, isActive, isPaused, streamTitle, autoplay, muted, controls, minViewers, maxViewers, loopMode, loopNextGameDate, loopNextGameTime, loopVideoUrl } = req.body;
 
-    // ✅ Stream URL is optional if loop mode is enabled
+    // ✅ Trim streamUrl and treat empty string as null
+    streamUrl = streamUrl?.trim() || '';
+
+    // ✅ Stream URL is required only if loop mode is disabled
     if (!loopMode && !streamUrl) {
       return res.status(400).json({
         success: false,
@@ -163,8 +166,10 @@ router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res)
       console.log('⚠️ Swapped min/max viewers:', { minViewers, maxViewers });
     }
 
-    // Auto-convert YouTube watch URLs to embed URLs
-    streamUrl = convertYouTubeUrl(streamUrl);
+    // Auto-convert YouTube watch URLs to embed URLs (only if streamUrl exists)
+    if (streamUrl) {
+      streamUrl = convertYouTubeUrl(streamUrl);
+    }
 
     if (!['iframe', 'video', 'custom'].includes(streamType)) {
       return res.status(400).json({
