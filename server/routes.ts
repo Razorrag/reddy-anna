@@ -140,6 +140,7 @@ import {
 //   updateRequestStatus
 // } from './whatsapp-service';
 import rateLimit from 'express-rate-limit';
+import { gameStateMutex } from './lib/AsyncMutex';
 import {
   authLimiter,
   generalLimiter,
@@ -5090,36 +5091,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ✅ STEP 2: Refund balance (after bet is cancelled)
       const newBalance = await storage.addBalanceAtomic(userId, betAmount);
 
-      // ✅ STEP 3: Update in-memory game state (subtract ONLY this bet)
-      console.log(`🔍 BEFORE UNDO - Game State:`, {
-        round1: currentGameState.round1Bets,
-        round2: currentGameState.round2Bets
-      });
+      // ✅ STEP 3: Update in-memory game state (subtract ONLY this bet) - PROTECTED BY MUTEX
+      await gameStateMutex.runExclusive(async () => {
+        console.log(`🔒 MUTEX ACQUIRED: Undoing bet for user ${userId}`);
+        console.log(`🔍 BEFORE UNDO - Game State:`, {
+          round1: currentGameState.round1Bets,
+          round2: currentGameState.round2Bets
+        });
 
-      // Update user's individual tracking
-      if (currentGameState.userBets.has(userId)) {
-        const userBetsState = currentGameState.userBets.get(userId)!;
-        if (betRound === 1) {
-          userBetsState.round1[betSide] -= betAmount;
-          if (userBetsState.round1[betSide] < 0) userBetsState.round1[betSide] = 0;
-        } else {
-          userBetsState.round2[betSide] -= betAmount;
-          if (userBetsState.round2[betSide] < 0) userBetsState.round2[betSide] = 0;
+        // Update user's individual tracking
+        if (currentGameState.userBets.has(userId)) {
+          const userBetsState = currentGameState.userBets.get(userId)!;
+          if (betRound === 1) {
+            userBetsState.round1[betSide] -= betAmount;
+            if (userBetsState.round1[betSide] < 0) userBetsState.round1[betSide] = 0;
+          } else {
+            userBetsState.round2[betSide] -= betAmount;
+            if (userBetsState.round2[betSide] < 0) userBetsState.round2[betSide] = 0;
+          }
         }
-      }
 
-      // Update global totals (for admin dashboard)
-      if (betRound === 1) {
-        currentGameState.round1Bets[betSide] -= betAmount;
-        if (currentGameState.round1Bets[betSide] < 0) currentGameState.round1Bets[betSide] = 0;
-      } else {
-        currentGameState.round2Bets[betSide] -= betAmount;
-        if (currentGameState.round2Bets[betSide] < 0) currentGameState.round2Bets[betSide] = 0;
-      }
+        // Update global totals (for admin dashboard)
+        if (betRound === 1) {
+          currentGameState.round1Bets[betSide] -= betAmount;
+          if (currentGameState.round1Bets[betSide] < 0) currentGameState.round1Bets[betSide] = 0;
+        } else {
+          currentGameState.round2Bets[betSide] -= betAmount;
+          if (currentGameState.round2Bets[betSide] < 0) currentGameState.round2Bets[betSide] = 0;
+        }
 
-      console.log(`✅ AFTER UNDO - Game State:`, {
-        round1: currentGameState.round1Bets,
-        round2: currentGameState.round2Bets
+        console.log(`✅ AFTER UNDO - Game State:`, {
+          round1: currentGameState.round1Bets,
+          round2: currentGameState.round2Bets
+        });
+        console.log(`🔓 MUTEX RELEASED: Undo complete for user ${userId}`);
       });
 
       // ✅ STEP 4: Broadcast to admin (instant update)
@@ -5145,19 +5150,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`✅ Admin notified: ₹${betAmount} undone from ${betSide} in Round ${betRound}`);
       }
 
-      // ✅ STEP 5: Notify user (all their connections)
-      if (typeof broadcast === 'function') {
-        broadcast({
-          type: 'bet_undo_success',
-          data: {
-            userId,
-            round: betRound,
-            side: betSide,
-            refundedAmount: betAmount,
-            newBalance
-          }
-        });
-      }
+      // ✅ STEP 5: Notify user (all their connections) - FIXED: Send to specific user only
+      const userClients = Array.from(clients).filter((c: any) => c.userId === userId);
+      userClients.forEach((client: any) => {
+        if (client.ws && client.ws.readyState === WebSocket.OPEN) {
+          client.ws.send(JSON.stringify({
+            type: 'bet_undo_success',
+            data: {
+              userId,
+              round: betRound,
+              side: betSide,
+              refundedAmount: betAmount,
+              newBalance,
+              timestamp: Date.now()
+            }
+          }));
+        }
+      });
+      console.log(`✅ Sent bet_undo_success to ${userClients.length} connections for user ${userId}`);
 
       console.log(`✅ UNDO COMPLETE: User ${userId}, Round ${betRound}, Side: ${betSide}, Refunded ₹${betAmount}`);
 
@@ -5181,6 +5191,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         success: false,
         error: 'Failed to undo bet'
+      });
+    }
+  });
+
+  // ✅ NEW: Get current game state endpoint (for page refresh sync)
+  app.get("/api/game/current-state", requireAuth, generalLimiter, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const gameState = (global as any).currentGameState;
+
+      if (!gameState) {
+        return res.json({
+          success: true,
+          data: {
+            gameId: 'default-game',
+            phase: 'idle',
+            currentRound: 1,
+            timer: 0,
+            bettingLocked: false,
+            openingCard: null,
+            andarCards: [],
+            baharCards: [],
+            winner: null,
+            winningCard: null,
+            round1Bets: { andar: 0, bahar: 0 },
+            round2Bets: { andar: 0, bahar: 0 },
+            playerRound1Bets: { andar: 0, bahar: 0 },
+            playerRound2Bets: { andar: 0, bahar: 0 }
+          }
+        });
+      }
+
+      // Get user's specific bets
+      const userBets = gameState.getUserBets?.(userId) || {
+        round1: { andar: 0, bahar: 0 },
+        round2: { andar: 0, bahar: 0 }
+      };
+
+      res.json({
+        success: true,
+        data: {
+          gameId: gameState.gameId,
+          phase: gameState.phase,
+          currentRound: gameState.currentRound,
+          timer: gameState.timer,
+          bettingLocked: gameState.bettingLocked,
+          openingCard: gameState.openingCard,
+          andarCards: gameState.andarCards || [],
+          baharCards: gameState.baharCards || [],
+          winner: gameState.winner,
+          winningCard: gameState.winningCard,
+          round1Bets: gameState.round1Bets,
+          round2Bets: gameState.round2Bets,
+          playerRound1Bets: userBets.round1,
+          playerRound2Bets: userBets.round2
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting game state:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get game state'
       });
     }
   });

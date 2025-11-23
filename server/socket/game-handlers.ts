@@ -7,6 +7,8 @@
 
 import { WebSocket } from 'ws';
 import { completeGame } from '../game';
+import { gameStateMutex } from '../lib/AsyncMutex';
+import { broadcastThrottler } from '../lib/BroadcastThrottler';
 
 // WSClient interface to match the main routes.ts file
 interface WSClient {
@@ -14,6 +16,18 @@ interface WSClient {
   userId: string;
   role: 'player' | 'admin' | 'super_admin';
   wallet: number;
+}
+
+/**
+ * Send error message to client
+ */
+function sendError(ws: WebSocket, message: string) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      data: { message }
+    }));
+  }
 }
 
 /**
@@ -28,7 +42,12 @@ export function registerGameHandlers() {
  * Handle player bet
  */
 export async function handlePlayerBet(client: WSClient, data: any) {
-  const { ws, userId, role } = client;
+  const { ws, userId, role, wallet } = client;
+
+  console.log('🎲🎲🎲 ===== BET RECEIVED ===== 🎲🎲🎲');
+  console.log(`User: ${userId}`);
+  console.log(`Data:`, data);
+  console.log('========================================');
 
   // Validate authentication
   if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -164,8 +183,9 @@ export async function handlePlayerBet(client: WSClient, data: any) {
     // Atomically deduct balance - prevents race conditions
     const { storage } = await import('../storage-supabase');
 
-    // ✅ FIX: Check timer again before processing bet (race condition prevention)
-    if (currentGameState.timer <= 0 || currentGameState.bettingLocked) {
+    // ✅ FIX: Check timer with 2-second safety buffer (prevents late bets due to network latency)
+    const TIMER_LOCK_BUFFER = 2; // seconds
+    if (currentGameState.timer <= TIMER_LOCK_BUFFER || currentGameState.bettingLocked) {
       sendError(ws, 'Betting time has expired. Please wait for the next round.');
       return;
     }
@@ -240,38 +260,44 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       console.error('⚠️ Error tracking wagering:', wageringError);
     }
 
-    // Step 5: Update in-memory game state (after DB operations succeed)
-    if (round === 1) {
-      if ((global as any).currentGameState?.userBets?.get) {
-        const beforeTotal = (global as any).currentGameState.round1Bets[side];
-        console.log(`🔍 BEFORE BET - Round 1 ${side}:`, { globalTotal: beforeTotal, betToAdd: amount });
+    // Step 5: Update in-memory game state (after DB operations succeed) - PROTECTED BY MUTEX
+    await gameStateMutex.runExclusive(async () => {
+      console.log(`🔒 MUTEX ACQUIRED: Updating game state for user ${userId}`);
+      
+      if (round === 1) {
+        if ((global as any).currentGameState?.userBets?.get) {
+          const beforeTotal = (global as any).currentGameState.round1Bets[side];
+          console.log(`🔍 BEFORE BET - Round 1 ${side}:`, { globalTotal: beforeTotal, betToAdd: amount });
 
-        if (!(global as any).currentGameState.userBets.has(userId)) {
-          (global as any).currentGameState.setUserBets(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
+          if (!(global as any).currentGameState.userBets.has(userId)) {
+            (global as any).currentGameState.setUserBets(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
+          }
+          const userBets = (global as any).currentGameState.getUserBets(userId);
+          userBets.round1[side] += amount;
+          (global as any).currentGameState.addRound1Bet(side, amount);
+
+          const afterTotal = (global as any).currentGameState.round1Bets[side];
+          console.log(`✅ AFTER BET - Round 1 ${side}:`, { globalTotal: afterTotal, added: amount });
         }
-        const userBets = (global as any).currentGameState.getUserBets(userId);
-        userBets.round1[side] += amount;
-        (global as any).currentGameState.addRound1Bet(side, amount);
+      } else if (round === 2) {
+        if ((global as any).currentGameState?.userBets?.get) {
+          const beforeTotal = (global as any).currentGameState.round2Bets[side];
+          console.log(`🔍 BEFORE BET - Round 2 ${side}:`, { globalTotal: beforeTotal, betToAdd: amount });
 
-        const afterTotal = (global as any).currentGameState.round1Bets[side];
-        console.log(`✅ AFTER BET - Round 1 ${side}:`, { globalTotal: afterTotal, added: amount });
-      }
-    } else if (round === 2) {
-      if ((global as any).currentGameState?.userBets?.get) {
-        const beforeTotal = (global as any).currentGameState.round2Bets[side];
-        console.log(`🔍 BEFORE BET - Round 2 ${side}:`, { globalTotal: beforeTotal, betToAdd: amount });
+          if (!(global as any).currentGameState.userBets.has(userId)) {
+            (global as any).currentGameState.setUserBets(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
+          }
+          const userBets = (global as any).currentGameState.getUserBets(userId);
+          userBets.round2[side] += amount;
+          (global as any).currentGameState.addRound2Bet(side, amount);
 
-        if (!(global as any).currentGameState.userBets.has(userId)) {
-          (global as any).currentGameState.setUserBets(userId, { round1: { andar: 0, bahar: 0 }, round2: { andar: 0, bahar: 0 } });
+          const afterTotal = (global as any).currentGameState.round2Bets[side];
+          console.log(`✅ AFTER BET - Round 2 ${side}:`, { globalTotal: afterTotal, added: amount });
         }
-        const userBets = (global as any).currentGameState.getUserBets(userId);
-        userBets.round2[side] += amount;
-        (global as any).currentGameState.addRound2Bet(side, amount);
-
-        const afterTotal = (global as any).currentGameState.round2Bets[side];
-        console.log(`✅ AFTER BET - Round 2 ${side}:`, { globalTotal: afterTotal, added: amount });
       }
-    }
+      
+      console.log(`🔓 MUTEX RELEASED: Game state updated for user ${userId}`);
+    });
 
     // Step 6: All operations succeeded - send confirmation with user's cumulative totals
     const betId = data.betId || `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -324,6 +350,14 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       const totalBahar = round1Bets.bahar + round2Bets.bahar;
 
       // Broadcast to Admin-specific listeners (admins see all players' bets)
+      console.log('📢📢📢 BROADCASTING TO ADMIN 📢📢📢');
+      console.log('Type: admin_bet_update');
+      console.log('Round 1 Bets:', round1Bets);
+      console.log('Round 2 Bets:', round2Bets);
+      console.log('Total Andar:', totalAndar);
+      console.log('Total Bahar:', totalBahar);
+      console.log('==========================================');
+      
       (global as any).broadcastToRole({
         type: 'admin_bet_update',
         data: {
@@ -338,45 +372,42 @@ export async function handlePlayerBet(client: WSClient, data: any) {
           round2Bets
         },
       }, 'admin');
+      
+      console.log('✅ Broadcast to admin complete');
 
-      // ⚡ PERFORMANCE FIX: Broadcast betting_stats in PARALLEL instead of sequential loop
-      // This reduces perceived latency from 200-400ms to <50ms for other players
-      const allClients = (global as any).clients || [];
-      const bettingStatsMessage = JSON.stringify({
-        type: 'betting_stats',
-        data: {
+      // ⚡ CRITICAL FIX: Use throttler to prevent broadcast storm (max 1 broadcast/second)
+      // Before: 1000 players × 10 bets/sec = 10,000 messages/sec → Server crash
+      // After: Max 1 broadcast/sec regardless of bet rate → Server stable
+      broadcastThrottler.throttledBroadcast(
+        'betting_stats',
+        'betting_stats',
+        {
           andarTotal: totalAndar,
           baharTotal: totalBahar,
           round1Bets: round1Bets,
-          round2Bets: round2Bets
-        }
-      });
-
-      // Send to all clients in TRULY PARALLEL using Promise.allSettled
-      // Each WebSocket send runs concurrently without blocking others
-      const sendPromises = allClients
-        .filter((client: WSClient) => client.userId !== userId && client.ws.readyState === WebSocket.OPEN)
-        .map((client: WSClient) =>
-          new Promise<void>((resolve) => {
-            try {
-              client.ws.send(bettingStatsMessage, (error) => {
-                if (error) {
-                  console.error(`⚠️ Failed to send betting_stats to ${client.userId}:`, error);
-                }
-                resolve(); // Always resolve, never reject
-              });
-            } catch (error) {
-              console.error(`⚠️ Exception sending betting_stats to ${client.userId}:`, error);
-              resolve(); // Always resolve, never reject
+          round2Bets: round2Bets,
+          lastUpdate: Date.now()
+        },
+        (message) => {
+          // Broadcast to all players except the one who just bet
+          const allClients = (global as any).clients || [];
+          const bettingStatsMessage = JSON.stringify(message);
+          
+          let sentCount = 0;
+          allClients.forEach((client: any) => {
+            if (client.userId !== userId && client.ws.readyState === WebSocket.OPEN) {
+              try {
+                client.ws.send(bettingStatsMessage);
+                sentCount++;
+              } catch (error) {
+                console.error(`⚠️ Failed to send betting_stats to ${client.userId}:`, error);
+              }
             }
-          })
-        );
-
-      // Fire and forget - don't block the bet confirmation
-      // Using allSettled ensures all sends complete even if some fail
-      Promise.allSettled(sendPromises).catch((error) => {
-        console.error('⚠️ Unexpected error in parallel broadcast:', error);
-      });
+          });
+          
+          console.log(`📊 Broadcast betting_stats to ${sentCount} players (throttled)`);
+        }
+      );
 
       // ✅ FIX: Broadcast analytics_update only to admins (not to players)
       // Analytics updates are for admin dashboard, not for players
@@ -438,20 +469,16 @@ export async function handleStartGame(client: WSClient, data: any) {
         }
       }
 
-      // Add synchronization lock to prevent concurrent game starts
-      if ((global as any).gameStartInProgress) {
-        sendError(ws, 'Game start already in progress. Please wait...');
-        return;
-      }
-
-      (global as any).gameStartInProgress = true;
-
-      // Start a new game (generates new game ID and resets state)
-      // This will generate a new gameId and reset all state
-      const oldGameId = (global as any).currentGameState.gameId;
-      (global as any).currentGameState.startNewGame();
-      const generatedGameId = (global as any).currentGameState.gameId;
-      console.log(`🔄 [DEBUG] Game ID changed: ${oldGameId} -> ${generatedGameId}`);
+      // ✅ CRITICAL FIX: Use mutex instead of simple flag for game start protection
+      await gameStateMutex.runExclusive(async () => {
+        console.log('🔒 MUTEX ACQUIRED: Game start');
+        
+        // Start a new game (generates new game ID and resets state)
+        // This will generate a new gameId and reset all state
+        const oldGameId = (global as any).currentGameState.gameId;
+        (global as any).currentGameState.startNewGame();
+        const generatedGameId = (global as any).currentGameState.gameId;
+        console.log(`🔄 [DEBUG] Game ID changed: ${oldGameId} -> ${generatedGameId}`);
 
       // ✅ FIX: Ensure all game state is properly reset using proper methods
       (global as any).currentGameState.winner = null;
@@ -581,15 +608,14 @@ export async function handleStartGame(client: WSClient, data: any) {
       }));
 
       console.log(`✅ GAME STARTED: Game ${(global as any).currentGameState.gameId} started by admin ${userId}`);
+      console.log('🔓 MUTEX RELEASED: Game start complete');
+      }); // Close mutex block
     } else {
       sendError(ws, 'Game state not available');
     }
   } catch (error: any) {
     console.error('Start game error:', error);
     sendError(ws, error.message || 'Failed to start game');
-  } finally {
-    // ✅ FIX #4: Always release the lock, even if error occurs
-    (global as any).gameStartInProgress = false;
   }
 }
 
@@ -1047,17 +1073,5 @@ export async function handleGameSubscribe(client: WSClient, data: any) {
   } catch (error: any) {
     console.error('Subscribe error:', error);
     sendError(ws, error.message || 'Failed to get game state');
-  }
-}
-
-/**
- * Send error message to client
- */
-export function sendError(ws: WebSocket, message: string) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      type: 'error',
-      data: { message }
-    }));
   }
 }

@@ -21,7 +21,7 @@ const optionalAuth = (req: any, res: any, next: any) => {
       const token = authHeader.substring(7);
       const secret = process.env.JWT_SECRET as string;
       const decoded = jwt.verify(token, secret) as any;
-      
+
       // Ensure this is an access token, not a refresh token
       if (decoded.type === 'access') {
         req.user = {
@@ -86,7 +86,13 @@ router.get('/simple-config', optionalAuth, async (req, res) => {
       muted: data.muted !== false,
       controls: data.controls || false,
       minViewers: data.min_viewers ?? null,
-      maxViewers: data.max_viewers ?? null
+      maxViewers: data.max_viewers ?? null,
+
+      // Loop video maintenance mode
+      loopMode: data.loop_mode || false,
+      loopNextGameDate: data.loop_next_game_date || null,
+      loopNextGameTime: data.loop_next_game_time || null,
+      loopVideoUrl: data.loop_video_url || '/shared/uhd_30fps.mp4'
     };
 
     res.json({
@@ -134,7 +140,7 @@ function convertYouTubeUrl(url: string): string {
  */
 router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res) => {
   try {
-    let { streamUrl, streamType, isActive, isPaused, streamTitle, autoplay, muted, controls, minViewers, maxViewers } = req.body;
+    let { streamUrl, streamType, isActive, isPaused, streamTitle, autoplay, muted, controls, minViewers, maxViewers, loopMode, loopNextGameDate, loopNextGameTime, loopVideoUrl } = req.body;
 
     if (!streamUrl || !streamType) {
       return res.status(400).json({
@@ -176,6 +182,13 @@ router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res)
       controls: controls || false,
       min_viewers: typeof minViewers === 'number' ? minViewers : null,
       max_viewers: typeof maxViewers === 'number' ? maxViewers : null,
+
+      // Loop video maintenance mode
+      loop_mode: loopMode || false,
+      loop_next_game_date: loopNextGameDate || null,
+      loop_next_game_time: loopNextGameTime || null,
+      loop_video_url: loopVideoUrl || '/shared/uhd_30fps.mp4',
+
       updated_at: new Date().toISOString()
     };
 

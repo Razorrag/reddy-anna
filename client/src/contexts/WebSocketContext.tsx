@@ -118,6 +118,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     updatePlayerWallet,
     setScreenSharing,
     setWinningCard,
+    addBetToHistory,
     removeLastBet,
     clearRoundBets,
     setBettingLocked,
@@ -481,6 +482,24 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
           updatePlayerRoundBets(2, { andar: newAndar, bahar: newBahar });
           console.log(`✅ Round 2 totals updated (anti-flicker): Andar ₹${newAndar}, Bahar ₹${newBahar}`);
+        }
+
+        // ✅ CRITICAL FIX: Ensure bet is in history (server confirmation backup)
+        // This handles cases where optimistic update might have failed
+        if (data.data.round && data.data.side && data.data.amount && data.data.betId) {
+          const round = data.data.round as 1 | 2;
+          const side = data.data.side as 'andar' | 'bahar';
+          const betHistory = round === 1 ? gameState.playerRound1BetHistory : gameState.playerRound2BetHistory;
+          const alreadyInHistory = betHistory[side].some((bet: any) => bet.betId === data.data.betId);
+          
+          if (!alreadyInHistory) {
+            addBetToHistory(round, side, {
+              amount: data.data.amount,
+              betId: data.data.betId,
+              timestamp: data.data.timestamp || Date.now()
+            });
+            console.log(`📝 Server confirmed bet added to history: ${data.data.betId}`);
+          }
         }
 
         // ✅ SYNC: Update balance from server (authoritative source)
@@ -1547,7 +1566,15 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       const currentBalance = typeof gameState.playerWallet === 'number' ? gameState.playerWallet : 0;
       updatePlayerWallet(currentBalance - amount);
 
+      // ✅ CRITICAL FIX: Add to bet history for undo functionality
+      addBetToHistory(gameState.currentRound as 1 | 2, side, {
+        amount,
+        betId,
+        timestamp: Date.now()
+      });
+
       console.log(`⚡ INSTANT BET UPDATE: ${side} +₹${amount} = ₹${newTotal}, Balance: ₹${currentBalance - amount}`);
+      console.log(`📝 Added to bet history: Round ${gameState.currentRound}, ${side}, ₹${amount}, betId: ${betId}`);
 
       // Add gameId to bet message (send to server in parallel)
       sendWebSocketMessage({

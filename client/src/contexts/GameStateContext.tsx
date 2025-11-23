@@ -490,7 +490,6 @@ interface GameStateContextType {
   updatePlayerRoundBets: (round: GameRound, bets: RoundBets) => void;
   addBetToHistory: (round: GameRound, side: BetSide, betInfo: BetInfo) => void;
   clearCards: () => void;
-  placeBet: (side: BetSide, amount: number, betId?: string) => void;
   removeLastBet: (round: GameRound, side: BetSide) => void;
   clearRoundBets: (round: GameRound, side?: BetSide) => void;
   resetBettingData: () => void;
@@ -785,112 +784,146 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 2, bets: { andar: 0, bahar: 0 } } });
   };
 
-  // ✅ FIX: Counter for unique bet IDs only - NO QUEUE BLOCKING
-  const betCounterRef = useRef<number>(0);
-
-  const placeBet = async (side: BetSide, amount: number, betId?: string) => {
-    // ✅ OPTIMISTIC UPDATE: Immediately add to local total
-    console.log(`🎯 INSTANT BET: ₹${amount} on ${side.toUpperCase()} - Round ${gameState.currentRound}`);
-
-    // Validate balance before placing bet
-    const isValidBalance = await validateBalance();
-    if (!isValidBalance) {
-      console.warn('Balance validation failed, skipping bet placement');
-      return;
-    }
-
-    // Ensure playerWallet is treated as a number for comparison
-    const currentBalance = Number(gameState.playerWallet);
-    if (isNaN(currentBalance) || currentBalance < amount) {
-      console.warn('Insufficient balance for bet or invalid balance value');
-      return;
-    }
-
-    // ✅ Generate betId for tracking
-    const finalBetId = betId || `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // ✅ INSTANT UPDATE: Add to cumulative total immediately
-    if (gameState.currentRound === 1) {
-      const currentTotal = typeof gameState.playerRound1Bets[side] === 'number'
-        ? gameState.playerRound1Bets[side]
-        : 0;
-      updatePlayerRoundBets(1, {
-        ...gameState.playerRound1Bets,
-        [side]: currentTotal + amount
-      });
-
-      // ✅ Add to bet history for undo
-      addBetToHistory(1, side, {
-        amount,
-        betId: finalBetId,
-        timestamp: Date.now()
-      });
-
-      console.log(`✅ INSTANT: Round 1 ${side} updated to ₹${currentTotal + amount}`);
-    } else if (gameState.currentRound === 2) {
-      const currentTotal = typeof gameState.playerRound2Bets[side] === 'number'
-        ? gameState.playerRound2Bets[side]
-        : 0;
-      updatePlayerRoundBets(2, {
-        ...gameState.playerRound2Bets,
-        [side]: currentTotal + amount
-      });
-
-      // ✅ Add to bet history for undo
-      addBetToHistory(2, side, {
-        amount,
-        betId: finalBetId,
-        timestamp: Date.now()
-      });
-
-      console.log(`✅ INSTANT: Round 2 ${side} updated to ₹${currentTotal + amount}`);
-    }
-
-    // ✅ INSTANT UPDATE #2: Deduct money from balance IMMEDIATELY (0ms)
-    const newBalance = currentBalance - amount;
-    updatePlayerWallet(newBalance);
-    console.log(`✅ INSTANT: Balance updated ₹${currentBalance.toLocaleString('en-IN')} → ₹${newBalance.toLocaleString('en-IN')}`);
-
-    // ✅ UPDATE: Dispatch immediate balance update for other components
-    const instantBalanceEvent = new CustomEvent('balance-instant-update', {
-      detail: {
-        balance: newBalance,
-        amount: -amount,
-        type: 'bet_optimistic',
-        timestamp: Date.now()
-      }
-    });
-    window.dispatchEvent(instantBalanceEvent);
-
-    // Server will confirm via WebSocket bet_confirmed with authoritative totals
-    console.log(`⏳ Waiting for server confirmation...`);
-
-    return finalBetId; // Return betId for tracking
-  };
+  // ✅ REMOVED: placeBet function moved to WebSocketContext to avoid double updates
+  // All bet placement logic is now handled by WebSocketContext.placeBet()
+  // This prevents duplicate optimistic updates and balance deductions
 
   const removeLastBet = (round: GameRound, side: BetSide) => {
     dispatch({ type: 'REMOVE_LAST_BET', payload: { round, side } });
   };
 
+  // ✅ FIX: Persist bet history to localStorage on change
+  useEffect(() => {
+    if (!gameState.gameId || gameState.gameId === 'default-game') return;
+
+    const betHistoryData = {
+      round1: gameState.playerRound1BetHistory,
+      round2: gameState.playerRound2BetHistory,
+      gameId: gameState.gameId,
+      timestamp: Date.now()
+    };
+    
+    try {
+      localStorage.setItem('betHistory', JSON.stringify(betHistoryData));
+      console.log('💾 Bet history saved to localStorage');
+    } catch (error) {
+      console.error('Failed to save bet history to localStorage:', error);
+    }
+  }, [gameState.playerRound1BetHistory, gameState.playerRound2BetHistory, gameState.gameId]);
+
+  // ✅ FIX: Restore bet history from localStorage on mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('betHistory');
+    if (!savedHistory) return;
+
+    try {
+      const data = JSON.parse(savedHistory);
+      
+      // Only restore if same game and less than 10 minutes old
+      if (data.gameId === gameState.gameId && Date.now() - data.timestamp < 600000) {
+        console.log('📂 Restoring bet history from localStorage:', data);
+        
+        // Restore Round 1 history
+        data.round1.andar.forEach((bet: BetInfo) => {
+          addBetToHistory(1, 'andar', bet);
+        });
+        data.round1.bahar.forEach((bet: BetInfo) => {
+          addBetToHistory(1, 'bahar', bet);
+        });
+        
+        // Restore Round 2 history
+        data.round2.andar.forEach((bet: BetInfo) => {
+          addBetToHistory(2, 'andar', bet);
+        });
+        data.round2.bahar.forEach((bet: BetInfo) => {
+          addBetToHistory(2, 'bahar', bet);
+        });
+        
+        console.log('✅ Bet history restored from localStorage');
+      } else {
+        console.log('⏭️ Skipping bet history restore (different game or too old)');
+        localStorage.removeItem('betHistory');
+      }
+    } catch (error) {
+      console.error('Failed to restore bet history from localStorage:', error);
+      localStorage.removeItem('betHistory');
+    }
+  }, [gameState.gameId]); // Only run when gameId changes
+
   const clearRoundBets = (round: GameRound, side?: BetSide) => {
     dispatch({ type: 'CLEAR_ROUND_BETS', payload: { round, side } });
   };
 
-  // ✅ NEW: Listen for optimistic bet events from WebSocketContext
+  // ✅ FIX: Sync game state from server on mount (handles page refresh)
   useEffect(() => {
-    const handleOptimisticBet = (event: CustomEvent) => {
-      const { side, amount, betId, round } = event.detail;
-      console.log('🎯 Optimistic bet event received:', { side, amount, betId, round });
-
-      // Only process if it's for the current round
-      if (round === gameState.currentRound) {
-        placeBet(side, amount, betId);
+    const syncGameState = async () => {
+      try {
+        const response = await fetch('/api/game/current-state', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data) {
+            const data = result.data;
+            
+            // Sync all game state
+            dispatch({ type: 'SET_GAME_ID', payload: data.gameId });
+            dispatch({ type: 'SET_PHASE', payload: data.phase });
+            dispatch({ type: 'SET_CURRENT_ROUND', payload: data.currentRound });
+            dispatch({ type: 'SET_COUNTDOWN', payload: data.timer });
+            dispatch({ type: 'SET_BETTING_LOCKED', payload: data.bettingLocked });
+            
+            if (data.openingCard) {
+              dispatch({ type: 'SET_OPENING_CARD', payload: data.openingCard });
+            }
+            
+            // Sync cards
+            if (data.andarCards?.length > 0) {
+              data.andarCards.forEach((card: any) => {
+                dispatch({ type: 'ADD_ANDAR_CARD', payload: card });
+              });
+            }
+            if (data.baharCards?.length > 0) {
+              data.baharCards.forEach((card: any) => {
+                dispatch({ type: 'ADD_BAHAR_CARD', payload: card });
+              });
+            }
+            
+            // Sync bets
+            if (data.playerRound1Bets) {
+              dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 1, bets: data.playerRound1Bets } });
+            }
+            if (data.playerRound2Bets) {
+              dispatch({ type: 'UPDATE_PLAYER_ROUND_BETS', payload: { round: 2, bets: data.playerRound2Bets } });
+            }
+            
+            // Sync winner
+            if (data.winner) {
+              dispatch({ type: 'SET_WINNER', payload: data.winner });
+              dispatch({ type: 'SET_WINNING_CARD', payload: data.winningCard });
+            }
+            
+            console.log('✅ Game state synced from server on mount');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to sync game state:', error);
       }
     };
 
-    window.addEventListener('optimistic-bet-placed', handleOptimisticBet as EventListener);
-    return () => window.removeEventListener('optimistic-bet-placed', handleOptimisticBet as EventListener);
-  }, [gameState.currentRound, placeBet]);
+    // Only sync if user is authenticated
+    const token = localStorage.getItem('token');
+    if (token) {
+      syncGameState();
+    }
+  }, []); // Run once on mount
+
+  // ✅ REMOVED: This was causing DOUBLE updates!
+  // WebSocketContext already does optimistic updates directly
+  // No need to listen for events and update again
 
   // ✅ NEW: Listen for bet rollback events from WebSocketContext
   useEffect(() => {
@@ -964,7 +997,6 @@ export const GameStateProvider: React.FC<{ children: ReactNode }> = ({ children 
     addBetToHistory,
     updatePlayerRoundBets,
     clearCards,
-    placeBet,
     removeLastBet,
     clearRoundBets,
     resetBettingData,

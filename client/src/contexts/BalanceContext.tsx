@@ -32,17 +32,23 @@ const balanceReducer = (state: BalanceState, action: BalanceAction): BalanceStat
       const timestamp = action.payload.timestamp || Date.now();
       const source = action.payload.source as 'websocket' | 'api' | 'localStorage';
 
-      // ✅ FIX: Race condition protection - Prioritize WebSocket updates over API/local updates
-      // If we have a recent WebSocket update and the new update is from API/localStorage, ignore it
-      // EXCEPTION: Allow 'api' updates if they're explicitly requested (like after game complete)
+      // ✅ ENHANCED: Race condition protection with timestamp-based deduplication
+      // Prioritize WebSocket updates over API/local updates
       if (source !== 'websocket' && state.lastWebSocketUpdate > 0) {
         const timeSinceWebSocketUpdate = timestamp - state.lastWebSocketUpdate;
-        // If WebSocket updated within last 1 second, ignore API/localStorage updates
-        // Reduced from 2 seconds to 1 second for faster updates after game complete
-        if (timeSinceWebSocketUpdate < 1000) {
-          console.log(`⚠️ Ignoring ${source} balance update - WebSocket update too recent (${timeSinceWebSocketUpdate}ms ago)`);
+        // If WebSocket updated within last 500ms, ignore API/localStorage updates
+        // Reduced to 500ms for better responsiveness while still preventing race conditions
+        if (timeSinceWebSocketUpdate < 500) {
+          console.log(`⏭️ Ignoring ${source} balance update - WebSocket update too recent (${timeSinceWebSocketUpdate}ms ago)`);
           return state;
         }
+      }
+
+      // ✅ ENHANCED: Prevent duplicate updates with same balance within 100ms
+      if (Math.abs(action.payload.balance - state.currentBalance) < 0.01 && 
+          timestamp - state.lastUpdated < 100) {
+        console.log(`⏭️ Ignoring duplicate balance update (same value within 100ms)`);
+        return state;
       }
 
       return {

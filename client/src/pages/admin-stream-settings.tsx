@@ -24,10 +24,15 @@ export default function AdminStreamSettings() {
   const [minViewers, setMinViewers] = useState<number>(1000);
   const [maxViewers, setMaxViewers] = useState<number>(1100);
 
+  // NEW: Loop video maintenance mode
+  const [loopMode, setLoopMode] = useState(false);
+  const [loopNextGameDate, setLoopNextGameDate] = useState('');
+  const [loopNextGameTime, setLoopNextGameTime] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Load current config
   useEffect(() => {
@@ -57,6 +62,11 @@ export default function AdminStreamSettings() {
         // Load viewer range settings
         setMinViewers(cfg.minViewers ?? 1000);
         setMaxViewers(cfg.maxViewers ?? 1100);
+
+        // Load loop video settings
+        setLoopMode(cfg.loopMode || false);
+        setLoopNextGameDate(cfg.loopNextGameDate || '');
+        setLoopNextGameTime(cfg.loopNextGameTime || '');
       }
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -86,7 +96,13 @@ export default function AdminStreamSettings() {
         muted: true,
         controls: streamType === 'video' ? false : true,
         minViewers,
-        maxViewers
+        maxViewers,
+
+        // Loop video maintenance mode
+        loopMode,
+        loopNextGameDate,
+        loopNextGameTime,
+        loopVideoUrl: '/shared/uhd_30fps.mp4'
       };
 
       const response = await apiClient.post<any>('/stream/simple-config', payload);
@@ -111,7 +127,7 @@ export default function AdminStreamSettings() {
 
     try {
       const newPausedState = !isPaused;
-      
+
       const response = await apiClient.post<any>('/stream/toggle-pause', {
         isPaused: newPausedState
       });
@@ -146,7 +162,7 @@ export default function AdminStreamSettings() {
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
           </button>
-          
+
           <h1 className="text-4xl font-bold bg-gradient-to-r from-gold to-yellow-600 bg-clip-text text-transparent drop-shadow-lg mb-2">
             🎥 Stream Settings
           </h1>
@@ -188,22 +204,20 @@ export default function AdminStreamSettings() {
                   <button
                     type="button"
                     onClick={() => setStreamType('iframe')}
-                    className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
-                      streamType === 'iframe'
-                        ? 'bg-gold text-black shadow-lg'
-                        : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-gold/40'
-                    }`}
+                    className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all ${streamType === 'iframe'
+                      ? 'bg-gold text-black shadow-lg'
+                      : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-gold/40'
+                      }`}
                   >
                     iFrame (YouTube / Embed)
                   </button>
                   <button
                     type="button"
                     onClick={() => setStreamType('video')}
-                    className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
-                      streamType === 'video'
-                        ? 'bg-green-500 text-black shadow-lg'
-                        : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-green-400/40'
-                    }`}
+                    className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all ${streamType === 'video'
+                      ? 'bg-green-500 text-black shadow-lg'
+                      : 'bg-black/40 text-gray-400 border border-gray-700 hover:border-green-400/40'
+                      }`}
                   >
                     Video (MP4 / HLS .m3u8)
                   </button>
@@ -221,7 +235,7 @@ export default function AdminStreamSettings() {
                     Configure the fake viewer count range that will be displayed to players. Leave both at default to show real player count.
                   </p>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-indigo-300 mb-2">
@@ -235,7 +249,7 @@ export default function AdminStreamSettings() {
                       className="w-full px-4 py-3 bg-black/50 border border-indigo-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-400/50 transition-colors"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-semibold text-indigo-300 mb-2">
                       Max Viewers
@@ -249,10 +263,72 @@ export default function AdminStreamSettings() {
                     />
                   </div>
                 </div>
-                
+
                 <p className="text-xs text-gray-400">
                   💡 A random number between Min and Max will be shown every 2 seconds. Set both to 0 to display real player count.
                 </p>
+              </div>
+
+              {/* Loop Video Maintenance Mode */}
+              <div className="space-y-4 p-4 bg-gradient-to-r from-purple-900/40 to-pink-900/40 rounded-lg border border-purple-500/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-purple-300 mb-1">🔁 Loop Video Mode</h3>
+                    <p className="text-sm text-gray-400">
+                      Show loop video when game is offline (overrides stream)
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setLoopMode(!loopMode)}
+                    className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${loopMode ? 'bg-purple-500' : 'bg-gray-600'}`}
+                  >
+                    <span
+                      className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${loopMode ? 'translate-x-7' : 'translate-x-1'}`}
+                    />
+                  </button>
+                </div>
+
+                {loopMode && (
+                  <div className="space-y-4 mt-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-purple-300 mb-2">
+                          📅 Next Game Date
+                        </label>
+                        <input
+                          type="text"
+                          value={loopNextGameDate}
+                          onChange={(e) => setLoopNextGameDate(e.target.value)}
+                          placeholder="e.g., 25 Nov 2025"
+                          className="w-full px-4 py-3 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-400/50"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-purple-300 mb-2">
+                          🕐 Next Game Time
+                        </label>
+                        <input
+                          type="text"
+                          value={loopNextGameTime}
+                          onChange={(e) => setLoopNextGameTime(e.target.value)}
+                          placeholder="e.g., 7:00 PM"
+                          className="w-full px-4 py-3 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-400/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-purple-900/20 rounded border border-purple-500/20">
+                      <p className="text-xs text-purple-300">
+                        ℹ️ Loop Video: <code className="bg-black/40 px-1 py-0.5 rounded">D:\nextjs projects\game\shared\uhd_30fps.mp4</code>
+                      </p>
+                      <p className="text-xs text-purple-300 mt-2">
+                        📺 Message shown to players: <strong>"Next game at {loopNextGameDate || '[date]'} at {loopNextGameTime || '[time]'}"</strong>
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Active Toggle */}
@@ -263,14 +339,12 @@ export default function AdminStreamSettings() {
                 </div>
                 <button
                   onClick={() => setIsActive(!isActive)}
-                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                    isActive ? 'bg-green-500' : 'bg-gray-600'
-                  }`}
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${isActive ? 'bg-green-500' : 'bg-gray-600'
+                    }`}
                 >
                   <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                      isActive ? 'translate-x-7' : 'translate-x-1'
-                    }`}
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-7' : 'translate-x-1'
+                      }`}
                   />
                 </button>
               </div>
@@ -291,15 +365,14 @@ export default function AdminStreamSettings() {
                       </p>
                     </div>
                   </div>
-                  
+
                   <button
                     onClick={togglePausePlay}
                     disabled={toggling}
-                    className={`w-full px-6 py-3 rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
-                      isPaused
-                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'
-                        : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white'
-                    }`}
+                    className={`w-full px-6 py-3 rounded-lg font-bold transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isPaused
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'
+                      : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white'
+                      }`}
                   >
                     {toggling ? (
                       <>
@@ -313,7 +386,7 @@ export default function AdminStreamSettings() {
                       </>
                     )}
                   </button>
-                  
+
                   <p className="text-xs text-gray-400 mt-2 text-center">
                     💡 {isPaused
                       ? 'Click to resume playback - players will see the live stream again'
@@ -324,11 +397,10 @@ export default function AdminStreamSettings() {
 
               {/* Status Message */}
               {message && (
-                <div className={`p-4 rounded-lg flex items-center gap-2 ${
-                  message.type === 'success' 
-                    ? 'bg-green-500/20 border border-green-500/30 text-green-400' 
-                    : 'bg-red-500/20 border border-red-500/30 text-red-400'
-                }`}>
+                <div className={`p-4 rounded-lg flex items-center gap-2 ${message.type === 'success'
+                  ? 'bg-green-500/20 border border-green-500/30 text-green-400'
+                  : 'bg-red-500/20 border border-red-500/30 text-red-400'
+                  }`}>
                   {message.type === 'success' ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
                   <span>{message.text}</span>
                 </div>
