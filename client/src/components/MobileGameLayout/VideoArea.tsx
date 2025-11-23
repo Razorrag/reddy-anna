@@ -907,14 +907,21 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       {/* Hidden canvas for capturing frozen frame when paused */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      {/* ✅ REMOVED: No overlay text for players - they just see frozen frame
-          Admin sees pause status in admin-bets page instead */}
-      {(isPausedState) && frozenFrame && (
-        <div className="absolute inset-0 z-20">
+      {/* ✅ FROZEN FRAME OVERLAY - Highest z-index to prevent black screen during reload */}
+      {frozenFrame && (
+        <div className="absolute inset-0 z-50 bg-black">
           <img
             src={frozenFrame}
             alt="Stream paused"
             className="w-full h-full object-cover"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }}
           />
           {/* No "Stream Paused" text overlay - clean experience for players */}
         </div>
