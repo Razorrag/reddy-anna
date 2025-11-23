@@ -622,8 +622,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       if (videoElement && streamConfig?.streamUrl?.includes('.m3u8')) {
         console.log('▶️ RESUMING - FORCING FRESH STREAM FOR ALL PLAYERS...');
 
-        // Clear frozen frame IMMEDIATELY
-        setFrozenFrame(null);
+        // ✅ CRITICAL FIX: Keep frozen frame visible during reload to prevent black screen
+        // Frozen frame will be cleared automatically when new video starts playing
 
         // 🔥 DESTROY HLS INSTANCE COMPLETELY
         if (hlsRef.current) {
@@ -639,6 +639,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         // 🚀 TRIGGER COMPLETE HLS RELOAD - This forces recreation with fresh live stream
         console.log('✅ Triggering HLS reload - ALL PLAYERS will auto-refresh to live edge');
         setHlsReloadTrigger(prev => prev + 1);
+
+        // ✅ Clear frozen frame only after a brief delay to ensure new video is loading
+        setTimeout(() => {
+          console.log('🎬 Clearing frozen frame now that new stream is loading');
+          setFrozenFrame(null);
+        }, 500); // 500ms delay ensures smooth transition
       }
 
       // Handle iframe resume
@@ -817,6 +823,13 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             console.log('▶️ Video playing');
             hideBuffering(); // Clear any buffering state
             setStreamError(null);
+            
+            // ✅ CRITICAL FIX: Clear frozen frame immediately when video starts playing
+            // This ensures smooth transition from frozen frame to live stream
+            if (frozenFrame) {
+              console.log('🎬 Video playing - clearing frozen frame for smooth transition');
+              setFrozenFrame(null);
+            }
           }}
           onCanPlay={() => {
             hideBuffering(); // Clear any buffering state
