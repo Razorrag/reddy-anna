@@ -48,6 +48,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // ✅ FIX: Track if we're waiting for video to load during paused state
   const [waitingForVideoOnPause, setWaitingForVideoOnPause] = useState(false);
 
+  // ✅ NEW: HLS reload trigger - increment to force HLS instance recreation
+  const [hlsReloadTrigger, setHlsReloadTrigger] = useState(0);
+  const previousPausedState = useRef(false);
+
   // ✅ Loading and buffering states for better UX
   const [isBuffering, setIsBuffering] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -184,27 +188,31 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     console.log('🔄 VideoArea mounted - loading stream config...');
     loadStreamConfig();
 
-    // ✅ FIX #1: Handle page visibility changes to keep stream at live edge
+    // ✅ ENHANCED: Handle page visibility changes with full stream refresh
     const handleVisibilityChange = () => {
       if (document.hidden) {
         console.log('📴 Page hidden - stream will continue buffering');
       } else {
-        console.log('👁️ Page visible again - checking stream position...');
+        console.log('👁️ Page visible again - FORCING FRESH STREAM...');
 
-        // If HLS stream is playing, jump to live edge if we've drifted
+        // 🚀 CRITICAL: Force complete HLS reload on tab return for fresh stream
         const videoElement = videoRef.current;
         const hls = hlsRef.current;
 
-        if (videoElement && hls && hls.liveSyncPosition) {
-          const currentLatency = hls.liveSyncPosition - videoElement.currentTime;
-
-          // 🔧 CRITICAL FIX: Only seek if NOT paused AND >3s behind
-          if (!isPausedState && currentLatency > 3 && isFinite(hls.liveSyncPosition)) {
-            console.log(`⚡ Visibility: ${currentLatency.toFixed(2)}s behind, seeking to live...`);
-            videoElement.currentTime = hls.liveSyncPosition;
-          } else if (currentLatency > 0) {
-            console.log(`✅ Visibility: ${currentLatency.toFixed(2)}s behind (within acceptable range)`);
+        if (videoElement && hls && !isPausedState) {
+          console.log('🔄 Destroying HLS instance for fresh stream...');
+          
+          // Destroy current HLS instance
+          try {
+            hls.destroy();
+          } catch (error) {
+            console.error('Error destroying HLS on visibility:', error);
           }
+          hlsRef.current = null;
+
+          // Trigger HLS recreation by incrementing reload trigger
+          setHlsReloadTrigger(prev => prev + 1);
+          console.log('✅ HLS reload triggered - stream will refresh to live edge');
         }
       }
     };
@@ -453,7 +461,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         videoElement.play().catch(err => console.error('❌ Native HLS play failed:', err));
       }
     }
-  }, [streamConfig?.streamUrl]);
+  }, [streamConfig?.streamUrl, hlsReloadTrigger]); // ✅ Add hlsReloadTrigger dependency
 
   // ✅ REMOVED AGGRESSIVE HEALTH MONITOR
   // Let HLS.js handle all recovery - no manual reloads
@@ -569,12 +577,16 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     }
   }, [waitingForVideoOnPause, isPausedState, captureCurrentFrame]);
 
-  // ✅ FIX #2: Handle pause/resume with proper refresh support
+  // ✅ ENHANCED: Handle pause/resume with FORCED stream refresh for all players
   useEffect(() => {
     const videoElement = videoRef.current;
     const iframeElement = iframeRef.current;
 
-    if (isPausedState) {
+    // Track previous pause state to detect transitions
+    const wasJustPaused = previousPausedState.current === false && isPausedState === true;
+    const wasJustResumed = previousPausedState.current === true && isPausedState === false;
+
+    if (isPausedState && wasJustPaused) {
       // PAUSE: Capture frame FIRST, pause video immediately, keep buffer
       if (videoElement && streamConfig?.streamUrl?.includes('.m3u8')) {
         // ✅ Capture frame first
@@ -584,6 +596,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           // Video not ready yet (e.g., page refresh during pause)
           console.log('⏳ Video not ready for capture - will wait for it to load');
           setWaitingForVideoOnPause(true);
+          previousPausedState.current = isPausedState;
           return;
         }
 
@@ -604,33 +617,28 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           videoElement.pause();
         }
       }
-    } else {
-      // 🎯 INSTANT RESUME: Ultra-fast resume with immediate jump to live
-      if (videoElement && hlsRef.current && streamConfig?.streamUrl?.includes('.m3u8')) {
-        console.log('▶️ Resuming stream from live edge...');
-
-        const hls = hlsRef.current;
+    } else if (!isPausedState && wasJustResumed) {
+      // 🚀 CRITICAL: FORCE COMPLETE STREAM REFRESH FOR ALL PLAYERS
+      if (videoElement && streamConfig?.streamUrl?.includes('.m3u8')) {
+        console.log('▶️ RESUMING - FORCING FRESH STREAM FOR ALL PLAYERS...');
 
         // Clear frozen frame IMMEDIATELY
         setFrozenFrame(null);
 
-        // Resume loading from live edge
-        hls.startLoad(-1);
-
-        // ✅ FIX: Seek to live position IMMEDIATELY without delay
-        if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
-          videoElement.currentTime = hls.liveSyncPosition;
-          console.log(`📍 Jumped to live: ${hls.liveSyncPosition.toFixed(2)}s`);
+        // 🔥 DESTROY HLS INSTANCE COMPLETELY
+        if (hlsRef.current) {
+          console.log('🔄 Destroying HLS instance for fresh stream...');
+          try {
+            hlsRef.current.destroy();
+          } catch (error) {
+            console.error('Error destroying HLS on resume:', error);
+          }
+          hlsRef.current = null;
         }
 
-        // Play video immediately
-        videoElement.play().catch(err => {
-          console.error('❌ Resume play failed:', err);
-          videoElement.muted = true;
-          videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
-        });
-
-        console.log('✅ Stream resumed to live edge instantly');
+        // 🚀 TRIGGER COMPLETE HLS RELOAD - This forces recreation with fresh live stream
+        console.log('✅ Triggering HLS reload - ALL PLAYERS will auto-refresh to live edge');
+        setHlsReloadTrigger(prev => prev + 1);
       }
 
       // Handle iframe resume
@@ -639,7 +647,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         iframeElement.src = iframeElement.src; // Refresh iframe
       }
     }
-  }, [isPausedState, streamConfig?.streamUrl]);
+
+    // Update previous state for next comparison
+    previousPausedState.current = isPausedState;
+  }, [isPausedState, streamConfig?.streamUrl, captureCurrentFrame]);
 
   // Handle pulse effect when less than 5 seconds
   useEffect(() => {
@@ -709,7 +720,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             loop
             muted
             playsInline
-            style={{ position: 'absolute', inset: 0, zIndex: 1, objectFit: 'fill' }}
+            style={{ position: 'absolute', inset: 0, zIndex: 1, objectFit: 'cover' }}
             onLoadedData={(e) => {
               console.log('✅ Loop video loaded from /shared/uhd_30fps.mp4');
               const video = e.currentTarget;
@@ -795,7 +806,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             left: 0,
             width: '100%',
             height: '100%',
-            objectFit: 'fill',
+            objectFit: 'cover',
             zIndex: 1
           }}
           onWaiting={() => {
