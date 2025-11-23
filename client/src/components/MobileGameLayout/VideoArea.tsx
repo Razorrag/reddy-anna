@@ -690,17 +690,17 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       );
     }
 
-    if (!streamConfig || !streamConfig.isActive || !streamConfig.streamUrl) {
-      console.log('🔁 VideoArea: No stream - showing loop video', {
-        hasConfig: !!streamConfig,
-        isActive: streamConfig?.isActive,
-        hasUrl: !!streamConfig?.streamUrl,
-        streamConfig
+    // ✅ SIMPLIFIED: Check loopMode - if ON, show loop video; if OFF, show stream
+    if (streamConfig?.loopMode) {
+      console.log('🔁 VideoArea: Loop mode ON - showing loop video', {
+        loopMode: streamConfig.loopMode,
+        nextGameDate: streamConfig.loopNextGameDate,
+        nextGameTime: streamConfig.loopNextGameTime
       });
       return (
         <div className="relative w-full h-full">
           <video
-            ref={videoRef}
+            key="loop-video"
             src="/uhd_30fps.mp4"
             className="w-full h-full object-cover"
             autoPlay
@@ -708,20 +708,27 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             muted
             playsInline
             style={{ position: 'absolute', inset: 0, zIndex: 1 }}
+            onLoadedData={(e) => {
+              console.log('✅ Loop video loaded, starting playback...');
+              const video = e.currentTarget;
+              video.play().catch(err => {
+                console.error('❌ Loop video autoplay failed:', err);
+                // Try muted play as fallback
+                video.muted = true;
+                video.play().catch(e => console.error('❌ Loop video muted play failed:', e));
+              });
+            }}
             onError={(e) => console.error('❌ Loop video error:', e)}
+            onCanPlay={() => console.log('✅ Loop video can play')}
+            onPlaying={() => console.log('▶️ Loop video is playing')}
           />
           <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
             <div className="text-center space-y-4 px-6">
-              <h1
-                className="text-5xl md:text-6xl font-bold text-white"
-                style={{ textShadow: '0 0 20px rgba(0, 0, 0, 0.9), 0 0 40px rgba(0, 0, 0, 0.7), 0 4px 8px rgba(0, 0, 0, 0.8)' }}
-              >
-                Next Game At
-              </h1>
+              {/* Only show configurable message from admin - no hardcoded text */}
               {streamConfig?.loopNextGameDate && (
                 <p
-                  className="text-3xl md:text-4xl font-bold text-gold"
-                  style={{ textShadow: '0 0 15px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 0, 0, 0.7), 0 3px 6px rgba(0, 0, 0, 0.8)' }}
+                  className="text-4xl md:text-5xl font-bold text-white"
+                  style={{ textShadow: '0 0 20px rgba(0, 0, 0, 0.9), 0 0 40px rgba(0, 0, 0, 0.7), 0 4px 8px rgba(0, 0, 0, 0.8)' }}
                 >
                   {streamConfig.loopNextGameDate}
                 </p>
@@ -736,13 +743,27 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
               )}
               {(!streamConfig?.loopNextGameDate && !streamConfig?.loopNextGameTime) && (
                 <p
-                  className="text-3xl md:text-4xl font-bold text-white"
-                  style={{ textShadow: '0 0 15px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 0, 0, 0.7), 0 3px 6px rgba(0, 0, 0, 0.8)' }}
+                  className="text-4xl md:text-5xl font-bold text-white"
+                  style={{ textShadow: '0 0 20px rgba(0, 0, 0, 0.9), 0 0 40px rgba(0, 0, 0, 0.7), 0 4px 8px rgba(0, 0, 0, 0.8)' }}
                 >
                   Game will resume shortly
                 </p>
               )}
             </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ✅ Check if we have a stream URL to display
+    if (!streamConfig?.streamUrl) {
+      console.log('⚠️ VideoArea: No stream URL configured');
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+          <div className="text-center px-6">
+            <div className="text-6xl mb-4">🎥</div>
+            <p className="text-gray-400 text-lg">No stream configured</p>
+            <p className="text-gray-600 text-sm mt-2">Please add a stream URL in admin settings</p>
           </div>
         </div>
       );
@@ -845,8 +866,8 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     }
   };
 
-  // Determine if stream is live
-  const isLive = !!(streamConfig?.isActive && streamConfig?.streamUrl);
+  // Determine if stream is live (not in loop mode and has URL)
+  const isLive = !!(streamConfig && !streamConfig.loopMode && streamConfig.streamUrl);
 
   console.log('🎥 VideoArea render state:', {
     isLive,

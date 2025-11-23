@@ -16,8 +16,10 @@ import { RefreshCw, Save, Eye, Link, Play, Square } from 'lucide-react';
 
 interface StreamConfig {
   streamUrl: string;
-  streamType: 'youtube' | 'direct';
-  isActive: boolean;
+  streamType: 'iframe' | 'video';
+  loopMode: boolean;
+  loopNextGameDate: string;
+  loopNextGameTime: string;
   minViewers: number;
   maxViewers: number;
   isPaused: boolean;
@@ -29,8 +31,10 @@ const StreamControlPanel: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<StreamConfig>({
     streamUrl: '',
-    streamType: 'youtube',
-    isActive: false,
+    streamType: 'iframe',
+    loopMode: false,
+    loopNextGameDate: '',
+    loopNextGameTime: '',
     minViewers: 1000,
     maxViewers: 1100,
     isPaused: false,
@@ -48,8 +52,10 @@ const StreamControlPanel: React.FC = () => {
       if (response.success && response.data) {
         setConfig({
           streamUrl: response.data.streamUrl || '',
-          streamType: response.data.streamType || 'youtube',
-          isActive: response.data.isActive || false,
+          streamType: response.data.streamType || 'iframe',
+          loopMode: response.data.loopMode || false,
+          loopNextGameDate: response.data.loopNextGameDate || '',
+          loopNextGameTime: response.data.loopNextGameTime || '',
           minViewers: response.data.minViewers || 1000,
           maxViewers: response.data.maxViewers || 1100,
           isPaused: response.data.isPaused || false,
@@ -116,8 +122,8 @@ const StreamControlPanel: React.FC = () => {
   return (
     <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-gold/30 shadow-2xl p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gold mb-2">🎥 Stream Configuration</h2>
-        <p className="text-sm text-gray-400">Manage live stream settings and viewer display</p>
+        <h2 className="text-2xl font-bold text-gold mb-2">🎥 Stream Settings</h2>
+        <p className="text-sm text-gray-400">Simple 2-mode system: Stream or Loop video</p>
       </div>
 
       <div className="space-y-6">
@@ -136,53 +142,86 @@ const StreamControlPanel: React.FC = () => {
           />
         </div>
 
-        {/* Stream Type */}
-        <div>
-          <label className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-2">
-            <Play className="w-4 h-4" />
-            Stream Type
-          </label>
-          <div className="flex gap-3">
+        {/* Loop Mode Toggle - Main Control */}
+        <div className="p-4 bg-gradient-to-r from-purple-900/40 to-pink-900/40 rounded-lg border border-purple-500/30">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-lg font-semibold text-purple-300">🔁 Loop Video Mode</h3>
+              <p className="text-sm text-gray-400">Toggle ON = Loop video | OFF = Stream</p>
+            </div>
             <button
-              onClick={() => setConfig({ ...config, streamType: 'youtube' })}
-              className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
-                config.streamType === 'youtube'
-                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg'
-                  : 'bg-slate-800/50 text-gray-400 hover:bg-slate-700/50 border border-slate-600/50'
-              }`}
+              type="button"
+              onClick={() => setConfig({ ...config, loopMode: !config.loopMode })}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${config.loopMode ? 'bg-purple-500' : 'bg-gray-600'}`}
             >
-              YouTube
-            </button>
-            <button
-              onClick={() => setConfig({ ...config, streamType: 'direct' })}
-              className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
-                config.streamType === 'direct'
-                  ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
-                  : 'bg-slate-800/50 text-gray-400 hover:bg-slate-700/50 border border-slate-600/50'
-              }`}
-            >
-              Direct Stream
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${config.loopMode ? 'translate-x-7' : 'translate-x-1'}`}
+              />
             </button>
           </div>
+
+          {config.loopMode && (
+            <div className="space-y-3 mt-4">
+              <div>
+                <label className="text-sm font-semibold text-purple-300 mb-2 block">
+                  📅 Next Game Date
+                </label>
+                <input
+                  type="text"
+                  value={config.loopNextGameDate}
+                  onChange={(e) => setConfig({ ...config, loopNextGameDate: e.target.value })}
+                  placeholder="e.g., 25 Nov 2025"
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-400/50"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-purple-300 mb-2 block">
+                  🕐 Next Game Time
+                </label>
+                <input
+                  type="text"
+                  value={config.loopNextGameTime}
+                  onChange={(e) => setConfig({ ...config, loopNextGameTime: e.target.value })}
+                  placeholder="e.g., 7:00 PM"
+                  className="w-full px-4 py-2 bg-black/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-400/50"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Active Status */}
-        <div>
-          <label className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-2">
-            <Square className="w-4 h-4" />
-            Stream Status
-          </label>
-          <button
-            onClick={() => setConfig({ ...config, isActive: !config.isActive })}
-            className={`w-full px-4 py-3 rounded-lg font-semibold transition-all ${
-              config.isActive
-                ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg'
-                : 'bg-gradient-to-r from-gray-600 to-gray-700 text-white'
-            }`}
-          >
-            {config.isActive ? '✅ Active' : '❌ Inactive'}
-          </button>
-        </div>
+        {/* Stream Type - Only show when NOT in loop mode */}
+        {!config.loopMode && (
+          <div>
+            <label className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-2">
+              <Play className="w-4 h-4" />
+              Stream Type
+            </label>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfig({ ...config, streamType: 'iframe' })}
+                className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
+                  config.streamType === 'iframe'
+                    ? 'bg-gradient-to-r from-gold to-yellow-600 text-black shadow-lg'
+                    : 'bg-slate-800/50 text-gray-400 hover:bg-slate-700/50 border border-slate-600/50'
+                }`}
+              >
+                iFrame (YouTube / Embed)
+              </button>
+              <button
+                onClick={() => setConfig({ ...config, streamType: 'video' })}
+                className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
+                  config.streamType === 'video'
+                    ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg'
+                    : 'bg-slate-800/50 text-gray-400 hover:bg-slate-700/50 border border-slate-600/50'
+                }`}
+              >
+                Video (MP4 / HLS)
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Fake Viewer Range */}
         <div>
@@ -216,27 +255,29 @@ const StreamControlPanel: React.FC = () => {
           </p>
         </div>
 
-        {/* Pause/Play Control */}
-        <div>
-          <label className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-2">
-            Stream Playback Control
-          </label>
-          <button
-            onClick={handleTogglePause}
-            className={`w-full px-4 py-3 rounded-lg font-semibold transition-all ${
-              config.isPaused
-                ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg'
-                : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-lg'
-            }`}
-          >
-            {config.isPaused ? '▶️ Resume Stream' : '⏸️ Pause Stream'}
-          </button>
-          <p className="text-xs text-gray-500 mt-2">
-            {config.isPaused
-              ? 'Stream is currently paused for all players'
-              : 'Stream is currently playing for all players'}
-          </p>
-        </div>
+        {/* Pause/Play Control - Only show when NOT in loop mode and has stream URL */}
+        {!config.loopMode && config.streamUrl && (
+          <div>
+            <label className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-2">
+              Stream Playback Control
+            </label>
+            <button
+              onClick={handleTogglePause}
+              className={`w-full px-4 py-3 rounded-lg font-semibold transition-all ${
+                config.isPaused
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg'
+                  : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-lg'
+              }`}
+            >
+              {config.isPaused ? '▶️ Resume Stream' : '⏸️ Pause Stream'}
+            </button>
+            <p className="text-xs text-gray-500 mt-2">
+              {config.isPaused
+                ? 'Stream is currently paused for all players'
+                : 'Stream is currently playing for all players'}
+            </p>
+          </div>
+        )}
 
         {/* Save Button */}
         <button

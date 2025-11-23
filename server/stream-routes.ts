@@ -142,10 +142,18 @@ router.post('/simple-config', requireAuth, validateAdminAccess, async (req, res)
   try {
     let { streamUrl, streamType, isActive, isPaused, streamTitle, autoplay, muted, controls, minViewers, maxViewers, loopMode, loopNextGameDate, loopNextGameTime, loopVideoUrl } = req.body;
 
-    if (!streamUrl || !streamType) {
+    // ✅ Stream URL is optional if loop mode is enabled
+    if (!loopMode && !streamUrl) {
       return res.status(400).json({
         success: false,
-        error: 'streamUrl and streamType are required'
+        error: 'streamUrl is required when loop mode is disabled'
+      });
+    }
+
+    if (!streamType) {
+      return res.status(400).json({
+        success: false,
+        error: 'streamType is required'
       });
     }
 

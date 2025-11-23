@@ -12,7 +12,6 @@ import { apiClient } from '@/lib/api-client';
 export default function AdminStreamSettings() {
   const [, setLocation] = useLocation();
   const [streamUrl, setStreamUrl] = useState('');
-  const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
   // NEW: Let admin choose how to play the URL
@@ -47,7 +46,6 @@ export default function AdminStreamSettings() {
       if (response.success && response.data) {
         const cfg = response.data;
         setStreamUrl(cfg.streamUrl || '');
-        setIsActive(cfg.isActive || false);
         setIsPaused(cfg.isPaused || false);
 
         // If backend has streamType, use it, else infer from URL
@@ -80,16 +78,10 @@ export default function AdminStreamSettings() {
     setMessage(null);
 
     try {
-      if (!streamUrl) {
-        setMessage({ type: 'error', text: 'Stream URL is required' });
-        setSaving(false);
-        return;
-      }
-
+      // ✅ Stream URL is optional - can be empty if using loop mode only
       const payload = {
-        streamUrl,
+        streamUrl: streamUrl || '',
         streamType, // 'iframe' or 'video' from UI toggle
-        isActive,
         isPaused,
         streamTitle: 'Live Game Stream',
         autoplay: true,
@@ -275,7 +267,7 @@ export default function AdminStreamSettings() {
                   <div>
                     <h3 className="text-lg font-semibold text-purple-300 mb-1">🔁 Loop Video Mode</h3>
                     <p className="text-sm text-gray-400">
-                      Show loop video when game is offline (overrides stream)
+                      Toggle ON to show loop video with custom message. Toggle OFF to show stream.
                     </p>
                   </div>
                   <button
@@ -331,26 +323,8 @@ export default function AdminStreamSettings() {
                 )}
               </div>
 
-              {/* Active Toggle */}
-              <div className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-green-500/20">
-                <div>
-                  <p className="font-semibold text-white">Stream Active</p>
-                  <p className="text-sm text-gray-400">Enable stream visibility for players</p>
-                </div>
-                <button
-                  onClick={() => setIsActive(!isActive)}
-                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${isActive ? 'bg-green-500' : 'bg-gray-600'
-                    }`}
-                >
-                  <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-7' : 'translate-x-1'
-                      }`}
-                  />
-                </button>
-              </div>
-
-              {/* Pause/Play Control - Only show when stream is active */}
-              {isActive && streamUrl && (
+              {/* Pause/Play Control - Only show when NOT in loop mode and has stream URL */}
+              {!loopMode && streamUrl && (
                 <div className="p-4 bg-gradient-to-r from-purple-900/40 to-blue-900/40 rounded-lg border border-purple-500/30">
                   <div className="flex items-center justify-between mb-3">
                     <div>
@@ -409,7 +383,7 @@ export default function AdminStreamSettings() {
               {/* Save Button */}
               <button
                 onClick={saveConfig}
-                disabled={saving || !streamUrl}
+                disabled={saving}
                 className="w-full px-6 py-3 bg-gradient-to-r from-gold to-yellow-600 hover:from-yellow-600 hover:to-gold text-black font-bold rounded-lg transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {saving ? (
@@ -458,20 +432,18 @@ export default function AdminStreamSettings() {
           <h3 className="text-xl font-bold text-gold mb-4">💡 How It Works</h3>
           <div className="space-y-3 text-sm text-gray-300">
             <div className="flex items-start gap-3">
-              <span className="text-gold font-bold">1.</span>
-              <p className="text-gray-400">Enter your stream URL above (HLS, YouTube, or any video URL)</p>
+              <span className="text-gold font-bold">🎥</span>
+              <div>
+                <p className="text-gold font-semibold">Stream Mode (Loop OFF):</p>
+                <p className="text-gray-400">Enter stream URL → Save → Players see your live stream</p>
+              </div>
             </div>
             <div className="flex items-start gap-3">
-              <span className="text-gold font-bold">2.</span>
-              <p className="text-gray-400">Enable "Stream Active" to make it visible to players</p>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="text-gold font-bold">3.</span>
-              <p className="text-gray-400">Click "Save Settings"</p>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="text-gold font-bold">4.</span>
-              <p className="text-gray-400">Players will see the stream full-screen on the game page!</p>
+              <span className="text-gold font-bold">🔁</span>
+              <div>
+                <p className="text-purple-300 font-semibold">Loop Mode (Loop ON):</p>
+                <p className="text-gray-400">Toggle Loop Mode ON → Set date/time message → Save → Players see loop video with your message</p>
+              </div>
             </div>
           </div>
         </div>
