@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Server version="8">
+	<Name>OvenMediaEngine</Name>
+	<!-- Host type: origin (default) -->
+	<Type>origin</Type>
+	<!-- Specify IP address to bind ("*" means all IPs) -->
+	<IP>*</IP>
+
+	<!-- 
+	To get the public IP address(mapped address of stun) of the local server. 
+	This is useful when OME cannot obtain a public IP from an interface, such as AWS or docker environment. 
+	If this is successful, you can use ${PublicIP} in your settings.
+	-->
+	<StunServer enable="true">stun.l.google.com:19302</StunServer>
+
+	<Bind>
+		<Providers>
+			<!-- RTMP Input from OBS -->
+			<RTMP>
+				<Port>1935</Port>
+			</RTMP>
+		</Providers>
+
+		<Publishers>
+			<!-- LL-HLS Output - ULTRA LOW LATENCY -->
+			<LLHLS>
+				<Port>8080</Port>
+			</LLHLS>
+		</Publishers>
+	</Bind>
+
+	<VirtualHosts>
+		<VirtualHost include="VHost*.xml" />
+		<VirtualHost>
+			<Name>default</Name>
+
+			<!-- Settings for multi-domain and TLS -->
+			<Host>
+				<Names>
+					<Name>*</Name>
+				</Names>
+			</Host>
+
+			<!-- Application -->
+			<Applications>
+				<Application>
+					<Name>live</Name>
+					<Type>live</Type>
+
+					<OutputProfiles>
+						<OutputProfile>
+							<Name>bypass</Name>
+							<OutputStreamName>${OriginStreamName}</OutputStreamName>
+							
+							<!-- Video: Bypass (no transcoding) -->
+							<Encodes>
+								<Video>
+									<Bypass>true</Bypass>
+								</Video>
+								<Audio>
+									<Bypass>true</Bypass>
+								</Audio>
+							</Encodes>
+						</OutputProfile>
+					</OutputProfiles>
+
+					<Providers>
+						<RTMP />
+					</Providers>
+
+					<Publishers>
+						<AppWorkerCount>1</AppWorkerCount>
+						<StreamWorkerCount>3</StreamWorkerCount>
+
+						<!-- LL-HLS Publisher - OPTIMIZED FOR SUB-1-SECOND LATENCY -->
+						<LLHLS>
+							<Enable>true</Enable>
+							
+							<!-- 
+							CRITICAL: Segment settings for ultra-low latency
+							- SegmentDuration: 0.3s (300ms) = Ultra-low latency
+							- SegmentCount: 6 = 1.8s total buffer (stability buffer)
+							- PartDuration: 0.1s (100ms) = Super fast partial segments
+							- PartHoldBack: 0.5s = Hold back for smoother playback
+							-->
+							<SegmentDuration>0.3</SegmentDuration>
+							<SegmentCount>6</SegmentCount>
+							<PartDuration>0.1</PartDuration>
+							<PartHoldBack>0.5</PartHoldBack>
+							
+							<!-- Cross-domain settings -->
+							<CrossDomains>
+								<Url>*</Url>
+							</CrossDomains>
+						</LLHLS>
+					</Publishers>
+				</Application>
+			</Applications>
+		</VirtualHost>
+	</VirtualHosts>
+</Server>

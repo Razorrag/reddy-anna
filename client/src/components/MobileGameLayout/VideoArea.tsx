@@ -302,51 +302,55 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           hlsRef.current.destroy();
         }
 
-        // Create HLS instance - ROCK SOLID: Maximum stability, zero stuttering
+        // Create HLS instance - ULTRA LOW LATENCY: Sub-1-second latency with stability
         const hls = new Hls({
-          // 🎯 ROCK SOLID SETTINGS: Prioritize smooth playback over latency
-          // Maximum buffer and tolerance for perfect stability
-
-          // Core latency settings - maximum stability
-          liveSyncDurationCount: 4,           // Stay 4 segments (4s) behind live - very stable
-          liveMaxLatencyDurationCount: 10,    // Max 10s drift before seeking - huge tolerance
+          // 🚀 ULTRA LOW LATENCY SETTINGS: Optimized for <1s latency with stability
+          
+          // Core latency settings - AGGRESSIVE for ultra-low latency
+          lowLatencyMode: true,               // Enable LL-HLS mode
+          liveSyncDurationCount: 1,           // Stay 1 segment (0.3s) behind live edge
+          liveMaxLatencyDurationCount: 3,     // Max 3 segments (0.9s) drift before seeking
           liveDurationInfinity: true,         // Treat as infinite live stream
-
-          // Buffer settings - MAXIMUM for zero stuttering
-          maxBufferLength: 20,                // 20s forward buffer - eliminates all stuttering
-          maxMaxBufferLength: 30,             // Hard limit 30s - massive safety margin
-          maxBufferSize: 120 * 1000 * 1000,   // 120MB - huge headroom
-          maxBufferHole: 1.0,                 // Skip gaps up to 1s
-
-          // Very gentle catch-up - smooth as silk
-          maxLiveSyncPlaybackRate: 1.02,      // Only 2% speed-up - completely unnoticeable
-
-          // Monitoring optimized for maximum stability
-          highBufferWatchdogPeriod: 3,        // Check buffer every 3s - less aggressive
-          nudgeMaxRetry: 2,                   // Minimal retries - let buffer handle it
-          nudgeOffset: 0.2,                   // Larger nudge - smoother adjustments
-
+          
+          // Buffer settings - MINIMAL but stable
+          maxBufferLength: 2,                 // 2s forward buffer - minimal for low latency
+          maxMaxBufferLength: 4,              // Hard limit 4s - prevents excessive buffering
+          maxBufferSize: 30 * 1000 * 1000,    // 30MB - adequate headroom
+          maxBufferHole: 0.3,                 // Skip gaps up to 0.3s
+          
+          // Fast catch-up - aggressive but smooth
+          maxLiveSyncPlaybackRate: 1.05,      // 5% speed-up for quick recovery
+          
+          // Monitoring optimized for low latency
+          highBufferWatchdogPeriod: 1,        // Check buffer every 1s - responsive
+          nudgeMaxRetry: 3,                   // More retries for low latency recovery
+          nudgeOffset: 0.1,                   // Small nudge - precise adjustments
+          
           // Performance optimization
-          enableWorker: true,
-          lowLatencyMode: false,              // Disabled for maximum stability
-          backBufferLength: 15,               // 15s back buffer for seeking
-
-          // Network resilience - ULTRA generous timeouts
-          manifestLoadingTimeOut: 20000,      // 20s timeout
-          manifestLoadingMaxRetry: 10,        // Maximum retries for bulletproof reliability
-          levelLoadingTimeOut: 20000,
-          fragLoadingTimeOut: 30000,          // 30s timeout - ultra tolerant
-          fragLoadingMaxRetry: 10,            // Maximum retries
-          fragLoadingRetryDelay: 2000,        // 2s retry delay - patient
-
+          enableWorker: true,                 // Use worker for better performance
+          backBufferLength: 5,                // 5s back buffer - minimal seeking support
+          
+          // Network resilience - FAST but reliable
+          manifestLoadingTimeOut: 10000,      // 10s timeout - balanced
+          manifestLoadingMaxRetry: 6,         // Adequate retries
+          levelLoadingTimeOut: 10000,         // 10s timeout
+          fragLoadingTimeOut: 6000,           // 6s timeout - fast failure detection
+          fragLoadingMaxRetry: 4,             // Moderate retries for stability
+          fragLoadingRetryDelay: 500,         // 0.5s retry delay - quick recovery
+          
           // Quality selection
           startLevel: -1,                     // Auto quality selection
-          abrEwmaDefaultEstimate: 2500000,    // Higher estimate for better quality
-
-          // Additional stability settings
-          abrBandWidthFactor: 0.8,            // Conservative bandwidth usage
-          abrBandWidthUpFactor: 0.7,          // Slow quality increases
+          abrEwmaDefaultEstimate: 5000000,    // Higher for better quality
+          
+          // Additional low-latency settings
+          abrBandWidthFactor: 0.95,           // Aggressive bandwidth usage
+          abrBandWidthUpFactor: 0.9,          // Fast quality increases
           capLevelToPlayerSize: false,        // Don't limit quality by player size
+          
+          // LL-HLS specific settings
+          enableDateRangeMetadataCues: false, // Disable for performance
+          enableEmsgMetadataCues: false,      // Disable for performance
+          enableID3MetadataCues: false,       // Disable for performance
         });
 
         hls.loadSource(streamUrl);
@@ -601,35 +605,32 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         }
       }
     } else {
-      // 🎯 INSTANT RESUME: Ultra-fast resume with pre-loaded buffer
+      // 🎯 INSTANT RESUME: Ultra-fast resume with immediate jump to live
       if (videoElement && hlsRef.current && streamConfig?.streamUrl?.includes('.m3u8')) {
         console.log('▶️ Resuming stream from live edge...');
 
         const hls = hlsRef.current;
 
-        // Clear frozen frame first
+        // Clear frozen frame IMMEDIATELY
         setFrozenFrame(null);
 
         // Resume loading from live edge
         hls.startLoad(-1);
 
-        // Small delay to let buffer fill a bit (prevents initial stutter)
-        setTimeout(() => {
-          // Seek to live position for instant catch-up
-          if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
-            videoElement.currentTime = hls.liveSyncPosition;
-            console.log(`📍 Jumped to live: ${hls.liveSyncPosition.toFixed(2)}s`);
-          }
+        // ✅ FIX: Seek to live position IMMEDIATELY without delay
+        if (hls.liveSyncPosition && isFinite(hls.liveSyncPosition)) {
+          videoElement.currentTime = hls.liveSyncPosition;
+          console.log(`📍 Jumped to live: ${hls.liveSyncPosition.toFixed(2)}s`);
+        }
 
-          // Play video
-          videoElement.play().catch(err => {
-            console.error('❌ Resume play failed:', err);
-            videoElement.muted = true;
-            videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
-          });
+        // Play video immediately
+        videoElement.play().catch(err => {
+          console.error('❌ Resume play failed:', err);
+          videoElement.muted = true;
+          videoElement.play().catch(e => console.error('❌ Muted play failed:', e));
+        });
 
-          console.log('✅ Stream resumed to live edge');
-        }, 100); // 100ms delay for buffer
+        console.log('✅ Stream resumed to live edge instantly');
       }
 
       // Handle iframe resume
@@ -703,12 +704,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           <video
             key="loop-video"
             src="/shared/uhd_30fps.mp4"
-            className="w-full h-full object-cover"
+            className="w-full h-full"
             autoPlay
             loop
             muted
             playsInline
-            style={{ position: 'absolute', inset: 0, zIndex: 1 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 1, objectFit: 'fill' }}
             onLoadedData={(e) => {
               console.log('✅ Loop video loaded from /shared/uhd_30fps.mp4');
               const video = e.currentTarget;
@@ -779,12 +780,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       return (
         <video
           ref={videoRef}
-          src={streamConfig.streamUrl}
-          className="w-full h-full object-cover"
+          className="w-full h-full"
           autoPlay
           muted={true}
           controls={false}
-          loop
           playsInline
           preload="auto"
           // ✅ LOW LATENCY: Minimize buffering for HLS streams
@@ -796,7 +795,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             left: 0,
             width: '100%',
             height: '100%',
-            objectFit: 'cover',
+            objectFit: 'fill',
             zIndex: 1
           }}
           onWaiting={() => {
@@ -977,48 +976,86 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         }}
       />
 
-      {/* Circular Timer Overlay - CENTERED - ONLY VISIBLE DURING BETTING */}
+      {/* Circular Timer Overlay - CENTERED - ONLY VISIBLE DURING BETTING - ENHANCED GLOW */}
       {gameState.phase === 'betting' && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
           <div className={`relative transition-all duration-300 ${gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
             }`}>
-            {/* Large Circular Timer */}
+            {/* Large Circular Timer with Enhanced Glow */}
             <div className="relative w-36 h-36 md:w-40 md:h-40 flex items-center justify-center">
+              {/* ✅ OUTER GLOW RING - Creates ambient light around timer */}
+              <div
+                className="absolute inset-0 rounded-full transition-all duration-300"
+                style={{
+                  background: `radial-gradient(circle, ${getTimerColor()}40 0%, transparent 70%)`,
+                  filter: 'blur(20px)',
+                  transform: 'scale(1.2)'
+                }}
+              />
+              
               <svg
                 className="transform -rotate-90 w-full h-full absolute inset-0"
                 viewBox="0 0 128 128"
                 preserveAspectRatio="xMidYMid meet"
               >
-                {/* Background circle - Dark grey with transparency */}
+                {/* Background circle - More transparent, softer blend */}
                 <circle
                   cx="64"
                   cy="64"
                   r="56"
-                  stroke="rgba(75, 85, 99, 0.8)"
+                  stroke="rgba(75, 85, 99, 0.4)"
                   strokeWidth="10"
-                  fill="rgba(31, 41, 55, 0.9)"
+                  fill="rgba(31, 41, 55, 0.6)"
                   className="transition-all duration-300"
+                  style={{
+                    filter: 'drop-shadow(0 0 10px rgba(0, 0, 0, 0.5))'
+                  }}
                 />
-                {/* Progress circle - Yellow arc, only show during betting */}
+                
+                {/* Progress circle - Enhanced glow with dual layers */}
                 {gameState.phase === 'betting' && localTimer > 0 && (
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke={getTimerColor()}
-                    strokeWidth="10"
-                    fill="none"
-                    strokeDasharray={`${2 * Math.PI * 56}`}
-                    strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}
-                    className="transition-all duration-1000 ease-linear"
-                    strokeLinecap="round"
-                    style={{ filter: 'drop-shadow(0 0 4px rgba(255, 209, 0, 0.5))' }}
-                  />
+                  <>
+                    {/* Inner glow layer - Blurred for depth */}
+                    <circle
+                      cx="64"
+                      cy="64"
+                      r="56"
+                      stroke={getTimerColor()}
+                      strokeWidth="14"
+                      fill="none"
+                      strokeDasharray={`${2 * Math.PI * 56}`}
+                      strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}
+                      className="transition-all duration-1000 ease-linear"
+                      strokeLinecap="round"
+                      style={{
+                        filter: 'blur(8px)',
+                        opacity: 0.6
+                      }}
+                    />
+                    
+                    {/* Main progress circle with strong glow */}
+                    <circle
+                      cx="64"
+                      cy="64"
+                      r="56"
+                      stroke={getTimerColor()}
+                      strokeWidth="10"
+                      fill="none"
+                      strokeDasharray={`${2 * Math.PI * 56}`}
+                      strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}
+                      className="transition-all duration-1000 ease-linear"
+                      strokeLinecap="round"
+                      style={{
+                        filter: `drop-shadow(0 0 8px ${getTimerColor()}) drop-shadow(0 0 15px ${getTimerColor()}90)`,
+                      }}
+                    />
+                  </>
                 )}
               </svg>
-              {/* Timer text and icon container */}
+              
+              {/* Timer text and icon container with enhanced styling */}
               <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-                {/* Icon above number - Screen/Monitor icon */}
+                {/* Icon above number - Screen/Monitor icon with glow */}
                 <div className="mb-0.5 opacity-90">
                   <svg
                     className="w-5 h-5 md:w-6 md:h-6 text-cyan-400"
@@ -1028,18 +1065,33 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     viewBox="0 0 24 24"
+                    style={{
+                      filter: 'drop-shadow(0 0 4px rgba(34, 211, 238, 0.8))'
+                    }}
                   >
                     <rect x="2" y="4" width="20" height="14" rx="2" ry="2" />
                     <line x1="8" y1="21" x2="16" y2="21" />
                     <line x1="12" y1="17" x2="12" y2="21" />
                   </svg>
                 </div>
-                {/* Timer number */}
-                <div className="text-white font-bold text-5xl md:text-6xl tabular-nums drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-none">
+                
+                {/* Timer number with enhanced text glow */}
+                <div
+                  className="text-white font-bold text-5xl md:text-6xl tabular-nums leading-none"
+                  style={{
+                    textShadow: '0 0 20px rgba(255, 255, 255, 0.8), 0 0 40px rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.8)'
+                  }}
+                >
                   {localTimer > 0 ? localTimer : '--'}
                 </div>
-                {/* Betting Time text */}
-                <div className="text-gold text-sm md:text-base font-semibold mt-1.5 tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                
+                {/* Betting Time text with enhanced glow */}
+                <div
+                  className="text-gold text-sm md:text-base font-semibold mt-1.5 tracking-wide"
+                  style={{
+                    textShadow: '0 0 10px rgba(255, 209, 0, 0.8), 0 1px 2px rgba(0, 0, 0, 0.8)'
+                  }}
+                >
                   Betting Time
                 </div>
               </div>
