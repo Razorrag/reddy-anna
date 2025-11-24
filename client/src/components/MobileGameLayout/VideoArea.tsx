@@ -51,6 +51,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
   // ✅ NEW: HLS reload trigger - increment to force HLS instance recreation
   const [hlsReloadTrigger, setHlsReloadTrigger] = useState(0);
   const previousPausedState = useRef(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   // ✅ Loading and buffering states for better UX
   const [isBuffering, setIsBuffering] = useState(false);
@@ -424,18 +425,40 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
                 console.log('🔄 Network error, attempting recovery...');
+                setIsReconnecting(true);
+                
+                // Try to recover by reloading
                 hls.startLoad();
+                
+                // If still failing after 3 seconds, try complete reload
+                setTimeout(() => {
+                  if (hls && videoElement && videoElement.paused && !isPausedState) {
+                    console.log('🔄 Recovery failed, forcing complete HLS reload...');
+                    setHlsReloadTrigger(prev => prev + 1);
+                  }
+                }, 3000);
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
                 console.log('🔄 Media error, attempting recovery...');
+                setIsReconnecting(true);
                 hls.recoverMediaError();
                 break;
               default:
                 console.log('🔄 Unrecoverable error, destroying HLS...');
+                setIsReconnecting(true);
                 hls.destroy();
+                // Try to reload after brief delay
+                setTimeout(() => {
+                  setHlsReloadTrigger(prev => prev + 1);
+                }, 1000);
                 break;
             }
           }
+        });
+
+        // Clear reconnecting state when manifest is successfully parsed
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          setIsReconnecting(false);
         });
 
         hlsRef.current = hls;
@@ -637,12 +660,35 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           hlsRef.current = null;
         }
 
+        // 🚀 CRITICAL: Add cache-busting to force fresh manifest load
+        // This prevents loading stale manifest if OBS was restarted
+        const originalUrl = streamConfig.streamUrl;
+        const cacheBuster = `_t=${Date.now()}`;
+        const separator = originalUrl.includes('?') ? '&' : '?';
+        const freshUrl = `${originalUrl}${separator}${cacheBuster}`;
+        
+        console.log('🔄 Adding cache-buster to stream URL:', cacheBuster);
+        
+        // Temporarily update stream config with cache-busted URL
+        setStreamConfig((prev: any) => ({
+          ...prev,
+          streamUrl: freshUrl
+        }));
+
         // 🚀 TRIGGER COMPLETE HLS RELOAD - This forces recreation with fresh live stream
-        console.log('✅ Triggering HLS reload - ALL PLAYERS will auto-refresh to live edge');
+        console.log('✅ Triggering HLS reload with fresh manifest - ALL PLAYERS will auto-refresh to live edge');
         setHlsReloadTrigger(prev => prev + 1);
         
         // ✅ Frozen frame will be cleared automatically by onPlaying event
         // This ensures NO BLACK SCREEN - frame stays until video is actually playing
+        
+        // 🔄 Restore original URL after 1 second (after HLS has loaded the manifest)
+        setTimeout(() => {
+          setStreamConfig((prev: any) => ({
+            ...prev,
+            streamUrl: originalUrl
+          }));
+        }, 1000);
       }
 
       // Handle iframe resume
@@ -821,6 +867,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             console.log('▶️ Video playing');
             hideBuffering(); // Clear any buffering state
             setStreamError(null);
+            setIsReconnecting(false); // Clear reconnecting state
             
             // ✅ CRITICAL FIX: Clear frozen frame immediately when video starts playing
             // This ensures smooth transition from frozen frame to live stream
@@ -927,6 +974,17 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         </div>
       )}
 
+      {/* ✅ Reconnecting Overlay - Show OVER frozen frame when trying to reconnect */}
+      {isReconnecting && frozenFrame && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-black/90 backdrop-blur-sm px-8 py-6 rounded-xl flex flex-col items-center gap-4 shadow-2xl border border-gold/30">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-3 border-gold"></div>
+            <span className="text-white text-base font-semibold">Reconnecting to stream...</span>
+            <span className="text-gray-400 text-xs">Please wait</span>
+          </div>
+        </div>
+      )}
+
       {/* ✅ Buffering Overlay - Show when stream is loading (but not if we have frozen frame) */}
       {isBuffering && !isPausedState && !frozenFrame && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-sm">
@@ -1005,46 +1063,97 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         }}
       />
 
-      {/* Circular Timer Overlay - CENTERED - ONLY VISIBLE DURING BETTING - ENHANCED GLOW */}
+      {/* ✅ ULTRA-SEAMLESS Circular Timer - Perfect Integration */}
       {gameState.phase === 'betting' && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
           <div className={`relative transition-all duration-300 ${gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
             }`}>
-            {/* Large Circular Timer with Enhanced Glow */}
+            {/* Large Circular Timer with Multi-Layer Seamless Glow */}
             <div className="relative w-36 h-36 md:w-40 md:h-40 flex items-center justify-center">
-              {/* ✅ OUTER GLOW RING - Creates ambient light around timer */}
+              {/* ✅ LAYER 1: Outermost Atmospheric Glow - Soft ambient effect */}
               <div
                 className="absolute inset-0 rounded-full transition-all duration-300"
                 style={{
-                  background: `radial-gradient(circle, ${getTimerColor()}40 0%, transparent 70%)`,
-                  filter: 'blur(20px)',
-                  transform: 'scale(1.2)'
+                  background: `radial-gradient(circle at center, ${getTimerColor()}40 0%, ${getTimerColor()}25 30%, transparent 70%)`,
+                  filter: 'blur(35px)',
+                  transform: 'scale(1.6)',
+                  animation: 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                }}
+              />
+
+              {/* ✅ LAYER 2: Middle Glow Ring - Creates depth and richness */}
+              <div
+                className="absolute inset-0 rounded-full transition-all duration-300"
+                style={{
+                  background: `radial-gradient(circle at center, ${getTimerColor()}50 0%, ${getTimerColor()}30 40%, transparent 65%)`,
+                  filter: 'blur(25px)',
+                  transform: 'scale(1.3)'
+                }}
+              />
+
+              {/* ✅ LAYER 3: Inner Glow Ring - Sharp focus layer */}
+              <div
+                className="absolute inset-0 rounded-full transition-all duration-300"
+                style={{
+                  background: `radial-gradient(circle at center, ${getTimerColor()}60 0%, ${getTimerColor()}35 35%, transparent 60%)`,
+                  filter: 'blur(15px)',
+                  transform: 'scale(1.15)'
+                }}
+              />
+
+              {/* ✅ LAYER 4: Core Highlight - Brightest center */}
+              <div
+                className="absolute inset-0 rounded-full transition-all duration-300"
+                style={{
+                  background: `radial-gradient(circle at center, ${getTimerColor()}70 0%, transparent 45%)`,
+                  filter: 'blur(8px)',
+                  transform: 'scale(1.05)'
                 }}
               />
               
+              {/* ✅ SVG Circle - Perfectly integrated multi-layer progress ring */}
               <svg
                 className="transform -rotate-90 w-full h-full absolute inset-0"
                 viewBox="0 0 128 128"
                 preserveAspectRatio="xMidYMid meet"
+                style={{ filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))' }}
               >
-                {/* Background circle - More transparent, softer blend */}
+                {/* Background circle - Subtle dark ring for contrast */}
                 <circle
                   cx="64"
                   cy="64"
                   r="56"
-                  stroke="rgba(75, 85, 99, 0.4)"
-                  strokeWidth="10"
-                  fill="rgba(31, 41, 55, 0.6)"
+                  stroke="rgba(31, 41, 55, 0.6)"
+                  strokeWidth="4"
+                  fill="rgba(17, 24, 39, 0.5)"
                   className="transition-all duration-300"
                   style={{
-                    filter: 'drop-shadow(0 0 10px rgba(0, 0, 0, 0.5))'
+                    filter: 'drop-shadow(0 0 8px rgba(0, 0, 0, 0.6))'
                   }}
                 />
                 
-                {/* Progress circle - Enhanced glow with dual layers */}
+                {/* Multi-Layer Progress Circle - Seamless glow integration */}
                 {gameState.phase === 'betting' && localTimer > 0 && (
                   <>
-                    {/* Inner glow layer - Blurred for depth */}
+                    {/* Base glow layer - Widest, softest */}
+                    <circle
+                      cx="64"
+                      cy="64"
+                      r="56"
+                      stroke={getTimerColor()}
+                      strokeWidth="18"
+                      fill="none"
+                      strokeDasharray={`${2 * Math.PI * 56}`}
+                      strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}
+                      className="transition-all duration-1000 ease-linear"
+                      strokeLinecap="round"
+                      style={{
+                        filter: `blur(10px)`,
+                        opacity: 0.35
+                      }}
+                    />
+
+                    {/* Mid-glow layer - Medium width */}
                     <circle
                       cx="64"
                       cy="64"
@@ -1057,12 +1166,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                       className="transition-all duration-1000 ease-linear"
                       strokeLinecap="round"
                       style={{
-                        filter: 'blur(8px)',
-                        opacity: 0.6
+                        filter: `blur(6px) drop-shadow(0 0 12px ${getTimerColor()})`,
+                        opacity: 0.5
                       }}
                     />
                     
-                    {/* Main progress circle with strong glow */}
+                    {/* Sharp definition layer */}
                     <circle
                       cx="64"
                       cy="64"
@@ -1075,50 +1184,99 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                       className="transition-all duration-1000 ease-linear"
                       strokeLinecap="round"
                       style={{
-                        filter: `drop-shadow(0 0 8px ${getTimerColor()}) drop-shadow(0 0 15px ${getTimerColor()}90)`,
+                        filter: `blur(3px) drop-shadow(0 0 10px ${getTimerColor()})`,
+                        opacity: 0.75
+                      }}
+                    />
+
+                    {/* Crisp outer edge */}
+                    <circle
+                      cx="64"
+                      cy="64"
+                      r="56"
+                      stroke={getTimerColor()}
+                      strokeWidth="7"
+                      fill="none"
+                      strokeDasharray={`${2 * Math.PI * 56}`}
+                      strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}
+                      className="transition-all duration-1000 ease-linear"
+                      strokeLinecap="round"
+                      style={{
+                        filter: `drop-shadow(0 0 8px ${getTimerColor()}) drop-shadow(0 0 16px ${getTimerColor()}AA)`,
+                        opacity: 0.9
+                      }}
+                    />
+
+                    {/* Bright core highlight */}
+                    <circle
+                      cx="64"
+                      cy="64"
+                      r="56"
+                      stroke={getTimerColor()}
+                      strokeWidth="3"
+                      fill="none"
+                      strokeDasharray={`${2 * Math.PI * 56}`}
+                      strokeDashoffset={`${2 * Math.PI * 56 * (1 - getTimerProgress())}`}
+                      className="transition-all duration-1000 ease-linear"
+                      strokeLinecap="round"
+                      style={{
+                        filter: `drop-shadow(0 0 4px ${getTimerColor()})`
                       }}
                     />
                   </>
                 )}
               </svg>
               
-              {/* Timer text and icon container with enhanced styling */}
+              {/* ✅ Timer Content - Perfectly integrated with glow system */}
               <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-                {/* Icon above number - Screen/Monitor icon with glow */}
-                <div className="mb-0.5 opacity-90">
+                {/* Icon above number - Matches timer color with seamless glow */}
+                <div className="mb-1 transition-all duration-300">
                   <svg
-                    className="w-5 h-5 md:w-6 md:h-6 text-cyan-400"
+                    className="w-5 h-5 md:w-6 md:h-6 transition-all duration-300"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     viewBox="0 0 24 24"
                     style={{
-                      filter: 'drop-shadow(0 0 4px rgba(34, 211, 238, 0.8))'
+                      color: getTimerColor(),
+                      filter: `drop-shadow(0 0 6px ${getTimerColor()}) drop-shadow(0 0 12px ${getTimerColor()}AA)`
                     }}
                   >
-                    <rect x="2" y="4" width="20" height="14" rx="2" ry="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
                   </svg>
                 </div>
                 
-                {/* Timer number with enhanced text glow */}
+                {/* Timer number with multi-layer seamless glow */}
                 <div
-                  className="text-white font-bold text-5xl md:text-6xl tabular-nums leading-none"
+                  className="text-white font-bold text-5xl md:text-6xl tabular-nums leading-none transition-all duration-300"
                   style={{
-                    textShadow: '0 0 20px rgba(255, 255, 255, 0.8), 0 0 40px rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.8)'
+                    textShadow: `
+                      0 0 15px ${getTimerColor()}FF,
+                      0 0 25px ${getTimerColor()}DD,
+                      0 0 35px ${getTimerColor()}99,
+                      0 0 45px ${getTimerColor()}66,
+                      0 0 60px ${getTimerColor()}44,
+                      0 0 80px ${getTimerColor()}22,
+                      0 3px 6px rgba(0, 0, 0, 0.7)
+                    `
                   }}
                 >
                   {localTimer > 0 ? localTimer : '--'}
                 </div>
                 
-                {/* Betting Time text with enhanced glow */}
+                {/* Betting Time text with matching glow */}
                 <div
-                  className="text-gold text-sm md:text-base font-semibold mt-1.5 tracking-wide"
+                  className="text-gold text-sm md:text-base font-semibold mt-1.5 tracking-wide transition-all duration-300"
                   style={{
-                    textShadow: '0 0 10px rgba(255, 209, 0, 0.8), 0 1px 2px rgba(0, 0, 0, 0.8)'
+                    textShadow: `
+                      0 0 12px rgba(255, 209, 0, 0.9),
+                      0 0 20px rgba(255, 209, 0, 0.6),
+                      0 0 30px rgba(255, 209, 0, 0.4),
+                      0 2px 4px rgba(0, 0, 0, 0.8)
+                    `
                   }}
                 >
                   Betting Time
