@@ -163,7 +163,7 @@ export default function AdminBonus() {
         console.log('✅ Bonus settings loaded:', response.data);
         setBonusSettings({
           depositBonusPercent: parseFloat(response.data.depositBonusPercent?.toString() || '5'),
-          referralBonusPercent: parseFloat(response.data.referralBonusPercent?.toString() || '1'),
+          referralBonusPercent: parseFloat(response.data.referralBonusPercent?.toString() || '5'),
           conditionalBonusThreshold: parseInt(response.data.conditionalBonusThreshold?.toString() || '30'),
           bonusClaimThreshold: parseFloat(response.data.bonusClaimThreshold?.toString() || '500'),
           adminWhatsappNumber: response.data.adminWhatsappNumber || ''
@@ -172,7 +172,7 @@ export default function AdminBonus() {
         console.warn('⚠️ No bonus settings data:', response);
         setBonusSettings({
           depositBonusPercent: 5,
-          referralBonusPercent: 1,
+          referralBonusPercent: 5,
           conditionalBonusThreshold: 30,
           bonusClaimThreshold: 500,
           adminWhatsappNumber: ''
@@ -292,7 +292,7 @@ export default function AdminBonus() {
 
   const filteredBonusTransactions = bonusTransactions.filter(transaction => {
     const matchesSearch = transaction.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         transaction.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      transaction.description?.toLowerCase().includes(searchTerm.toLowerCase());
     // Support both 'action' (database) and 'status' (legacy)
     const transactionStatus = transaction.action || transaction.status || '';
     const matchesStatus = statusFilter === 'all' || transactionStatus === statusFilter;
@@ -461,8 +461,8 @@ export default function AdminBonus() {
               <p className="text-gray-300">Manage deposit bonuses, referral bonuses, and system settings</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10"
                 disabled
                 title="Export functionality coming soon"
@@ -470,8 +470,8 @@ export default function AdminBonus() {
                 <Download className="w-4 h-4 mr-2" />
                 Export Data (Coming Soon)
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="border-purple-400/30 text-purple-200 hover:bg-purple-400/10"
                 onClick={handleRefresh}
                 disabled={isLoading}
@@ -558,7 +558,7 @@ export default function AdminBonus() {
                 </CardDescription>
                 <div className="mt-3 p-3 bg-blue-500/10 border border-blue-400/30 rounded-lg">
                   <p className="text-sm text-blue-200">
-                    ℹ️ <strong>Note:</strong> Bonus percentages (Deposit & Referral) are also managed in <strong>Backend Settings</strong>. 
+                    ℹ️ <strong>Note:</strong> Bonus percentages (Deposit & Referral) are also managed in <strong>Backend Settings</strong>.
                     Changes here will sync with game settings. For comprehensive configuration, use Backend Settings page.
                   </p>
                 </div>
@@ -705,11 +705,10 @@ export default function AdminBonus() {
                     <div key={transaction.id} className="p-6 bg-black/30 rounded-lg border border-purple-400/20 hover:border-purple-400/40 transition-colors">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                            transaction.type === 'deposit_bonus' ? 'bg-blue-500/20 border border-blue-500/30' :
-                            transaction.type === 'referral_bonus' ? 'bg-purple-500/20 border border-purple-500/30' :
-                            'bg-green-500/20 border border-green-500/30'
-                          }`}>
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${transaction.type === 'deposit_bonus' ? 'bg-blue-500/20 border border-blue-500/30' :
+                              transaction.type === 'referral_bonus' ? 'bg-purple-500/20 border border-purple-500/30' :
+                                'bg-green-500/20 border border-green-500/30'
+                            }`}>
                             <Gift className="w-6 h-6 text-purple-300" />
                           </div>
                           <div>
@@ -1103,13 +1102,13 @@ export default function AdminBonus() {
                         (player.fullName && player.fullName.toLowerCase().includes(searchLower))
                       );
                     }).length === 0 && (
-                      <div className="text-center py-12">
-                        <Users className="w-16 h-16 text-purple-300/30 mx-auto mb-4" />
-                        <p className="text-purple-300">
-                          {playerSearchTerm ? 'No players found matching your search.' : 'No player bonus analytics found.'}
-                        </p>
-                      </div>
-                    )}
+                        <div className="text-center py-12">
+                          <Users className="w-16 h-16 text-purple-300/30 mx-auto mb-4" />
+                          <p className="text-purple-300">
+                            {playerSearchTerm ? 'No players found matching your search.' : 'No player bonus analytics found.'}
+                          </p>
+                        </div>
+                      )}
                   </>
                 )}
               </CardContent>

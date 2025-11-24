@@ -4193,7 +4193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const bonusSettings = {
         depositBonusPercent: settings.default_deposit_bonus_percent || '5',
-        referralBonusPercent: settings.referral_bonus_percent || '1',
+        referralBonusPercent: settings.referral_bonus_percent || '5',
         conditionalBonusThreshold: settings.conditional_bonus_threshold || '30',
         bonusClaimThreshold: (settings as any).bonus_claim_threshold || '500',
         // Surface admin WhatsApp number for frontend configuration

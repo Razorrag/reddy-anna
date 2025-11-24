@@ -47,7 +47,7 @@ export const updateSiteContent = async (updates: ContentUpdate, adminId: string)
   try {
     // For our simplified Supabase schema, we'll use the game_settings table
     // This is a simplified approach since we don't have a dedicated site content table
-    
+
     // Update individual settings
     if (updates.whatsappNumber !== undefined) {
       await storage.updateGameSetting('whatsapp_number', updates.whatsappNumber);
@@ -77,7 +77,7 @@ export const getSiteContent = async (): Promise<ContentResponse> => {
     const siteTitle = await storage.getGameSetting('site_title') || 'RAJU GARI KOSSU - Andar Bahar Game';
     const siteSubtitle = await storage.getGameSetting('site_subtitle') || 'Play and Win Real Money';
     const contactEmail = await storage.getGameSetting('contact_email') || 'support@raju-gari-kossu.com';
-    
+
     const content = {
       whatsappNumber,
       siteTitle,
@@ -167,27 +167,29 @@ export const getSystemSettings = async (): Promise<ContentResponse> => {
     const adminWhatsappNumber = await storage.getGameSetting('admin_whatsapp_number');
     const customerSupportEmail = await storage.getGameSetting('customer_support_email');
     const customerSupportPhone = await storage.getGameSetting('customer_support_phone');
-    
+
     // ✅ FIX: Remove hardcoded fallback - return empty string if not configured
     // Admin must configure WhatsApp number in settings
-    return { success: true, content: {
-      maintenanceMode: maintenanceMode === 'true',
-      maintenanceMessage: maintenanceMessage || '',
-      depositBonus: parseInt(depositBonus || '10', 10),
-      referralCommission: parseInt(referralCommission || '5', 10),
-      backupFrequency: 'daily',
-      whatsappBusinessAPI: '',
-      adminWhatsappNumber: adminWhatsappNumber || '',
-      whatsappNumber: adminWhatsappNumber || '', // Legacy field
-      minDepositAmount: parseInt(minDepositAmount || '100', 10),
-      maxDepositAmount: parseInt(maxDepositAmount || '100000', 10),
-      minWithdrawAmount: parseInt(minWithdrawAmount || '500', 10),
-      maxWithdrawAmount: parseInt(maxWithdrawAmount || '50000', 10),
-      autoWithdrawal: false,
-      kycRequired: true,
-      customerSupportEmail: customerSupportEmail || 'support@raju-gari-kossu.com',
-      customerSupportPhone: customerSupportPhone || ''
-    } };
+    return {
+      success: true, content: {
+        maintenanceMode: maintenanceMode === 'true',
+        maintenanceMessage: maintenanceMessage || '',
+        depositBonus: parseInt(depositBonus || '10', 10),
+        referralCommission: parseInt(referralCommission || '5', 10),
+        backupFrequency: 'daily',
+        whatsappBusinessAPI: '',
+        adminWhatsappNumber: adminWhatsappNumber || '',
+        whatsappNumber: adminWhatsappNumber || '', // Legacy field
+        minDepositAmount: parseInt(minDepositAmount || '100', 10),
+        maxDepositAmount: parseInt(maxDepositAmount || '100000', 10),
+        minWithdrawAmount: parseInt(minWithdrawAmount || '500', 10),
+        maxWithdrawAmount: parseInt(maxWithdrawAmount || '50000', 10),
+        autoWithdrawal: false,
+        kycRequired: true,
+        customerSupportEmail: customerSupportEmail || 'support@raju-gari-kossu.com',
+        customerSupportPhone: customerSupportPhone || ''
+      }
+    };
   } catch (error) {
     console.error('Settings retrieval error:', error);
     return { success: false, error: 'Settings retrieval failed' };
@@ -201,10 +203,12 @@ export const toggleMaintenanceMode = async (enabled: boolean, message?: string, 
       await storage.updateGameSetting('maintenance_message', message);
     }
 
-    return { success: true, content: {
-      maintenanceMode: enabled,
-      maintenanceMessage: message || ''
-    } };
+    return {
+      success: true, content: {
+        maintenanceMode: enabled,
+        maintenanceMessage: message || ''
+      }
+    };
   } catch (error) {
     console.error('Maintenance mode toggle error:', error);
     return { success: false, error: 'Failed to toggle maintenance mode' };
@@ -228,10 +232,12 @@ export const updateBonusSettings = async (
     await storage.updateGameSetting('deposit_bonus', depositBonus.toString());
     await storage.updateGameSetting('referral_commission', referralCommission.toString());
 
-    return { success: true, content: {
-      depositBonus,
-      referralCommission
-    } };
+    return {
+      success: true, content: {
+        depositBonus,
+        referralCommission
+      }
+    };
   } catch (error) {
     console.error('Bonus settings update error:', error);
     return { success: false, error: 'Failed to update bonus settings' };
@@ -284,12 +290,14 @@ export const updatePaymentLimits = async (
       await storage.updateGameSetting('max_withdraw_amount', limits.maxWithdraw.toString());
     }
 
-    return { success: true, content: {
-      minDepositAmount: limits.minDeposit,
-      maxDepositAmount: limits.maxDeposit,
-      minWithdrawAmount: limits.minWithdraw,
-      maxWithdrawAmount: limits.maxWithdraw
-    } };
+    return {
+      success: true, content: {
+        minDepositAmount: limits.minDeposit,
+        maxDepositAmount: limits.maxDeposit,
+        minWithdrawAmount: limits.minWithdraw,
+        maxWithdrawAmount: limits.maxWithdraw
+      }
+    };
   } catch (error) {
     console.error('Payment limits update error:', error);
     return { success: false, error: 'Failed to update payment limits' };
@@ -418,7 +426,7 @@ export const getGameSettings = async (): Promise<ContentResponse> => {
         houseCommissionRate: parseFloat(commissionRate || '0.05'),
         adminWhatsAppNumber: adminWhatsApp || '',
         default_deposit_bonus_percent: parseFloat(defaultDepositBonusPercent || '5'),
-        referral_bonus_percent: parseFloat(referralBonusPercent || '1'),
+        referral_bonus_percent: parseFloat(referralBonusPercent || '5'),
         conditional_bonus_threshold: parseFloat(conditionalBonusThreshold || '30'),
         wagering_multiplier: parseFloat(wageringMultiplier || '0.3')
       }

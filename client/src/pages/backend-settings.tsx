@@ -27,7 +27,7 @@ export default function BackendSettingsPage() {
     maxBet: 100000,
     timerDuration: 30,
     depositBonusPercent: 5,
-    referralBonusPercent: 1,
+    referralBonusPercent: 5,
     conditionalBonusThreshold: 30,
     maintenanceMode: false,
     maintenanceMessage: ''
@@ -47,7 +47,7 @@ export default function BackendSettingsPage() {
           maxBet: response.content.maxBet || 100000,
           timerDuration: response.content.bettingTimerDuration || 30,
           depositBonusPercent: response.content.depositBonusPercent || 5,
-          referralBonusPercent: response.content.referralBonusPercent || 1,
+          referralBonusPercent: response.content.referralBonusPercent || 5,
           conditionalBonusThreshold: response.content.conditionalBonusThreshold || 30,
           maintenanceMode: response.content.maintenanceMode || false,
           maintenanceMessage: response.content.maintenanceMessage || ''
@@ -117,7 +117,7 @@ export default function BackendSettingsPage() {
                   <input
                     type="number"
                     value={settings.minBet}
-                    onChange={(e) => setSettings({...settings, minBet: parseInt(e.target.value)})}
+                    onChange={(e) => setSettings({ ...settings, minBet: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:border-gold focus:outline-none"
                   />
                 </div>
@@ -126,7 +126,7 @@ export default function BackendSettingsPage() {
                   <input
                     type="number"
                     value={settings.maxBet}
-                    onChange={(e) => setSettings({...settings, maxBet: parseInt(e.target.value)})}
+                    onChange={(e) => setSettings({ ...settings, maxBet: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:border-gold focus:outline-none"
                   />
                 </div>
@@ -150,7 +150,7 @@ export default function BackendSettingsPage() {
                   <input
                     type="number"
                     value={settings.timerDuration}
-                    onChange={(e) => setSettings({...settings, timerDuration: parseInt(e.target.value)})}
+                    onChange={(e) => setSettings({ ...settings, timerDuration: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:border-gold focus:outline-none"
                   />
                 </div>
@@ -169,7 +169,7 @@ export default function BackendSettingsPage() {
                 </CardDescription>
                 <div className="mt-3 p-3 bg-blue-500/10 border border-blue-400/30 rounded-lg">
                   <p className="text-sm text-blue-200">
-                    ℹ️ <strong>Primary Configuration:</strong> This is the canonical source for bonus settings. 
+                    ℹ️ <strong>Primary Configuration:</strong> This is the canonical source for bonus settings.
                     Changes sync with Admin Bonus page automatically.
                   </p>
                 </div>
@@ -180,7 +180,7 @@ export default function BackendSettingsPage() {
                   <input
                     type="number"
                     value={settings.depositBonusPercent}
-                    onChange={(e) => setSettings({...settings, depositBonusPercent: parseInt(e.target.value)})}
+                    onChange={(e) => setSettings({ ...settings, depositBonusPercent: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:border-gold focus:outline-none"
                   />
                 </div>
@@ -189,7 +189,7 @@ export default function BackendSettingsPage() {
                   <input
                     type="number"
                     value={settings.referralBonusPercent}
-                    onChange={(e) => setSettings({...settings, referralBonusPercent: parseInt(e.target.value)})}
+                    onChange={(e) => setSettings({ ...settings, referralBonusPercent: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:border-gold focus:outline-none"
                   />
                 </div>
@@ -198,7 +198,7 @@ export default function BackendSettingsPage() {
                   <input
                     type="number"
                     value={settings.conditionalBonusThreshold}
-                    onChange={(e) => setSettings({...settings, conditionalBonusThreshold: parseInt(e.target.value)})}
+                    onChange={(e) => setSettings({ ...settings, conditionalBonusThreshold: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:border-gold focus:outline-none"
                   />
                 </div>
@@ -221,7 +221,7 @@ export default function BackendSettingsPage() {
                   <input
                     type="checkbox"
                     checked={settings.maintenanceMode}
-                    onChange={(e) => setSettings({...settings, maintenanceMode: e.target.checked})}
+                    onChange={(e) => setSettings({ ...settings, maintenanceMode: e.target.checked })}
                     className="w-5 h-5"
                   />
                   <label className="text-white">Enable Maintenance Mode</label>
@@ -231,7 +231,7 @@ export default function BackendSettingsPage() {
                     <label className="text-sm text-gray-400 mb-1 block">Maintenance Message</label>
                     <textarea
                       value={settings.maintenanceMessage}
-                      onChange={(e) => setSettings({...settings, maintenanceMessage: e.target.value})}
+                      onChange={(e) => setSettings({ ...settings, maintenanceMessage: e.target.value })}
                       className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:border-gold focus:outline-none"
                       rows={3}
                       placeholder="Enter maintenance message for users..."

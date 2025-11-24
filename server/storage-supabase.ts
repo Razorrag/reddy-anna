@@ -107,7 +107,7 @@ export interface IStorage {
   updateUserGameStats(userId: string, won: boolean, betAmount: number, payoutAmount: number): Promise<void>;
   approvePaymentRequestAtomic(requestId: string, userId: string, amount: number, adminId: string): Promise<{ balance: number; bonusAmount: number; wageringRequirement: number }>; // Atomic deposit approval
   updateMultipleUserBalances(updates: Array<{ userId: string; amountChange: number }>): Promise<Array<{ userId: string; success: boolean; newBalance?: number; error?: string }>>; // Batch balance updates
-  
+
   // Game session operations
   createGameSession(session: InsertGameSession): Promise<GameSession>;
   getCurrentGameSession(): Promise<GameSession | undefined>;
@@ -116,7 +116,7 @@ export interface IStorage {
   getLastCompletedGame(): Promise<GameSession | undefined>;
   updateGameSession(gameId: string, updates: Partial<GameSession>): Promise<void>;
   completeGameSession(gameId: string, winner: string, winningCard: string): Promise<void>;
-  
+
   // Betting operations
   placeBet(bet: InsertBet): Promise<PlayerBet>;
   createBet(bet: InsertBet): Promise<PlayerBet>;
@@ -141,7 +141,7 @@ export interface IStorage {
   getUserGameHistory(userId: string): Promise<any[]>;
   updateBet(gameId: string, userId: string, updates: Partial<UpdateBet>): Promise<void>;
   applyPayoutsAndupdateBets(payouts: { userId: string; amount: number }[], winningBets: string[], losingBets: string[]): Promise<void>;
-  
+
   // Simplified payout methods (idempotent)
   updateBetWithPayout(betId: string, status: string, transactionId: string, payoutAmount: number): Promise<void>;
   createTransaction(transaction: {
@@ -152,7 +152,7 @@ export interface IStorage {
     payout_transaction_id: string;
     description: string;
   }): Promise<void>;
-  
+
   // Transaction operations
   getUserTransactions(
     userId: string,
@@ -167,23 +167,23 @@ export interface IStorage {
     }>;
     total: number;
   }>;
-  
+
   // Card operations
   dealCard(card: InsertDealtCard): Promise<DealtCard>;
   createDealtCard(card: InsertDealtCard): Promise<DealtCard>;
   getDealtCards(gameId: string): Promise<DealtCard[]>;
   updateDealtCard(cardId: string, updates: Partial<DealtCard>): Promise<void>;
   updateDealtCardForGame(gameId: string, cardId: string, updates: Partial<DealtCard>): Promise<void>;
-  
+
   // Game history operations
   addGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry>;
   saveGameHistory(history: InsertGameHistory): Promise<GameHistoryEntry>;
   getGameHistory(limit?: number): Promise<GameHistoryEntry[]>;
-  
+
   // Settings operations
-  getGameSettings(): Promise<{ 
-    minBet: number; 
-    maxBet: number; 
+  getGameSettings(): Promise<{
+    minBet: number;
+    maxBet: number;
     timerDuration: number;
     default_deposit_bonus_percent: number;
     referral_bonus_percent: number;
@@ -194,35 +194,35 @@ export interface IStorage {
   updateGameSettings(settings: { minBet?: number; maxBet?: number; timerDuration?: number }): Promise<void>;
   getGameSetting(key: string): Promise<string | undefined>;
   updateGameSetting(key: string, value: string): Promise<void>;
-  
+
   // Stream settings operations
   getStreamSettings(): Promise<StreamSettings[]>;
   updateStreamSetting(key: string, value: string): Promise<void>;
-  
+
   // Analytics methods
   saveGameStatistics(stats: Omit<GameStatistics, 'id' | 'createdAt'>): Promise<GameStatistics>;
   getGameStatistics(gameId: string): Promise<GameStatistics | null>;
   getGameStatisticsByDateRange(startDate: Date, endDate: Date): Promise<GameStatistics[]>;
-  
+
   // Daily statistics
   getDailyStats(date: Date): Promise<DailyGameStatistics | null>;
   getDailyStatsByRange(startDate: Date, endDate: Date): Promise<DailyGameStatistics[]>;
   updateDailyStats(date: Date, updates: Partial<DailyGameStatistics>): Promise<void>;
   createDailyStats(stats: Omit<DailyGameStatistics, 'id' | 'createdAt' | 'updatedAt'>): Promise<void>;
   incrementDailyStats(date: Date, increments: Partial<DailyGameStatistics>): Promise<void>;
-  
+
   // Monthly statistics
   getMonthlyStats(monthYear: string): Promise<MonthlyGameStatistics | null>;
   getMonthlyStatsByRange(startMonth: string, endMonth: string): Promise<MonthlyGameStatistics[]>;
   createMonthlyStats(stats: Omit<MonthlyGameStatistics, 'id' | 'createdAt' | 'updatedAt'>): Promise<void>;
   incrementMonthlyStats(monthYear: string, increments: Partial<MonthlyGameStatistics>): Promise<void>;
-  
+
   // Yearly statistics
   getYearlyStats(year: number): Promise<YearlyGameStatistics | null>;
   getYearlyStatsByRange(startYear: number, endYear: number): Promise<YearlyGameStatistics[]>;
   createYearlyStats(stats: Omit<YearlyGameStatistics, 'id' | 'createdAt' | 'updatedAt'>): Promise<void>;
   incrementYearlyStats(year: number, increments: Partial<YearlyGameStatistics>): Promise<void>;
-  
+
   // Aggregation methods
   getTodayStats(): Promise<DailyGameStatistics | null>;
   getMonthToDateStats(monthYear: string): Promise<MonthlyGameStatistics | null>;
@@ -230,12 +230,12 @@ export interface IStorage {
   getTodayGameCount(): Promise<number>;
   getTodayBetsTotal(): Promise<number>;
   getTodayUniquePlayers(): Promise<number>;
-  
+
   // Bonus and referral methods
   addUserBonus(userId: string, bonusAmount: number, bonusType: string, referenceAmount?: number): Promise<void>;
-  getUserBonusInfo(userId: string): Promise<{ 
-    depositBonus: number; 
-    referralBonus: number; 
+  getUserBonusInfo(userId: string): Promise<{
+    depositBonus: number;
+    referralBonus: number;
     totalBonus: number;
     wageringRequired: number;
     wageringCompleted: number;
@@ -248,7 +248,7 @@ export interface IStorage {
   getUserReferrals(userId: string): Promise<UserReferral[]>;
   checkAndApplyReferralBonus(userId: string, depositAmount: number): Promise<void>;
   applyConditionalBonus(userId: string): Promise<boolean>;
-  
+
   // Wagering requirement methods
   setUserWageringRequirement(userId: string, amount: number): Promise<void>;
   trackWagering(userId: string, betAmount: number): Promise<void>;
@@ -269,7 +269,7 @@ export interface IStorage {
     referenceId?: string;
     description?: string;
   }): Promise<void>;
-  
+
   // Payment request methods
   createPaymentRequest(request: {
     userId: string;
@@ -285,14 +285,14 @@ export interface IStorage {
   getPendingPaymentRequests(): Promise<any[]>;
   updatePaymentRequest(requestId: string, status: string, adminId?: string): Promise<void>;
   approvePaymentRequest(requestId: string, userId: string, amount: number, adminId: string): Promise<void>;
-  
+
   // Analytics methods
   getBonusAnalytics(period: string): Promise<any>;
   getReferralAnalytics(period: string): Promise<any>;
   getAllBonusTransactions(filters?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<any[]>;
   getAllReferralData(filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
   getPlayerBonusAnalytics(filters?: { userId?: string; limit?: number; offset?: number }): Promise<any[]>;
-  
+
   // New Bonus System Methods
   createDepositBonus(data: {
     userId: string;
@@ -327,7 +327,7 @@ export interface IStorage {
     bonusAmount: number;
     bonusPercentage: number;
   }): Promise<string>;
-  
+
   // Payment Summary Method
   getPaymentsSummary(): Promise<{
     approvedDepositsToday: number;
@@ -337,7 +337,7 @@ export interface IStorage {
     approvedDepositsCount: number;
     approvedWithdrawalsCount: number;
   }>;
-  
+
   // Payment History Method
   getAllPaymentRequests(filters?: {
     status?: string;
@@ -347,7 +347,7 @@ export interface IStorage {
     startDate?: Date;
     endDate?: Date;
   }): Promise<any[]>;
-  
+
   // Statistics methods with proper typing
   getAllTimeStatistics(): Promise<StatisticsData>;
   getDailyStatistics(): Promise<StatisticsData>;
@@ -399,7 +399,7 @@ export class SupabaseStorage implements IStorage {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const { data, error } = await supabaseServer
@@ -423,13 +423,13 @@ export class SupabaseStorage implements IStorage {
       } catch (error: any) {
         lastError = error;
         console.error(`Attempt ${attempt} failed to get user ${id}:`, error);
-        
+
         // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') || 
-            error.code === 'ECONNREFUSED' || 
-            error.code === 'ETIMEDOUT' ||
-            error.name === 'AbortError') {
-          
+        if (error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') {
+
           if (attempt < maxRetries) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -441,7 +441,7 @@ export class SupabaseStorage implements IStorage {
         }
       }
     }
-    
+
     console.error('Error getting user after all retries:', lastError);
     return undefined;
   }
@@ -451,7 +451,7 @@ export class SupabaseStorage implements IStorage {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const { data, error } = await supabaseServer
@@ -475,13 +475,13 @@ export class SupabaseStorage implements IStorage {
       } catch (error: any) {
         lastError = error;
         console.error(`Attempt ${attempt} failed to get user by identifier ${identifier}:`, error);
-        
+
         // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') || 
-            error.code === 'ECONNREFUSED' || 
-            error.code === 'ETIMEDOUT' ||
-            error.name === 'AbortError') {
-          
+        if (error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') {
+
           if (attempt < maxRetries) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -493,7 +493,7 @@ export class SupabaseStorage implements IStorage {
         }
       }
     }
-    
+
     console.error('Error getting user by identifier after all retries:', lastError);
     console.log('Searching for identifier:', identifier);
     return undefined;
@@ -504,7 +504,7 @@ export class SupabaseStorage implements IStorage {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const { data, error } = await supabaseServer
@@ -528,13 +528,13 @@ export class SupabaseStorage implements IStorage {
       } catch (error: any) {
         lastError = error;
         console.error(`Attempt ${attempt} failed to get user by phone ${phone}:`, error);
-        
+
         // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') || 
-            error.code === 'ECONNREFUSED' || 
-            error.code === 'ETIMEDOUT' ||
-            error.name === 'AbortError') {
-          
+        if (error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') {
+
           if (attempt < maxRetries) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -546,7 +546,7 @@ export class SupabaseStorage implements IStorage {
         }
       }
     }
-    
+
     console.error('Error getting user by phone after all retries:', lastError);
     return undefined;
   }
@@ -556,7 +556,7 @@ export class SupabaseStorage implements IStorage {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const { data, error } = await supabaseServer
@@ -576,13 +576,13 @@ export class SupabaseStorage implements IStorage {
       } catch (error: any) {
         lastError = error;
         console.error(`Attempt ${attempt} failed to get user by referral code ${referralCode}:`, error);
-        
+
         // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') || 
-            error.code === 'ECONNREFUSED' || 
-            error.code === 'ETIMEDOUT' ||
-            error.name === 'AbortError') {
-          
+        if (error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') {
+
           if (attempt < maxRetries) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -594,7 +594,7 @@ export class SupabaseStorage implements IStorage {
         }
       }
     }
-    
+
     console.error('Error getting user by referral code after all retries:', lastError);
     return undefined;
   }
@@ -604,7 +604,7 @@ export class SupabaseStorage implements IStorage {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const { data, error } = await supabaseServer
@@ -624,13 +624,13 @@ export class SupabaseStorage implements IStorage {
       } catch (error: any) {
         lastError = error;
         console.error(`Attempt ${attempt} failed to get admin by username ${username}:`, error);
-        
+
         // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') || 
-            error.code === 'ECONNREFUSED' || 
-            error.code === 'ETIMEDOUT' ||
-            error.name === 'AbortError') {
-          
+        if (error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') {
+
           if (attempt < maxRetries) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -642,7 +642,7 @@ export class SupabaseStorage implements IStorage {
         }
       }
     }
-    
+
     console.error('Error getting admin by username after all retries:', lastError);
     return undefined;
   }
@@ -651,7 +651,7 @@ export class SupabaseStorage implements IStorage {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const { data, error } = await supabaseServer
@@ -675,13 +675,13 @@ export class SupabaseStorage implements IStorage {
       } catch (error: any) {
         lastError = error;
         console.error(`Attempt ${attempt} failed to get user by ID ${id}:`, error);
-        
+
         // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') || 
-            error.code === 'ECONNREFUSED' || 
-            error.code === 'ETIMEDOUT' ||
-            error.name === 'AbortError') {
-          
+        if (error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') {
+
           if (attempt < maxRetries) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -693,7 +693,7 @@ export class SupabaseStorage implements IStorage {
         }
       }
     }
-    
+
     console.error('Error getting user by ID after all retries:', lastError);
     return undefined;
   }
@@ -702,7 +702,7 @@ export class SupabaseStorage implements IStorage {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const { data, error } = await supabaseServer
@@ -721,7 +721,7 @@ export class SupabaseStorage implements IStorage {
               user.balance = this.parseBalance(user.balance) as any;
             }
           });
-          
+
           // 🔍 DEBUG: Log what we got from Supabase
           console.log(`🗄️ Storage.getAllUsers - Got ${data.length} users from Supabase`);
           if (data.length > 0) {
@@ -738,13 +738,13 @@ export class SupabaseStorage implements IStorage {
       } catch (error: any) {
         lastError = error;
         console.error(`Attempt ${attempt} failed to get all users:`, error);
-        
+
         // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') || 
-            error.code === 'ECONNREFUSED' || 
-            error.code === 'ETIMEDOUT' ||
-            error.name === 'AbortError') {
-          
+        if (error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') {
+
           if (attempt < maxRetries) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -756,7 +756,7 @@ export class SupabaseStorage implements IStorage {
         }
       }
     }
-    
+
     console.error('Error getting all users after all retries:', lastError);
     return [];
   }
@@ -764,10 +764,10 @@ export class SupabaseStorage implements IStorage {
   // Update createUser to use phone as ID with configurable default balance
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = (insertUser as any).id || insertUser.phone; // Use phone as ID if no explicit ID provided
-    
+
     // Get default balance from environment - use 0.00 if not set
     const defaultBalance = process.env.DEFAULT_BALANCE || "0.00";
-    
+
     const user = {
       id,
       phone: insertUser.phone,
@@ -827,7 +827,7 @@ export class SupabaseStorage implements IStorage {
       console.log('⚠️ Skipping balance update for anonymous user');
       return;
     }
-    
+
     // 🔒 SECURITY FIX: Use direct SQL update to prevent race conditions
     try {
       // First, get the current balance
@@ -877,24 +877,24 @@ export class SupabaseStorage implements IStorage {
     if (userId === 'anonymous') {
       return 0;
     }
-    
+
     try {
       // Use RPC function if available for better performance
       const { data: rpcData, error: rpcError } = await supabaseServer.rpc('get_user_balance', {
         p_user_id: userId
       });
-      
+
       if (!rpcError && rpcData !== null && rpcData !== undefined) {
         return parseFloat(String(rpcData)) || 0;
       }
-      
+
       // Fallback to direct query
       const { data, error } = await supabaseServer
         .from('users')
         .select('balance')
         .eq('id', userId)
         .single();
-      
+
       if (error) {
         // ✅ FIX: Suppress PGRST116 error - admin users don't have balance
         if (error.code === 'PGRST116') {
@@ -905,7 +905,7 @@ export class SupabaseStorage implements IStorage {
         console.error(`Error getting balance for user ${userId}:`, error);
         return 0;
       }
-      
+
       return parseFloat(data?.balance || '0');
     } catch (error) {
       console.error(`Error in getUserBalance for ${userId}:`, error);
@@ -941,7 +941,7 @@ export class SupabaseStorage implements IStorage {
   }
 
   async updateUser(userId: string, updates: any): Promise<User> {
-    const { data, error} = await supabaseServer
+    const { data, error } = await supabaseServer
       .from('users')
       .update(updates)
       .eq('id', userId)
@@ -981,7 +981,7 @@ export class SupabaseStorage implements IStorage {
 
           const currentBalance = parseFloat(user.balance || '0');
           lastBalance = currentBalance;
-          
+
           // Check if sufficient balance
           if (currentBalance < amount) {
             throw new Error(`Insufficient balance. You have ₹${currentBalance.toFixed(2)}, but bet is ₹${amount.toFixed(2)}`);
@@ -992,7 +992,7 @@ export class SupabaseStorage implements IStorage {
           // Update balance atomically with optimistic locking
           const { data: updatedData, error: updateError } = await supabaseServer
             .from('users')
-            .update({ 
+            .update({
               balance: newBalance.toString(),
               updated_at: new Date().toISOString()
             })
@@ -1019,23 +1019,23 @@ export class SupabaseStorage implements IStorage {
           // Success - return new balance after threshold checks
           try {
             await this.checkBonusThresholds(userId);
-          } catch (error) {}
+          } catch (error) { }
           return newBalance;
         } catch (error: any) {
           lastError = error;
-          
+
           // If it's not a retryable error (like insufficient balance or user not found), throw immediately
-          if (error.message?.includes('Insufficient balance') || 
-              error.message?.includes('User not found')) {
+          if (error.message?.includes('Insufficient balance') ||
+            error.message?.includes('User not found')) {
             throw error;
           }
 
           // For network errors, retry with exponential backoff
-          if ((error.message?.includes('fetch failed') || 
-               error.code === 'ECONNREFUSED' || 
-               error.code === 'ETIMEDOUT' ||
-               error.name === 'AbortError') && 
-              attempt < maxRetries) {
+          if ((error.message?.includes('fetch failed') ||
+            error.code === 'ECONNREFUSED' ||
+            error.code === 'ETIMEDOUT' ||
+            error.name === 'AbortError') &&
+            attempt < maxRetries) {
             const backoffDelay = Math.min(100 * Math.pow(2, attempt - 1), 1000); // 100ms, 200ms, 400ms, 800ms, 1000ms max
             await new Promise(resolve => setTimeout(resolve, backoffDelay));
             continue;
@@ -1082,7 +1082,7 @@ export class SupabaseStorage implements IStorage {
         // Update balance atomically with optimistic locking
         const { error: updateError } = await supabaseServer
           .from('users')
-          .update({ 
+          .update({
             balance: newBalance.toString(),
             updated_at: new Date().toISOString()
           })
@@ -1107,22 +1107,22 @@ export class SupabaseStorage implements IStorage {
         // Success - return new balance after threshold checks
         try {
           await this.checkBonusThresholds(userId);
-        } catch (error) {}
+        } catch (error) { }
         return newBalance;
       } catch (error: any) {
         lastError = error;
-        
+
         // If it's not a retryable error, throw immediately
         if (error.message?.includes('User not found')) {
           throw error;
         }
 
         // For network errors, retry with exponential backoff
-        if ((error.message?.includes('fetch failed') || 
-             error.code === 'ECONNREFUSED' || 
-             error.code === 'ETIMEDOUT' ||
-             error.name === 'AbortError') && 
-            attempt < maxRetries) {
+        if ((error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') &&
+          attempt < maxRetries) {
           const backoffDelay = Math.min(100 * Math.pow(2, attempt - 1), 1000); // 100ms, 200ms, 400ms, 800ms, 1000ms max
           await new Promise(resolve => setTimeout(resolve, backoffDelay));
           continue;
@@ -1153,16 +1153,16 @@ export class SupabaseStorage implements IStorage {
       // Calculate new values
       const gamesPlayed = (user.games_played || 0) + 1;
       const gamesWon = won ? (user.games_won || 0) + 1 : (user.games_won || 0);
-      
+
       // ✅ CRITICAL FIX: Track GROSS amounts, not NET profit/loss
       // total_winnings = sum of all payouts received
       // total_losses = sum of all bets that lost (where payout = 0 or payout < bet)
       const currentWinnings = parseFloat(user.total_winnings as any) || 0;
       const currentLosses = parseFloat(user.total_losses as any) || 0;
-      
+
       let newWinnings = currentWinnings;
       let newLosses = currentLosses;
-      
+
       if (won && payoutAmount > 0) {
         // Player won - add GROSS PAYOUT to total_winnings
         newWinnings = currentWinnings + payoutAmount;
@@ -1181,7 +1181,7 @@ export class SupabaseStorage implements IStorage {
         // Refund (1:1 payout) - no change to winnings/losses
         console.log(`🔄 User ${userId} REFUND: Bet ₹${betAmount}, Payout ₹${payoutAmount}, No change`);
       }
-      
+
       const totalWinnings = newWinnings;
       const totalLosses = newLosses;
 
@@ -1215,13 +1215,13 @@ export class SupabaseStorage implements IStorage {
     // This ensures the gameId in memory matches the game_id in database
     const providedGameId = (session as any).gameId || (session as any).game_id;
     const gameId = providedGameId || randomUUID();
-    
+
     if (providedGameId) {
       console.log(`✅ Using provided gameId: ${gameId} (matches memory state)`);
     } else {
       console.log(`⚠️ No gameId provided, generated new UUID: ${gameId}`);
     }
-    
+
     const now = new Date();
     // Use snake_case column names to match database schema exactly
     const gameSession = {
@@ -1281,7 +1281,7 @@ export class SupabaseStorage implements IStorage {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const { data, error } = await supabaseServer
@@ -1303,13 +1303,13 @@ export class SupabaseStorage implements IStorage {
       } catch (error: any) {
         lastError = error;
         console.error(`Attempt ${attempt} failed to get current game session:`, error);
-        
+
         // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') || 
-            error.code === 'ECONNREFUSED' || 
-            error.code === 'ETIMEDOUT' ||
-            error.name === 'AbortError') {
-          
+        if (error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') {
+
           if (attempt < maxRetries) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -1321,7 +1321,7 @@ export class SupabaseStorage implements IStorage {
         }
       }
     }
-    
+
     console.error('Error getting current game session after all retries:', lastError);
     return undefined;
   }
@@ -1330,7 +1330,7 @@ export class SupabaseStorage implements IStorage {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const { data, error } = await supabaseServer
@@ -1350,13 +1350,13 @@ export class SupabaseStorage implements IStorage {
       } catch (error: any) {
         lastError = error;
         console.error(`Attempt ${attempt} failed to get game session ${gameId}:`, error);
-        
+
         // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') || 
-            error.code === 'ECONNREFUSED' || 
-            error.code === 'ETIMEDOUT' ||
-            error.name === 'AbortError') {
-          
+        if (error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') {
+
           if (attempt < maxRetries) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -1368,7 +1368,7 @@ export class SupabaseStorage implements IStorage {
         }
       }
     }
-    
+
     console.error('Error getting game session after all retries:', lastError);
     return undefined;
   }
@@ -1378,7 +1378,7 @@ export class SupabaseStorage implements IStorage {
     const dbUpdates: any = {
       updated_at: new Date()
     };
-    
+
     if (updates.phase) dbUpdates.phase = updates.phase;
     if ((updates as any).round !== undefined) dbUpdates.current_round = (updates as any).round;
     if (updates.currentTimer !== undefined) dbUpdates.current_timer = updates.currentTimer;
@@ -1610,7 +1610,7 @@ export class SupabaseStorage implements IStorage {
       console.log('⚠️ Skipping bet status update for anonymous user');
       return;
     }
-    
+
     const { error } = await supabaseServer
       .from('player_bets')
       .update({ status, updated_at: new Date() }) // Use snake_case
@@ -1630,7 +1630,7 @@ export class SupabaseStorage implements IStorage {
       console.log('⚠️ Skipping bet update for anonymous user');
       return;
     }
-    
+
     const { error } = await supabaseServer
       .from('player_bets')
       .update({ ...updates, updated_at: new Date() }) // Use snake_case
@@ -1664,7 +1664,7 @@ export class SupabaseStorage implements IStorage {
       console.log('⚠️ Skipping bet update for anonymous user');
       return;
     }
-    
+
     // Update the specific bet
     const { error } = await supabaseServer
       .from('player_bets')
@@ -1735,7 +1735,7 @@ export class SupabaseStorage implements IStorage {
     const bets = await this.getBetsForGame(gameId);
     const andarBets = bets.filter(b => b.side === 'andar');
     const baharBets = bets.filter(b => b.side === 'bahar');
-    
+
     return {
       andarTotal: andarBets.reduce((sum, b) => sum + parseFloat(b.amount), 0),
       baharTotal: baharBets.reduce((sum, b) => sum + parseFloat(b.amount), 0),
@@ -2141,7 +2141,7 @@ export class SupabaseStorage implements IStorage {
   async getUserGameHistory(userId: string): Promise<any[]> {
     console.log(`\n🔍 ========== getUserGameHistory START ==========`);
     console.log(`User ID: ${userId}`);
-    
+
     try {
       // ✅ TRY RPC FIRST - More efficient if it exists
       const { data: rpcData, error: rpcError } = await supabaseServer
@@ -2154,7 +2154,7 @@ export class SupabaseStorage implements IStorage {
       // If RPC works, use it
       if (!rpcError && rpcData && rpcData.length > 0) {
         console.log(`✅ RPC returned ${rpcData.length} game history records`);
-        
+
         const formattedHistory = rpcData.map((game: any) => ({
           id: game.game_id,
           gameId: game.game_id,
@@ -2303,7 +2303,7 @@ export class SupabaseStorage implements IStorage {
 
       console.log(`✅ Built ${result.length} game history records via direct queries`);
       console.log(`========== getUserGameHistory END (SUCCESS - DIRECT) ==========\n`);
-      
+
       return result;
     } catch (error) {
       console.error('❌ getUserGameHistory error:', error);
@@ -2378,7 +2378,7 @@ export class SupabaseStorage implements IStorage {
       const gameHistory = gameData.gameHistory; // ✅ Use game_history from JOIN
       const history = historyMap.get(gameId);
       const cards = cardsMap.get(gameId) || [];
-      
+
       // Determine result based on actual payouts
       const won = gameData.totalPayout > 0;
       const winner = gameHistory?.winner || history?.winner;
@@ -2425,7 +2425,7 @@ export class SupabaseStorage implements IStorage {
       };
     });
   }
-  
+
   // Analytics operations
   /**
    * Insert or update game statistics for a completed game
@@ -2498,7 +2498,7 @@ export class SupabaseStorage implements IStorage {
       const revenue = totalBets - totalPayouts;
       const profitLoss = revenue;
       const profitLossPercentage = totalBets > 0 ? (profitLoss / totalBets) * 100 : 0;
-      
+
       // Merge unique players without spread to avoid TS downlevelIteration issues
       const existingPlayers = new Set<string>((existing as any)?.unique_players || []);
       const allPlayers = new Set<string>();
@@ -2550,7 +2550,7 @@ export class SupabaseStorage implements IStorage {
       const revenue = totalBets - totalPayouts;
       const profitLoss = revenue;
       const profitLossPercentage = totalBets > 0 ? (profitLoss / totalBets) * 100 : 0;
-      
+
       const existingPlayers = new Set<string>((existing as any)?.unique_players || []);
       const allPlayers = new Set<string>();
       existingPlayers.forEach((p) => allPlayers.add(p));
@@ -2601,7 +2601,7 @@ export class SupabaseStorage implements IStorage {
       const revenue = totalBets - totalPayouts;
       const profitLoss = revenue;
       const profitLossPercentage = totalBets > 0 ? (profitLoss / totalBets) * 100 : 0;
-      
+
       const existingPlayers = new Set<string>((existing as any)?.unique_players || []);
       const allPlayers = new Set<string>();
       existingPlayers.forEach((p) => allPlayers.add(p));
@@ -2630,36 +2630,36 @@ export class SupabaseStorage implements IStorage {
       throw error;
     }
   }
-  
+
   // Settings operations
-    async getGameSettings(): Promise<{ 
-      minBet: number; 
-      maxBet: number; 
-      timerDuration: number;
-      default_deposit_bonus_percent: number;
-      referral_bonus_percent: number;
-      conditional_bonus_threshold: number;
-      bonus_claim_threshold: number;
-      admin_whatsapp_number: string;
-    }> {
-      // Get bonus settings from game_settings table
-      const defaultDepositBonusPercent = await this.getGameSetting('default_deposit_bonus_percent');
-      const referralBonusPercent = await this.getGameSetting('referral_bonus_percent');
-      const conditionalBonusThreshold = await this.getGameSetting('conditional_bonus_threshold');
-      const bonusClaimThreshold = await this.getGameSetting('bonus_claim_threshold');
-      const adminWhatsappNumber = await this.getGameSetting('admin_whatsapp_number');
-      
-      return {
-        minBet: 1000,
-        maxBet: 100000,
-        timerDuration: 30,
-        default_deposit_bonus_percent: parseFloat(defaultDepositBonusPercent || '5'),
-        referral_bonus_percent: parseFloat(referralBonusPercent || '1'),
-        conditional_bonus_threshold: parseFloat(conditionalBonusThreshold || '30'),
-        bonus_claim_threshold: parseFloat(bonusClaimThreshold || '500'),
-        admin_whatsapp_number: adminWhatsappNumber || ''
-      };
-    }
+  async getGameSettings(): Promise<{
+    minBet: number;
+    maxBet: number;
+    timerDuration: number;
+    default_deposit_bonus_percent: number;
+    referral_bonus_percent: number;
+    conditional_bonus_threshold: number;
+    bonus_claim_threshold: number;
+    admin_whatsapp_number: string;
+  }> {
+    // Get bonus settings from game_settings table
+    const defaultDepositBonusPercent = await this.getGameSetting('default_deposit_bonus_percent');
+    const referralBonusPercent = await this.getGameSetting('referral_bonus_percent');
+    const conditionalBonusThreshold = await this.getGameSetting('conditional_bonus_threshold');
+    const bonusClaimThreshold = await this.getGameSetting('bonus_claim_threshold');
+    const adminWhatsappNumber = await this.getGameSetting('admin_whatsapp_number');
+
+    return {
+      minBet: 1000,
+      maxBet: 100000,
+      timerDuration: 30,
+      default_deposit_bonus_percent: parseFloat(defaultDepositBonusPercent || '5'),
+      referral_bonus_percent: parseFloat(referralBonusPercent || '5'),
+      conditional_bonus_threshold: parseFloat(conditionalBonusThreshold || '30'),
+      bonus_claim_threshold: parseFloat(bonusClaimThreshold || '500'),
+      admin_whatsapp_number: adminWhatsappNumber || ''
+    };
+  }
   async updateGameSettings(settings: { minBet?: number; maxBet?: number; timerDuration?: number }): Promise<void> {
     // For simplicity, just update the defaults
     // In practice, you'd store these in a settings table
@@ -2716,7 +2716,7 @@ export class SupabaseStorage implements IStorage {
 
   async updateStreamSetting(key: string, value: string): Promise<void> {
     console.log(`🔄 Updating stream setting: ${key} = ${value}`);
-    
+
     const { error } = await supabaseServer
       .from('stream_settings')
       .upsert({
@@ -2849,7 +2849,7 @@ export class SupabaseStorage implements IStorage {
   async getDailyStats(date: Date): Promise<DailyGameStatistics | null> {
     const dateStr = date.toISOString().split('T')[0];
     console.log(`📊 getDailyStats - Querying for date: ${dateStr}`);
-    
+
     const { data, error } = await supabaseServer
       .from('daily_game_statistics')
       .select('*')
@@ -2928,10 +2928,10 @@ export class SupabaseStorage implements IStorage {
 
   async incrementDailyStats(date: Date, increments: Partial<DailyGameStatistics>): Promise<void> {
     const dateStr = date.toISOString().split('T')[0];
-    
+
     // Check if record exists
     let existing = await this.getDailyStats(date);
-    
+
     if (existing) {
       // Update existing record - FIX: Use snake_case field names from database
       const currentGames = (existing as any).total_games || 0;
@@ -2940,15 +2940,15 @@ export class SupabaseStorage implements IStorage {
       const currentRevenue = parseFloat((existing as any).total_revenue || '0');
       const currentProfitLoss = parseFloat((existing as any).profit_loss || '0');
       const currentPlayers = (existing as any).unique_players || 0;
-      
+
       // Calculate new totals
       const newTotalBets = currentBets + (increments.totalBets || 0);
       const newTotalPayouts = currentPayouts + (increments.totalPayouts || 0);
       const newProfitLoss = currentProfitLoss + (increments.profitLoss || 0);
-      
+
       // Recalculate profit_loss_percentage based on new totals
       const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
-      
+
       const { error } = await supabaseServer
         .from('daily_game_statistics')
         .update({
@@ -2962,7 +2962,7 @@ export class SupabaseStorage implements IStorage {
           updated_at: new Date()
         })
         .eq('date', dateStr);
-      
+
       if (error) {
         console.error('Error updating daily stats:', error);
         throw error;
@@ -2986,7 +2986,7 @@ export class SupabaseStorage implements IStorage {
   // Monthly statistics methods
   async getMonthlyStats(monthYear: string): Promise<MonthlyGameStatistics | null> {
     console.log(`📊 getMonthlyStats - Querying for month: ${monthYear}`);
-    
+
     const { data, error } = await supabaseServer
       .from('monthly_game_statistics')
       .select('*')
@@ -3049,7 +3049,7 @@ export class SupabaseStorage implements IStorage {
   async incrementMonthlyStats(monthYear: string, increments: Partial<MonthlyGameStatistics>): Promise<void> {
     // Check if record exists
     let existing = await this.getMonthlyStats(monthYear);
-    
+
     if (existing) {
       // Update existing record - FIX: Use snake_case field names from database
       const currentGames = (existing as any).total_games || 0;
@@ -3058,15 +3058,15 @@ export class SupabaseStorage implements IStorage {
       const currentRevenue = parseFloat((existing as any).total_revenue || '0');
       const currentProfitLoss = parseFloat((existing as any).profit_loss || '0');
       const currentPlayers = (existing as any).unique_players || 0;
-      
+
       // Calculate new totals
       const newTotalBets = currentBets + (increments.totalBets || 0);
       const newTotalPayouts = currentPayouts + (increments.totalPayouts || 0);
       const newProfitLoss = currentProfitLoss + (increments.profitLoss || 0);
-      
+
       // Recalculate profit_loss_percentage based on new totals
       const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
-      
+
       const { error } = await supabaseServer
         .from('monthly_game_statistics')
         .update({
@@ -3080,7 +3080,7 @@ export class SupabaseStorage implements IStorage {
           updated_at: new Date()
         })
         .eq('month_year', monthYear);
-      
+
       if (error) {
         console.error('Error updating monthly stats:', error);
         throw error;
@@ -3103,7 +3103,7 @@ export class SupabaseStorage implements IStorage {
   // Yearly statistics methods
   async getYearlyStats(year: number): Promise<YearlyGameStatistics | null> {
     console.log(`📊 getYearlyStats - Querying for year: ${year}`);
-    
+
     const { data, error } = await supabaseServer
       .from('yearly_game_statistics')
       .select('*')
@@ -3166,7 +3166,7 @@ export class SupabaseStorage implements IStorage {
   async incrementYearlyStats(year: number, increments: Partial<YearlyGameStatistics>): Promise<void> {
     // Check if record exists
     let existing = await this.getYearlyStats(year);
-    
+
     if (existing) {
       // Update existing record - FIX: Use snake_case field names from database
       const currentGames = (existing as any).total_games || 0;
@@ -3175,15 +3175,15 @@ export class SupabaseStorage implements IStorage {
       const currentRevenue = parseFloat((existing as any).total_revenue || '0');
       const currentProfitLoss = parseFloat((existing as any).profit_loss || '0');
       const currentPlayers = (existing as any).unique_players || 0;
-      
+
       // Calculate new totals
       const newTotalBets = currentBets + (increments.totalBets || 0);
       const newTotalPayouts = currentPayouts + (increments.totalPayouts || 0);
       const newProfitLoss = currentProfitLoss + (increments.profitLoss || 0);
-      
+
       // Recalculate profit_loss_percentage based on new totals
       const newProfitLossPercentage = newTotalBets > 0 ? (newProfitLoss / newTotalBets) * 100 : 0;
-      
+
       const { error } = await supabaseServer
         .from('yearly_game_statistics')
         .update({
@@ -3197,7 +3197,7 @@ export class SupabaseStorage implements IStorage {
           updated_at: new Date()
         })
         .eq('year', year);
-      
+
       if (error) {
         console.error('Error updating yearly stats:', error);
         throw error;
@@ -3236,16 +3236,16 @@ export class SupabaseStorage implements IStorage {
     const today = new Date().toISOString().split('T')[0];
     const { data, error } = await supabaseServer
       .from('game_sessions')
-      .select('*', { count: 'exact', head: true})
+      .select('*', { count: 'exact', head: true })
       .eq('status', 'completed')
       .gte('created_at', today)
       .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
-    
+
     if (error) {
       console.error('Error getting today\'s game count:', error);
       return 0;
     }
-    
+
     return data?.length || 0;
   }
 
@@ -3256,12 +3256,12 @@ export class SupabaseStorage implements IStorage {
       .select('amount')
       .gte('created_at', today)
       .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
-    
+
     if (error) {
       console.error('Error getting today\'s bets total:', error);
       return 0;
     }
-    
+
     return data?.reduce((sum, bet) => sum + parseFloat(bet.amount), 0) || 0;
   }
 
@@ -3272,12 +3272,12 @@ export class SupabaseStorage implements IStorage {
       .select('user_id')
       .gte('created_at', today)
       .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
-    
+
     if (error) {
       console.error('Error getting today\'s unique players:', error);
       return 0;
     }
-    
+
     // Get unique user IDs
     const uniqueUsers = new Set(data?.map(bet => bet.user_id) || []);
     return uniqueUsers.size;
@@ -3293,7 +3293,7 @@ export class SupabaseStorage implements IStorage {
     const bonusField = bonusType === 'deposit_bonus' ? 'deposit_bonus_available' : 'referral_bonus_available';
     const currentBonusField = parseFloat(user[bonusField as keyof typeof user] as string) || 0;
     const currentTotalBonusEarned = parseFloat(user.total_bonus_earned || '0') || 0;
-    
+
     const { error } = await supabaseServer
       .from('users')
       .update({
@@ -3309,9 +3309,9 @@ export class SupabaseStorage implements IStorage {
     }
   }
 
-  async getUserBonusInfo(userId: string): Promise<{ 
-    depositBonus: number; 
-    referralBonus: number; 
+  async getUserBonusInfo(userId: string): Promise<{
+    depositBonus: number;
+    referralBonus: number;
     totalBonus: number;
     wageringRequired: number;
     wageringCompleted: number;
@@ -3321,7 +3321,7 @@ export class SupabaseStorage implements IStorage {
     // Retry logic for failed fetches
     const maxRetries = 3;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const { data, error } = await supabaseServer
@@ -3332,9 +3332,9 @@ export class SupabaseStorage implements IStorage {
 
         if (error) {
           if (error.code === 'PGRST116') { // Not found is expected
-            return { 
-              depositBonus: 0, 
-              referralBonus: 0, 
+            return {
+              depositBonus: 0,
+              referralBonus: 0,
               totalBonus: 0,
               wageringRequired: 0,
               wageringCompleted: 0,
@@ -3351,7 +3351,7 @@ export class SupabaseStorage implements IStorage {
         const wageringCompleted = parseFloat(data?.wagering_completed || '0');
         const wageringProgress = wageringRequired > 0 ? (wageringCompleted / wageringRequired) * 100 : 0;
         const bonusLocked = data?.bonus_locked || false;
-        
+
         return {
           depositBonus,
           referralBonus,
@@ -3364,13 +3364,13 @@ export class SupabaseStorage implements IStorage {
       } catch (error: any) {
         lastError = error;
         console.error(`Attempt ${attempt} failed to get user bonus info for ${userId}:`, error);
-        
+
         // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') || 
-            error.code === 'ECONNREFUSED' || 
-            error.code === 'ETIMEDOUT' ||
-            error.name === 'AbortError') {
-          
+        if (error.message?.includes('fetch failed') ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.name === 'AbortError') {
+
           if (attempt < maxRetries) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -3382,11 +3382,11 @@ export class SupabaseStorage implements IStorage {
         }
       }
     }
-    
+
     console.error('Error getting user bonus info after all retries:', lastError);
-    return { 
-      depositBonus: 0, 
-      referralBonus: 0, 
+    return {
+      depositBonus: 0,
+      referralBonus: 0,
       totalBonus: 0,
       wageringRequired: 0,
       wageringCompleted: 0,
@@ -3478,7 +3478,7 @@ export class SupabaseStorage implements IStorage {
     // ✅ FIX #1: Check minimum deposit threshold
     const minDepositForReferral = await this.getGameSetting('min_deposit_for_referral') || '500';
     const minDeposit = parseFloat(minDepositForReferral);
-    
+
     if (depositAmount < minDeposit) {
       console.log(`❌ Deposit amount ₹${depositAmount} is below minimum ₹${minDeposit} for referral bonus`);
       return;
@@ -3507,7 +3507,7 @@ export class SupabaseStorage implements IStorage {
       console.log(`❌ Referral bonus already applied for user ${userId}`);
       return; // Bonus already applied
     }
-    
+
     // ✅ FIX #3: Ensure this is the FIRST deposit only
     // Check if user has any APPROVED deposits (excluding current one being processed)
     const { data: previousDeposits, error: depositError } = await supabaseServer
@@ -3516,37 +3516,37 @@ export class SupabaseStorage implements IStorage {
       .eq('user_id', userId)
       .eq('request_type', 'deposit')
       .eq('status', 'approved');
-    
+
     if (depositError) {
       console.error('Error checking previous deposits:', depositError);
       return;
     }
-    
+
     // ✅ FIX: Check if there's already an approved deposit (this means current one is NOT first)
     if (previousDeposits && previousDeposits.length >= 1) {
       console.log(`❌ User ${userId} has already made ${previousDeposits.length} approved deposit(s). Referral bonus only on first deposit.`);
       return;
     }
-    
+
     // ✅ FIX #4: Check referrer's monthly referral limit
     const maxReferralsPerMonth = await this.getGameSetting('max_referrals_per_month') || '50';
     const maxReferrals = parseInt(maxReferralsPerMonth);
-    
+
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
-    
+
     const { data: monthlyReferrals, error: referralError } = await supabaseServer
       .from('user_referrals')
       .select('id')
       .eq('referrer_user_id', referrerData.id)
       .gte('created_at', startOfMonth.toISOString());
-    
+
     if (referralError) {
       console.error('Error checking monthly referrals:', referralError);
       return;
     }
-    
+
     if (monthlyReferrals && monthlyReferrals.length >= maxReferrals) {
       console.log(`❌ Referrer ${referrerData.id} has reached monthly limit of ${maxReferrals} referrals`);
       return;
@@ -3555,9 +3555,9 @@ export class SupabaseStorage implements IStorage {
     // ✅ CRITICAL FIX: ONLY track referral relationship, DO NOT create bonus yet!
     // Referral bonus will be created ONLY when deposit bonus is credited (via handleReferralForBonus)
     // This ensures referral bonus is tied to wagering bonus, not instant deposit
-    
+
     // Calculate expected referral bonus for tracking purposes
-    const referralBonusPercent = await this.getGameSetting('referral_bonus_percent') || '1';
+    const referralBonusPercent = await this.getGameSetting('referral_bonus_percent') || '5';
     const bonusPercentage = parseFloat(referralBonusPercent);
     const expectedBonusAmount = (depositAmount * bonusPercentage) / 100;
 
@@ -3594,7 +3594,7 @@ export class SupabaseStorage implements IStorage {
 
       // Calculate percentage change from original deposit
       const percentageChange = ((currentBalance - originalDeposit) / originalDeposit) * 100;
-      
+
       console.log(`Conditional bonus check for user ${userId}:`, {
         originalDeposit,
         currentBalance,
@@ -3604,7 +3604,7 @@ export class SupabaseStorage implements IStorage {
 
       // Check if balance has changed by ±threshold%
       const thresholdReached = Math.abs(percentageChange) >= threshold;
-      
+
       if (!thresholdReached) {
         console.log(`Threshold not reached for user ${userId}`);
         return false;
@@ -3622,10 +3622,10 @@ export class SupabaseStorage implements IStorage {
       // Auto-apply bonus to main balance
       const balanceBefore = currentBalance;
       await this.updateUserBalance(userId, bonusInfo.totalBonus);
-      
+
       // Reset bonus amounts
       await this.resetUserBonus(userId);
-      
+
       // Log the transaction
       await this.addTransaction({
         userId,
@@ -3656,7 +3656,7 @@ export class SupabaseStorage implements IStorage {
         updated_at: new Date().toISOString()
       })
       .eq('id', userId);
-      
+
     if (error) {
       console.error('Error setting wagering requirement:', error);
       throw new Error('Failed to set wagering requirement');
@@ -3669,10 +3669,10 @@ export class SupabaseStorage implements IStorage {
     if (!user || !user.bonus_locked) {
       return; // No locked bonus to track
     }
-    
+
     const currentCompleted = parseFloat(user.wagering_completed || '0');
     const newCompleted = currentCompleted + betAmount;
-    
+
     const { error } = await supabaseServer
       .from('users')
       .update({
@@ -3680,7 +3680,7 @@ export class SupabaseStorage implements IStorage {
         updated_at: new Date().toISOString()
       })
       .eq('id', userId);
-      
+
     if (error) {
       console.error('Error tracking wagering:', error);
       throw new Error('Failed to track wagering');
@@ -3692,22 +3692,22 @@ export class SupabaseStorage implements IStorage {
     if (!user || !user.bonus_locked) {
       return null; // No locked bonus
     }
-    
+
     const requirement = parseFloat(user.wagering_requirement || '0');
     const completed = parseFloat(user.wagering_completed || '0');
-    
+
     // Check if requirement met
     if (completed >= requirement && requirement > 0) {
       // Get total locked bonus
       const depositBonus = parseFloat(user.deposit_bonus_available || '0');
       const referralBonus = parseFloat(user.referral_bonus_available || '0');
       const totalBonus = depositBonus + referralBonus;
-      
+
       if (totalBonus > 0) {
         // Add bonus to main balance
         const currentBalance = parseFloat(user.balance);
         const newBalance = currentBalance + totalBonus;
-        
+
         // Update user - unlock bonus
         const { error } = await supabaseServer
           .from('users')
@@ -3721,12 +3721,12 @@ export class SupabaseStorage implements IStorage {
             updated_at: new Date().toISOString()
           })
           .eq('id', userId);
-        
+
         if (error) {
           console.error('Error unlocking bonus:', error);
           throw new Error('Failed to unlock bonus');
         }
-        
+
         // Log the unlock transaction (optional - don't fail if it doesn't work)
         try {
           await this.addTransaction({
@@ -3741,13 +3741,13 @@ export class SupabaseStorage implements IStorage {
         } catch (txError: any) {
           console.warn('⚠️ Failed to log bonus unlock transaction (non-critical):', txError.message);
         }
-        
+
         console.log(`🎉 Bonus unlocked! ₹${totalBonus} added to user ${userId} balance. Wagering completed: ₹${completed.toFixed(2)} / ₹${requirement.toFixed(2)}`);
-        
+
         return { unlocked: true, amount: totalBonus };
       }
     }
-    
+
     return null;
   }
 
@@ -3762,14 +3762,14 @@ export class SupabaseStorage implements IStorage {
     if (!user || !user.bonus_locked) {
       return null; // No locked bonus
     }
-    
+
     const requirement = parseFloat(user.wagering_requirement || '0');
     const completed = parseFloat(user.wagering_completed || '0');
     const remaining = Math.max(0, requirement - completed);
     const percentage = requirement > 0 ? (completed / requirement) * 100 : 0;
-    const bonusLocked = parseFloat(user.deposit_bonus_available || '0') + 
-                       parseFloat(user.referral_bonus_available || '0');
-    
+    const bonusLocked = parseFloat(user.deposit_bonus_available || '0') +
+      parseFloat(user.referral_bonus_available || '0');
+
     return {
       requirement,
       completed,
@@ -3869,7 +3869,7 @@ export class SupabaseStorage implements IStorage {
     try {
       let startDate: Date;
       const endDate = new Date();
-      
+
       switch (period) {
         case 'daily':
           startDate = new Date();
@@ -3885,7 +3885,7 @@ export class SupabaseStorage implements IStorage {
           startDate = new Date();
           startDate.setHours(0, 0, 0, 0);
       }
-      
+
       // Get bonus transactions from user_transactions table
       const { data, error } = await supabaseServer
         .from('user_transactions')
@@ -3893,7 +3893,7 @@ export class SupabaseStorage implements IStorage {
         .eq('transaction_type', 'bonus')
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString());
-      
+
       if (error) {
         console.error('Error getting bonus analytics:', error);
         return {
@@ -3905,14 +3905,14 @@ export class SupabaseStorage implements IStorage {
           period
         };
       }
-      
+
       // Calculate analytics
       const totalBonusGiven = data?.reduce((sum, txn) => sum + parseFloat(txn.amount), 0) || 0;
       const depositBonusGiven = data?.filter(txn => txn.description?.includes('Deposit bonus')).reduce((sum, txn) => sum + parseFloat(txn.amount), 0) || 0;
       const referralBonusGiven = data?.filter(txn => txn.description?.includes('Referral bonus')).reduce((sum, txn) => sum + parseFloat(txn.amount), 0) || 0;
       const manualBonusGiven = data?.filter(txn => txn.description?.includes('Manual')).reduce((sum, txn) => sum + parseFloat(txn.amount), 0) || 0;
       const totalUsersReceivedBonus = new Set(data?.map(txn => txn.user_id) || []).size;
-      
+
       return {
         totalBonusGiven,
         depositBonusGiven,
@@ -3938,7 +3938,7 @@ export class SupabaseStorage implements IStorage {
     try {
       let startDate: Date;
       const endDate = new Date();
-      
+
       switch (period) {
         case 'daily':
           startDate = new Date();
@@ -3954,14 +3954,14 @@ export class SupabaseStorage implements IStorage {
           startDate = new Date();
           startDate.setHours(0, 0, 0, 0);
       }
-      
+
       // Get referral data from user_referrals table
       const { data, error } = await supabaseServer
         .from('user_referrals')
         .select('*')
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString());
-      
+
       if (error) {
         console.error('Error getting referral analytics:', error);
         return {
@@ -3972,12 +3972,12 @@ export class SupabaseStorage implements IStorage {
           period
         };
       }
-      
+
       // Calculate analytics
       const totalReferrals = data?.length || 0;
       const totalReferralBonusGiven = data?.reduce((sum, referral) => sum + parseFloat(referral.bonus_amount || '0'), 0) || 0;
       const totalDepositsFromReferrals = data?.reduce((sum, referral) => sum + parseFloat(referral.deposit_amount || '0'), 0) || 0;
-      
+
       return {
         totalReferrals,
         totalReferralBonusGiven,
@@ -4000,7 +4000,7 @@ export class SupabaseStorage implements IStorage {
   async getAllBonusTransactionsLegacy(filters: { status?: string; type?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
     try {
       const { status, type, limit = 100, offset = 0 } = filters;
-      
+
       let query = supabaseServer
         .from('user_transactions')
         .select(`
@@ -4066,7 +4066,7 @@ export class SupabaseStorage implements IStorage {
   async getAllReferralDataLegacy(filters: { status?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
     try {
       const { status, limit = 100, offset = 0 } = filters;
-      
+
       let query = supabaseServer
         .from('user_referrals')
         .select(`
@@ -4111,57 +4111,57 @@ export class SupabaseStorage implements IStorage {
   async getPlayerBonusAnalyticsLegacy(filters: { userId?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
     try {
       const { userId, limit = 1000, offset = 0 } = filters;
-      
+
       // Get all users who have received bonuses
       let usersQuery = supabaseServer
         .from('users')
         .select('id, phone, full_name, username, deposit_bonus_available, referral_bonus_available, total_bonus_earned, created_at');
-      
+
       if (userId) {
         usersQuery = usersQuery.eq('id', userId);
       }
-      
+
       const { data: usersData, error: usersError } = await usersQuery;
-      
+
       if (usersError) {
         console.error('Error getting users for bonus analytics:', usersError);
         return [];
       }
-      
+
       if (!usersData || usersData.length === 0) {
         return [];
       }
-      
+
       // Get all bonus transactions grouped by user
       const { data: transactionsData, error: transactionsError } = await supabaseServer
         .from('user_transactions')
         .select('*')
         .in('transaction_type', ['bonus', 'bonus_applied'])
         .order('created_at', { ascending: false });
-      
+
       if (transactionsError) {
         console.error('Error getting bonus transactions:', transactionsError);
         return [];
       }
-      
+
       // Process per-player analytics
       const playerAnalytics: any[] = [];
-      
+
       for (const user of usersData) {
         // Filter transactions for this user
         const userTransactions = (transactionsData || []).filter(
           (txn: any) => txn.user_id === user.id
         );
-        
+
         // Only include users who have received bonuses
         const depositBonus = parseFloat(user.deposit_bonus_available || '0');
         const referralBonus = parseFloat(user.referral_bonus_available || '0');
         const totalBonusEarned = parseFloat(user.total_bonus_earned || '0');
-        
+
         if (userTransactions.length === 0 && totalBonusEarned === 0 && depositBonus === 0 && referralBonus === 0) {
           continue; // Skip users with no bonuses
         }
-        
+
         // Calculate totals from transactions
         const depositBonusTransactions = userTransactions.filter(
           (txn: any) => txn.description?.includes('Deposit bonus')
@@ -4172,7 +4172,7 @@ export class SupabaseStorage implements IStorage {
         const appliedBonusTransactions = userTransactions.filter(
           (txn: any) => txn.transaction_type === 'bonus_applied'
         );
-        
+
         const totalDepositBonus = depositBonusTransactions.reduce(
           (sum, txn) => sum + parseFloat(txn.amount || '0'), 0
         );
@@ -4183,16 +4183,16 @@ export class SupabaseStorage implements IStorage {
           (sum, txn) => sum + parseFloat(txn.amount || '0'), 0
         );
         const totalPendingBonus = depositBonus + referralBonus;
-        
+
         // Get first and last bonus dates
         const bonusDates = userTransactions
           .map((txn: any) => new Date(txn.created_at))
           .filter((date: Date) => !isNaN(date.getTime()))
           .sort((a: Date, b: Date) => a.getTime() - b.getTime());
-        
+
         const firstBonusDate = bonusDates.length > 0 ? bonusDates[0] : null;
         const lastBonusDate = bonusDates.length > 0 ? bonusDates[bonusDates.length - 1] : null;
-        
+
         playerAnalytics.push({
           userId: user.id,
           username: user.username || user.full_name || user.phone || 'Unknown',
@@ -4221,17 +4221,17 @@ export class SupabaseStorage implements IStorage {
             id: txn.id,
             amount: parseFloat(txn.amount || '0'),
             type: txn.description?.includes('Deposit bonus') ? 'deposit_bonus' :
-                  txn.description?.includes('Referral bonus') ? 'referral_bonus' : 'bonus_applied',
+              txn.description?.includes('Referral bonus') ? 'referral_bonus' : 'bonus_applied',
             description: txn.description || '',
             timestamp: txn.created_at,
             status: txn.transaction_type === 'bonus_applied' ? 'applied' : 'pending'
           }))
         });
       }
-      
+
       // Sort by total bonus earned (descending)
       playerAnalytics.sort((a, b) => (b.totalBonusEarned || 0) - (a.totalBonusEarned || 0));
-      
+
       // Apply limit and offset
       return playerAnalytics.slice(offset, offset + limit);
     } catch (error) {
@@ -4252,7 +4252,7 @@ export class SupabaseStorage implements IStorage {
   }): Promise<any> {
     const id = randomUUID();
     const now = new Date();
-    
+
     // Map to database columns
     const paymentRequest = {
       id,
@@ -4345,7 +4345,7 @@ export class SupabaseStorage implements IStorage {
           .select('*')
           .eq('status', 'pending')
           .order('created_at', { ascending: false });
-        
+
         if (simpleError) {
           console.error('Error getting pending payment requests (simple query):', simpleError);
           // If table doesn't exist, return empty array
@@ -4355,7 +4355,7 @@ export class SupabaseStorage implements IStorage {
           }
           return [];
         }
-        
+
         // Manually fetch user data for each request
         const requestsWithUsers = await Promise.all(
           (simpleData || []).map(async (request: any) => {
@@ -4365,7 +4365,7 @@ export class SupabaseStorage implements IStorage {
                 .select('phone, full_name')
                 .eq('id', request.user_id)
                 .single();
-              
+
               return {
                 ...request,
                 user: userData || null,
@@ -4385,7 +4385,7 @@ export class SupabaseStorage implements IStorage {
             }
           })
         );
-        
+
         return requestsWithUsers;
       }
 
@@ -4393,7 +4393,7 @@ export class SupabaseStorage implements IStorage {
       const flattenedData = (data || []).map((request: any) => {
         const userPhone = request.user?.phone || request.user_id || null;
         const userFullName = request.user?.full_name || null;
-        
+
         return {
           id: request.id,
           user_id: request.user_id,
@@ -4430,15 +4430,15 @@ export class SupabaseStorage implements IStorage {
   }): Promise<any[]> {
     try {
       console.log('🔍 getAllPaymentRequests called with filters:', JSON.stringify(filters, null, 2));
-      
+
       let query = supabaseServer
         .from('payment_requests')
         .select(`
           *,
           users(phone, full_name, id)
         `)
-        .order('created_at', { ascending: false});
-      
+        .order('created_at', { ascending: false });
+
       console.log('📊 Base query created for payment_requests table');
 
       if (filters?.status && filters.status !== 'all') {
@@ -4447,24 +4447,24 @@ export class SupabaseStorage implements IStorage {
       } else {
         console.log('🔍 No status filter (showing all statuses)');
       }
-      
+
       if (filters?.type && filters.type !== 'all') {
         console.log(`🔍 Filtering by type: ${filters.type}`);
         query = query.eq('request_type', filters.type);
       } else {
         console.log('🔍 No type filter (showing all types)');
       }
-      
+
       if (filters?.startDate) {
         console.log(`🔍 Filtering from date: ${filters.startDate.toISOString()}`);
         query = query.gte('created_at', filters.startDate.toISOString());
       }
-      
+
       if (filters?.endDate) {
         console.log(`🔍 Filtering to date: ${filters.endDate.toISOString()}`);
         query = query.lte('created_at', filters.endDate.toISOString());
       }
-      
+
       if (filters?.limit) {
         const offset = filters.offset || 0;
         console.log(`🔍 Limit: ${filters.limit}, Offset: ${offset}`);
@@ -4474,7 +4474,7 @@ export class SupabaseStorage implements IStorage {
       console.log('🚀 Executing query...');
       const { data, error } = await query;
       console.log(`📊 Query completed. Error: ${error ? 'YES' : 'NO'}, Data count: ${data?.length || 0}`);
-      
+
       if (error) {
         console.error('❌ Error fetching all payment requests:', error);
         console.error('Error details:', {
@@ -4485,7 +4485,7 @@ export class SupabaseStorage implements IStorage {
         });
         return [];
       }
-      
+
       if (!data || data.length === 0) {
         console.warn('⚠️ Query succeeded but returned NO DATA');
         console.warn('This could mean:');
@@ -4494,7 +4494,7 @@ export class SupabaseStorage implements IStorage {
         console.warn('  3. Foreign key join failed');
         return [];
       }
-      
+
       console.log(`✅ Query returned ${data.length} requests`);
       console.log('📊 Sample request (first):', {
         id: data[0].id,
@@ -4506,7 +4506,7 @@ export class SupabaseStorage implements IStorage {
         users_phone: data[0].users?.phone,
         users_full_name: data[0].users?.full_name
       });
-      
+
       // Flatten the nested user data
       const flattenedData = (data || []).map((req: any) => ({
         ...req,
@@ -4515,7 +4515,7 @@ export class SupabaseStorage implements IStorage {
         user: undefined, // Remove nested object
         users: undefined // Remove nested object
       }));
-      
+
       console.log(`✅ Returning ${flattenedData.length} flattened requests`);
       console.log('📊 Sample flattened request:', {
         id: flattenedData[0].id,
@@ -4523,7 +4523,7 @@ export class SupabaseStorage implements IStorage {
         full_name: flattenedData[0].full_name,
         status: flattenedData[0].status
       });
-      
+
       return flattenedData;
     } catch (err: any) {
       console.error('Exception in getAllPaymentRequests:', err);
@@ -4545,7 +4545,7 @@ export class SupabaseStorage implements IStorage {
   }> {
     try {
       const today = new Date().toISOString().split('T')[0];
-      
+
       // Get approved deposits today
       const { data: approvedDeposits, error: depositsError } = await supabaseServer
         .from('payment_requests')
@@ -4554,11 +4554,11 @@ export class SupabaseStorage implements IStorage {
         .in('status', ['approved', 'completed'])
         .gte('processed_at', `${today}T00:00:00`)
         .lte('processed_at', `${today}T23:59:59`);
-      
+
       if (depositsError) {
         console.error('Error fetching approved deposits:', depositsError);
       }
-      
+
       // Get approved withdrawals today
       const { data: approvedWithdrawals, error: withdrawalsError } = await supabaseServer
         .from('payment_requests')
@@ -4567,45 +4567,45 @@ export class SupabaseStorage implements IStorage {
         .in('status', ['approved', 'completed'])
         .gte('processed_at', `${today}T00:00:00`)
         .lte('processed_at', `${today}T23:59:59`);
-      
+
       if (withdrawalsError) {
         console.error('Error fetching approved withdrawals:', withdrawalsError);
       }
-      
+
       // Get pending counts
       const { data: pendingDeposits, error: pendingDepositsError } = await supabaseServer
         .from('payment_requests')
         .select('amount')
         .eq('request_type', 'deposit')
         .eq('status', 'pending');
-      
+
       const { data: pendingWithdrawals, error: pendingWithdrawalsError } = await supabaseServer
         .from('payment_requests')
         .select('amount')
         .eq('request_type', 'withdrawal')
         .eq('status', 'pending');
-      
+
       // Calculate totals
       const approvedDepositsTotal = (approvedDeposits || []).reduce(
-        (sum, req) => sum + parseFloat(req.amount || '0'), 
+        (sum, req) => sum + parseFloat(req.amount || '0'),
         0
       );
-      
+
       const approvedWithdrawalsTotal = (approvedWithdrawals || []).reduce(
-        (sum, req) => sum + parseFloat(req.amount || '0'), 
+        (sum, req) => sum + parseFloat(req.amount || '0'),
         0
       );
-      
+
       const pendingDepositsTotal = (pendingDeposits || []).reduce(
-        (sum, req) => sum + parseFloat(req.amount || '0'), 
+        (sum, req) => sum + parseFloat(req.amount || '0'),
         0
       );
-      
+
       const pendingWithdrawalsTotal = (pendingWithdrawals || []).reduce(
-        (sum, req) => sum + parseFloat(req.amount || '0'), 
+        (sum, req) => sum + parseFloat(req.amount || '0'),
         0
       );
-      
+
       console.log('💰 Payments Summary:', {
         approvedDepositsToday: approvedDepositsTotal,
         approvedDepositsCount: approvedDeposits?.length || 0,
@@ -4614,7 +4614,7 @@ export class SupabaseStorage implements IStorage {
         pendingDeposits: pendingDepositsTotal,
         pendingWithdrawals: pendingWithdrawalsTotal
       });
-      
+
       return {
         approvedDepositsToday: approvedDepositsTotal,
         approvedWithdrawalsToday: approvedWithdrawalsTotal,
@@ -4659,7 +4659,7 @@ export class SupabaseStorage implements IStorage {
           notes: data.notes || null,
           created_at: new Date()
         });
-      
+
       console.log(`✅ Audit trail logged: ${data.action} - ${data.previousStatus} → ${data.newStatus}`);
     } catch (error) {
       console.error('⚠️ Failed to log audit trail (non-critical):', error);
@@ -4668,12 +4668,12 @@ export class SupabaseStorage implements IStorage {
   }
 
   async updatePaymentRequest(requestId: string, status: string, adminId?: string, previousStatus?: string): Promise<void> {
-    const updates: any = { 
+    const updates: any = {
       status,
       processed_at: new Date(),
       processed_by: adminId || null
     };
-    
+
     if (adminId) {
       updates.admin_id = adminId;
     }
@@ -4687,7 +4687,7 @@ export class SupabaseStorage implements IStorage {
       console.error('Error updating payment request:', error);
       throw new Error('Failed to update payment request');
     }
-    
+
     // Log audit trail
     if (previousStatus && previousStatus !== status) {
       await this.logRequestAudit({
@@ -4698,7 +4698,7 @@ export class SupabaseStorage implements IStorage {
         newStatus: status
       });
     }
-    
+
     console.log(`✅ Payment request updated: ${requestId}, status: ${status}`);
   }
 
@@ -4711,13 +4711,13 @@ export class SupabaseStorage implements IStorage {
 
     const requestType = paymentRequest.request_type || paymentRequest.type;
     const previousStatus = paymentRequest.status;
-    
+
     // Use database transaction to ensure atomic operation
     try {
       // Get user balance before operation
       const user = await this.getUser(userId);
       const balanceBefore = user ? parseFloat(user.balance) : 0;
-      
+
       // Update the payment request status
       await this.updatePaymentRequest(requestId, 'approved', adminId, previousStatus);
 
@@ -4725,7 +4725,7 @@ export class SupabaseStorage implements IStorage {
       if (requestType === 'deposit') {
         // For deposits: use atomic operation to add balance
         const newBalance = await this.addBalanceAtomic(userId, amount);
-        
+
         // ✅ CRITICAL: Log transaction with payment_request_id link
         try {
           await this.addTransaction({
@@ -4741,7 +4741,7 @@ export class SupabaseStorage implements IStorage {
         } catch (txError: any) {
           console.warn('⚠️ Transaction logging failed (non-critical):', txError.message);
         }
-        
+
         // ✅ FIX: Apply deposit bonus when admin approves deposit
         try {
           const { applyDepositBonus } = await import('./payment');
@@ -4768,7 +4768,7 @@ export class SupabaseStorage implements IStorage {
         } catch (txError: any) {
           console.warn('⚠️ Transaction logging failed (non-critical):', txError.message);
         }
-        
+
         console.log(`✅ Withdrawal approved: ₹${amount} for user ${userId} (balance was deducted on request submission)`);
       }
     } catch (error) {
@@ -4789,41 +4789,41 @@ export class SupabaseStorage implements IStorage {
       // Step 1: Get admin-configured settings
       const bonusPercentSetting = await this.getGameSetting('default_deposit_bonus_percent');
       const wageringMultiplierSetting = await this.getGameSetting('wagering_multiplier');
-      
+
       const bonusPercent = parseFloat(bonusPercentSetting || '5'); // Default 5%
       const wageringMultiplier = parseFloat(wageringMultiplierSetting || '0.3'); // Default 0.3 (30% of deposit)
-      
+
       // Step 2: Calculate bonus amount
       const bonusAmount = amount * (bonusPercent / 100);
-      
+
       // Step 3: Calculate wagering requirement (multiplier of deposit amount)
       // e.g., 0.3 = 30% of deposit, 1.0 = 100% of deposit, 10.0 = 10x deposit
       const wageringRequirement = amount * wageringMultiplier;
-      
+
       console.log(`💰 Deposit approval: Amount: ₹${amount}, Bonus: ₹${bonusAmount} (${bonusPercent}%) LOCKED until ₹${wageringRequirement} wagered (${wageringMultiplier * 100}% of deposit)`);
-      
+
       // Step 4: Add ONLY deposit to balance (NOT bonus!)
       const newBalance = await this.addBalanceAtomic(userId, amount);
       console.log(`✅ Balance updated: User ${userId}, New Balance: ₹${newBalance} (deposit only)`);
-      
+
       // Step 5: Get current user bonus state to ACCUMULATE instead of overwrite
       const user = await this.getUserById(userId);
       if (!user) {
         throw new Error(`User ${userId} not found`);
       }
-      
+
       const currentDepositBonus = parseFloat(user.deposit_bonus_available || '0');
       const currentWagering = parseFloat(user.wagering_requirement || '0');
       const currentOriginalDeposit = parseFloat(user.original_deposit_amount || '0');
       const currentWageringCompleted = parseFloat(user.wagering_completed || '0');
-      
+
       // Calculate new accumulated values
       const newDepositBonus = currentDepositBonus + bonusAmount;
       const newWageringRequirement = currentWagering + wageringRequirement;
       const newOriginalDeposit = currentOriginalDeposit + amount;
-      
+
       // Step 6: Do not update legacy user bonus buckets; bonus tracking is per-deposit
-      
+
       // ✅ CRITICAL FIX: Create deposit bonus record for history tracking
       let bonusRecordId: string | null = null;
       try {
@@ -4840,7 +4840,7 @@ export class SupabaseStorage implements IStorage {
         console.error('⚠️ Failed to create deposit bonus record:', createError);
         // Don't fail approval if bonus record creation fails, but log it
       }
-      
+
       // Step 7: Update payment request status to approved
       const { error: updateError } = await supabaseServer
         .from('payment_requests')
@@ -4849,12 +4849,12 @@ export class SupabaseStorage implements IStorage {
           // ✅ FIX: Only update status - approved_by and approved_at columns don't exist
         })
         .eq('id', requestId);
-      
+
       if (updateError) {
         console.error('Error updating payment request:', updateError);
         throw new Error('Failed to update payment request status');
       }
-      
+
       console.log(`✅ Payment request approved: ${requestId}`);
       console.log(`📊 Summary: Deposit: ₹${amount} (added to balance), Bonus: ₹${bonusAmount} (Total locked: ₹${newDepositBonus}), Required wagering: ₹${wageringRequirement} (Total: ₹${newWageringRequirement})`);
 
@@ -4875,7 +4875,7 @@ export class SupabaseStorage implements IStorage {
               .single();
             if (!existing) {
               const referralPercentSetting = await this.getGameSetting('referral_bonus_percent');
-              const referralPercent = parseFloat(referralPercentSetting || '0');
+              const referralPercent = parseFloat(referralPercentSetting || '5');
               const potentialReferral = bonusAmount * (referralPercent / 100);
               await supabaseServer
                 .from('user_referrals')
@@ -4890,8 +4890,8 @@ export class SupabaseStorage implements IStorage {
             }
           }
         }
-      } catch (e) {}
-      
+      } catch (e) { }
+
       return {
         balance: newBalance,
         bonusAmount: newDepositBonus, // ✅ FIX: Return total accumulated bonus
@@ -4910,7 +4910,7 @@ export class SupabaseStorage implements IStorage {
     if (updates.length === 0) {
       return [];
     }
-    
+
     try {
       // Convert to JSONB format for RPC call
       const updatesJson = JSON.stringify(
@@ -4919,12 +4919,12 @@ export class SupabaseStorage implements IStorage {
           amountChange: u.amountChange
         }))
       );
-      
+
       // Use batch RPC function if available
       const { data, error } = await supabaseServer.rpc('update_multiple_user_balances', {
         p_updates: updatesJson
       });
-      
+
       if (error) {
         console.error('Error in update_multiple_user_balances RPC:', error);
         // Fallback to individual updates in parallel
@@ -4940,7 +4940,7 @@ export class SupabaseStorage implements IStorage {
           })
         );
       }
-      
+
       // Map results from RPC function
       return (data || []).map((result: any) => ({
         userId: result.user_id,
@@ -5358,7 +5358,7 @@ export class SupabaseStorage implements IStorage {
           await this.handleReferralForBonus(b.id);
         }
       }
-    } catch {}
+    } catch { }
   }
 
   /**
@@ -5381,7 +5381,7 @@ export class SupabaseStorage implements IStorage {
     if (!relation) return;
 
     const setting = await this.getGameSetting('referral_bonus_percent');
-    const percent = parseFloat(setting || '0');
+    const percent = parseFloat(setting || '5');
     if (percent <= 0) return;
 
     // ✅ FIX: Referral bonus = 1% of DEPOSIT AMOUNT (not bonus amount)
@@ -5664,7 +5664,7 @@ export class SupabaseStorage implements IStorage {
   async getDailyStatistics(): Promise<StatisticsData> {
     try {
       const today = new Date().toISOString().split('T')[0];
-      
+
       const { data, error } = await supabaseServer
         .from('daily_game_statistics')
         .select('*')
@@ -5691,7 +5691,7 @@ export class SupabaseStorage implements IStorage {
     try {
       const now = new Date();
       const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      
+
       const { data, error } = await supabaseServer
         .from('monthly_game_statistics')
         .select('*')
@@ -5716,7 +5716,7 @@ export class SupabaseStorage implements IStorage {
   async getYearlyStatistics(): Promise<StatisticsData> {
     try {
       const year = new Date().getFullYear();
-      
+
       const { data, error } = await supabaseServer
         .from('yearly_game_statistics')
         .select('*')
@@ -5762,7 +5762,7 @@ export class SupabaseStorage implements IStorage {
    */
   async getAllBonusTransactions(filters?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<any[]> {
     const { status, type, limit = 100, offset = 0 } = filters || {};
-    
+
     let query = supabaseServer
       .from('bonus_transactions')
       .select(`
@@ -5812,7 +5812,7 @@ export class SupabaseStorage implements IStorage {
    */
   async getAllReferralData(filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]> {
     const { status, limit = 100, offset = 0 } = filters || {};
-    
+
     let query = supabaseServer
       .from('user_referrals')
       .select(`
@@ -5868,17 +5868,17 @@ export class SupabaseStorage implements IStorage {
    */
   async getPlayerBonusAnalytics(filters?: { userId?: string; limit?: number; offset?: number }): Promise<any[]> {
     const { userId, limit = 1000, offset = 0 } = filters || {};
-    
+
     // Get users with optional filtering
     let usersQuery = supabaseServer
       .from('users')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (userId) {
       usersQuery = usersQuery.eq('id', userId);
     }
-    
+
     const { data: users, error: usersError } = await usersQuery;
 
     if (usersError || !users) {
