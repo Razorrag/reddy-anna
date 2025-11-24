@@ -202,7 +202,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
 
         if (videoElement && hls && !isPausedState) {
           console.log('🔄 Destroying HLS instance for fresh stream...');
-          
+
           // Destroy current HLS instance
           try {
             hls.destroy();
@@ -314,31 +314,31 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         // Create HLS instance - ULTRA LOW LATENCY: Sub-1-second latency with stability
         const hls = new Hls({
           // 🚀 ULTRA LOW LATENCY SETTINGS: Optimized for <1s latency with stability
-          
+
           // Core latency settings - AGGRESSIVE for ultra-low latency
           lowLatencyMode: true,               // Enable LL-HLS mode
           liveSyncDurationCount: 1,           // Stay 1 segment (0.3s) behind live edge
           liveMaxLatencyDurationCount: 3,     // Max 3 segments (0.9s) drift before seeking
           liveDurationInfinity: true,         // Treat as infinite live stream
-          
+
           // Buffer settings - MINIMAL but stable
           maxBufferLength: 2,                 // 2s forward buffer - minimal for low latency
           maxMaxBufferLength: 4,              // Hard limit 4s - prevents excessive buffering
           maxBufferSize: 30 * 1000 * 1000,    // 30MB - adequate headroom
           maxBufferHole: 0.3,                 // Skip gaps up to 0.3s
-          
+
           // Fast catch-up - aggressive but smooth
           maxLiveSyncPlaybackRate: 1.05,      // 5% speed-up for quick recovery
-          
+
           // Monitoring optimized for low latency
           highBufferWatchdogPeriod: 1,        // Check buffer every 1s - responsive
           nudgeMaxRetry: 3,                   // More retries for low latency recovery
           nudgeOffset: 0.1,                   // Small nudge - precise adjustments
-          
+
           // Performance optimization
           enableWorker: true,                 // Use worker for better performance
           backBufferLength: 5,                // 5s back buffer - minimal seeking support
-          
+
           // Network resilience - FAST but reliable
           manifestLoadingTimeOut: 10000,      // 10s timeout - balanced
           manifestLoadingMaxRetry: 6,         // Adequate retries
@@ -346,16 +346,16 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           fragLoadingTimeOut: 6000,           // 6s timeout - fast failure detection
           fragLoadingMaxRetry: 4,             // Moderate retries for stability
           fragLoadingRetryDelay: 500,         // 0.5s retry delay - quick recovery
-          
+
           // Quality selection
           startLevel: -1,                     // Auto quality selection
           abrEwmaDefaultEstimate: 5000000,    // Higher for better quality
-          
+
           // Additional low-latency settings
           abrBandWidthFactor: 0.95,           // Aggressive bandwidth usage
           abrBandWidthUpFactor: 0.9,          // Fast quality increases
           capLevelToPlayerSize: false,        // Don't limit quality by player size
-          
+
           // LL-HLS specific settings
           enableDateRangeMetadataCues: false, // Disable for performance
           enableEmsgMetadataCues: false,      // Disable for performance
@@ -426,10 +426,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
               case Hls.ErrorTypes.NETWORK_ERROR:
                 console.log('🔄 Network error, attempting recovery...');
                 setIsReconnecting(true);
-                
+
                 // Try to recover by reloading
                 hls.startLoad();
-                
+
                 // If still failing after 3 seconds, try complete reload
                 setTimeout(() => {
                   if (hls && videoElement && videoElement.paused && !isPausedState) {
@@ -666,9 +666,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         const cacheBuster = `_t=${Date.now()}`;
         const separator = originalUrl.includes('?') ? '&' : '?';
         const freshUrl = `${originalUrl}${separator}${cacheBuster}`;
-        
+
         console.log('🔄 Adding cache-buster to stream URL:', cacheBuster);
-        
+
         // Temporarily update stream config with cache-busted URL
         setStreamConfig((prev: any) => ({
           ...prev,
@@ -678,10 +678,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         // 🚀 TRIGGER COMPLETE HLS RELOAD - This forces recreation with fresh live stream
         console.log('✅ Triggering HLS reload with fresh manifest - ALL PLAYERS will auto-refresh to live edge');
         setHlsReloadTrigger(prev => prev + 1);
-        
+
         // ✅ Frozen frame will be cleared automatically by onPlaying event
         // This ensures NO BLACK SCREEN - frame stays until video is actually playing
-        
+
         // 🔄 Restore original URL after 1 second (after HLS has loaded the manifest)
         setTimeout(() => {
           setStreamConfig((prev: any) => ({
@@ -868,7 +868,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             hideBuffering(); // Clear any buffering state
             setStreamError(null);
             setIsReconnecting(false); // Clear reconnecting state
-            
+
             // ✅ CRITICAL FIX: Clear frozen frame immediately when video starts playing
             // This ensures smooth transition from frozen frame to live stream
             if (frozenFrame) {
@@ -1064,8 +1064,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
       />
 
       {/* ✅ ULTRA-SEAMLESS Circular Timer - Perfect Integration */}
+      {/* ✅ CRITICAL FIX: Timer must be above frozen frame (z-50) and reconnecting overlay (z-60) */}
       {gameState.phase === 'betting' && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[70] pointer-events-none">
           <div className={`relative transition-all duration-300 ${gameState.phase === 'betting' && isPulsing ? 'animate-pulse scale-110' : 'scale-100'
             }`}>
             {/* Large Circular Timer with Multi-Layer Seamless Glow */}
@@ -1110,7 +1111,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                   transform: 'scale(1.05)'
                 }}
               />
-              
+
               {/* ✅ SVG Circle - Perfectly integrated multi-layer progress ring */}
               <svg
                 className="transform -rotate-90 w-full h-full absolute inset-0"
@@ -1131,7 +1132,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                     filter: 'drop-shadow(0 0 8px rgba(0, 0, 0, 0.6))'
                   }}
                 />
-                
+
                 {/* Multi-Layer Progress Circle - Seamless glow integration */}
                 {gameState.phase === 'betting' && localTimer > 0 && (
                   <>
@@ -1170,7 +1171,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                         opacity: 0.5
                       }}
                     />
-                    
+
                     {/* Sharp definition layer */}
                     <circle
                       cx="64"
@@ -1226,7 +1227,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                   </>
                 )}
               </svg>
-              
+
               {/* ✅ Timer Content - Perfectly integrated with glow system */}
               <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
                 {/* Icon above number - Matches timer color with seamless glow */}
@@ -1248,7 +1249,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                     <polyline points="12 6 12 12 16 14" />
                   </svg>
                 </div>
-                
+
                 {/* Timer number with multi-layer seamless glow */}
                 <div
                   className="text-white font-bold text-5xl md:text-6xl tabular-nums leading-none transition-all duration-300"
@@ -1266,7 +1267,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
                 >
                   {localTimer > 0 ? localTimer : '--'}
                 </div>
-                
+
                 {/* Betting Time text with matching glow */}
                 <div
                   className="text-gold text-sm md:text-base font-semibold mt-1.5 tracking-wide transition-all duration-300"
