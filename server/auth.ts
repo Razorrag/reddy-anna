@@ -214,15 +214,12 @@ export const registerUser = async (userData: {
         last_login: new Date()
       });
 
-      // If a referral code was used, create the referral relationship
+      // ✅ FIX: Referral relationship is created when first deposit is APPROVED, not at registration
+      // The referral relationship is tracked in approvePaymentRequestAtomic() in storage-supabase.ts
+      // We just store the referral_code in the user record during registration
       if (referrerUser) {
-        try {
-          // Use the existing method in storage to track referral
-          await storage.checkAndApplyReferralBonus(newUser.id, defaultBalance); // This handles referral tracking internally
-        } catch (referralError) {
-          console.error('Error tracking referral:', referralError);
-          // Don't fail the registration for referral tracking issues
-        }
+        console.log(`✅ User ${newUser.id} registered with referral code: ${sanitizedData.referralCode}`);
+        console.log(`   Referrer: ${referrerUser.id} - Bonus will be applied when first deposit is approved`);
       }
 
       // Generate authentication tokens
@@ -243,13 +240,36 @@ export const registerUser = async (userData: {
       };
 
       return { success: true, user: userResponse };
-    } catch (storageError) {
-      console.error('Storage error during registration:', storageError);
-      // Check if it's a duplicate key error
-      if (storageError instanceof Error && storageError.message.includes('duplicate')) {
+    } catch (storageError: any) {
+      // ✅ DETAILED ERROR LOGGING - Handles both Error objects and Supabase error objects
+      const errorMessage =
+        storageError?.message ||
+        storageError?.error?.message ||
+        (typeof storageError === 'object' ? JSON.stringify(storageError) : 'Unknown error');
+      
+      console.error('❌ STORAGE ERROR DURING REGISTRATION:', {
+        error: storageError,
+        errorType: storageError?.constructor?.name,
+        message: errorMessage,
+        code: storageError?.code,
+        details: storageError?.details,
+        hint: storageError?.hint,
+        stack: storageError?.stack,
+        userData: {
+          phone: normalizedPhone,
+          name: sanitizedData.name,
+          hasReferralCode: !!sanitizedData.referralCode,
+          referralCode: sanitizedData.referralCode || 'none'
+        }
+      });
+      
+      // Check if it's a duplicate key error (PostgreSQL code 23505)
+      if (errorMessage.includes('duplicate') || storageError?.code === '23505') {
         return { success: false, error: 'User already exists with this phone number' };
       }
-      return { success: false, error: 'Database error during registration' };
+      
+      console.error(`❌ Returning error to client: ${errorMessage}`);
+      return { success: false, error: `Database error: ${errorMessage}` };
     }
   } catch (error) {
     console.error('Registration error:', error);

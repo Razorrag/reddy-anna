@@ -247,18 +247,11 @@ export async function handlePlayerBet(client: WSClient, data: any) {
       return;
     }
 
-    // Step 4: Track wagering for bonuses (non-critical)
-    try {
-      await storage.updateDepositBonusWagering(userId, amount);
-      await storage.checkBonusThresholds(userId);
-
-      ws.send(JSON.stringify({
-        type: 'bonus_update',
-        data: { message: 'Bonus status updated', timestamp: Date.now() }
-      }));
-    } catch (wageringError) {
-      console.error('⚠️ Error tracking wagering:', wageringError);
-    }
+    // Step 4: Wagering tracking REMOVED from here
+    // ✅ CRITICAL FIX: Wagering is now tracked ONLY after game completion in game.ts
+    // This prevents exploitation where users place bets to accumulate wagering progress
+    // then cancel/undo bets but keep the wagering progress
+    // Wagering is now tracked in completeGame() for bets that actually completed (won/lost)
 
     // Step 5: Update in-memory game state (after DB operations succeed) - PROTECTED BY MUTEX
     await gameStateMutex.runExclusive(async () => {

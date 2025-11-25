@@ -1099,7 +1099,7 @@ INSERT INTO game_settings (setting_key, setting_value, description) VALUES
 ('deposit_bonus', '10', 'Default deposit bonus percentage'),
 ('referral_commission', '5', 'Referral commission percentage'),
 ('default_deposit_bonus_percent', '5', 'Default deposit bonus percentage'),
-('referral_bonus_percent', '1', 'Referral bonus percentage'),
+('referral_bonus_percent', '5', 'Referral bonus percentage'),
 ('conditional_bonus_threshold', '30', 'Conditional bonus threshold percentage'),
 -- ✅ NEW: Added missing game settings
 ('bonus_claim_threshold', '500', 'Bonus claim threshold amount'),

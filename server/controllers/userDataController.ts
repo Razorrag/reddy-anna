@@ -135,13 +135,29 @@ export const getUserBonusSummary = async (req: Request, res: Response) => {
     let depositCredited = 0;
     let referralPending = 0;
     let referralCredited = 0;
+    
+    // ✅ CRITICAL FIX: Track wagering progress for UI display
+    let totalWageringRequired = 0;
+    let totalWageringCompleted = 0;
+    let oldestLockedBonus: any = null;
 
-    depositBonuses.forEach((bonus: any) => {
+    // Sort by created_at ascending to find oldest locked bonus (FIFO)
+    const sortedDepositBonuses = [...depositBonuses].sort((a: any, b: any) => 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    sortedDepositBonuses.forEach((bonus: any) => {
       const amount = parseFloat(bonus.bonus_amount || '0');
       if (bonus.status === 'unlocked') {
         depositUnlocked += amount; // Ready to claim
       } else if (bonus.status === 'locked') {
         depositLocked += amount; // Still locked
+        totalWageringRequired += parseFloat(bonus.wagering_required || '0');
+        totalWageringCompleted += parseFloat(bonus.wagering_completed || '0');
+        // Track oldest locked bonus for detailed progress display
+        if (!oldestLockedBonus) {
+          oldestLockedBonus = bonus;
+        }
       } else if (bonus.status === 'credited') {
         depositCredited += amount; // Already credited
       }
@@ -156,25 +172,55 @@ export const getUserBonusSummary = async (req: Request, res: Response) => {
       }
     });
 
-    const totalBonusEarned = parseFloat(user.total_bonus_earned || '0');
+    // ✅ FIX: Calculate lifetime from actual bonus tables, not stale user field
+    const lifetimeFromTables = depositUnlocked + depositLocked + depositCredited + referralPending + referralCredited;
+    const totalBonusEarned = Math.max(parseFloat(user.total_bonus_earned || '0'), lifetimeFromTables);
+
+    // ✅ FIX: Include locked bonuses in available (they're still "available" just locked)
+    // This ensures the UI shows the total bonus amount the user has
+    const totalAvailable = depositUnlocked + depositLocked + referralPending;
+    
+    // ✅ CRITICAL FIX: Calculate overall wagering progress percentage
+    const wageringProgress = totalWageringRequired > 0 
+      ? Math.min(100, (totalWageringCompleted / totalWageringRequired) * 100)
+      : 0;
 
     res.json({
       success: true,
       data: {
         totals: {
-          // ✅ FIX: Sum all unlocked + pending bonuses from tables
-          available: depositUnlocked + referralPending,
+          // ✅ FIX: Show all non-credited bonuses as "available" (includes locked)
+          available: totalAvailable,
           credited: depositCredited + referralCredited,
           lifetime: totalBonusEarned
         },
         depositBonuses: {
           unlocked: depositUnlocked,
           locked: depositLocked,
-          credited: depositCredited
+          credited: depositCredited,
+          total: depositUnlocked + depositLocked + depositCredited
         },
         referralBonuses: {
           pending: referralPending,
-          credited: referralCredited
+          credited: referralCredited,
+          total: referralPending + referralCredited
+        },
+        // ✅ NEW: Wagering progress info for UI
+        wagering: {
+          required: totalWageringRequired,
+          completed: totalWageringCompleted,
+          progress: wageringProgress,
+          hasLockedBonuses: depositLocked > 0,
+          // Details of oldest locked bonus (FIFO - this is what user is currently working on)
+          currentBonus: oldestLockedBonus ? {
+            id: oldestLockedBonus.id,
+            amount: parseFloat(oldestLockedBonus.bonus_amount || '0'),
+            depositAmount: parseFloat(oldestLockedBonus.deposit_amount || '0'),
+            wageringRequired: parseFloat(oldestLockedBonus.wagering_required || '0'),
+            wageringCompleted: parseFloat(oldestLockedBonus.wagering_completed || '0'),
+            progress: parseFloat(oldestLockedBonus.wagering_progress || '0'),
+            createdAt: oldestLockedBonus.created_at
+          } : null
         }
       }
     });

@@ -332,6 +332,46 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
     await Promise.all(statsPromises);
     console.log(`⏱️ Stats updates completed in ${Date.now() - statsStartTime}ms (parallel)`);
     
+    // ✅ CRITICAL FIX: Track wagering ONLY for completed bets (after game ends)
+    // This prevents exploitation where users place bets, accumulate wagering, then cancel
+    // Wagering is tracked based on ACTUAL bet amounts that completed (won or lost)
+    console.log(`🎰 Tracking wagering for ${allBets.length} completed bets...`);
+    const wageringStartTime = Date.now();
+    const uniqueUsersForWagering = new Set<string>();
+    
+    for (const bet of allBets) {
+      const betUserId = (bet as any).user_id || (bet as any).userId;
+      const betAmount = parseFloat(String(bet.amount || '0'));
+      
+      if (betUserId && betAmount > 0) {
+        try {
+          // Track wagering for this completed bet
+          await storage.updateDepositBonusWagering(betUserId, betAmount);
+          
+          // ✅ NEW: Track wagering for referral bonuses (amount based)
+          await storage.updateReferralBonusWagering(betUserId, betAmount);
+          
+          uniqueUsersForWagering.add(betUserId);
+          console.log(`✅ Wagering tracked: User ${betUserId}, Amount ₹${betAmount}`);
+        } catch (wageringError) {
+          console.error(`⚠️ Failed to track wagering for user ${betUserId}:`, wageringError);
+          // Don't fail the entire operation
+        }
+      }
+    }
+    
+    // Check bonus thresholds for all users who had completed bets
+    const usersToCheckThresholds = Array.from(uniqueUsersForWagering);
+    for (const userId of usersToCheckThresholds) {
+      try {
+        await storage.checkBonusThresholds(userId);
+      } catch (thresholdError) {
+        console.error(`⚠️ Failed to check bonus thresholds for user ${userId}:`, thresholdError);
+      }
+    }
+    
+    console.log(`⏱️ Wagering tracking completed in ${Date.now() - wageringStartTime}ms for ${uniqueUsersForWagering.size} users`);
+    
   } catch (error) {
     payoutError = error;
     console.error('❌ CRITICAL ERROR processing payouts:', error);

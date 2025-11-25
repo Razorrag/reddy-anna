@@ -99,10 +99,12 @@ export const securityHeaders = helmet({
 // CORS configuration
 export const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+    const envOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) || [];
+    const defaultOrigins = [
       'http://localhost:5173',
       'http://localhost:3000',
       'http://localhost:3001',
+      'http://localhost:5000',
       'https://raju-gari-kossu.com',
       'https://raju-gari-kossu-7n83.onrender.com',
       'https://raju-gari-kossu.onrender.com',
@@ -110,6 +112,12 @@ export const corsOptions = {
       'http://89.42.231.35:5000',
       'http://89.42.231.35:8000'
     ];
+
+    // In development, combine env origins with defaults
+    // In production, use env origins if present, otherwise fallback to defaults (or empty if strict)
+    const allowedOrigins = process.env.NODE_ENV === 'development'
+      ? [...defaultOrigins, ...envOrigins]
+      : (envOrigins.length > 0 ? envOrigins : defaultOrigins);
 
     // Allow requests with no origin (like mobile apps, curl, or same-origin)
     if (!origin) return callback(null, true);

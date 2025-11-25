@@ -193,6 +193,22 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  // ✅ STARTUP CHECK: Fix missing referral codes for existing users
+  try {
+    const { storage } = await import('./storage-supabase');
+    const result = await storage.generateMissingReferralCodes();
+    if (result.fixed > 0) {
+      log(`✅ Fixed ${result.fixed} users missing referral codes on startup`);
+    } else {
+      log(`✅ All users have referral codes`);
+    }
+    if (result.failed > 0) {
+      log(`⚠️  Failed to generate referral codes for ${result.failed} users`);
+    }
+  } catch (error) {
+    log(`⚠️  Could not check/fix referral codes on startup:`, error);
+  }
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

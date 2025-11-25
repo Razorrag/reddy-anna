@@ -398,10 +398,10 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const fetchReferralData = useCallback(async (forceRefresh = false) => {
     try {
-      // ✅ FIX: Cache referral data for 24 hours to prevent flooding
+      // ✅ FIX: Cache referral data for 5 minutes (reduced from 24 hours)
       const CACHE_KEY = 'referral_data_cache';
       const CACHE_TIMESTAMP_KEY = 'referral_data_cache_timestamp';
-      const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+      const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
       
       // Check cache first
       if (!forceRefresh) {
@@ -857,10 +857,11 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     const handleBonusUpdate = async (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log('🎁 Bonus update received:', customEvent.detail);
-      // Refresh bonus summary/bonus info and analytics when bonus changes
+      // Refresh bonus summary/bonus info, analytics, AND referral data when bonus changes
       await Promise.all([
         fetchBonusInfo(),
-        fetchAnalytics()
+        fetchAnalytics(),
+        fetchReferralData(true) // Force refresh referral data
       ]);
     };
 
@@ -873,7 +874,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       window.removeEventListener('balance-websocket-update', handleWebSocketBalanceUpdate as EventListener);
       window.removeEventListener('bonus_update', handleBonusUpdate as EventListener);
     };
-  }, [state.analytics, fetchBonusInfo, fetchAnalytics]);
+  }, [state.analytics, fetchBonusInfo, fetchAnalytics, fetchReferralData]);
 
   // Enhance refreshData to include balance refresh
   const enhancedRefreshData = async () => {

@@ -93,7 +93,7 @@ export default function AdminBonus() {
   const [playerAnalytics, setPlayerAnalytics] = useState<PlayerBonusAnalytics[]>([]);
   const [bonusSettings, setBonusSettings] = useState<BonusSettings>({
     depositBonusPercent: 5,
-    referralBonusPercent: 1,
+    referralBonusPercent: 5,
     conditionalBonusThreshold: 30,
     bonusClaimThreshold: 500,
     adminWhatsappNumber: ''

@@ -52,8 +52,20 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
   const availableBonus = bonusSummary?.totals?.available || 0;
   
   // Get individual bonus amounts for breakdown display
-  const depositBonus = bonusSummary?.depositBonuses?.unlocked || 0;
+  const depositBonusUnlocked = bonusSummary?.depositBonuses?.unlocked || 0;
+  const depositBonusLocked = bonusSummary?.depositBonuses?.locked || 0;
+  const depositBonus = depositBonusUnlocked + depositBonusLocked;
   const referralBonus = bonusSummary?.referralBonuses?.pending || 0;
+  
+  // ✅ CRITICAL FIX: Get wagering progress from new API response
+  const wageringInfo = bonusSummary?.wagering || {};
+  const wageringRequired = wageringInfo.required || 0;
+  const wageringCompleted = wageringInfo.completed || 0;
+  const wageringProgress = wageringInfo.progress || 0;
+  const currentBonus = wageringInfo.currentBonus;
+  
+  // ✅ FIX: Determine if any bonus is locked (for UI indicator)
+  const hasLockedBonus = depositBonusLocked > 0 || wageringInfo.hasLockedBonuses;
 
   const bonusInfo = profileState.bonusInfo; // contains derived flags like bonusLocked/wageringProgress when provided
   const hasBonus = availableBonus > 0;
@@ -64,20 +76,30 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
 
   // ✅ Bonuses are auto-credited - show detailed breakdown with cumulative info
   const handleBonusInfo = () => {
-    // Format bonus breakdown message
+    // Format bonus breakdown message with locked/unlocked status
     const breakdownParts = [];
-    if (depositBonus > 0) {
-      breakdownParts.push(`Deposit: ₹${depositBonus.toLocaleString('en-IN')}`);
+    if (depositBonusLocked > 0) {
+      breakdownParts.push(`🔒 Deposit (Locked): ₹${depositBonusLocked.toLocaleString('en-IN')}`);
+    }
+    if (depositBonusUnlocked > 0) {
+      breakdownParts.push(`✅ Deposit (Unlocked): ₹${depositBonusUnlocked.toLocaleString('en-IN')}`);
     }
     if (referralBonus > 0) {
-      breakdownParts.push(`Referral: ₹${referralBonus.toLocaleString('en-IN')}`);
+      breakdownParts.push(`🎁 Referral: ₹${referralBonus.toLocaleString('en-IN')}`);
     }
     const breakdown = breakdownParts.length > 0 ? `\n• ${breakdownParts.join('\n• ')}` : '';
     
-    if (bonusInfo?.bonusLocked) {
-      const progress = bonusInfo.wageringProgress || 0;
+    // ✅ CRITICAL FIX: Show detailed wagering progress
+    if (hasLockedBonus) {
+      let wageringMessage = '';
+      if (wageringRequired > 0) {
+        wageringMessage = `\n\n📊 Wagering Progress:\n₹${wageringCompleted.toLocaleString('en-IN')} / ₹${wageringRequired.toLocaleString('en-IN')} (${wageringProgress.toFixed(0)}%)`;
+        if (currentBonus) {
+          wageringMessage += `\n\n🎯 Current Bonus: ₹${currentBonus.amount.toLocaleString('en-IN')}\nWager ₹${(currentBonus.wageringRequired - currentBonus.wageringCompleted).toLocaleString('en-IN')} more to unlock!`;
+        }
+      }
       showNotification(
-        `🔒 Total Locked Bonus: ₹${availableBonus.toLocaleString('en-IN')}${breakdown}\n\nWagering Progress: ${progress.toFixed(0)}%\nKeep playing to unlock your bonuses!`,
+        `🔒 Total Bonus: ₹${availableBonus.toLocaleString('en-IN')}${breakdown}${wageringMessage}\n\nKeep playing to unlock your bonuses!`,
         'info'
       );
     } else {
@@ -133,14 +155,14 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
               <button
                 onClick={handleBonusInfo}
                 className={`flex items-center space-x-1.5 rounded-xl px-3 py-2 transition-all active:scale-95 shadow-lg ${
-                  bonusInfo?.bonusLocked
+                  hasLockedBonus || bonusInfo?.bonusLocked
                     ? 'bg-gradient-to-r from-yellow-500/30 to-orange-600/30 border-2 border-yellow-400 hover:from-yellow-500/40 hover:to-orange-600/40 hover:border-yellow-300 shadow-yellow-500/20'
                     : 'bg-gradient-to-r from-green-500/30 to-green-600/30 border-2 border-green-400 hover:from-green-500/40 hover:to-green-600/40 hover:border-green-300 shadow-green-500/20'
                 }`}
-                title={`Total Bonus: ₹${availableBonus.toLocaleString('en-IN')}${depositBonus > 0 ? `\nDeposit: ₹${depositBonus.toLocaleString('en-IN')}` : ''}${referralBonus > 0 ? `\nReferral: ₹${referralBonus.toLocaleString('en-IN')}` : ''}\n\nClick for details`}
+                title={`Total Bonus: ₹${availableBonus.toLocaleString('en-IN')}${depositBonus > 0 ? `\nDeposit: ₹${depositBonus.toLocaleString('en-IN')}${depositBonusLocked > 0 ? ' (Locked)' : ''}` : ''}${referralBonus > 0 ? `\nReferral: ₹${referralBonus.toLocaleString('en-IN')}` : ''}\n\nClick for details`}
               >
                 <div className="flex flex-col items-start leading-tight -space-y-0.5">
-                  {bonusInfo?.bonusLocked ? (
+                  {hasLockedBonus || bonusInfo?.bonusLocked ? (
                     <>
                       <div className="flex items-center gap-1">
                         <svg className="w-3 h-3 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">

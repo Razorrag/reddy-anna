@@ -14,6 +14,7 @@ import {
   type UserReferral,
 } from "@shared/schema";
 import { transformStatistics, type StatisticsData } from './utils/data-transformers';
+import crypto from 'crypto';
 
 // Analytics interfaces
 export interface GameStatistics {
@@ -247,6 +248,7 @@ export interface IStorage {
   trackUserReferral(referrerId: string, referredId: string, depositAmount: number, bonusAmount: number): Promise<void>;
   getUserReferrals(userId: string): Promise<UserReferral[]>;
   checkAndApplyReferralBonus(userId: string, depositAmount: number): Promise<void>;
+  updateReferralBonusWagering(userId: string, betAmount: number): Promise<void>; // ✅ NEW: Update wagering for referral bonuses
   applyConditionalBonus(userId: string): Promise<boolean>;
 
   // Wagering requirement methods
@@ -327,6 +329,9 @@ export interface IStorage {
     bonusAmount: number;
     bonusPercentage: number;
   }): Promise<string>;
+
+  // Referral Code Fix Method
+  generateMissingReferralCodes(): Promise<{ fixed: number; failed: number; users: string[] }>;
 
   // Payment Summary Method
   getPaymentsSummary(): Promise<{
@@ -761,12 +766,52 @@ export class SupabaseStorage implements IStorage {
     return [];
   }
 
+  /**
+   * ✅ SINGLE SOURCE OF TRUTH: Generate unique 6-character referral code
+   * Uses crypto-secure random generation with database uniqueness check
+   */
+  private async generateUniqueReferralCode(): Promise<string> {
+    const MAX_ATTEMPTS = 50; // Increased from 20 to 50
+    
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      // Generate 8-character code with more entropy (uses full hex range)
+      const code = crypto.randomBytes(5).toString('hex').toUpperCase().substring(0, 8);
+      
+      // Check if code already exists in database
+      const { data: existing, error } = await supabaseServer
+        .from('users')
+        .select('id')
+        .eq('referral_code_generated', code)
+        .maybeSingle();
+      
+      if (error) {
+        console.warn(`⚠️ Error checking referral code uniqueness (attempt ${attempt + 1}):`, error);
+        continue;
+      }
+      
+      // Code is unique - return it
+      if (!existing) {
+        console.log(`✅ Generated unique referral code: ${code} (attempt ${attempt + 1})`);
+        return code;
+      }
+      
+      console.log(`⚠️ Code ${code} already exists, retrying...`);
+    }
+    
+    // Extremely unlikely to reach here, but throw error if we do
+    throw new Error('Failed to generate unique referral code after maximum attempts');
+  }
+
   // Update createUser to use phone as ID with configurable default balance
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = (insertUser as any).id || insertUser.phone; // Use phone as ID if no explicit ID provided
 
     // Get default balance from environment - use 0.00 if not set
     const defaultBalance = process.env.DEFAULT_BALANCE || "0.00";
+
+    // ✅ SINGLE SOURCE OF TRUTH: Generate referral code BEFORE insert
+    const referralCode = await this.generateUniqueReferralCode();
+    console.log(`✅ Generated referral code for new user ${id}: ${referralCode}`);
 
     const user = {
       id,
@@ -781,8 +826,8 @@ export class SupabaseStorage implements IStorage {
       games_played: insertUser.games_played || 0,
       games_won: insertUser.games_won || 0,
       phone_verified: insertUser.phone_verified || false,
-      referral_code: insertUser.referral_code || null,
-      referral_code_generated: null, // Will be generated later
+      referral_code: insertUser.referral_code || null, // Code used during signup (referrer's code)
+      referral_code_generated: referralCode, // ✅ User's own unique referral code
       original_deposit_amount: insertUser.original_deposit_amount ? insertUser.original_deposit_amount.toString() : defaultBalance,
       deposit_bonus_available: insertUser.deposit_bonus_available ? insertUser.deposit_bonus_available.toString() : "0.00",
       referral_bonus_available: insertUser.referral_bonus_available ? insertUser.referral_bonus_available.toString() : "0.00",
@@ -799,23 +844,20 @@ export class SupabaseStorage implements IStorage {
       .single();
 
     if (error) {
-      console.error('Error creating user:', error);
-      // Check for specific error types
+      // ✅ DETAILED ERROR LOGGING - Shows actual Supabase error
+      console.error('❌ Error creating user:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      
       if (error.code === '23505') { // Unique violation
         throw new Error('User with this phone number already exists');
       }
-      throw error;
-    }
-
-    // After creating the user, generate a referral code for them
-    try {
-      const { data: genResult } = await supabaseServer.rpc('generate_referral_code', {
-        p_user_id: data.id
-      });
-      console.log(`Generated referral code for user ${data.id}:`, genResult);
-    } catch (referralError) {
-      console.error('Error generating referral code:', referralError);
-      // Don't fail the entire operation for referral code generation
+      
+      // ✅ Throw proper Error with message (not raw Supabase error object)
+      throw new Error(error.message || `Database error (code: ${error.code})`);
     }
 
     return data;
@@ -4742,15 +4784,10 @@ export class SupabaseStorage implements IStorage {
           console.warn('⚠️ Transaction logging failed (non-critical):', txError.message);
         }
 
-        // ✅ FIX: Apply deposit bonus when admin approves deposit
-        try {
-          const { applyDepositBonus } = await import('./payment');
-          await applyDepositBonus(userId, amount);
-          console.log(`✅ Deposit bonus applied for user ${userId} on admin-approved deposit of ₹${amount}`);
-        } catch (bonusError) {
-          console.error('⚠️ Failed to apply deposit bonus on approval:', bonusError);
-          // Don't fail the approval if bonus fails
-        }
+        // ❌ REMOVED: Dead call to applyDepositBonus()
+        // Bonus is now handled by approvePaymentRequestAtomic() which creates deposit_bonuses records
+        // This legacy approvePaymentRequest() function is only used for withdrawals
+        console.log(`⚠️ Legacy approvePaymentRequest called for deposit - use approvePaymentRequestAtomic instead`);
       } else if (requestType === 'withdrawal') {
         // ✅ CRITICAL FIX: Balance already deducted on request submission
         // No need to deduct again - just log approval
@@ -4858,39 +4895,83 @@ export class SupabaseStorage implements IStorage {
       console.log(`✅ Payment request approved: ${requestId}`);
       console.log(`📊 Summary: Deposit: ₹${amount} (added to balance), Bonus: ₹${bonusAmount} (Total locked: ₹${newDepositBonus}), Required wagering: ₹${wageringRequirement} (Total: ₹${newWageringRequirement})`);
 
-      // Set up referral relationship if first approved deposit and a referral code was used
+      // ✅ FIX: Apply referral bonus when first deposit is approved
       try {
         const u = await this.getUserById(userId);
         if (u && u.referral_code) {
+          console.log(`🔍 Checking referral bonus for user ${userId} with referral code: ${u.referral_code}`);
+          
           const { data: referrer } = await supabaseServer
             .from('users')
-            .select('id')
+            .select('id, full_name, phone')
             .eq('referral_code_generated', u.referral_code)
             .single();
+            
           if (referrer && referrer.id) {
-            const { data: existing } = await supabaseServer
+            console.log(`✅ Found referrer: ${referrer.id} (${referrer.full_name || referrer.phone})`);
+            
+            // Check if referral bonus already applied for this user
+            const { data: existingReferral } = await supabaseServer
               .from('user_referrals')
-              .select('id')
+              .select('id, deposit_amount, bonus_amount')
               .eq('referred_user_id', userId)
               .single();
-            if (!existing) {
-              const referralPercentSetting = await this.getGameSetting('referral_bonus_percent');
-              const referralPercent = parseFloat(referralPercentSetting || '5');
-              const potentialReferral = bonusAmount * (referralPercent / 100);
-              await supabaseServer
-                .from('user_referrals')
-                .upsert({
-                  referrer_user_id: referrer.id,
-                  referred_user_id: userId,
-                  deposit_amount: amount,
-                  bonus_amount: potentialReferral,
-                  bonus_applied: false,
-                  created_at: new Date().toISOString()
-                }, { onConflict: 'referred_user_id' });
+              
+            // ✅ FIX: Always process referral bonus for every deposit
+            const referralPercentSetting = await this.getGameSetting('referral_bonus_percent');
+            const referralPercent = parseFloat(referralPercentSetting || '5');
+            const referralBonusAmount = amount * (referralPercent / 100); // ✅ CORRECT: 5% of deposit
+            
+            console.log(`💰 Referral bonus calculation: ${referralPercent}% of ₹${amount} = ₹${referralBonusAmount}`);
+            
+            // Calculate cumulative amounts
+            const currentTotalDeposit = parseFloat(existingReferral?.deposit_amount || '0');
+            const currentTotalBonus = parseFloat(existingReferral?.bonus_amount || '0');
+            
+            const newTotalDeposit = currentTotalDeposit + amount;
+            const newTotalBonus = currentTotalBonus + referralBonusAmount;
+            
+            // Create or update user_referrals record (Cumulative Stats)
+            const { data: referralRecord, error: referralError } = await supabaseServer
+              .from('user_referrals')
+              .upsert({
+                referrer_user_id: referrer.id,
+                referred_user_id: userId,
+                deposit_amount: newTotalDeposit, // Accumulate deposit
+                bonus_amount: newTotalBonus,     // Accumulate bonus
+                bonus_applied: true, 
+                created_at: existingReferral ? undefined : new Date().toISOString() // Keep original created_at
+              }, { onConflict: 'referred_user_id' })
+              .select('id')
+              .single();
+              
+            if (referralError) {
+              console.error('❌ Error updating user_referrals record:', referralError);
+            } else {
+              console.log(`✅ User referral stats updated: Total Deposit ₹${newTotalDeposit}, Total Bonus ₹${newTotalBonus}`);
             }
+            
+            // ✅ CRITICAL: Create NEW referral_bonuses record for THIS deposit
+            try {
+              await this.createReferralBonus({
+                referrerUserId: referrer.id,
+                referredUserId: userId,
+                referralId: referralRecord?.id,
+                depositAmount: amount,
+                bonusAmount: referralBonusAmount,
+                bonusPercentage: referralPercent
+              });
+              console.log(`✅ New referral bonus record created for referrer ${referrer.id}: ₹${referralBonusAmount} (Locked)`);
+            } catch (bonusError: any) {
+              console.error('❌ Error creating referral bonus:', bonusError);
+            }
+          } else {
+            console.log(`⚠️ Referrer not found for code: ${u.referral_code}`);
           }
         }
-      } catch (e) { }
+      } catch (e: any) {
+        console.error('❌ Error processing referral bonus:', e.message || e);
+      }
 
       return {
         balance: newBalance,
@@ -4980,6 +5061,19 @@ export class SupabaseStorage implements IStorage {
     bonusPercentage: number;
     wageringRequired: number;
   }): Promise<string> {
+    // ✅ CRITICAL FIX: Check for existing bonus on this deposit to prevent duplicates
+    const { data: existingBonus } = await supabaseServer
+      .from('deposit_bonuses')
+      .select('id')
+      .eq('user_id', data.userId)
+      .eq('deposit_request_id', data.depositRequestId)
+      .maybeSingle();
+    
+    if (existingBonus) {
+      console.warn(`⚠️ Duplicate bonus creation prevented for user ${data.userId}, deposit ${data.depositRequestId}`);
+      return existingBonus.id; // Return existing bonus ID instead of creating duplicate
+    }
+    
     const { data: bonus, error } = await supabaseServer
       .from('deposit_bonuses')
       .insert({
@@ -5021,37 +5115,76 @@ export class SupabaseStorage implements IStorage {
   async getDepositBonuses(userId: string): Promise<any[]> {
     const { data, error } = await supabaseServer
       .from('deposit_bonuses')
-      .select('*')
+      .select(`
+        id,
+        user_id,
+        bonus_amount,
+        deposit_amount,
+        bonus_percentage,
+        status,
+        wagering_required,
+        wagering_completed,
+        created_at,
+        credited_at
+      `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching deposit bonuses:', error);
+      console.error('❌ Error fetching deposit bonuses:', error);
       return [];
     }
 
-    return data || [];
+    // Map to consistent camelCase format
+    return (data || []).map((bonus: any) => ({
+      id: bonus.id,
+      userId: bonus.user_id,
+      bonusAmount: parseFloat(bonus.bonus_amount || 0),
+      depositAmount: parseFloat(bonus.deposit_amount || 0),
+      bonusPercentage: parseFloat(bonus.bonus_percentage || 5),
+      status: bonus.status,
+      wageringRequired: parseFloat(bonus.wagering_required || 0),
+      wageringCompleted: parseFloat(bonus.wagering_completed || 0),
+      wageringProgress: bonus.wagering_required > 0
+        ? (parseFloat(bonus.wagering_completed || 0) / parseFloat(bonus.wagering_required)) * 100
+        : 0,
+      createdAt: bonus.created_at,
+      creditedAt: bonus.credited_at
+    }));
   }
 
   /**
-   * Update wagering progress for all locked deposit bonuses
+   * Update wagering progress for locked deposit bonuses using FIFO (oldest first)
+   * ✅ CRITICAL FIX: Each bonus is independent - wagering applies to OLDEST bonus first
    */
   async updateDepositBonusWagering(userId: string, betAmount: number): Promise<void> {
-    // Get all locked bonuses for this user
+    // ✅ FIX: Get OLDEST locked bonus first (FIFO ordering)
     const { data: lockedBonuses, error: fetchError } = await supabaseServer
       .from('deposit_bonuses')
       .select('*')
       .eq('user_id', userId)
-      .eq('status', 'locked');
+      .eq('status', 'locked')
+      .order('created_at', { ascending: true }); // FIFO: oldest first
 
     if (fetchError || !lockedBonuses || lockedBonuses.length === 0) {
       return; // No locked bonuses to update
     }
 
-    // Update each locked bonus
+    // ✅ CRITICAL FIX: Apply wagering to OLDEST bonus first (FIFO)
+    // If oldest bonus is fully wagered, move remaining to next bonus
+    let remainingBetAmount = betAmount;
+    
     for (const bonus of lockedBonuses) {
-      const newCompleted = parseFloat(bonus.wagering_completed) + betAmount;
-      const progress = (newCompleted / parseFloat(bonus.wagering_required)) * 100;
+      if (remainingBetAmount <= 0) break;
+      
+      const currentCompleted = parseFloat(bonus.wagering_completed);
+      const required = parseFloat(bonus.wagering_required);
+      const remainingToComplete = required - currentCompleted;
+      
+      // Calculate how much of this bet applies to this bonus
+      const amountToApply = Math.min(remainingBetAmount, remainingToComplete + remainingBetAmount);
+      const newCompleted = currentCompleted + amountToApply;
+      const progress = (newCompleted / required) * 100;
 
       const { error: updateError } = await supabaseServer
         .from('deposit_bonuses')
@@ -5067,9 +5200,15 @@ export class SupabaseStorage implements IStorage {
         continue;
       }
 
-      // Check if wagering requirement met
-      if (newCompleted >= parseFloat(bonus.wagering_required)) {
+      // Check if wagering requirement met for THIS bonus
+      if (newCompleted >= required) {
         await this.unlockDepositBonus(bonus.id);
+        // ✅ FIX: Calculate overflow to apply to next bonus
+        remainingBetAmount = newCompleted - required;
+        console.log(`🔓 Bonus ${bonus.id} unlocked! Overflow ₹${remainingBetAmount} applies to next bonus`);
+      } else {
+        // All bet amount consumed by this bonus
+        remainingBetAmount = 0;
       }
 
       // Log progress milestone (every 25%)
@@ -5187,7 +5326,7 @@ export class SupabaseStorage implements IStorage {
   }
 
   /**
-   * Create a referral bonus record
+   * Create a referral bonus record (LOCKED initially)
    */
   async createReferralBonus(data: {
     referrerUserId: string;
@@ -5197,6 +5336,15 @@ export class SupabaseStorage implements IStorage {
     bonusAmount: number;
     bonusPercentage: number;
   }): Promise<string> {
+    // ✅ FIX: Calculate wagering requirement (default 3x bonus amount)
+    const multiplierSetting = await this.getGameSetting('referral_wagering_multiplier');
+    let multiplier = parseFloat(multiplierSetting || '3'); // Default 3x
+    
+    // Safety check: Multiplier should be at least 1 if not explicitly set to 0
+    if (multiplier <= 0) multiplier = 3;
+    
+    const wageringRequired = data.bonusAmount * multiplier;
+
     const { data: bonus, error } = await supabaseServer
       .from('referral_bonuses')
       .insert({
@@ -5206,7 +5354,9 @@ export class SupabaseStorage implements IStorage {
         deposit_amount: data.depositAmount,
         bonus_amount: data.bonusAmount,
         bonus_percentage: data.bonusPercentage,
-        status: 'pending'
+        status: 'locked', // ✅ Locked initially
+        wagering_required: wageringRequired,
+        wagering_completed: 0
       })
       .select('id')
       .single();
@@ -5222,19 +5372,92 @@ export class SupabaseStorage implements IStorage {
       bonusType: 'referral_bonus',
       bonusSourceId: bonus.id,
       amount: data.bonusAmount,
-      action: 'added',
-      description: `Referral bonus earned: ₹${data.bonusAmount} from user deposit`
+      action: 'locked',
+      description: `Referral bonus locked: ₹${data.bonusAmount}. Wager ₹${wageringRequired} to unlock.`
     });
 
-    // Auto-credit referral bonuses immediately
-    await this.creditReferralBonus(bonus.id);
-
-    console.log(`✅ Referral bonus created: ₹${data.bonusAmount} for user ${data.referrerUserId}`);
+    console.log(`✅ Referral bonus created (LOCKED): ₹${data.bonusAmount} for user ${data.referrerUserId}. Wagering required: ₹${wageringRequired}`);
     return bonus.id;
   }
 
   /**
-   * Credit referral bonus to user balance
+   * Update wagering progress for locked referral bonuses using FIFO (oldest first)
+   * Called when a user completes a bet
+   */
+  async updateReferralBonusWagering(userId: string, betAmount: number): Promise<void> {
+    try {
+      if (betAmount <= 0) return;
+
+      // Find all LOCKED referral bonuses for this referrer, ordered by creation (FIFO)
+      const { data: bonuses, error } = await supabaseServer
+        .from('referral_bonuses')
+        .select('*')
+        .eq('referrer_user_id', userId)
+        .eq('status', 'locked')
+        .order('created_at', { ascending: true }); // FIFO: oldest first
+        
+      if (error) {
+        console.error('Error fetching locked referral bonuses:', error);
+        return;
+      }
+        
+      if (!bonuses || bonuses.length === 0) return;
+      
+      let remainingBetAmount = betAmount;
+      console.log(`🎰 Tracking wagering of ₹${betAmount} for ${bonuses.length} locked referral bonuses (FIFO)`);
+      
+      for (const bonus of bonuses) {
+        if (remainingBetAmount <= 0) break;
+
+        const currentCompleted = parseFloat(bonus.wagering_completed || '0');
+        const required = parseFloat(bonus.wagering_required || '0');
+        
+        // If for some reason required is 0, autocomplete it
+        if (required <= 0) {
+           await this.creditReferralBonus(bonus.id);
+           continue;
+        }
+
+        // Calculate remaining needed for this specific bonus
+        const remainingToComplete = required - currentCompleted;
+        
+        // Apply bet amount to this bonus (allowing overflow for calculation)
+        const amountToApply = remainingBetAmount;
+        const newCompleted = currentCompleted + amountToApply;
+        
+        // Update database
+        await supabaseServer
+          .from('referral_bonuses')
+          .update({ 
+            wagering_completed: newCompleted,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', bonus.id);
+          
+        // Check completion
+        if (newCompleted >= required) {
+          // Unlock and credit!
+          console.log(`🔓 Referral bonus ${bonus.id} UNLOCKED! (Wagering met: ₹${newCompleted.toFixed(2)}/₹${required})`);
+          await this.creditReferralBonus(bonus.id);
+          
+          // Calculate overflow to apply to next bonus
+          remainingBetAmount = newCompleted - required;
+          if (remainingBetAmount > 0) {
+             console.log(`↪️ Overflow ₹${remainingBetAmount.toFixed(2)} applies to next bonus`);
+          }
+        } else {
+          // All bet amount consumed
+          console.log(`⏳ Referral bonus ${bonus.id} progress: ₹${newCompleted.toFixed(2)}/₹${required}`);
+          remainingBetAmount = 0;
+        }
+      }
+    } catch (error) {
+      console.error('Error updating referral bonus wagering:', error);
+    }
+  }
+
+  /**
+   * Credit referral bonus to user balance (when unlocked)
    */
   async creditReferralBonus(bonusId: string): Promise<void> {
     const { data: bonus, error: fetchError } = await supabaseServer
@@ -5243,6 +5466,7 @@ export class SupabaseStorage implements IStorage {
       .eq('id', bonusId)
       .single();
 
+    // ✅ FIX: Allow crediting if status is 'locked' (transitioning to credited)
     if (fetchError || !bonus || bonus.status === 'credited') {
       return;
     }
@@ -5286,24 +5510,20 @@ export class SupabaseStorage implements IStorage {
       if (referralUpdateError) {
         console.error('⚠️ Error updating user_referrals.bonus_applied flag:', referralUpdateError);
         // Don't fail the credit operation if this update fails
-      } else {
-        console.log(`✅ Updated user_referrals.bonus_applied = true for referral ${bonus.referral_id}`);
       }
     }
-
-    // Log credit
+    
+    // Log transaction
     await this.logBonusTransaction({
       userId: bonus.referrer_user_id,
       bonusType: 'referral_bonus',
       bonusSourceId: bonusId,
       amount: bonusAmount,
-      balanceBefore,
-      balanceAfter,
       action: 'credited',
-      description: `Referral bonus automatically credited: ₹${bonusAmount}`
+      description: `Referral bonus unlocked and credited: ₹${bonusAmount} (wagering complete)`
     });
-
-    console.log(`✅ Referral bonus credited: ₹${bonusAmount} to user ${bonus.referrer_user_id}`);
+    
+    console.log(`✅ Referral bonus credited to user ${bonus.referrer_user_id}: ₹${bonusAmount}`);
   }
 
   /**
@@ -5315,11 +5535,13 @@ export class SupabaseStorage implements IStorage {
       const thresholdPercent = parseFloat(thresholdSetting || '30');
       const t = thresholdPercent / 100;
 
+      // ✅ CRITICAL FIX: Only check UNLOCKED bonuses (wagering requirement already met)
+      // Locked bonuses must complete wagering first via updateDepositBonusWagering()
       const { data: bonuses, error } = await supabaseServer
         .from('deposit_bonuses')
         .select('*')
         .eq('user_id', userId)
-        .eq('status', 'locked'); // ✅ FIX: Only check 'locked' (bonuses are created as 'locked', not 'pending')
+        .eq('status', 'unlocked'); // ✅ FIX: Only credit UNLOCKED bonuses, not locked ones
 
       if (error || !bonuses || bonuses.length === 0) {
         return;
@@ -5355,7 +5577,8 @@ export class SupabaseStorage implements IStorage {
             description: `Threshold reached (≤ ₹${lower.toFixed(2)} or ≥ ₹${upper.toFixed(2)})`
           });
 
-          await this.handleReferralForBonus(b.id);
+          // ❌ REMOVED: Referral bonus is now created upon deposit approval, not bonus unlock
+          // await this.handleReferralForBonus(b.id);
         }
       }
     } catch { }
@@ -5384,8 +5607,8 @@ export class SupabaseStorage implements IStorage {
     const percent = parseFloat(setting || '5');
     if (percent <= 0) return;
 
-    // ✅ FIX: Referral bonus = 1% of DEPOSIT AMOUNT (not bonus amount)
-    // Example: Deposit ₹1000 → Referral gets ₹10 (1% of ₹1000)
+    // ✅ FIX: Referral bonus = 5% of DEPOSIT AMOUNT (not bonus amount)
+    // Example: Deposit ₹1000 → Referral gets ₹50 (5% of ₹1000)
     const referralAmount = parseFloat(b.deposit_amount || '0') * (percent / 100);
     if (referralAmount <= 0) return;
 
@@ -5403,66 +5626,101 @@ export class SupabaseStorage implements IStorage {
    * Get all referral bonuses for a user
    */
   async getReferralBonuses(userId: string): Promise<any[]> {
+    // ✅ CRITICAL FIX: Removed foreign key join to prevent query failures
     const { data, error } = await supabaseServer
       .from('referral_bonuses')
-      .select(`
-        *,
-        referred_user:users!referral_bonuses_referred_user_id_fkey(phone, full_name)
-      `)
+      .select('*')
       .eq('referrer_user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching referral bonuses:', error);
+      console.error('❌ CRITICAL: Error fetching referral bonuses for user', userId, ':', error);
       return [];
     }
 
-    return data || [];
+    // Map to consistent camelCase format
+    return (data || []).map((bonus: any) => ({
+      id: bonus.id,
+      userId: bonus.user_id,
+      referrerUserId: bonus.referrer_user_id,
+      bonusAmount: parseFloat(bonus.bonus_amount || 0),
+      depositAmount: parseFloat(bonus.deposit_amount || 0),
+      status: bonus.status,
+      wageringRequired: parseFloat(bonus.wagering_required || 0),
+      wageringCompleted: parseFloat(bonus.wagering_completed || 0),
+      wageringProgress: bonus.wagering_required > 0
+        ? (parseFloat(bonus.wagering_completed || 0) / parseFloat(bonus.wagering_required)) * 100
+        : 0,
+      createdAt: bonus.created_at,
+      creditedAt: bonus.credited_at,
+      referredUsername: bonus.referred_user?.full_name || bonus.referred_user?.phone || 'Unknown'
+    }));
   }
 
   /**
    * Get all users referred by a specific user
    */
   async getUsersReferredBy(referrerId: string): Promise<any[]> {
-    // First get the user's referral code
-    const referrer = await this.getUser(referrerId);
-    if (!referrer || !referrer.referral_code_generated) {
-      return [];
-    }
-
-    // Get all users who signed up with this referral code
-    const { data, error } = await supabaseServer
-      .from('users')
-      .select('id, phone, full_name, created_at')
-      .eq('referral_code', referrer.referral_code_generated)
+    // ✅ FIX: Query from user_referrals table which is the source of truth
+    const { data: referrals, error } = await supabaseServer
+      .from('user_referrals')
+      .select(`
+        id,
+        referred_user_id,
+        deposit_amount,
+        bonus_amount,
+        bonus_applied,
+        created_at,
+        users!user_referrals_referred_user_id_fkey (
+          id,
+          phone,
+          full_name,
+          created_at
+        )
+      `)
+      .eq('referrer_user_id', referrerId)
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching referred users:', error);
-      return [];
+      console.error('Error getting referred users from user_referrals:', error);
+      // Fallback to old method
+      const referrer = await this.getUser(referrerId);
+      if (!referrer || !referrer.referral_code_generated) {
+        return [];
+      }
+      
+      const { data: users } = await supabaseServer
+        .from('users')
+        .select('id, phone, full_name, created_at')
+        .eq('referral_code', referrer.referral_code_generated)
+        .order('created_at', { ascending: false });
+      
+      return (users || []).map((user: any) => ({
+        id: user.id,
+        phone: user.phone,
+        fullName: user.full_name,
+        createdAt: user.created_at,
+        depositAmount: 0,
+        bonusEarned: 0,
+        bonusApplied: false,
+        bonusStatus: 'pending',
+        hasDeposited: false
+      }));
     }
 
-    // For each referred user, get their referral bonus info
-    const referredUsersWithBonuses = await Promise.all(
-      (data || []).map(async (user: any) => {
-        // Get referral bonus for this referred user
-        const { data: bonusData } = await supabaseServer
-          .from('referral_bonuses')
-          .select('bonus_amount, status, created_at')
-          .eq('referrer_user_id', referrerId)
-          .eq('referred_user_id', user.id)
-          .single();
-
-        return {
-          ...user,
-          bonusEarned: bonusData?.bonus_amount || 0,
-          bonusStatus: bonusData?.status || 'pending',
-          hasDeposited: bonusData ? true : false
-        };
-      })
-    );
-
-    return referredUsersWithBonuses;
+    // Transform data from user_referrals table
+    return (referrals || []).map((r: any) => ({
+      id: r.users?.id || r.referred_user_id,
+      phone: r.users?.phone || '',
+      fullName: r.users?.full_name || '',
+      full_name: r.users?.full_name || '',
+      createdAt: r.users?.created_at || r.created_at,
+      depositAmount: parseFloat(r.deposit_amount || '0'),
+      bonusEarned: parseFloat(r.bonus_amount || '0'),
+      bonusApplied: r.bonus_applied || false,
+      bonusStatus: r.bonus_applied ? 'credited' : 'pending',
+      hasDeposited: parseFloat(r.deposit_amount || '0') > 0
+    }));
   }
 
   /**
@@ -5538,7 +5796,7 @@ export class SupabaseStorage implements IStorage {
 
       // Calculate deposit bonus totals by status
       depositBonuses.forEach((bonus: any) => {
-        const amount = parseFloat(bonus.bonus_amount || '0');
+        const amount = bonus.bonusAmount; // Already parsed in getDepositBonuses()
         if (bonus.status === 'unlocked') {
           depositBonusUnlocked += amount;
         } else if (bonus.status === 'locked') {
@@ -5550,10 +5808,10 @@ export class SupabaseStorage implements IStorage {
 
       // Calculate referral bonus totals by status
       referralBonuses.forEach((bonus: any) => {
-        const amount = parseFloat(bonus.bonus_amount || '0');
+        const amount = bonus.bonusAmount; // Already parsed in getReferralBonuses()
         if (bonus.status === 'credited') {
           referralBonusCredited += amount;
-        } else if (bonus.status === 'pending') {
+        } else if (bonus.status === 'pending' || bonus.status === 'locked') {
           referralBonusPending += amount;
         }
       });
@@ -5584,6 +5842,69 @@ export class SupabaseStorage implements IStorage {
         totalCredited: 0,
         lifetimeEarnings: 0
       };
+    }
+  }
+
+  /**
+   * ✅ SINGLE SOURCE OF TRUTH: Fix missing referral codes for existing users
+   * Uses the same generateUniqueReferralCode() method as createUser
+   */
+  async generateMissingReferralCodes(): Promise<{ fixed: number; failed: number; users: string[] }> {
+    const result = { fixed: 0, failed: 0, users: [] as string[] };
+    
+    try {
+      // Get all users without referral codes
+      const { data: usersWithoutCodes, error } = await supabaseServer
+        .from('users')
+        .select('id, phone')
+        .is('referral_code_generated', null);
+      
+      if (error) {
+        console.error('Error fetching users without referral codes:', error);
+        return result;
+      }
+      
+      if (!usersWithoutCodes || usersWithoutCodes.length === 0) {
+        console.log('✅ All users have referral codes');
+        return result;
+      }
+      
+      console.log(`🔄 Found ${usersWithoutCodes.length} users without referral codes`);
+      
+      // Generate code for each user using the SAME method as createUser
+      for (const user of usersWithoutCodes) {
+        try {
+          // Use the single source of truth method
+          const code = await this.generateUniqueReferralCode();
+          
+          // Update user with the generated code
+          const { error: updateError } = await supabaseServer
+            .from('users')
+            .update({ 
+              referral_code_generated: code,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', user.id);
+          
+          if (!updateError) {
+            result.fixed++;
+            result.users.push(user.id);
+            console.log(`✅ Generated referral code for user ${user.id}: ${code}`);
+          } else {
+            result.failed++;
+            console.error(`❌ Failed to update user ${user.id} with referral code:`, updateError);
+          }
+        } catch (userError) {
+          result.failed++;
+          console.error(`❌ Error generating referral code for user ${user.id}:`, userError);
+        }
+      }
+      
+      console.log(`✅ Referral code generation complete: ${result.fixed} fixed, ${result.failed} failed`);
+      return result;
+    } catch (error) {
+      console.error('Error in generateMissingReferralCodes:', error);
+      return result;
     }
   }
 
@@ -5737,22 +6058,66 @@ export class SupabaseStorage implements IStorage {
 
   /**
    * Get realtime game statistics
+   * ✅ FIX: Use direct queries instead of RPC function that may not exist
    */
   async getRealtimeGameStats(): Promise<any> {
     try {
-      // Call the database function we created
-      const { data, error } = await supabaseServer
-        .rpc('get_realtime_game_stats');
+      // Get current active game
+      const { data: currentGame, error: gameError } = await supabaseServer
+        .from('game_sessions')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching realtime game stats:', error);
-        throw error;
+      if (gameError) {
+        console.warn('Warning fetching current game:', gameError.message);
       }
 
-      return data || { currentGame: null };
+      // Get active players count (players who bet in last 5 minutes)
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { count: activePlayers, error: playersError } = await supabaseServer
+        .from('player_bets')
+        .select('user_id', { count: 'exact', head: true })
+        .gte('created_at', fiveMinutesAgo);
+
+      if (playersError) {
+        console.warn('Warning fetching active players:', playersError.message);
+      }
+
+      // Get today's stats
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString();
+
+      const { count: todayGames, error: todayGamesError } = await supabaseServer
+        .from('game_sessions')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', todayStr);
+
+      const { data: todayBetsData, error: todayBetsError } = await supabaseServer
+        .from('player_bets')
+        .select('amount')
+        .gte('created_at', todayStr);
+
+      const totalBetsToday = todayBetsData?.reduce((sum, bet) => sum + parseFloat(bet.amount || '0'), 0) || 0;
+
+      return {
+        currentGame: currentGame || null,
+        activePlayers: activePlayers || 0,
+        todayStats: {
+          totalGames: todayGames || 0,
+          totalBets: totalBetsToday
+        }
+      };
     } catch (error) {
       console.error('Error in getRealtimeGameStats:', error);
-      return { currentGame: null };
+      return { 
+        currentGame: null,
+        activePlayers: 0,
+        todayStats: { totalGames: 0, totalBets: 0 }
+      };
     }
   }
 
@@ -5963,7 +6328,7 @@ export class SupabaseStorage implements IStorage {
       // Safe defaults that match previous behavior
       return {
         depositBonusPercent: 5,
-        referralBonusPercent: 1,
+        referralBonusPercent: 5,
         conditionalBonusThreshold: 30,
         bonusClaimThreshold: 500,
         adminWhatsappNumber: ''
@@ -5986,7 +6351,7 @@ export class SupabaseStorage implements IStorage {
 
     return {
       depositBonusPercent: toNumber('default_deposit_bonus_percent', 5),
-      referralBonusPercent: toNumber('referral_bonus_percent', 1),
+      referralBonusPercent: toNumber('referral_bonus_percent', 5),
       conditionalBonusThreshold: toNumber('conditional_bonus_threshold', 30),
       bonusClaimThreshold: toNumber('bonus_claim_threshold', 500),
       adminWhatsappNumber: map.get('admin_whatsapp_number') || ''

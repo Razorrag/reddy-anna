@@ -282,82 +282,22 @@ export const addBonus = async (userId: string, bonusAmount: number, reason: stri
   }
 };
 
-// New bonus-related functions
-export const applyDepositBonus = async (userId: string, depositAmount: number): Promise<boolean> => {
-  try {
-    console.log('applyDepositBonus legacy path called; ignored because new per-deposit bonus system handles bonuses on admin approval.', {
-      userId,
-      depositAmount
-    });
-    // All deposit bonuses are now created in approvePaymentRequestAtomic and
-    // credited automatically via threshold-based logic in storage-supabase.ts
-    return false;
-  } catch (error) {
-    console.error('Error in legacy applyDepositBonus (no-op):', error);
-    return false;
-  }
-};
-
-export const applyReferralBonus = async (referrerId: string, depositAmount: number): Promise<boolean> => {
-  try {
-    console.log('applyReferralBonus legacy path called; ignored because referral bonuses are now created from credited deposit bonuses.', {
-      referrerId,
-      depositAmount
-    });
-    // Referral bonuses are now created in handleReferralForBonus in storage-supabase.ts
-    return false;
-  } catch (error) {
-    console.error('Error in legacy applyReferralBonus (no-op):', error);
-    return false;
-  }
-};
-
-export const checkConditionalBonus = async (userId: string): Promise<boolean> => {
-  try {
-    console.log('checkConditionalBonus legacy path called; no-op under new bonus system.', { userId });
-    return false;
-  } catch (error) {
-    console.error('Error in legacy checkConditionalBonus (no-op):', error);
-    return false;
-  }
-};
-
-// Check if bonus has reached threshold and auto-credit it
-export const checkAndAutoCreditBonus = async (userId: string): Promise<boolean> => {
-  try {
-    console.log('checkAndAutoCreditBonus legacy path called; auto-credit is now handled by checkBonusThresholds on balance changes.', { userId });
-    return false;
-  } catch (error) {
-    console.error('Error in legacy checkAndAutoCreditBonus (no-op):', error);
-    return false;
-  }
-};
-
-// Auto-credit bonus to main balance (legacy helper now unused)
-const autoCreditBonus = async (userId: string, bonusInfo: { depositBonus: number; referralBonus: number; totalBonus: number }): Promise<boolean> => {
-  try {
-    console.log('autoCreditBonus legacy helper called; ignored under new bonus system.', {
-      userId,
-      bonusInfo
-    });
-    return false;
-  } catch (error) {
-    console.error('Error in legacy autoCreditBonus (no-op):', error);
-    return false;
-  }
-};
-
-export const applyAvailableBonus = async (userId: string): Promise<boolean> => {
-  try {
-    console.log('applyAvailableBonus legacy manual-claim path called; bonuses are now auto-credited and cannot be manually claimed.', { userId });
-    // Manual claiming is disabled; any UI calling this should be updated to rely on
-    // automatic crediting via the new bonus engine.
-    return false;
-  } catch (error) {
-    console.error('Error in legacy applyAvailableBonus (no-op):', error);
-    return false;
-  }
-};
+// ============================================================================
+// ❌ LEGACY BONUS FUNCTIONS REMOVED
+// ============================================================================
+// The following functions were removed as they were dead code (no-ops):
+// - applyDepositBonus() - Now handled by approvePaymentRequestAtomic()
+// - applyReferralBonus() - Now handled by handleReferralForBonus()
+// - checkConditionalBonus() - Now handled by checkBonusThresholds()
+// - checkAndAutoCreditBonus() - Now handled by creditDepositBonus()
+// - applyAvailableBonus() - Bonuses are now auto-credited
+// - autoCreditBonus() - Internal helper, no longer needed
+//
+// All bonus logic is now centralized in:
+// - server/storage-supabase.ts: approvePaymentRequestAtomic(), createDepositBonus(),
+//   updateDepositBonusWagering(), unlockDepositBonus(), creditDepositBonus()
+// - server/game.ts: completeGame() - wagering tracked after game completion
+// ============================================================================
 
 export const getPaymentMethods = (): PaymentMethod[] => {
   return [

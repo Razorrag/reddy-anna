@@ -128,14 +128,41 @@ const Profile: React.FC = () => {
   }, [location]);
 
   // ✅ FIX: Fetch referral data when referral tab is active (cached for 24 hours)
+  // Also auto-generate referral code if missing
   useEffect(() => {
     if (activeTab === 'referral' && user) {
       // Only fetch if not already loaded (cache will be checked inside fetchReferralData)
       if (!profileState.referralData) {
         fetchReferralData();
       }
+      
+      // ✅ CRITICAL FIX: Auto-generate referral code if missing
+      const referralCode = profileState.user?.referralCodeGenerated || profileState.referralData?.referralCode;
+      if (!referralCode && !profileState.isLoading) {
+        console.log('🔄 No referral code found, attempting to generate...');
+        // Call API to generate referral code
+        fetch('/api/user/generate-referral-code', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
+          }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.data?.referralCode) {
+              console.log('✅ Referral code generated:', data.data.referralCode);
+              // Refresh referral data to show the new code
+              fetchReferralData();
+              fetchUserProfile();
+            } else {
+              console.warn('⚠️ Failed to generate referral code:', data.error);
+            }
+          })
+          .catch(err => console.error('❌ Error generating referral code:', err));
+      }
     }
-  }, [activeTab, user]); // ✅ FIX: Removed fetchReferralData from dependencies to prevent infinite loops
+  }, [activeTab, user, profileState.referralData, profileState.user?.referralCodeGenerated]); // ✅ FIX: Removed fetchReferralData from dependencies to prevent infinite loops
 
   // Fetch transactions when transactions tab is active
   useEffect(() => {
@@ -1569,24 +1596,56 @@ const Profile: React.FC = () => {
                             profileState.referralData?.referralCode ||
                             'NO REFERRAL CODE YET'}
                         </div>
-                        <Button
-                          onClick={() => {
-                            const codeToCopy =
-                              profileState.user?.referralCodeGenerated ||
-                              profileState.referralData?.referralCode ||
-                              '';
-                            if (!codeToCopy) {
-                              showNotification('Referral code not available yet. Please contact support.', 'error');
-                              return;
-                            }
-                            void handleCopyToClipboard(codeToCopy);
-                          }}
-                          variant="outline"
-                          className="border-gold/30 text-gold hover:bg-gold/10"
-                        >
-                          <Copy className="w-4 h-4 mr-2" />
-                          Copy Code
-                        </Button>
+                        {/* Show Generate button if no code, otherwise show Copy button */}
+                        {!(profileState.user?.referralCodeGenerated || profileState.referralData?.referralCode) ? (
+                          <Button
+                            onClick={async () => {
+                              try {
+                                showNotification('Generating referral code...', 'info');
+                                const response = await fetch('/api/user/generate-referral-code', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
+                                  }
+                                });
+                                const data = await response.json();
+                                if (data.success && data.data?.referralCode) {
+                                  showNotification(`Referral code generated: ${data.data.referralCode}`, 'success');
+                                  fetchReferralData();
+                                  fetchUserProfile();
+                                } else {
+                                  showNotification(data.error || 'Failed to generate code', 'error');
+                                }
+                              } catch (err) {
+                                showNotification('Error generating referral code', 'error');
+                              }
+                            }}
+                            variant="default"
+                            className="bg-gold text-black hover:bg-gold/80"
+                          >
+                            Generate Code
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => {
+                              const codeToCopy =
+                                profileState.user?.referralCodeGenerated ||
+                                profileState.referralData?.referralCode ||
+                                '';
+                              if (!codeToCopy) {
+                                showNotification('Referral code not available yet. Please contact support.', 'error');
+                                return;
+                              }
+                              void handleCopyToClipboard(codeToCopy);
+                            }}
+                            variant="outline"
+                            className="border-gold/30 text-gold hover:bg-gold/10"
+                          >
+                            <Copy className="w-4 h-4 mr-2" />
+                            Copy Code
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1659,7 +1718,7 @@ const Profile: React.FC = () => {
                     <p className="mb-2 font-semibold text-gold">How it works:</p>
                     <ul className="list-disc list-inside space-y-1 text-white/60">
                       <li>Friend gets 5% bonus on their first deposit (locked until they play)</li>
-                      <li>You get 1% of their deposit amount when their bonus unlocks</li>
+                      <li>You get 5% of their deposit amount when their bonus unlocks</li>
                       <li>Referral bonus is automatically credited when they reach wagering threshold</li>
                       <li>Example: Friend deposits ₹1000 → You get ₹10 when they unlock their ₹50 bonus</li>
                     </ul>

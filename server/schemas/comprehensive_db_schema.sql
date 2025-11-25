@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS users (
   games_won INTEGER DEFAULT 0,
   phone_verified BOOLEAN DEFAULT false,
   referral_code VARCHAR(50), -- Referral code used during signup
-  referral_code_generated VARCHAR(50), -- Auto-generated referral code for sharing
+  referral_code_generated VARCHAR(50) UNIQUE, -- Auto-generated referral code for sharing (MUST BE UNIQUE)
   deposit_bonus_available DECIMAL(15, 2) DEFAULT '0.00',
   referral_bonus_available DECIMAL(15, 2) DEFAULT '0.00',
   original_deposit_amount DECIMAL(15, 2) DEFAULT '0.00',
@@ -622,7 +622,7 @@ SELECT 'default_deposit_bonus_percent', '5', 'Default deposit bonus percentage'
 WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'default_deposit_bonus_percent');
 
 INSERT INTO game_settings (setting_key, setting_value, description)
-SELECT 'referral_bonus_percent', '1', 'Referral bonus percentage'
+SELECT 'referral_bonus_percent', '5', 'Referral bonus percentage (5% of deposit amount)'
 WHERE NOT EXISTS (SELECT 1 FROM game_settings WHERE setting_key = 'referral_bonus_percent');
 
 INSERT INTO game_settings (setting_key, setting_value, description)

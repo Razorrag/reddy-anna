@@ -5,7 +5,9 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage-supabase";
 import { supabaseServer } from "./lib/supabaseServer";
 import { registerUser, loginUser, loginAdmin, requireAuth, requireAdmin } from './auth';
-import { processPayment, getTransactionHistory, applyDepositBonus, applyReferralBonus, checkConditionalBonus, applyAvailableBonus } from './payment';
+import { processPayment, getTransactionHistory } from './payment';
+// ❌ REMOVED: applyDepositBonus, applyReferralBonus, checkConditionalBonus, applyAvailableBonus
+// These legacy functions were dead code. Bonus logic is now in storage-supabase.ts
 import {
   updateSiteContent,
   getSiteContent,

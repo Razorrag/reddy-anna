@@ -75,7 +75,7 @@ const ReferralBonusesList: React.FC<ReferralBonusesListProps> = ({ bonuses }) =>
         <CardHeader>
           <CardTitle className="text-gold">Referral Bonuses</CardTitle>
           <CardDescription className="text-white/60">
-            Earn 1% when your referrals deposit
+            Earn 5% when your referrals deposit
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -100,7 +100,7 @@ const ReferralBonusesList: React.FC<ReferralBonusesListProps> = ({ bonuses }) =>
           <div>
             <CardTitle className="text-gold">Referral Bonuses ({bonuses.length})</CardTitle>
             <CardDescription className="text-white/60">
-              Earn 1% when your referrals deposit
+              Earn 5% when your referrals deposit
             </CardDescription>
           </div>
           <div className="text-right">

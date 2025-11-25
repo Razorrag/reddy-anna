@@ -11,12 +11,29 @@ import { Progress } from '@/components/ui/progress';
 
 interface BonusWalletProps {
   bonusSummary: {
-    totalDepositBonus: number;
-    totalReferralBonus: number;
-    totalPendingBonus: number;
-    totalCreditedBonus: number;
-    depositBonusCount: number;
-    referralBonusCount: number;
+    totals: {
+      available: number;
+      credited: number;
+      lifetime: number;
+    };
+    depositBonuses: {
+      unlocked: number;
+      locked: number;
+      credited: number;
+      total: number;
+    };
+    referralBonuses: {
+      pending: number;
+      credited: number;
+      total: number;
+    };
+    wagering?: {
+      required: number;
+      completed: number;
+      progress: number;
+      hasLockedBonuses: boolean;
+      currentBonus: any;
+    };
   } | null;
   depositBonuses: any[];
   referralBonuses: any[];
@@ -53,9 +70,11 @@ export const BonusWallet: React.FC<BonusWalletProps> = ({
     );
   }
 
-  const totalBonus = (bonusSummary?.totalDepositBonus || 0) + (bonusSummary?.totalReferralBonus || 0);
-  const pendingBonus = bonusSummary?.totalPendingBonus || 0;
-  const creditedBonus = bonusSummary?.totalCreditedBonus || 0;
+  const totalBonus = bonusSummary?.totals?.lifetime || 0;
+  const pendingBonus = bonusSummary?.totals?.available || 0;
+  const creditedBonus = bonusSummary?.totals?.credited || 0;
+  const depositBonusCount = depositBonuses.length;
+  const referralBonusCount = referralBonuses.length;
 
   return (
     <div className="space-y-6">
@@ -77,7 +96,7 @@ export const BonusWallet: React.FC<BonusWalletProps> = ({
               <div className="text-sm text-white/60 mb-1">Total Bonus Earned</div>
               <div className="text-2xl font-bold text-gold">{formatCurrency(totalBonus)}</div>
               <div className="text-xs text-white/40 mt-1">
-                {bonusSummary?.depositBonusCount || 0} deposit + {bonusSummary?.referralBonusCount || 0} referral
+                {depositBonusCount} deposit + {referralBonusCount} referral
               </div>
             </div>
 
@@ -206,7 +225,7 @@ export const BonusWallet: React.FC<BonusWalletProps> = ({
               Referral Bonuses ({referralBonuses.length})
             </CardTitle>
             <CardDescription className="text-white/60">
-              1% bonus when your referrals unlock their deposit bonus
+              5% bonus when your referrals unlock their deposit bonus
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -277,7 +296,7 @@ export const BonusWallet: React.FC<BonusWalletProps> = ({
               <Gift className="w-16 h-16 mx-auto mb-4 opacity-50" />
               <p className="text-lg font-semibold mb-2">No Bonuses Yet</p>
               <p className="text-sm">
-                Make a deposit to earn 5% bonus, or refer friends to earn 1% of their bonuses!
+                Make a deposit to earn 5% bonus, or refer friends to earn 5% of their deposits!
               </p>
             </div>
           </CardContent>

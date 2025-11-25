@@ -321,7 +321,25 @@ router.get('/bonus-settings', getAdminBonusSettings);
 
 router.put('/bonus-settings', updateAdminBonusSettings);
 
-
+// ✅ NEW: Fix missing referral codes for existing users
+router.post('/fix-referral-codes', async (req, res) => {
+  try {
+    const { storage } = await import('../storage-supabase');
+    const result = await storage.generateMissingReferralCodes();
+    
+    res.json({
+      success: true,
+      message: `Fixed ${result.fixed} users, ${result.failed} failed`,
+      data: result
+    });
+  } catch (error: any) {
+    console.error('Error fixing referral codes:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fix referral codes'
+    });
+  }
+});
 
 export default router;
 
