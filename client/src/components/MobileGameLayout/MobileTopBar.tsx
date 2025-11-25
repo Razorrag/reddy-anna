@@ -55,7 +55,8 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({
   const depositBonusUnlocked = bonusSummary?.depositBonuses?.unlocked || 0;
   const depositBonusLocked = bonusSummary?.depositBonuses?.locked || 0;
   const depositBonus = depositBonusUnlocked + depositBonusLocked;
-  const referralBonus = bonusSummary?.referralBonuses?.pending || 0;
+  // ✅ FIX: Show cumulative locked + pending referral bonuses
+  const referralBonus = (bonusSummary?.referralBonuses?.locked || 0) + (bonusSummary?.referralBonuses?.pending || 0);
   
   // ✅ CRITICAL FIX: Get wagering progress from new API response
   const wageringInfo = bonusSummary?.wagering || {};
