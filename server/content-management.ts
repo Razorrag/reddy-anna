@@ -397,7 +397,7 @@ export interface GameSettings {
   default_deposit_bonus_percent?: number;
   referral_bonus_percent?: number;
   conditional_bonus_threshold?: number;
-  wagering_multiplier?: number; // Wagering requirement multiplier (0.3 = 30%, 1.0 = 100%, 2.0 = 200%)
+  wagering_multiplier?: number; // Wagering requirement as percentage of DEPOSIT (0.3 = 30% of deposit, e.g., 100k deposit requires 30k wagering)
 }
 
 export const getGameSettings = async (): Promise<ContentResponse> => {

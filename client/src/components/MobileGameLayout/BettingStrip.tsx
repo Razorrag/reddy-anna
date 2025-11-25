@@ -127,9 +127,9 @@ const BettingStrip: React.FC<BettingStripProps> = ({
     (gameState.countdownTimer <= 0 && gameState.phase === 'betting');
 
   return (
-    <div className={`flex flex-col gap-3 ${className}`}>
+    <div className={`flex flex-col gap-3 w-full overflow-hidden ${className}`}>
       {/* Main Betting Strip */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 w-full min-w-0">
         {/* Andar Section */}
         <button
           onClick={() => handleBetClick('andar')}
@@ -142,7 +142,7 @@ const BettingStrip: React.FC<BettingStripProps> = ({
           }}
           disabled={isBettingDisabled}
           className={`
-            flex-1 bg-gradient-to-b from-red-900 to-red-950 rounded-lg p-1
+            flex-1 min-w-0 bg-gradient-to-b from-red-900 to-red-950 rounded-lg p-1
             border-2 transition-all duration-200 active:scale-95 relative
             touch-manipulation select-none
             ${selectedPosition === 'andar'
@@ -212,7 +212,7 @@ const BettingStrip: React.FC<BettingStripProps> = ({
         </button>
 
         {/* Opening Card Section - Center - Enhanced Visibility */}
-        <div className="w-20 bg-gradient-to-b from-yellow-900/40 to-yellow-950/40 rounded-lg px-2 py-2 border-2 border-gold/50 flex flex-col justify-center items-center shadow-lg shadow-gold/20">
+        <div className="w-16 flex-shrink-0 bg-gradient-to-b from-yellow-900/40 to-yellow-950/40 rounded-lg px-1 py-2 border-2 border-gold/50 flex flex-col justify-center items-center shadow-lg shadow-gold/20">
           {gameState.selectedOpeningCard ? (
             <div className="relative flex flex-col items-center justify-center gap-0.5">
               {/* Symbol - Larger and more visible */}
@@ -256,7 +256,7 @@ const BettingStrip: React.FC<BettingStripProps> = ({
           }}
           disabled={isBettingDisabled}
           className={`
-            flex-1 bg-gradient-to-b from-blue-900 to-blue-950 rounded-lg p-1
+            flex-1 min-w-0 bg-gradient-to-b from-blue-900 to-blue-950 rounded-lg p-1
             border-2 transition-all duration-200 active:scale-95 relative
             touch-manipulation select-none
             ${selectedPosition === 'bahar'

@@ -275,12 +275,35 @@ export async function completeGame(gameState: GameState, winningSide: 'andar' | 
         });
         
         // 3. Update each bet with transaction ID (idempotent)
+        // ✅ CRITICAL FIX: Calculate payout PER BET, not total user payout
         for (const bet of userBets) {
           const betStatus = bet.side === winningSide ? 'won' : 'lost';
-          const betPayout = bet.side === winningSide ? payout.amount : 0;
+          const betAmount = parseFloat(String(bet.amount || '0'));
+          
+          // Calculate individual bet payout based on game rules
+          let betPayout = 0;
+          if (bet.side === winningSide) {
+            const betRound = parseInt(String(bet.round || '1'));
+            
+            if (gameState.currentRound === 1) {
+              // Round 1: Andar 1:1, Bahar 1:0 (refund)
+              betPayout = winningSide === 'andar' ? betAmount * 2 : betAmount;
+            } else if (gameState.currentRound === 2) {
+              // Round 2: Andar 1:1 on all, Bahar 1:1 on R1, 1:0 on R2
+              if (winningSide === 'andar') {
+                betPayout = betAmount * 2; // 1:1 on all Andar bets
+              } else {
+                // Bahar: 1:1 on R1, 1:0 on R2
+                betPayout = betRound === 1 ? betAmount * 2 : betAmount;
+              }
+            } else {
+              // Round 3+: 1:1 on winning side
+              betPayout = betAmount * 2;
+            }
+          }
           
           await storage.updateBetWithPayout(bet.id, betStatus, txId, betPayout);
-          console.log(`✅ Updated bet ${bet.id}: ${betStatus}, payout=₹${betPayout}`);
+          console.log(`✅ Updated bet ${bet.id}: ${betStatus}, amount=₹${betAmount}, payout=₹${betPayout}`);
         }
         
         // 4. Create transaction record (idempotent)

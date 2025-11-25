@@ -3485,8 +3485,8 @@ export class SupabaseStorage implements IStorage {
         referred_user_id: referredId,
         deposit_amount: depositAmount,
         bonus_amount: bonusAmount,
-        bonus_applied: true,
-        bonus_applied_at: new Date().toISOString(),
+        bonus_applied: false, // ✅ FIX: Set to false until wagering is complete
+        // bonus_applied_at will be set when bonus is actually credited
         created_at: new Date().toISOString()
       }, {
         onConflict: 'referred_user_id'
@@ -4828,13 +4828,14 @@ export class SupabaseStorage implements IStorage {
       const wageringMultiplierSetting = await this.getGameSetting('wagering_multiplier');
 
       const bonusPercent = parseFloat(bonusPercentSetting || '5'); // Default 5%
-      const wageringMultiplier = parseFloat(wageringMultiplierSetting || '0.3'); // Default 0.3 (30% of deposit)
+      const wageringMultiplier = parseFloat(wageringMultiplierSetting || '0.3'); // Default 0.3 = 30% of DEPOSIT
 
       // Step 2: Calculate bonus amount
       const bonusAmount = amount * (bonusPercent / 100);
 
-      // Step 3: Calculate wagering requirement (multiplier of deposit amount)
-      // e.g., 0.3 = 30% of deposit, 1.0 = 100% of deposit, 10.0 = 10x deposit
+      // Step 3: Calculate wagering requirement (percentage of DEPOSIT amount)
+      // ✅ CORRECT: 0.3 means 30% of deposit
+      // e.g., Deposit 100k, Wagering = 100k × 0.3 = 30k
       const wageringRequirement = amount * wageringMultiplier;
 
       console.log(`💰 Deposit approval: Amount: ₹${amount}, Bonus: ₹${bonusAmount} (${bonusPercent}%) LOCKED until ₹${wageringRequirement} wagered (${wageringMultiplier * 100}% of deposit)`);
@@ -4939,7 +4940,7 @@ export class SupabaseStorage implements IStorage {
                 referred_user_id: userId,
                 deposit_amount: newTotalDeposit, // Accumulate deposit
                 bonus_amount: newTotalBonus,     // Accumulate bonus
-                bonus_applied: true, 
+                bonus_applied: false, // ✅ FIX: Set to false until wagering is complete 
                 created_at: existingReferral ? undefined : new Date().toISOString() // Keep original created_at
               }, { onConflict: 'referred_user_id' })
               .select('id')
@@ -5336,14 +5337,15 @@ export class SupabaseStorage implements IStorage {
     bonusAmount: number;
     bonusPercentage: number;
   }): Promise<string> {
-    // ✅ FIX: Calculate wagering requirement (default 3x bonus amount)
+    // ✅ FIX: Calculate wagering requirement (30% of DEPOSIT amount)
     const multiplierSetting = await this.getGameSetting('referral_wagering_multiplier');
-    let multiplier = parseFloat(multiplierSetting || '3'); // Default 3x
+    let multiplier = parseFloat(multiplierSetting || '0.3'); // Default 0.3 = 30% of deposit
     
-    // Safety check: Multiplier should be at least 1 if not explicitly set to 0
-    if (multiplier <= 0) multiplier = 3;
+    // Safety check: Multiplier should be positive
+    if (multiplier <= 0) multiplier = 0.3;
     
-    const wageringRequired = data.bonusAmount * multiplier;
+    // Wagering = deposit × multiplier (e.g., 100k × 0.3 = 30k)
+    const wageringRequired = data.depositAmount * multiplier;
 
     const { data: bonus, error } = await supabaseServer
       .from('referral_bonuses')
@@ -5626,7 +5628,7 @@ export class SupabaseStorage implements IStorage {
    * Get all referral bonuses for a user
    */
   async getReferralBonuses(userId: string): Promise<any[]> {
-    // ✅ CRITICAL FIX: Removed foreign key join to prevent query failures
+    // ✅ FIX: Fetch referral bonuses with referred user details
     const { data, error } = await supabaseServer
       .from('referral_bonuses')
       .select('*')
@@ -5638,23 +5640,41 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
 
-    // Map to consistent camelCase format
-    return (data || []).map((bonus: any) => ({
-      id: bonus.id,
-      userId: bonus.user_id,
-      referrerUserId: bonus.referrer_user_id,
-      bonusAmount: parseFloat(bonus.bonus_amount || 0),
-      depositAmount: parseFloat(bonus.deposit_amount || 0),
-      status: bonus.status,
-      wageringRequired: parseFloat(bonus.wagering_required || 0),
-      wageringCompleted: parseFloat(bonus.wagering_completed || 0),
-      wageringProgress: bonus.wagering_required > 0
-        ? (parseFloat(bonus.wagering_completed || 0) / parseFloat(bonus.wagering_required)) * 100
-        : 0,
-      createdAt: bonus.created_at,
-      creditedAt: bonus.credited_at,
-      referredUsername: bonus.referred_user?.full_name || bonus.referred_user?.phone || 'Unknown'
-    }));
+    // ✅ FIX: Fetch referred user details for each bonus
+    const bonusesWithUserDetails = await Promise.all(
+      (data || []).map(async (bonus: any) => {
+        let referredUsername = 'Unknown';
+        if (bonus.referred_user_id) {
+          const referredUser = await this.getUserById(bonus.referred_user_id);
+          if (referredUser) {
+            referredUsername = referredUser.full_name || referredUser.phone || 'Unknown';
+          }
+        }
+        
+        return {
+          // ✅ FIX: Return raw snake_case data for routes.ts to transform
+          id: bonus.id,
+          referrer_user_id: bonus.referrer_user_id,
+          referred_user_id: bonus.referred_user_id,
+          referral_id: bonus.referral_id,
+          deposit_amount: bonus.deposit_amount,
+          bonus_amount: bonus.bonus_amount,
+          bonus_percentage: bonus.bonus_percentage,
+          status: bonus.status,
+          wagering_required: bonus.wagering_required,
+          wagering_completed: bonus.wagering_completed,
+          credited_at: bonus.credited_at,
+          expired_at: bonus.expired_at,
+          notes: bonus.notes,
+          created_at: bonus.created_at,
+          updated_at: bonus.updated_at,
+          // ✅ FIX: Include referred user details
+          referred_user: { full_name: referredUsername, phone: referredUsername }
+        };
+      })
+    );
+
+    return bonusesWithUserDetails;
   }
 
   /**

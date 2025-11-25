@@ -1,12 +1,13 @@
 /**
  * ReferralBonusesList - Shows all referral bonuses
- * Referral bonuses are credited immediately (no wagering)
+ * Referral bonuses require wagering to unlock (3x bonus amount)
  */
 
 import React from 'react';
-import { Users, CheckCircle, Clock } from 'lucide-react';
+import { Users, CheckCircle, Clock, Lock, Unlock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 
 interface ReferralBonus {
   id: string;
@@ -14,7 +15,10 @@ interface ReferralBonus {
   depositAmount: number;
   bonusAmount: number;
   bonusPercentage: number;
-  status: 'pending' | 'credited' | 'expired';
+  status: 'pending' | 'locked' | 'unlocked' | 'credited' | 'expired';
+  wageringRequired?: number;
+  wageringCompleted?: number;
+  wageringProgress?: number;
   creditedAt?: string;
   createdAt: string;
 }
@@ -47,6 +51,18 @@ const ReferralBonusesList: React.FC<ReferralBonusesListProps> = ({ bonuses }) =>
           icon: CheckCircle,
           label: 'Credited',
           color: 'bg-green-500/20 text-green-400 border-green-500'
+        };
+      case 'unlocked':
+        return {
+          icon: Unlock,
+          label: 'Unlocked',
+          color: 'bg-blue-500/20 text-blue-400 border-blue-500'
+        };
+      case 'locked':
+        return {
+          icon: Lock,
+          label: 'Locked',
+          color: 'bg-orange-500/20 text-orange-400 border-orange-500'
         };
       case 'pending':
         return {
@@ -157,6 +173,23 @@ const ReferralBonusesList: React.FC<ReferralBonusesListProps> = ({ bonuses }) =>
                     )}
                   </div>
                 </div>
+                
+                {/* Wagering Progress for locked bonuses */}
+                {bonus.status === 'locked' && bonus.wageringRequired && bonus.wageringRequired > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gold/10">
+                    <div className="flex justify-between text-xs text-white/60 mb-1">
+                      <span>Wagering Progress</span>
+                      <span>{formatCurrency(bonus.wageringCompleted || 0)} / {formatCurrency(bonus.wageringRequired)}</span>
+                    </div>
+                    <Progress 
+                      value={bonus.wageringProgress || 0} 
+                      className="h-2 bg-gray-700"
+                    />
+                    <div className="text-xs text-white/40 mt-1">
+                      Play games to unlock this bonus
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
