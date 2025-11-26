@@ -160,6 +160,8 @@ import streamRoutes from './stream-routes';
 import { AdminRequestsSupabaseAPI } from './admin-requests-supabase';
 import adminUserRoutes from './routes/admin';
 import userRoutes from './routes/user';
+import partnerRoutes from './routes/partner';
+import adminPartnerRoutes from './routes/admin-partners';
 import { completeGame as gameCompleteGame } from './game';
 import {
   handlePlayerBet,
@@ -1859,8 +1861,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       '/api/auth/logout',
       '/api/stream/config',
       '/api/stream/simple-config',  // ✅ Allow public access to simple stream config
-      '/api/whatsapp-number'  // ✅ Allow public access to WhatsApp number for deposit/withdrawal
+      '/api/whatsapp-number',  // ✅ Allow public access to WhatsApp number for deposit/withdrawal
     ];
+    
+    // 🤝 Partner routes bypass player auth (they use their own requirePartnerAuth middleware)
+    const partnerRoutesPrefix = '/api/partner';
 
     // Log all API requests for debugging
     console.log(`🔍 API Request: ${req.method} ${req.originalUrl || req.url}`);
@@ -1893,6 +1898,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`✅ Public endpoint identified: "${cleanPath}" matches "${publicPath}"`);
         break;
       }
+    }
+    
+    // 🤝 Check if this is a partner route (they use their own auth middleware)
+    const isPartnerRoute = cleanPath.startsWith(partnerRoutesPrefix);
+    if (isPartnerRoute) {
+      console.log(`🤝 Partner route detected: "${cleanPath}" - bypassing player auth`);
+      return next();
     }
 
     // Allow public endpoints to continue without authentication
@@ -2117,6 +2129,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin", adminUserRoutes);
   // ✅ REMOVED: Old user routes moved inline below for better control
   // app.use("/api/user", userRoutes);
+
+  // 🤝 Partner Routes - Completely separate from player routes
+  app.use("/api/partner", partnerRoutes);
+  
+  // 🔧 Admin Partner Management Routes
+  app.use("/api/admin/partners", adminPartnerRoutes);
+  console.log('🤝 Partner System routes registered');
 
   app.get("/api/game-settings", async (req, res) => {
     try {

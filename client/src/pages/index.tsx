@@ -72,6 +72,13 @@ export default function Index() {
             >
               Sign Up
             </a>
+            <a
+              href="/partner/signup"
+              className="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 text-base sm:text-lg px-8 sm:px-10 py-3 sm:py-4 rounded-full font-semibold shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 inline-flex items-center justify-center hover:scale-105"
+            >
+              <Users className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
+              Become a Partner
+            </a>
           </div>
         </div>
       </section>

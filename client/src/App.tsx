@@ -12,6 +12,7 @@ import BackendSettings from "@/pages/backend-settings.tsx";
 import AdminWhatsAppSettings from "@/pages/admin-whatsapp-settings.tsx";
 import AdminStreamSettings from "@/pages/admin-stream-settings.tsx";
 import GameHistoryPage from "@/pages/GameHistoryPage.tsx";
+import AdminPartners from "@/pages/admin-partners.tsx";
 
 import Login from "@/pages/login.tsx";
 import Signup from "@/pages/signup.tsx";
@@ -21,8 +22,14 @@ import NotFound from "@/pages/not-found.tsx";
 import Unauthorized from "@/pages/unauthorized.tsx";
 import ProtectedRoute from "@/components/ProtectedRoute.tsx";
 import ProtectedAdminRoute from "@/components/ProtectedAdminRoute.tsx";
+import ProtectedPartnerRoute from "@/components/ProtectedPartnerRoute.tsx";
 import ErrorBoundary from "@/components/ErrorBoundary.tsx";
 import AppProviders from "@/providers/AppProviders.tsx";
+
+// 🤝 Partner Pages
+import PartnerLogin from "@/pages/partner/partner-login.tsx";
+import PartnerSignup from "@/pages/partner/partner-signup.tsx";
+import PartnerDashboard from "@/pages/partner/partner-dashboard.tsx";
 
 // 📱 Import mobile performance optimizations
 import "@/styles/mobile-optimizations.css";
@@ -111,6 +118,20 @@ function Router() {
         <ProtectedAdminRoute>
           <GameHistoryPage />
         </ProtectedAdminRoute>
+      </Route>
+      <Route path="/admin/partners">
+        <ProtectedAdminRoute>
+          <AdminPartners />
+        </ProtectedAdminRoute>
+      </Route>
+
+      {/* 🤝 Partner Routes - Completely Separate System */}
+      <Route path="/partner/login" component={PartnerLogin} />
+      <Route path="/partner/signup" component={PartnerSignup} />
+      <Route path="/partner/dashboard">
+        <ProtectedPartnerRoute>
+          <PartnerDashboard />
+        </ProtectedPartnerRoute>
       </Route>
 
       <Route path="/unauthorized" component={Unauthorized} />

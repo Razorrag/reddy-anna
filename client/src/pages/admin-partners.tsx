@@ -1,0 +1,396 @@
+// 🔧 ADMIN PARTNER MANAGEMENT PAGE
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
+import AdminLayout from "@/components/AdminLayout";
+import {
+  Users,
+  UserCheck,
+  UserX,
+  Clock,
+  Ban,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  Check,
+  X
+} from "lucide-react";
+
+interface Partner {
+  id: string;
+  phone: string;
+  fullName: string;
+  email: string | null;
+  status: 'pending' | 'active' | 'suspended' | 'banned';
+  sharePercentage: number;
+  lastLogin: string | null;
+  createdAt: string;
+}
+
+export default function AdminPartners() {
+  const { token } = useAuth();
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, suspended: 0, banned: 0 });
+  
+  const [filters, setFilters] = useState({
+    status: 'all',
+    search: '',
+    page: 1,
+    limit: 20
+  });
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
+  const [editingShare, setEditingShare] = useState<string | null>(null);
+  const [newShare, setNewShare] = useState('');
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'Never';
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  const fetchPartners = async () => {
+    try {
+      const params = new URLSearchParams();
+      params.set('page', filters.page.toString());
+      params.set('limit', filters.limit.toString());
+      if (filters.status !== 'all') params.set('status', filters.status);
+      if (filters.search) params.set('search', filters.search);
+
+      const response = await fetch(`/api/admin/partners?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setPartners(data.data.partners);
+        setPagination(data.data.pagination);
+      }
+    } catch (err) {
+      console.error('Error fetching partners:', err);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('/api/admin/partners/stats/summary', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setStats(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching stats:', err);
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([fetchPartners(), fetchStats()]);
+      setLoading(false);
+    };
+    loadData();
+  }, [token]);
+
+  useEffect(() => {
+    fetchPartners();
+  }, [filters.page, filters.status, filters.search]);
+
+  const updatePartnerStatus = async (partnerId: string, status: string) => {
+    try {
+      const response = await fetch(`/api/admin/partners/${partnerId}/status`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchPartners();
+        fetchStats();
+      } else {
+        alert(data.error || 'Failed to update status');
+      }
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert('Failed to update status');
+    }
+  };
+
+  const updateSharePercentage = async (partnerId: string, sharePercentage: string) => {
+    const percentage = parseFloat(sharePercentage);
+    if (isNaN(percentage) || percentage < 1 || percentage > 100) {
+      alert('Share percentage must be between 1 and 100');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/admin/partners/${partnerId}/share`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sharePercentage: percentage })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setEditingShare(null);
+        setNewShare('');
+        fetchPartners();
+      } else {
+        alert(data.error || 'Failed to update share percentage');
+      }
+    } catch (err) {
+      console.error('Error updating share:', err);
+      alert('Failed to update share percentage');
+    }
+  };
+
+
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      active: 'bg-green-500/20 text-green-400 border-green-500/30',
+      suspended: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+      banned: 'bg-red-500/20 text-red-400 border-red-500/30'
+    };
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${styles[status] || styles.pending}`}>
+        {status.toUpperCase()}
+      </span>
+    );
+  };
+
+  return (
+    <AdminLayout>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-4 md:p-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gold">Partner Management</h1>
+            <p className="text-gray-400">Manage partner accounts</p>
+          </div>
+          <Button
+            variant="outline"
+            className="border-gold/30 text-gold hover:bg-gold/10"
+            onClick={() => { fetchPartners(); fetchStats(); }}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
+          <Card className="bg-black/40 border-gold/30">
+            <CardContent className="pt-4 text-center">
+              <Users className="w-6 h-6 text-gold mx-auto mb-2" />
+              <p className="text-2xl font-bold text-white">{stats.total}</p>
+              <p className="text-gray-400 text-xs">Total</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-black/40 border-yellow-500/30">
+            <CardContent className="pt-4 text-center">
+              <Clock className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-yellow-400">{stats.pending}</p>
+              <p className="text-gray-400 text-xs">Pending</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-black/40 border-green-500/30">
+            <CardContent className="pt-4 text-center">
+              <UserCheck className="w-6 h-6 text-green-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-green-400">{stats.active}</p>
+              <p className="text-gray-400 text-xs">Active</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-black/40 border-orange-500/30">
+            <CardContent className="pt-4 text-center">
+              <UserX className="w-6 h-6 text-orange-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-orange-400">{stats.suspended}</p>
+              <p className="text-gray-400 text-xs">Suspended</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-black/40 border-red-500/30">
+            <CardContent className="pt-4 text-center">
+              <Ban className="w-6 h-6 text-red-400 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-red-400">{stats.banned}</p>
+              <p className="text-gray-400 text-xs">Banned</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters */}
+        <Card className="bg-black/40 border-gold/30 mb-6">
+          <CardContent className="pt-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search by name or phone..."
+                    value={filters.search}
+                    onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value, page: 1 }))}
+                    className="pl-10 bg-black/30 border-gold/30 text-white"
+                  />
+                </div>
+              </div>
+              <Select value={filters.status} onValueChange={(v) => setFilters(prev => ({ ...prev, status: v, page: 1 }))}>
+                <SelectTrigger className="w-40 bg-black/30 border-gold/30 text-white">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="suspended">Suspended</SelectItem>
+                  <SelectItem value="banned">Banned</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Partners Table */}
+        <Card className="bg-black/40 border-gold/30">
+          <CardHeader>
+            <CardTitle className="text-gold">Partners ({pagination.total})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gold mx-auto"></div>
+                <p className="text-gray-400 mt-2">Loading...</p>
+              </div>
+            ) : partners.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                <p className="text-gray-400">No partners found</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-white">
+                    <thead>
+                      <tr className="border-b border-gold/30">
+                        <th className="text-left p-3 text-gold font-medium">Partner</th>
+                        <th className="text-left p-3 text-gold font-medium">Status</th>
+                        <th className="text-center p-3 text-gold font-medium">Share %</th>
+                        <th className="text-left p-3 text-gold font-medium">Last Login</th>
+                        <th className="text-center p-3 text-gold font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {partners.map((partner, index) => (
+                        <tr key={partner.id} className={`border-b border-gold/20 ${index % 2 === 0 ? 'bg-black/20' : ''}`}>
+                          <td className="p-3">
+                            <div>
+                              <p className="font-medium text-white">{partner.fullName}</p>
+                              <p className="text-gray-400 text-sm">{partner.phone}</p>
+                              {partner.email && <p className="text-gray-500 text-xs">{partner.email}</p>}
+                            </div>
+                          </td>
+                          <td className="p-3">{getStatusBadge(partner.status)}</td>
+                          <td className="p-3 text-center">
+                            {editingShare === partner.id ? (
+                              <div className="flex items-center gap-1 justify-center">
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max="100"
+                                  value={newShare}
+                                  onChange={(e) => setNewShare(e.target.value)}
+                                  className="w-16 h-7 bg-black/30 border-purple-500/30 text-white text-center"
+                                />
+                                <Button size="sm" className="h-7 px-2 bg-green-600"
+                                  onClick={() => updateSharePercentage(partner.id, newShare)}>
+                                  <Check className="h-3 w-3" />
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 px-2 border-gray-500"
+                                  onClick={() => { setEditingShare(null); setNewShare(''); }}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <button
+                                className="text-purple-400 font-bold hover:text-purple-300"
+                                onClick={() => { setEditingShare(partner.id); setNewShare(partner.sharePercentage.toString()); }}
+                              >
+                                {partner.sharePercentage}%
+                              </button>
+                            )}
+                          </td>
+                          <td className="p-3 text-gray-400 text-sm">{formatDate(partner.lastLogin)}</td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-1 justify-center flex-wrap">
+                              {partner.status === 'pending' && (
+                                <>
+                                  <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 px-2"
+                                    onClick={() => updatePartnerStatus(partner.id, 'active')}>
+                                    <Check className="h-3 w-3 mr-1" /> Approve
+                                  </Button>
+                                  <Button size="sm" variant="destructive" className="h-7 px-2"
+                                    onClick={() => updatePartnerStatus(partner.id, 'banned')}>
+                                    <X className="h-3 w-3 mr-1" /> Reject
+                                  </Button>
+                                </>
+                              )}
+                              {partner.status === 'active' && (
+                                <Button size="sm" variant="outline" className="border-orange-500/30 text-orange-400 h-7 px-2"
+                                  onClick={() => updatePartnerStatus(partner.id, 'suspended')}>
+                                  Suspend
+                                </Button>
+                              )}
+                              {partner.status === 'suspended' && (
+                                <>
+                                  <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 px-2"
+                                    onClick={() => updatePartnerStatus(partner.id, 'active')}>
+                                    Activate
+                                  </Button>
+                                  <Button size="sm" variant="destructive" className="h-7 px-2"
+                                    onClick={() => updatePartnerStatus(partner.id, 'banned')}>
+                                    Ban
+                                  </Button>
+                                </>
+                              )}
+                              {partner.status === 'banned' && (
+                                <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 px-2"
+                                  onClick={() => updatePartnerStatus(partner.id, 'active')}>
+                                  Unban
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {pagination.pages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gold/30">
+                    <div className="text-gray-400 text-sm">Page {filters.page} of {pagination.pages}</div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" disabled={filters.page <= 1}
+                        className="border-gold/30 text-gold"
+                        onClick={() => setFilters(prev => ({ ...prev, page: prev.page - 1 }))}>
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" disabled={filters.page >= pagination.pages}
+                        className="border-gold/30 text-gold"
+                        onClick={() => setFilters(prev => ({ ...prev, page: prev.page + 1 }))}>
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </AdminLayout>
+  );
+}

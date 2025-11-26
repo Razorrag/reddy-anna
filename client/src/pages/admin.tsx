@@ -14,7 +14,8 @@ import {
   MessageSquare,
   Video,
   RefreshCw,
-  TrendingDown
+  TrendingDown,
+  Handshake
 } from "lucide-react";
 import AdminLayout from "@/components/AdminLayout";
 import { useAdminStats } from "@/hooks/useAdminStats";
@@ -379,6 +380,26 @@ export default function Admin() {
                 <CardContent>
                   <div className="text-center text-sm text-gray-400">
                     Set where user requests are sent
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+
+            {/* Partner Management */}
+            <Link href="/admin/partners">
+              <Card className="bg-black/40 border-purple-500/30 backdrop-blur-sm hover:scale-105 transition-all duration-200 cursor-pointer">
+                <CardHeader>
+                  <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    <Handshake className="w-8 h-8 text-white" />
+                  </div>
+                  <CardTitle className="text-white text-center text-xl">Partner Management</CardTitle>
+                  <CardDescription className="text-gray-400 text-center">
+                    Manage partner accounts
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center text-sm text-gray-400">
+                    Approve, suspend, or ban partners
                   </div>
                 </CardContent>
               </Card>

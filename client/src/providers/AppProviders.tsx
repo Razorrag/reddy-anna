@@ -8,6 +8,7 @@ import { GameStateProvider } from '../contexts/GameStateContext';
 import { WebSocketProvider } from '../contexts/WebSocketContext';
 import { NotificationProvider } from '../contexts/NotificationContext';
 import { AuthProvider } from '../contexts/AuthContext';
+import { PartnerAuthProvider } from '../contexts/PartnerAuthContext';
 import { UserProfileProvider } from '../contexts/UserProfileContext';
 import { BalanceProvider } from '../contexts/BalanceContext';
 import { queryClient } from '../lib/queryClient';
@@ -22,21 +23,23 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
       <TooltipProvider>
         <Toaster />
         <AuthProvider>
-          <BalanceProvider>
-            <UserProfileProvider>
-              <AppProvider>
-                <GameProvider>
-                  <GameStateProvider>
-                    <NotificationProvider>
-                      <WebSocketProvider>
-                        {children}
-                      </WebSocketProvider>
-                    </NotificationProvider>
-                  </GameStateProvider>
-                </GameProvider>
-              </AppProvider>
-            </UserProfileProvider>
-          </BalanceProvider>
+          <PartnerAuthProvider>
+            <BalanceProvider>
+              <UserProfileProvider>
+                <AppProvider>
+                  <GameProvider>
+                    <GameStateProvider>
+                      <NotificationProvider>
+                        <WebSocketProvider>
+                          {children}
+                        </WebSocketProvider>
+                      </NotificationProvider>
+                    </GameStateProvider>
+                  </GameProvider>
+                </AppProvider>
+              </UserProfileProvider>
+            </BalanceProvider>
+          </PartnerAuthProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

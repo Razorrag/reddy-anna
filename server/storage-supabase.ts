@@ -3359,82 +3359,61 @@ export class SupabaseStorage implements IStorage {
     wageringCompleted: number;
     wageringProgress: number;
     bonusLocked: boolean;
+    // ✅ NEW: Enhanced fields
+    totalReferrals: number;
+    referralsWithDeposit: number;
+    referralCode: string | null;
+    pendingDepositBonus: number;
+    pendingReferralBonus: number;
+    pendingCreditOnWagering: number;
+    wageringRemaining: number;
   }> {
-    // Retry logic for failed fetches
-    const maxRetries = 3;
-    let lastError: any;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const { data, error } = await supabaseServer
-          .from('users')
-          .select('deposit_bonus_available, referral_bonus_available, wagering_requirement, wagering_completed, bonus_locked')
-          .eq('id', userId)
-          .single();
-
-        if (error) {
-          if (error.code === 'PGRST116') { // Not found is expected
-            return {
-              depositBonus: 0,
-              referralBonus: 0,
-              totalBonus: 0,
-              wageringRequired: 0,
-              wageringCompleted: 0,
-              wageringProgress: 0,
-              bonusLocked: false
-            };
-          }
-          throw error;
-        }
-
-        const depositBonus = parseFloat(data?.deposit_bonus_available || '0');
-        const referralBonus = parseFloat(data?.referral_bonus_available || '0');
-        const wageringRequired = parseFloat(data?.wagering_requirement || '0');
-        const wageringCompleted = parseFloat(data?.wagering_completed || '0');
-        const wageringProgress = wageringRequired > 0 ? (wageringCompleted / wageringRequired) * 100 : 0;
-        const bonusLocked = data?.bonus_locked || false;
-
-        return {
-          depositBonus,
-          referralBonus,
-          totalBonus: depositBonus + referralBonus,
-          wageringRequired,
-          wageringCompleted,
-          wageringProgress,
-          bonusLocked
-        };
-      } catch (error: any) {
-        lastError = error;
-        console.error(`Attempt ${attempt} failed to get user bonus info for ${userId}:`, error);
-
-        // If it's a fetch failure, network error, or timeout, try again after a delay
-        if (error.message?.includes('fetch failed') ||
-          error.code === 'ECONNREFUSED' ||
-          error.code === 'ETIMEDOUT' ||
-          error.name === 'AbortError') {
-
-          if (attempt < maxRetries) {
-            // Wait before retrying (exponential backoff)
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-            continue;
-          }
-        } else {
-          // If it's not a network error, don't retry
-          break;
-        }
-      }
+    try {
+      // ✅ NEW: Use getBonusSummary for accurate data from bonus tables
+      const summary = await this.getBonusSummary(userId);
+      
+      // Get user's referral code
+      const user = await this.getUserById(userId);
+      const referralCode = user?.referral_code_generated || null;
+      
+      return {
+        // Legacy fields (for backward compatibility)
+        depositBonus: summary.depositBonusLocked + summary.depositBonusUnlocked,
+        referralBonus: summary.referralBonusLocked,
+        totalBonus: summary.totalAvailable,
+        wageringRequired: summary.wageringRequired,
+        wageringCompleted: summary.wageringCompleted,
+        wageringProgress: summary.wageringProgress,
+        bonusLocked: summary.depositBonusLocked > 0 || summary.referralBonusLocked > 0,
+        
+        // ✅ NEW: Enhanced fields
+        totalReferrals: summary.totalReferrals,
+        referralsWithDeposit: summary.referralsWithDeposit,
+        referralCode: referralCode,
+        pendingDepositBonus: summary.pendingDepositBonus,
+        pendingReferralBonus: summary.pendingReferralBonus,
+        pendingCreditOnWagering: summary.pendingCreditOnWagering,
+        wageringRemaining: summary.wageringRemaining
+      };
+    } catch (error: any) {
+      console.error('Error getting user bonus info:', error);
+      return {
+        depositBonus: 0,
+        referralBonus: 0,
+        totalBonus: 0,
+        wageringRequired: 0,
+        wageringCompleted: 0,
+        wageringProgress: 0,
+        bonusLocked: false,
+        totalReferrals: 0,
+        referralsWithDeposit: 0,
+        referralCode: null,
+        pendingDepositBonus: 0,
+        pendingReferralBonus: 0,
+        pendingCreditOnWagering: 0,
+        wageringRemaining: 0
+      };
     }
-
-    console.error('Error getting user bonus info after all retries:', lastError);
-    return {
-      depositBonus: 0,
-      referralBonus: 0,
-      totalBonus: 0,
-      wageringRequired: 0,
-      wageringCompleted: 0,
-      wageringProgress: 0,
-      bonusLocked: false
-    };
   }
 
   async resetUserBonus(userId: string): Promise<void> {
@@ -5324,10 +5303,86 @@ export class SupabaseStorage implements IStorage {
     });
 
     console.log(`✅ Deposit bonus credited: ₹${bonusAmount} to user ${bonus.user_id}`);
+    
+    // ✅ NEW: Credit all linked referral bonuses together with this deposit bonus
+    await this.creditLinkedReferralBonuses(bonusId, bonus.user_id);
+  }
+  
+  /**
+   * ✅ NEW: Credit all referral bonuses linked to a deposit bonus
+   * Called when deposit bonus is credited - referral bonuses are credited together
+   */
+  async creditLinkedReferralBonuses(depositBonusId: string, userId: string): Promise<void> {
+    try {
+      // Find all locked referral bonuses linked to this deposit bonus
+      const { data: linkedBonuses, error } = await supabaseServer
+        .from('referral_bonuses')
+        .select('*')
+        .eq('referrer_user_id', userId)
+        .eq('linked_deposit_bonus_id', depositBonusId)
+        .eq('status', 'locked');
+        
+      if (error || !linkedBonuses || linkedBonuses.length === 0) {
+        console.log(`ℹ️ No linked referral bonuses found for deposit bonus ${depositBonusId}`);
+        return;
+      }
+      
+      console.log(`🎁 Found ${linkedBonuses.length} linked referral bonuses to credit together`);
+      
+      let totalReferralBonus = 0;
+      
+      for (const refBonus of linkedBonuses) {
+        const refBonusAmount = parseFloat(refBonus.bonus_amount || '0');
+        totalReferralBonus += refBonusAmount;
+        
+        // Update referral bonus status to credited
+        await supabaseServer
+          .from('referral_bonuses')
+          .update({
+            status: 'credited',
+            credited_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', refBonus.id);
+          
+        // Log the credit
+        await this.logBonusTransaction({
+          userId: userId,
+          bonusType: 'referral_bonus',
+          bonusSourceId: refBonus.id,
+          amount: refBonusAmount,
+          action: 'credited',
+          description: `Referral bonus credited with deposit bonus: ₹${refBonusAmount}`
+        });
+        
+        // Update user_referrals to mark bonus as applied
+        if (refBonus.referral_id) {
+          await supabaseServer
+            .from('user_referrals')
+            .update({
+              bonus_applied: true,
+              bonus_applied_at: new Date().toISOString()
+            })
+            .eq('id', refBonus.referral_id);
+        }
+        
+        console.log(`✅ Referral bonus ${refBonus.id} credited: ₹${refBonusAmount}`);
+      }
+      
+      // Add total referral bonus to user balance
+      if (totalReferralBonus > 0) {
+        await this.updateUserBalance(userId, totalReferralBonus);
+        console.log(`✅ Total referral bonus credited: ₹${totalReferralBonus} to user ${userId}`);
+      }
+    } catch (error) {
+      console.error('Error crediting linked referral bonuses:', error);
+    }
   }
 
   /**
    * Create a referral bonus record (LOCKED initially)
+   * ✅ NEW LOGIC: Referral bonus is linked to referrer's LATEST locked deposit bonus
+   * It will be credited TOGETHER with that deposit bonus when wagering is complete
    */
   async createReferralBonus(data: {
     referrerUserId: string;
@@ -5337,16 +5392,20 @@ export class SupabaseStorage implements IStorage {
     bonusAmount: number;
     bonusPercentage: number;
   }): Promise<string> {
-    // ✅ FIX: Calculate wagering requirement (30% of DEPOSIT amount)
-    const multiplierSetting = await this.getGameSetting('referral_wagering_multiplier');
-    let multiplier = parseFloat(multiplierSetting || '0.3'); // Default 0.3 = 30% of deposit
-    
-    // Safety check: Multiplier should be positive
-    if (multiplier <= 0) multiplier = 0.3;
-    
-    // Wagering = deposit × multiplier (e.g., 100k × 0.3 = 30k)
-    const wageringRequired = data.depositAmount * multiplier;
+    // ✅ NEW: Find the referrer's LATEST locked deposit bonus to link to
+    const { data: latestDepositBonus } = await supabaseServer
+      .from('deposit_bonuses')
+      .select('id, wagering_required, wagering_completed')
+      .eq('user_id', data.referrerUserId)
+      .eq('status', 'locked')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
 
+    const linkedDepositBonusId = latestDepositBonus?.id || null;
+    
+    // ✅ NEW: Referral bonus has NO separate wagering - it's linked to deposit bonus
+    // wagering_required = 0 means it relies on linked deposit bonus
     const { data: bonus, error } = await supabaseServer
       .from('referral_bonuses')
       .insert({
@@ -5356,9 +5415,10 @@ export class SupabaseStorage implements IStorage {
         deposit_amount: data.depositAmount,
         bonus_amount: data.bonusAmount,
         bonus_percentage: data.bonusPercentage,
-        status: 'locked', // ✅ Locked initially
-        wagering_required: wageringRequired,
-        wagering_completed: 0
+        status: 'locked', // ✅ Locked until linked deposit bonus is credited
+        wagering_required: 0, // ✅ No separate wagering - linked to deposit bonus
+        wagering_completed: 0,
+        linked_deposit_bonus_id: linkedDepositBonusId // ✅ NEW: Link to deposit bonus
       })
       .select('id')
       .single();
@@ -5369,93 +5429,33 @@ export class SupabaseStorage implements IStorage {
     }
 
     // Log bonus transaction
+    const linkMessage = linkedDepositBonusId 
+      ? `Linked to deposit bonus ${linkedDepositBonusId}. Will be credited together.`
+      : `No active deposit bonus to link. Will be credited when referrer makes a deposit.`;
+      
     await this.logBonusTransaction({
       userId: data.referrerUserId,
       bonusType: 'referral_bonus',
       bonusSourceId: bonus.id,
       amount: data.bonusAmount,
       action: 'locked',
-      description: `Referral bonus locked: ₹${data.bonusAmount}. Wager ₹${wageringRequired} to unlock.`
+      description: `Referral bonus locked: ₹${data.bonusAmount}. ${linkMessage}`
     });
 
-    console.log(`✅ Referral bonus created (LOCKED): ₹${data.bonusAmount} for user ${data.referrerUserId}. Wagering required: ₹${wageringRequired}`);
+    console.log(`✅ Referral bonus created (LOCKED): ₹${data.bonusAmount} for user ${data.referrerUserId}. Linked to deposit bonus: ${linkedDepositBonusId || 'NONE'}`);
     return bonus.id;
   }
 
   /**
-   * Update wagering progress for locked referral bonuses using FIFO (oldest first)
-   * Called when a user completes a bet
+   * ✅ DEPRECATED: Referral bonuses no longer have separate wagering
+   * They are now linked to deposit bonuses and credited together
+   * This function is kept for backward compatibility but does nothing
    */
   async updateReferralBonusWagering(userId: string, betAmount: number): Promise<void> {
-    try {
-      if (betAmount <= 0) return;
-
-      // Find all LOCKED referral bonuses for this referrer, ordered by creation (FIFO)
-      const { data: bonuses, error } = await supabaseServer
-        .from('referral_bonuses')
-        .select('*')
-        .eq('referrer_user_id', userId)
-        .eq('status', 'locked')
-        .order('created_at', { ascending: true }); // FIFO: oldest first
-        
-      if (error) {
-        console.error('Error fetching locked referral bonuses:', error);
-        return;
-      }
-        
-      if (!bonuses || bonuses.length === 0) return;
-      
-      let remainingBetAmount = betAmount;
-      console.log(`🎰 Tracking wagering of ₹${betAmount} for ${bonuses.length} locked referral bonuses (FIFO)`);
-      
-      for (const bonus of bonuses) {
-        if (remainingBetAmount <= 0) break;
-
-        const currentCompleted = parseFloat(bonus.wagering_completed || '0');
-        const required = parseFloat(bonus.wagering_required || '0');
-        
-        // If for some reason required is 0, autocomplete it
-        if (required <= 0) {
-           await this.creditReferralBonus(bonus.id);
-           continue;
-        }
-
-        // Calculate remaining needed for this specific bonus
-        const remainingToComplete = required - currentCompleted;
-        
-        // Apply bet amount to this bonus (allowing overflow for calculation)
-        const amountToApply = remainingBetAmount;
-        const newCompleted = currentCompleted + amountToApply;
-        
-        // Update database
-        await supabaseServer
-          .from('referral_bonuses')
-          .update({ 
-            wagering_completed: newCompleted,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', bonus.id);
-          
-        // Check completion
-        if (newCompleted >= required) {
-          // Unlock and credit!
-          console.log(`🔓 Referral bonus ${bonus.id} UNLOCKED! (Wagering met: ₹${newCompleted.toFixed(2)}/₹${required})`);
-          await this.creditReferralBonus(bonus.id);
-          
-          // Calculate overflow to apply to next bonus
-          remainingBetAmount = newCompleted - required;
-          if (remainingBetAmount > 0) {
-             console.log(`↪️ Overflow ₹${remainingBetAmount.toFixed(2)} applies to next bonus`);
-          }
-        } else {
-          // All bet amount consumed
-          console.log(`⏳ Referral bonus ${bonus.id} progress: ₹${newCompleted.toFixed(2)}/₹${required}`);
-          remainingBetAmount = 0;
-        }
-      }
-    } catch (error) {
-      console.error('Error updating referral bonus wagering:', error);
-    }
+    // ✅ NEW LOGIC: Referral bonuses are linked to deposit bonuses
+    // They are credited automatically when the linked deposit bonus is credited
+    // No separate wagering tracking needed
+    return;
   }
 
   /**
@@ -5652,7 +5652,7 @@ export class SupabaseStorage implements IStorage {
         }
         
         return {
-          // ✅ FIX: Return raw snake_case data for routes.ts to transform
+          // Raw snake_case data
           id: bonus.id,
           referrer_user_id: bonus.referrer_user_id,
           referred_user_id: bonus.referred_user_id,
@@ -5663,13 +5663,18 @@ export class SupabaseStorage implements IStorage {
           status: bonus.status,
           wagering_required: bonus.wagering_required,
           wagering_completed: bonus.wagering_completed,
+          linked_deposit_bonus_id: bonus.linked_deposit_bonus_id, // ✅ NEW: Link to deposit bonus
           credited_at: bonus.credited_at,
           expired_at: bonus.expired_at,
           notes: bonus.notes,
           created_at: bonus.created_at,
           updated_at: bonus.updated_at,
-          // ✅ FIX: Include referred user details
-          referred_user: { full_name: referredUsername, phone: referredUsername }
+          // Referred user details
+          referred_user: { full_name: referredUsername, phone: referredUsername },
+          // ✅ NEW: camelCase aliases for frontend
+          bonusAmount: parseFloat(bonus.bonus_amount || '0'),
+          depositAmount: parseFloat(bonus.deposit_amount || '0'),
+          linkedDepositBonusId: bonus.linked_deposit_bonus_id
         };
       })
     );
@@ -5799,7 +5804,7 @@ export class SupabaseStorage implements IStorage {
 
   /**
    * Get bonus summary for a user
-   * Calculates from actual tables instead of relying on view
+   * ✅ ENHANCED: Now includes referral count, wagering progress, and detailed breakdown
    */
   async getBonusSummary(userId: string): Promise<any> {
     try {
@@ -5807,20 +5812,34 @@ export class SupabaseStorage implements IStorage {
       const depositBonuses = await this.getDepositBonuses(userId);
       // Get referral bonuses
       const referralBonuses = await this.getReferralBonuses(userId);
+      // Get referral count (users referred by this user)
+      const referredUsers = await this.getUsersReferredBy(userId);
 
       let depositBonusUnlocked = 0;
       let depositBonusLocked = 0;
       let depositBonusCredited = 0;
       let referralBonusCredited = 0;
-      let referralBonusPending = 0;
+      let referralBonusLocked = 0;
+      
+      // Wagering tracking for locked deposit bonus
+      let currentWageringRequired = 0;
+      let currentWageringCompleted = 0;
+      let currentLockedDepositBonus = 0;
+      let currentLinkedReferralBonus = 0;
 
       // Calculate deposit bonus totals by status
       depositBonuses.forEach((bonus: any) => {
-        const amount = bonus.bonusAmount; // Already parsed in getDepositBonuses()
+        const amount = bonus.bonusAmount;
         if (bonus.status === 'unlocked') {
           depositBonusUnlocked += amount;
         } else if (bonus.status === 'locked') {
-          depositBonusLocked += amount; // ✅ FIX: Only 'locked' status (bonuses are created as 'locked')
+          depositBonusLocked += amount;
+          // Track the OLDEST locked bonus wagering (FIFO)
+          if (currentWageringRequired === 0) {
+            currentWageringRequired = bonus.wageringRequired || 0;
+            currentWageringCompleted = bonus.wageringCompleted || 0;
+            currentLockedDepositBonus = amount;
+          }
         } else if (bonus.status === 'credited') {
           depositBonusCredited += amount;
         }
@@ -5828,27 +5847,63 @@ export class SupabaseStorage implements IStorage {
 
       // Calculate referral bonus totals by status
       referralBonuses.forEach((bonus: any) => {
-        const amount = bonus.bonusAmount; // Already parsed in getReferralBonuses()
+        const amount = bonus.bonusAmount;
         if (bonus.status === 'credited') {
           referralBonusCredited += amount;
         } else if (bonus.status === 'pending' || bonus.status === 'locked') {
-          referralBonusPending += amount;
+          referralBonusLocked += amount;
+          // Track linked referral bonus for current wagering
+          if (bonus.linkedDepositBonusId) {
+            currentLinkedReferralBonus += amount;
+          }
         }
       });
 
-      const totalAvailable = depositBonusUnlocked + depositBonusLocked + referralBonusPending;
+      // Calculate wagering progress percentage
+      const wageringProgress = currentWageringRequired > 0 
+        ? Math.min(100, (currentWageringCompleted / currentWageringRequired) * 100)
+        : 0;
+      const wageringRemaining = Math.max(0, currentWageringRequired - currentWageringCompleted);
+
+      // Referral stats
+      const totalReferrals = referredUsers.length;
+      const referralsWithDeposit = referredUsers.filter((u: any) => u.hasDeposited).length;
+
+      const totalAvailable = depositBonusUnlocked + depositBonusLocked + referralBonusLocked;
       const totalCredited = depositBonusCredited + referralBonusCredited;
-      const lifetimeEarnings = depositBonusUnlocked + depositBonusLocked + depositBonusCredited + referralBonusCredited + referralBonusPending;
+      const lifetimeEarnings = totalAvailable + totalCredited;
 
       return {
+        // Deposit bonus breakdown
         depositBonusUnlocked,
         depositBonusLocked,
         depositBonusCredited,
+        
+        // Referral bonus breakdown
         referralBonusCredited,
-        referralBonusPending,
+        referralBonusLocked,
+        referralBonusPending: referralBonusLocked, // Alias for backward compatibility
+        
+        // Totals
         totalAvailable,
         totalCredited,
-        lifetimeEarnings
+        lifetimeEarnings,
+        
+        // ✅ NEW: Wagering progress for current locked bonus
+        wageringRequired: currentWageringRequired,
+        wageringCompleted: currentWageringCompleted,
+        wageringRemaining,
+        wageringProgress: Math.round(wageringProgress * 100) / 100,
+        
+        // ✅ NEW: What will be credited when wagering is complete
+        pendingCreditOnWagering: currentLockedDepositBonus + currentLinkedReferralBonus,
+        pendingDepositBonus: currentLockedDepositBonus,
+        pendingReferralBonus: currentLinkedReferralBonus,
+        
+        // ✅ NEW: Referral stats
+        totalReferrals,
+        referralsWithDeposit,
+        referralCode: null // Will be filled by the API endpoint
       };
     } catch (error) {
       console.error('Error calculating bonus summary:', error);
@@ -5857,10 +5912,21 @@ export class SupabaseStorage implements IStorage {
         depositBonusLocked: 0,
         depositBonusCredited: 0,
         referralBonusCredited: 0,
+        referralBonusLocked: 0,
         referralBonusPending: 0,
         totalAvailable: 0,
         totalCredited: 0,
-        lifetimeEarnings: 0
+        lifetimeEarnings: 0,
+        wageringRequired: 0,
+        wageringCompleted: 0,
+        wageringRemaining: 0,
+        wageringProgress: 0,
+        pendingCreditOnWagering: 0,
+        pendingDepositBonus: 0,
+        pendingReferralBonus: 0,
+        totalReferrals: 0,
+        referralsWithDeposit: 0,
+        referralCode: null
       };
     }
   }

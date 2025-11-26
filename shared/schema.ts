@@ -422,3 +422,45 @@ export interface BettingStats {
   andarCount: number;
   baharCount: number;
 }
+
+// =====================================================
+// PARTNER SYSTEM SCHEMA (Simple - View Game History)
+// =====================================================
+
+// Partners table - separate accounts that can view game history
+export const partners = pgTable("partners", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  phone: varchar("phone", { length: 20 }).notNull().unique(),
+  password_hash: text("password_hash").notNull(),
+  full_name: text("full_name").notNull(),
+  email: text("email"),
+  whatsapp_number: varchar("whatsapp_number", { length: 20 }),
+  
+  // Status and approval
+  status: varchar("status", { length: 20 }).default("pending"), // pending, active, suspended, banned
+  approved_by: varchar("approved_by"),
+  approved_at: timestamp("approved_at"),
+  rejection_reason: text("rejection_reason"),
+  
+  // Timestamps
+  last_login: timestamp("last_login"),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+// Admin partner settings table - global configuration
+export const adminPartnerSettings = pgTable("admin_partner_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  setting_key: varchar("setting_key", { length: 100 }).notNull().unique(),
+  setting_value: text("setting_value").notNull(),
+  description: text("description"),
+  updated_by: varchar("updated_by"),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+// Partner Types
+export type Partner = typeof partners.$inferSelect;
+export type InsertPartner = typeof partners.$inferInsert;
+export type AdminPartnerSetting = typeof adminPartnerSettings.$inferSelect;
+export type PartnerStatus = 'pending' | 'active' | 'suspended' | 'banned';
