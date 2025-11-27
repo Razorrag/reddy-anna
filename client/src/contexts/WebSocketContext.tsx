@@ -976,6 +976,14 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
           updatePlayerWallet(balance);
           console.log(`✅ Instant balance refresh after game complete: ₹${balance}`);
         }
+        
+        // ✅ NEW: Clear referral data cache when bonus credits occur
+        if (type === 'bonus' && amount > 0) {
+          // Clear referral cache to refresh statistics
+          localStorage.removeItem('referral_data_cache');
+          localStorage.removeItem('referral_data_cache_timestamp');
+          console.log(`🔄 Cleared referral data cache due to bonus credit: ₹${amount}`);
+        }
 
         const balanceEvent = new CustomEvent('balance-websocket-update', {
           detail: { balance, amount, type, timestamp: Date.now() }

@@ -465,6 +465,15 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, []); // ✅ FIX: useCallback with empty deps to prevent infinite loops
 
+  // ✅ NEW: Function to manually clear referral cache and force refresh
+  const clearReferralCache = useCallback(() => {
+    localStorage.removeItem('referral_data_cache');
+    localStorage.removeItem('referral_data_cache_timestamp');
+    console.log('🗑️ Manually cleared referral data cache');
+    // Fetch fresh data immediately
+    fetchReferralData(true);
+  }, [fetchReferralData]);
+
   const fetchTransactions = async (append = false) => {
     try {
       if (!append) dispatch({ type: 'SET_LOADING', payload: true });
@@ -900,6 +909,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     fetchAnalytics,
     fetchBonusInfo,
     fetchReferralData,
+    clearReferralCache,
     fetchTransactions,
     fetchGameHistory,
     updateProfile,

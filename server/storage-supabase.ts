@@ -5314,99 +5314,23 @@ export class SupabaseStorage implements IStorage {
    */
   async creditLinkedReferralBonuses(depositBonusId: string, userId: string): Promise<void> {
     try {
-      // Find all locked referral bonuses linked to this deposit bonus
-      const { data: linkedBonuses, error } = await supabaseServer
+      // Find all locked referral bonuses for this user
+      const { data: lockedBonuses, error } = await supabaseServer
         .from('referral_bonuses')
         .select('*')
         .eq('referrer_user_id', userId)
-        .eq('status', 'locked')
-        .or(`linked_deposit_bonus_id.is.null,linked_deposit_bonus_id.eq.${depositBonusId}`);
-          
-      if (unlinkedBonuses && unlinkedBonuses.length > 0) {
-        console.log(`🎁 Found ${unlinkedBonuses.length} referral bonuses to credit (including unlinked)`);
-        await this.creditReferralBonusesList(unlinkedBonuses, userId);
-          
-        // ✅ FIX: Update the linked_deposit_bonus_id for future reference
-        for (const bonus of unlinkedBonuses) {
-          if (!bonus.linked_deposit_bonus_id) {
-            await supabaseServer
-              .from('referral_bonuses')
-              .update({ linked_deposit_bonus_id: depositBonusId })
-              .eq('id', bonus.id);
-          }
-        }
-      }
-      return;
-    }
-      
-    console.log(`🎁 Found ${linkedBonuses.length} linked referral bonuses to credit together`);
-      
-    let totalReferralBonus = 0;
-      
-    for (const refBonus of linkedBonuses) {
-      const refBonusAmount = parseFloat(refBonus.bonus_amount || '0');
-      totalReferralBonus += refBonusAmount;
+        .eq('status', 'locked');
         
-      // Update referral bonus status to credited
-      await supabaseServer
-        .from('referral_bonuses')
-        .update({
-          status: 'credited',
-          credited_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', refBonus.id);
-          
-      // Log the credit
-      await this.logBonusTransaction({
-        userId: userId,
-        bonusType: 'referral_bonus',
-        bonusSourceId: refBonus.id,
-        amount: refBonusAmount,
-        action: 'credited',
-        description: `Referral bonus credited with deposit bonus: ₹${refBonusAmount}`
-      });
-        
-      // Update user_referrals to mark bonus as applied
-      if (refBonus.referral_id) {
-        await supabaseServer
-          .from('user_referrals')
-          .update({
-            bonus_applied: true,
-            bonus_applied_at: new Date().toISOString()
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', refBonus.id);
-          
-        // Log the credit
-        await this.logBonusTransaction({
-          userId: userId,
-          bonusType: 'referral_bonus',
-          bonusSourceId: refBonus.id,
-          amount: refBonusAmount,
-          action: 'credited',
-          description: `Referral bonus credited with deposit bonus: ₹${refBonusAmount}`
-        });
-        
-        // Update user_referrals to mark bonus as applied
-        if (refBonus.referral_id) {
-          await supabaseServer
-            .from('user_referrals')
-            .update({
-              bonus_applied: true,
-              bonus_applied_at: new Date().toISOString()
-            })
-            .eq('id', refBonus.referral_id);
-        }
-        
-        console.log(`✅ Referral bonus ${refBonus.id} credited: ₹${refBonusAmount}`);
+      if (error || !lockedBonuses || lockedBonuses.length === 0) {
+        console.log(`ℹ️ No locked referral bonuses found for user ${userId}`);
+        return;
       }
       
-      // Add total referral bonus to user balance
-      if (totalReferralBonus > 0) {
-        await this.updateUserBalance(userId, totalReferralBonus);
-        console.log(`✅ Total referral bonus credited: ₹${totalReferralBonus} to user ${userId}`);
-      }
+      console.log(`🎁 Found ${lockedBonuses.length} locked referral bonuses to credit`);
+      
+      // Credit all locked referral bonuses
+      await this.creditReferralBonusesList(lockedBonuses, userId);
+      
     } catch (error) {
       console.error('Error crediting linked referral bonuses:', error);
     }
@@ -5724,17 +5648,18 @@ export class SupabaseStorage implements IStorage {
    * Get all users referred by a specific user
    */
   async getUsersReferredBy(referrerId: string): Promise<any[]> {
-    // ✅ FIX: Query from user_referrals table which is the source of truth
-    const { data: referrals, error } = await supabaseServer
-      .from('user_referrals')
+    // ✅ CRITICAL FIX: Query referral_bonuses table for accurate credited amounts
+    const { data: referralBonuses, error } = await supabaseServer
+      .from('referral_bonuses')
       .select(`
         id,
         referred_user_id,
         deposit_amount,
         bonus_amount,
-        bonus_applied,
+        status,
+        credited_at,
         created_at,
-        users!user_referrals_referred_user_id_fkey (
+        users!referral_bonuses_referred_user_id_fkey (
           id,
           phone,
           full_name,
@@ -5745,44 +5670,58 @@ export class SupabaseStorage implements IStorage {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error getting referred users from user_referrals:', error);
-      // Fallback to old method
-      const referrer = await this.getUser(referrerId);
-      if (!referrer || !referrer.referral_code_generated) {
+      console.error('Error getting referred users from referral_bonuses:', error);
+      // Fallback to user_referrals table
+      const { data: referrals, error: fallbackError } = await supabaseServer
+        .from('user_referrals')
+        .select(`
+          id,
+          referred_user_id,
+          deposit_amount,
+          bonus_amount,
+          bonus_applied,
+          created_at,
+          users!user_referrals_referred_user_id_fkey (
+            id,
+            phone,
+            full_name,
+            created_at
+          )
+        `)
+        .eq('referrer_user_id', referrerId)
+        .order('created_at', { ascending: false });
+        
+      if (fallbackError) {
+        console.error('Fallback to user_referrals also failed:', fallbackError);
         return [];
       }
       
-      const { data: users } = await supabaseServer
-        .from('users')
-        .select('id, phone, full_name, created_at')
-        .eq('referral_code', referrer.referral_code_generated)
-        .order('created_at', { ascending: false });
-      
-      return (users || []).map((user: any) => ({
-        id: user.id,
-        phone: user.phone,
-        fullName: user.full_name,
-        createdAt: user.created_at,
-        depositAmount: 0,
-        bonusEarned: 0,
-        bonusApplied: false,
-        bonusStatus: 'pending',
-        hasDeposited: false
+      return (referrals || []).map((r: any) => ({
+        id: r.users?.id || r.referred_user_id,
+        phone: r.users?.phone || '',
+        fullName: r.users?.full_name || '',
+        full_name: r.users?.full_name || '',
+        createdAt: r.users?.created_at || r.created_at,
+        depositAmount: parseFloat(r.deposit_amount || '0'),
+        bonusEarned: parseFloat(r.bonus_amount || '0'),
+        bonusApplied: r.bonus_applied || false,
+        bonusStatus: r.bonus_applied ? 'credited' : 'pending',
+        hasDeposited: parseFloat(r.deposit_amount || '0') > 0
       }));
     }
 
-    // Transform data from user_referrals table
-    return (referrals || []).map((r: any) => ({
-      id: r.users?.id || r.referred_user_id,
-      phone: r.users?.phone || '',
-      fullName: r.users?.full_name || '',
-      full_name: r.users?.full_name || '',
-      createdAt: r.users?.created_at || r.created_at,
-      depositAmount: parseFloat(r.deposit_amount || '0'),
-      bonusEarned: parseFloat(r.bonus_amount || '0'),
-      bonusApplied: r.bonus_applied || false,
-      bonusStatus: r.bonus_applied ? 'credited' : 'pending',
-      hasDeposited: parseFloat(r.deposit_amount || '0') > 0
+    // Transform data from referral_bonuses table (accurate source)
+    return (referralBonuses || []).map((rb: any) => ({
+      id: rb.users?.id || rb.referred_user_id,
+      phone: rb.users?.phone || '',
+      fullName: rb.users?.full_name || '',
+      full_name: rb.users?.full_name || '',
+      createdAt: rb.users?.created_at || rb.created_at,
+      depositAmount: parseFloat(rb.deposit_amount || '0'),
+      bonusEarned: rb.status === 'credited' ? parseFloat(rb.bonus_amount || '0') : 0,
+      bonusApplied: rb.status === 'credited',
+      bonusStatus: rb.status,
+      hasDeposited: parseFloat(rb.deposit_amount || '0') > 0
     }));
   }
 

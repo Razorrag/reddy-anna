@@ -54,6 +54,7 @@ const Profile: React.FC = () => {
     fetchGameHistory,
     updateProfile,
     fetchReferralData,
+    clearReferralCache,
     fetchUserProfile  // ✅ ADDED: Profile data fetcher
   } = useUserProfile();
   const { balance, refreshBalance } = useBalance();
@@ -1728,7 +1729,17 @@ const Profile: React.FC = () => {
 
               <Card className="bg-black/50 border-gold/30">
                 <CardHeader>
-                  <CardTitle className="text-gold">Referral Statistics</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-gold">Referral Statistics</CardTitle>
+                    <Button
+                      onClick={() => clearReferralCache()}
+                      variant="ghost"
+                      size="sm"
+                      className="text-gold/60 hover:text-gold hover:bg-gold/10"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
