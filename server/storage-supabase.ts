@@ -5648,24 +5648,10 @@ export class SupabaseStorage implements IStorage {
    * Get all users referred by a specific user
    */
   async getUsersReferredBy(referrerId: string): Promise<any[]> {
-    // ✅ CRITICAL FIX: Query referral_bonuses table for accurate credited amounts
+    // ✅ CRITICAL FIX: Use simple query first, then manually join with users
     const { data: referralBonuses, error } = await supabaseServer
       .from('referral_bonuses')
-      .select(`
-        id,
-        referred_user_id,
-        deposit_amount,
-        bonus_amount,
-        status,
-        credited_at,
-        created_at,
-        users!referral_bonuses_referred_user_id_fkey (
-          id,
-          phone,
-          full_name,
-          created_at
-        )
-      `)
+      .select('*')
       .eq('referrer_user_id', referrerId)
       .order('created_at', { ascending: false });
 
@@ -5711,18 +5697,37 @@ export class SupabaseStorage implements IStorage {
     }
 
     // Transform data from referral_bonuses table (accurate source)
-    return (referralBonuses || []).map((rb: any) => ({
-      id: rb.users?.id || rb.referred_user_id,
-      phone: rb.users?.phone || '',
-      fullName: rb.users?.full_name || '',
-      full_name: rb.users?.full_name || '',
-      createdAt: rb.users?.created_at || rb.created_at,
-      depositAmount: parseFloat(rb.deposit_amount || '0'),
-      bonusEarned: rb.status === 'credited' ? parseFloat(rb.bonus_amount || '0') : 0,
-      bonusApplied: rb.status === 'credited',
-      bonusStatus: rb.status,
-      hasDeposited: parseFloat(rb.deposit_amount || '0') > 0
-    }));
+    // Manually fetch user information for each referral bonus
+    const transformedData = [];
+    
+    for (const rb of referralBonuses || []) {
+      let userInfo = null;
+      
+      // Fetch user information separately
+      if (rb.referred_user_id) {
+        const { data: user } = await supabaseServer
+          .from('users')
+          .select('id, phone, full_name, created_at')
+          .eq('id', rb.referred_user_id)
+          .single();
+        userInfo = user;
+      }
+      
+      transformedData.push({
+        id: userInfo?.id || rb.referred_user_id,
+        phone: userInfo?.phone || '',
+        fullName: userInfo?.full_name || '',
+        full_name: userInfo?.full_name || '',
+        createdAt: userInfo?.created_at || rb.created_at,
+        depositAmount: parseFloat(rb.deposit_amount || '0'),
+        bonusEarned: rb.status === 'credited' ? parseFloat(rb.bonus_amount || '0') : 0,
+        bonusApplied: rb.status === 'credited',
+        bonusStatus: rb.status,
+        hasDeposited: parseFloat(rb.deposit_amount || '0') > 0
+      });
+    }
+    
+    return transformedData;
   }
 
   /**

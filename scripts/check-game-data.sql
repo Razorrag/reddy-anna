@@ -53,6 +53,55 @@ LEFT JOIN users u_referred ON ur.referred_user_id = u_referred.id
 WHERE ur.created_at >= NOW() - INTERVAL '7 days'
 ORDER BY ur.created_at DESC;
 
+-- 6. Check if anyone used referral code 3161E17D
+SELECT 
+    u.id,
+    u.phone,
+    u.referral_code,
+    u.created_at
+FROM users u
+WHERE u.referral_code = (
+    SELECT referral_code_generated 
+    FROM users 
+    WHERE id = '8209093944'
+);
+
+-- 7. Check specifically for referral code 3161E17D
+SELECT 
+    u.id,
+    u.phone,
+    u.referral_code,
+    u.created_at,
+    'Used referral code 3161E17D' as info
+FROM users u
+WHERE u.referral_code = '3161E17D';
+
+-- 8. Check if there are any user_referrals for this referrer
+SELECT 
+    ur.id,
+    ur.referred_user_id,
+    ur.deposit_amount,
+    ur.bonus_amount,
+    ur.bonus_applied,
+    ur.created_at,
+    u_referred.phone as referred_phone
+FROM user_referrals ur
+LEFT JOIN users u_referred ON ur.referred_user_id = u_referred.id
+WHERE ur.referrer_user_id = '8209093944';
+
+-- 9. Check if there are any referral_bonuses for this referrer
+SELECT 
+    rb.id,
+    rb.referred_user_id,
+    rb.bonus_amount,
+    rb.status,
+    rb.created_at,
+    rb.credited_at,
+    u_referred.phone as referred_phone
+FROM referral_bonuses rb
+LEFT JOIN users u_referred ON rb.referred_user_id = u_referred.id
+WHERE rb.referrer_user_id = '8209093944';
+
 -- ====================================
 -- GAME DATA DIAGNOSTIC QUERIES
 -- ====================================
