@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getSupportWhatsAppNumberAsync, createWhatsAppUrl } from "@/lib/whatsapp-helper";
 
 export default function Login() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [formData, setFormData] = useState({
     phone: '',
     password: ''
@@ -21,6 +21,14 @@ export default function Login() {
   const [error, setError] = useState('');
   const [showFlashScreen, setShowFlashScreen] = useState(false);
   const { login } = useAuth();
+
+  // Reset flash screen state when component mounts OR when location changes
+  // This ensures flash screen shows EVERY TIME user logs in
+  useEffect(() => {
+    console.log('Login page mounted/location changed - resetting flash screen');
+    setShowFlashScreen(false);
+    setError('');
+  }, [location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
