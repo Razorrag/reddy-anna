@@ -5377,10 +5377,13 @@ export class SupabaseStorage implements IStorage {
         deposit_amount: data.depositAmount,
         bonus_amount: data.bonusAmount,
         bonus_percentage: data.bonusPercentage,
-        status: 'locked', // ✅ Locked until linked deposit bonus is credited
-        wagering_required: 0, // ✅ No separate wagering - linked to deposit bonus
+        linked_deposit_bonus_id: linkedDepositBonusId,
+        status: 'locked', // ✅ FIXED: Start as 'locked' (not 'pending')
+        wagering_required: 0, // ✅ FIXED: No separate wagering requirement
         wagering_completed: 0,
-        linked_deposit_bonus_id: linkedDepositBonusId // ✅ NEW: Link to deposit bonus
+        notes: `Linked to deposit bonus ${linkedDepositBonusId}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       })
       .select('id')
       .single();
@@ -5488,6 +5491,19 @@ export class SupabaseStorage implements IStorage {
     });
     
     console.log(`✅ Referral bonus credited to user ${bonus.referrer_user_id}: ₹${bonusAmount}`);
+  }
+
+  /**
+   * Credit multiple referral bonuses from a list
+   */
+  async creditReferralBonusesList(bonuses: any[], userId: string): Promise<void> {
+    for (const bonus of bonuses) {
+      try {
+        await this.creditReferralBonus(bonus.id);
+      } catch (error: any) {
+        console.error(`❌ Error crediting referral bonus ${bonus.id}:`, error);
+      }
+    }
   }
 
   /**
@@ -5648,12 +5664,20 @@ export class SupabaseStorage implements IStorage {
    * Get all users referred by a specific user
    */
   async getUsersReferredBy(referrerId: string): Promise<any[]> {
-    // ✅ CRITICAL FIX: Use simple query first, then manually join with users
+    // ✅ CRITICAL FIX: Use referral_bonuses table with proper join to users
     console.log('🔍 DEBUG getUsersReferredBy for referrerId:', referrerId);
     
     const { data: referralBonuses, error } = await supabaseServer
       .from('referral_bonuses')
-      .select('*')
+      .select(`
+        *,
+        users!referral_bonuses_referred_user_id_fkey (
+          id,
+          phone,
+          full_name,
+          created_at
+        )
+      `)
       .eq('referrer_user_id', referrerId)
       .order('created_at', { ascending: false });
       
@@ -5700,39 +5724,22 @@ export class SupabaseStorage implements IStorage {
       }));
     }
 
-    // Transform data from referral_bonuses table (accurate source)
-    // Manually fetch user information for each referral bonus
-    const transformedData = [];
-    
-    for (const rb of referralBonuses || []) {
-      let userInfo = null;
-      
-      // Fetch user information separately
-      if (rb.referred_user_id) {
-        const { data: user } = await supabaseServer
-          .from('users')
-          .select('id, phone, full_name, created_at')
-          .eq('id', rb.referred_user_id)
-          .single();
-        userInfo = user;
-      }
-      
-      transformedData.push({
-        id: userInfo?.id || rb.referred_user_id,
-        phone: userInfo?.phone || '',
-        fullName: userInfo?.full_name || '',
-        full_name: userInfo?.full_name || '',
-        createdAt: userInfo?.created_at || rb.created_at,
-        depositAmount: parseFloat(rb.deposit_amount || '0'),
-        bonusEarned: rb.status === 'credited' ? parseFloat(rb.bonus_amount || '0') : 0,
-        bonusApplied: rb.status === 'credited',
-        bonusStatus: rb.status,
-        hasDeposited: parseFloat(rb.deposit_amount || '0') > 0
-      });
-    }
-    
-    console.log('🔍 DEBUG Final transformedData:', transformedData);
-    return transformedData;
+    // ✅ FIXED: Map referral_bonuses data properly
+    return (referralBonuses || []).map((rb: any) => ({
+      id: rb.users?.id || rb.referred_user_id,
+      phone: rb.users?.phone || '',
+      fullName: rb.users?.full_name || '',
+      full_name: rb.users?.full_name || '',
+      createdAt: rb.users?.created_at || rb.created_at,
+      depositAmount: parseFloat(rb.deposit_amount || '0'),
+      bonusEarned: parseFloat(rb.bonus_amount || '0'),
+      bonusApplied: rb.status === 'credited',
+      bonusStatus: rb.status || 'locked',
+      hasDeposited: parseFloat(rb.deposit_amount || '0') > 0,
+      referralBonusId: rb.id,
+      referralBonusStatus: rb.status,
+      referralBonusAmount: parseFloat(rb.bonus_amount || '0')
+    }));
   }
 
   /**
