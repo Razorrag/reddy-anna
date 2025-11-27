@@ -1745,7 +1745,7 @@ const Profile: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-4 bg-black/30 rounded-lg">
                       <div className="text-2xl font-bold text-gold">
-                        {profileState.referralData?.referredUsers?.length || 0}
+                        {Math.floor((profileState.bonusInfo?.referralBonus || 0) / 2500)}
                       </div>
                       <div className="text-white/60 text-sm">Total Referrals</div>
                     </div>
