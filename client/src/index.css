@@ -376,6 +376,20 @@ button, input, select, textarea {
   animation: slideInRight 0.5s ease-out;
 }
 
+/* Shimmer animation for loading bars */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .btn-gold {
