@@ -854,9 +854,12 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     };
 
     // Handle bonus updates from WebSocket
-    const handleBonusUpdate = async (event: Event) => {
-      const customEvent = event as CustomEvent;
+    const handleBonusUpdate = async (customEvent: any) => {
       console.log('🎁 Bonus update received:', customEvent.detail);
+      // ✅ CRITICAL FIX: Clear referral cache when bonuses change
+      localStorage.removeItem('referral_data_cache');
+      localStorage.removeItem('referral_data_cache_timestamp');
+      
       // Refresh bonus summary/bonus info, analytics, AND referral data when bonus changes
       await Promise.all([
         fetchBonusInfo(),

@@ -1,5 +1,62 @@
 -- Check if game data exists with card information
 
+-- ====================================
+-- REFERRAL DATA DIAGNOSTIC QUERIES
+-- ====================================
+
+-- 1. Check user_referrals table
+SELECT 
+    'user_referrals count' as info,
+    COUNT(*) as count
+FROM user_referrals;
+
+-- 2. Check referral_bonuses table
+SELECT 
+    'referral_bonuses count' as info,
+    COUNT(*) as count
+FROM referral_bonuses;
+
+-- 3. Check referral bonuses by status
+SELECT 
+    status,
+    COUNT(*) as count,
+    SUM(bonus_amount) as total_amount
+FROM referral_bonuses
+GROUP BY status;
+
+-- 4. Find referral bonuses for 'jack' (example user)
+SELECT 
+    rb.id,
+    rb.bonus_amount,
+    rb.status,
+    rb.credited_at,
+    u_referred.phone as referred_phone,
+    u_referrer.phone as referrer_phone
+FROM referral_bonuses rb
+LEFT JOIN users u_referred ON rb.referred_user_id = u_referred.id
+LEFT JOIN users u_referrer ON rb.referrer_user_id = u_referrer.id
+WHERE u_referred.phone LIKE '%jack%' OR u_referrer.phone LIKE '%jack%'
+ORDER BY rb.created_at DESC;
+
+-- 5. Check recent referral activity
+SELECT 
+    ur.id,
+    ur.deposit_amount,
+    ur.bonus_amount,
+    ur.bonus_applied,
+    u_referrer.phone as referrer_phone,
+    u_referred.phone as referred_phone,
+    ur.created_at
+FROM user_referrals ur
+LEFT JOIN users u_referrer ON ur.referrer_user_id = u_referrer.id
+LEFT JOIN users u_referred ON ur.referred_user_id = u_referred.id
+WHERE ur.created_at >= NOW() - INTERVAL '7 days'
+ORDER BY ur.created_at DESC;
+
+-- ====================================
+-- GAME DATA DIAGNOSTIC QUERIES
+-- ====================================
+
 -- 1. Count total games in game_sessions
 SELECT 
     'Total Games in game_sessions' as info,

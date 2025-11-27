@@ -5319,28 +5319,61 @@ export class SupabaseStorage implements IStorage {
         .from('referral_bonuses')
         .select('*')
         .eq('referrer_user_id', userId)
-        .eq('linked_deposit_bonus_id', depositBonusId)
-        .eq('status', 'locked');
-        
-      if (error || !linkedBonuses || linkedBonuses.length === 0) {
-        console.log(`ℹ️ No linked referral bonuses found for deposit bonus ${depositBonusId}`);
-        return;
+        .eq('status', 'locked')
+        .or(`linked_deposit_bonus_id.is.null,linked_deposit_bonus_id.eq.${depositBonusId}`);
+          
+      if (unlinkedBonuses && unlinkedBonuses.length > 0) {
+        console.log(`🎁 Found ${unlinkedBonuses.length} referral bonuses to credit (including unlinked)`);
+        await this.creditReferralBonusesList(unlinkedBonuses, userId);
+          
+        // ✅ FIX: Update the linked_deposit_bonus_id for future reference
+        for (const bonus of unlinkedBonuses) {
+          if (!bonus.linked_deposit_bonus_id) {
+            await supabaseServer
+              .from('referral_bonuses')
+              .update({ linked_deposit_bonus_id: depositBonusId })
+              .eq('id', bonus.id);
+          }
+        }
       }
+      return;
+    }
       
-      console.log(`🎁 Found ${linkedBonuses.length} linked referral bonuses to credit together`);
+    console.log(`🎁 Found ${linkedBonuses.length} linked referral bonuses to credit together`);
       
-      let totalReferralBonus = 0;
+    let totalReferralBonus = 0;
       
-      for (const refBonus of linkedBonuses) {
-        const refBonusAmount = parseFloat(refBonus.bonus_amount || '0');
-        totalReferralBonus += refBonusAmount;
+    for (const refBonus of linkedBonuses) {
+      const refBonusAmount = parseFloat(refBonus.bonus_amount || '0');
+      totalReferralBonus += refBonusAmount;
         
-        // Update referral bonus status to credited
+      // Update referral bonus status to credited
+      await supabaseServer
+        .from('referral_bonuses')
+        .update({
+          status: 'credited',
+          credited_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', refBonus.id);
+          
+      // Log the credit
+      await this.logBonusTransaction({
+        userId: userId,
+        bonusType: 'referral_bonus',
+        bonusSourceId: refBonus.id,
+        amount: refBonusAmount,
+        action: 'credited',
+        description: `Referral bonus credited with deposit bonus: ₹${refBonusAmount}`
+      });
+        
+      // Update user_referrals to mark bonus as applied
+      if (refBonus.referral_id) {
         await supabaseServer
-          .from('referral_bonuses')
+          .from('user_referrals')
           .update({
-            status: 'credited',
-            credited_at: new Date().toISOString(),
+            bonus_applied: true,
+            bonus_applied_at: new Date().toISOString()
             updated_at: new Date().toISOString()
           })
           .eq('id', refBonus.id);
