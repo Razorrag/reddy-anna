@@ -1745,13 +1745,13 @@ const Profile: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-4 bg-black/30 rounded-lg">
                       <div className="text-2xl font-bold text-gold">
-                        {profileState.referralData?.totalReferrals || 0}
+                        {profileState.referralData?.referredUsers?.length || 0}
                       </div>
                       <div className="text-white/60 text-sm">Total Referrals</div>
                     </div>
                     <div className="text-center p-4 bg-black/30 rounded-lg">
                       <div className="text-2xl font-bold text-green-400">
-                        {formatCurrency(profileState.referralData?.totalReferralEarnings || 0)}
+                        {formatCurrency(profileState.bonusInfo?.referralBonus || 0)}
                       </div>
                       <div className="text-white/60 text-sm">Referral Earnings</div>
                     </div>

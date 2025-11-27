@@ -5649,11 +5649,15 @@ export class SupabaseStorage implements IStorage {
    */
   async getUsersReferredBy(referrerId: string): Promise<any[]> {
     // ✅ CRITICAL FIX: Use simple query first, then manually join with users
+    console.log('🔍 DEBUG getUsersReferredBy for referrerId:', referrerId);
+    
     const { data: referralBonuses, error } = await supabaseServer
       .from('referral_bonuses')
       .select('*')
       .eq('referrer_user_id', referrerId)
       .order('created_at', { ascending: false });
+      
+    console.log('🔍 DEBUG referralBonuses query result:', { error, data: referralBonuses });
 
     if (error) {
       console.error('Error getting referred users from referral_bonuses:', error);
@@ -5727,6 +5731,7 @@ export class SupabaseStorage implements IStorage {
       });
     }
     
+    console.log('🔍 DEBUG Final transformedData:', transformedData);
     return transformedData;
   }
 

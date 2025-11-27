@@ -377,7 +377,13 @@ export const getUserReferralData = async (req: Request, res: Response) => {
       return sum + parseFloat(String(u.bonusEarned || '0'));
     }, 0);
 
-    res.json({
+    // ✅ DEBUG: Log what we're returning
+    console.log('🔍 DEBUG getUserReferralData for user:', req.user.id);
+    console.log('🔍 DEBUG referredUsers:', referredUsers);
+    console.log('🔍 DEBUG totalReferrals:', totalReferrals);
+    console.log('🔍 DEBUG totalReferralEarnings:', totalReferralEarnings);
+
+    const responseData = {
       success: true,
       data: {
         referralCode,
@@ -393,7 +399,10 @@ export const getUserReferralData = async (req: Request, res: Response) => {
           bonusStatus: u.bonusStatus || 'pending'
         }))
       }
-    });
+    };
+    
+    console.log('🔍 DEBUG Final API response:', responseData);
+    res.json(responseData);
   } catch (error: any) {
     console.error('Get user referral data error:', error);
     res.status(500).json({
