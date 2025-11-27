@@ -5392,17 +5392,22 @@ export class SupabaseStorage implements IStorage {
     bonusAmount: number;
     bonusPercentage: number;
   }): Promise<string> {
-    // ✅ NEW: Find the referrer's LATEST locked deposit bonus to link to
+    // ✅ CRITICAL FIX: Find the referrer's LATEST deposit bonus (locked or unlocked) to link to
+    // The referral bonus should be linked to whatever deposit bonus the referrer currently has
+    // This ensures the referral bonus gets credited together with the referrer's deposit bonus
     const { data: latestDepositBonus } = await supabaseServer
       .from('deposit_bonuses')
-      .select('id, wagering_required, wagering_completed')
+      .select('id, status, wagering_required, wagering_completed')
       .eq('user_id', data.referrerUserId)
-      .eq('status', 'locked')
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
+    // ✅ FIX: Use the latest deposit bonus regardless of status
+    // If no deposit bonus exists, we'll still create the referral bonus but it won't be linked
     const linkedDepositBonusId = latestDepositBonus?.id || null;
+    
+    console.log(`🔗 Creating referral bonus for referrer ${data.referrerUserId}, linking to deposit bonus: ${linkedDepositBonusId}`);
     
     // ✅ NEW: Referral bonus has NO separate wagering - it's linked to deposit bonus
     // wagering_required = 0 means it relies on linked deposit bonus

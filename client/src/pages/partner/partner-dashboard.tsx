@@ -25,7 +25,6 @@ interface GameHistoryItem {
   openingCard: string | null;
   winner: string | null;
   winningCard: string | null;
-  totalCards: number;
   totalPlayers: number;
   totalBets: number;
   totalWinnings: number;
@@ -98,7 +97,7 @@ export default function PartnerDashboard() {
   };
 
   const exportToCSV = () => {
-    const headers = ['Date', 'Opening Card', 'Winner', 'Winning Card', 'Andar Bets', 'Bahar Bets', 'Total Bets', 'Payout', 'Profit/Loss'];
+    const headers = ['Date', 'Opening Card', 'Winner', 'Winning Card', 'Profit/Loss'];
     const csvContent = [
       headers.join(','),
       ...gameHistory.map(game => [
@@ -106,10 +105,6 @@ export default function PartnerDashboard() {
         game.openingCard || 'N/A',
         game.winner?.toUpperCase() || 'N/A',
         game.winningCard || 'N/A',
-        game.andarTotalBet,
-        game.baharTotalBet,
-        game.totalBets,
-        game.housePayout,
         game.profitLoss
       ].join(','))
     ].join('\n');
@@ -118,7 +113,7 @@ export default function PartnerDashboard() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `game-history-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `partner-game-history-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
   };
 
@@ -269,13 +264,9 @@ export default function PartnerDashboard() {
                     <thead>
                       <tr className="border-b border-purple-500/30">
                         <th className="text-left p-3 text-purple-300">Date</th>
-                        <th className="text-center p-3 text-purple-300">Opening</th>
+                        <th className="text-center p-3 text-purple-300">Opening Card</th>
                         <th className="text-center p-3 text-purple-300">Winner</th>
-                        <th className="text-center p-3 text-purple-300">Winning</th>
-                        <th className="text-right p-3 text-purple-300">Andar</th>
-                        <th className="text-right p-3 text-purple-300">Bahar</th>
-                        <th className="text-right p-3 text-purple-300">Total Bets</th>
-                        <th className="text-right p-3 text-purple-300">Payout</th>
+                        <th className="text-center p-3 text-purple-300">Winning Card</th>
                         <th className="text-right p-3 text-purple-300">Profit/Loss</th>
                       </tr>
                     </thead>
@@ -284,20 +275,16 @@ export default function PartnerDashboard() {
                         <tr key={game.id} className={`border-b border-purple-500/20 ${index % 2 === 0 ? 'bg-purple-900/10' : ''}`}>
                           <td className="p-3 text-gray-300">{formatDate(game.createdAt)}</td>
                           <td className="p-3 text-center">
-                            <span className="text-lg font-bold text-white">{game.openingCard || '-'}</span>
+                            <span className="text-xl font-bold text-white">{game.openingCard || 'N/A'}</span>
                           </td>
                           <td className="p-3 text-center">
                             <span className={`font-semibold ${game.winner === 'andar' ? 'text-red-400' : 'text-blue-400'}`}>
-                              {game.winner?.toUpperCase() || '-'}
+                              {game.winner?.toUpperCase() || 'N/A'}
                             </span>
                           </td>
                           <td className="p-3 text-center">
-                            <span className="text-lg font-bold text-white">{game.winningCard || '-'}</span>
+                            <span className="text-xl font-bold text-white">{game.winningCard || 'N/A'}</span>
                           </td>
-                          <td className="p-3 text-right text-red-400">{formatCurrency(game.andarTotalBet)}</td>
-                          <td className="p-3 text-right text-blue-400">{formatCurrency(game.baharTotalBet)}</td>
-                          <td className="p-3 text-right text-white">{formatCurrency(game.totalBets)}</td>
-                          <td className="p-3 text-right text-gray-300">{formatCurrency(game.housePayout)}</td>
                           <td className="p-3 text-right">
                             <span className={`font-semibold ${game.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                               {formatCurrency(game.profitLoss)}

@@ -19,6 +19,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showFlashScreen, setShowFlashScreen] = useState(false);
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,8 +75,11 @@ export default function Login() {
       login(userData, token, refreshToken);
       console.log('✅ Login successful - token stored');
 
-      // Redirect to game immediately after successful login
-      setLocation('/game');
+      // Show flash screen overlay for 2.5 seconds before redirecting to game
+      setShowFlashScreen(true);
+      setTimeout(() => {
+        setLocation('/game');
+      }, 2500);
     } catch (err: any) {
       console.error('Login error:', err);
       
@@ -132,7 +136,27 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+    <>
+      {/* Flash Screen Overlay - Shows after successful login */}
+      {showFlashScreen && (
+        <div className="fixed inset-0 w-screen h-screen overflow-hidden bg-black flex items-center justify-center z-[9999] animate-fade-in">
+          <img
+            src="/flash_screen.jpeg"
+            alt="Loading Game"
+            className="w-full h-full object-cover"
+          />
+          {/* Loading indicator */}
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+            <div className="flex space-x-2">
+              <div className="w-3 h-3 bg-gold rounded-full animate-bounce"></div>
+              <div className="w-3 h-3 bg-gold rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+              <div className="w-3 h-3 bg-gold rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-20 left-10 w-32 h-32 bg-gold/10 rounded-full blur-xl animate-pulse"></div>
@@ -258,5 +282,6 @@ export default function Login() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

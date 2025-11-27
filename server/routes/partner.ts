@@ -214,7 +214,7 @@ router.get('/game-history', requirePartnerAuth, async (req: Request, res: Respon
     const gameIds = games?.map(g => g.game_id) || [];
     const { data: sessions } = await supabaseServer
       .from('game_sessions')
-      .select('game_id, opening_card, winner, winning_card, total_cards')
+      .select('game_id, opening_card, winner, winning_card')
       .in('game_id', gameIds);
     
     const sessionMap = new Map(sessions?.map(s => [s.game_id, s]) || []);
@@ -240,7 +240,6 @@ router.get('/game-history', requirePartnerAuth, async (req: Request, res: Respon
         openingCard: session?.opening_card || null,
         winner: session?.winner || null,
         winningCard: session?.winning_card || null,
-        totalCards: session?.total_cards || 0,
         // Counts unchanged
         totalPlayers: game.total_players || 0,
         andarBetsCount: game.andar_bets_count || 0,
