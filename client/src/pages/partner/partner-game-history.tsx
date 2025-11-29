@@ -1,14 +1,15 @@
-// 🤝 PARTNER DASHBOARD - Complete with Wallet & Earnings
+// 🤝 PARTNER GAME HISTORY - Main view after login (like player game page)
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePartnerAuth } from "@/contexts/PartnerAuthContext";
 import {
   History,
-  LogOut,
+  User,
+  Wallet,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -16,14 +17,8 @@ import {
   Search,
   TrendingUp,
   TrendingDown,
-  BarChart3,
-  Wallet,
-  DollarSign,
-  FileText
+  BarChart3
 } from "lucide-react";
-import WalletCard from "./components/WalletCard";
-import EarningsTable from "./components/EarningsTable";
-import WithdrawalRequestsTable from "./components/WithdrawalRequestsTable";
 
 interface GameHistoryItem {
   id: string;
@@ -44,38 +39,14 @@ interface GameHistoryItem {
   housePayout: number;
 }
 
-export default function PartnerDashboard() {
-  const { partner, token, logout } = usePartnerAuth();
+export default function PartnerGameHistory() {
+  const { partner, token } = usePartnerAuth();
+  const [, setLocation] = useLocation();
   const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Wallet & Earnings State
-  const [walletData, setWalletData] = useState({
-    wallet_balance: "0",
-    total_earned: "0",
-    total_withdrawn: "0",
-    min_withdrawal_amount: "5000",
-    commission_rate: "10",
-    share_percentage: "50"
-  });
-  
-  const [dashboardStats, setDashboardStats] = useState({
-    total_games: 0,
-    total_earnings: "0",
-    current_balance: "0",
-    total_withdrawn: "0",
-    pending_withdrawals: "0",
-    earnings_this_month: "0",
-    earnings_today: "0",
-    avg_earning_per_game: "0",
-    last_earning_date: null
-  });
-  
-  const [earnings, setEarnings] = useState([]);
-  const [earningsLoading, setEarningsLoading] = useState(false);
-  
-  const [withdrawalRequests, setWithdrawalRequests] = useState([]);
-  const [withdrawalsLoading, setWithdrawalsLoading] = useState(false);
+  // Wallet balance for top bar
+  const [walletBalance, setWalletBalance] = useState("0");
   
   const [filters, setFilters] = useState({
     dateFrom: '',
@@ -123,89 +94,22 @@ export default function PartnerDashboard() {
     }
   };
 
-  // Fetch wallet data
-  const fetchWalletData = async () => {
+  const fetchWalletBalance = async () => {
     try {
       const response = await fetch('/api/partner/wallet', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
       if (data.success) {
-        setWalletData(data.data);
+        setWalletBalance(data.data.wallet_balance);
       }
     } catch (err) {
       console.error('Error fetching wallet:', err);
     }
   };
-  
-  // Fetch dashboard stats
-  const fetchDashboardStats = async () => {
-    try {
-      const response = await fetch('/api/partner/wallet/stats', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setDashboardStats(data.data);
-      }
-    } catch (err) {
-      console.error('Error fetching dashboard stats:', err);
-    }
-  };
-  
-  // Fetch earnings history
-  const fetchEarnings = async () => {
-    setEarningsLoading(true);
-    try {
-      const response = await fetch('/api/partner/wallet/earnings?page=1&limit=10', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setEarnings(data.data.earnings);
-      }
-    } catch (err) {
-      console.error('Error fetching earnings:', err);
-    } finally {
-      setEarningsLoading(false);
-    }
-  };
-  
-  // Fetch withdrawal requests
-  const fetchWithdrawalRequests = async () => {
-    setWithdrawalsLoading(true);
-    try {
-      const response = await fetch('/api/partner/wallet/withdrawals?page=1&limit=10', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setWithdrawalRequests(data.data.requests);
-      }
-    } catch (err) {
-      console.error('Error fetching withdrawal requests:', err);
-    } finally {
-      setWithdrawalsLoading(false);
-    }
-  };
-  
-  // Refresh all data
-  const refreshAllData = () => {
-    fetchWalletData();
-    fetchDashboardStats();
-    fetchEarnings();
-    fetchWithdrawalRequests();
-    fetchGameHistory();
-  };
 
   useEffect(() => {
-    fetchWalletData();
-    fetchDashboardStats();
-    fetchEarnings();
-    fetchWithdrawalRequests();
-  }, [token]);
-
-  useEffect(() => {
+    fetchWalletBalance();
     fetchGameHistory();
   }, [token, filters.page, filters.dateFrom, filters.dateTo, filters.sortBy, filters.sortOrder]);
 
@@ -241,125 +145,50 @@ export default function PartnerDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-      {/* Header */}
-      <div className="bg-black/40 border-b border-purple-500/30 p-4">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex-1">
-            <h1 className="text-2xl md:text-3xl font-bold text-purple-400">Partner Dashboard</h1>
-            <p className="text-gray-400">Welcome, {partner?.full_name}</p>
-          </div>
-          
-          {/* Wallet Balance Display */}
-          <div className="flex items-center gap-4">
-            <div className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-lg px-6 py-3">
-              <div className="flex items-center gap-3">
-                <Wallet className="h-6 w-6 text-purple-400" />
-                <div>
-                  <p className="text-xs text-gray-400">Wallet Balance</p>
-                  <p className="text-xl font-bold text-white">
-                    {formatCurrency(parseFloat(walletData.wallet_balance))}
-                  </p>
-                </div>
-              </div>
+      {/* Top Bar - Similar to Player Game */}
+      <div className="bg-black/40 border-b border-purple-500/30">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex justify-between items-center">
+            {/* Left - Title */}
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold text-purple-400">Partner Dashboard</h1>
+              <p className="text-sm text-gray-400">{partner?.full_name}</p>
             </div>
             
-            <Button variant="outline" className="border-purple-400/30 text-purple-300 hover:bg-purple-400/10" onClick={logout}>
-              <LogOut className="h-4 w-4 mr-2" /> Logout
-            </Button>
+            {/* Right - Wallet & Profile Buttons */}
+            <div className="flex items-center gap-2">
+              {/* Partner Wallet Button */}
+              <button
+                onClick={() => setLocation('/partner/wallet')}
+                className="flex items-center space-x-2 bg-gradient-to-r from-purple-600/30 to-blue-600/30 border-2 border-purple-400 rounded-xl px-4 py-2 hover:from-purple-600/40 hover:to-blue-600/40 hover:border-purple-300 transition-all active:scale-95 shadow-lg shadow-purple-500/20"
+              >
+                <Wallet className="w-5 h-5 text-purple-300" />
+                <div className="flex flex-col leading-tight -space-y-0.5">
+                  <span className="text-purple-300/70 text-[9px] uppercase tracking-wide font-semibold">
+                    Wallet
+                  </span>
+                  <span className="text-purple-300 font-bold text-sm">
+                    {formatCurrency(parseFloat(walletBalance))}
+                  </span>
+                </div>
+              </button>
+
+              {/* Profile Button */}
+              <button
+                onClick={() => setLocation('/partner/profile')}
+                className="flex items-center justify-center w-10 h-10 bg-gray-800/80 border-2 border-purple-500/30 rounded-full hover:bg-gray-700/80 hover:border-purple-400 transition-all active:scale-95"
+                aria-label="Profile"
+              >
+                <User className="w-5 h-5 text-purple-300" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto p-4 md:p-6">
-        {/* Tabs for Navigation */}
-        <Tabs defaultValue="wallet" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 bg-black/40 border border-purple-500/30">
-            <TabsTrigger value="wallet" className="data-[state=active]:bg-purple-600">
-              <Wallet className="h-4 w-4 mr-2" />
-              Wallet
-            </TabsTrigger>
-            <TabsTrigger value="earnings" className="data-[state=active]:bg-purple-600">
-              <DollarSign className="h-4 w-4 mr-2" />
-              Earnings
-            </TabsTrigger>
-            <TabsTrigger value="withdrawals" className="data-[state=active]:bg-purple-600">
-              <FileText className="h-4 w-4 mr-2" />
-              Withdrawals
-            </TabsTrigger>
-            <TabsTrigger value="history" className="data-[state=active]:bg-purple-600">
-              <History className="h-4 w-4 mr-2" />
-              Game History
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Wallet Tab */}
-          <TabsContent value="wallet" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Wallet Card */}
-              <WalletCard
-                walletBalance={parseFloat(walletData.wallet_balance)}
-                totalEarned={parseFloat(walletData.total_earned)}
-                totalWithdrawn={parseFloat(walletData.total_withdrawn)}
-                minWithdrawal={parseFloat(walletData.min_withdrawal_amount)}
-                earningsToday={parseFloat(dashboardStats.earnings_today)}
-                earningsThisMonth={parseFloat(dashboardStats.earnings_this_month)}
-                onWithdrawalSuccess={refreshAllData}
-              />
-              
-              {/* Stats Cards */}
-              <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="bg-black/40 border-purple-500/30">
-                  <CardContent className="pt-6 text-center">
-                    <BarChart3 className="w-8 h-8 text-purple-400 mx-auto mb-2" />
-                    <p className="text-gray-400 text-sm">Total Games</p>
-                    <p className="text-2xl font-bold text-white">{dashboardStats.total_games}</p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-black/40 border-blue-500/30">
-                  <CardContent className="pt-6 text-center">
-                    <TrendingUp className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-                    <p className="text-gray-400 text-sm">Avg Per Game</p>
-                    <p className="text-2xl font-bold text-white">
-                      {formatCurrency(parseFloat(dashboardStats.avg_earning_per_game))}
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-black/40 border-yellow-500/30">
-                  <CardContent className="pt-6 text-center">
-                    <DollarSign className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
-                    <p className="text-gray-400 text-sm">Pending Withdrawals</p>
-                    <p className="text-2xl font-bold text-yellow-400">
-                      {formatCurrency(parseFloat(dashboardStats.pending_withdrawals))}
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-black/40 border-green-500/30">
-                  <CardContent className="pt-6 text-center">
-                    <TrendingUp className="w-8 h-8 text-green-400 mx-auto mb-2" />
-                    <p className="text-gray-400 text-sm">Commission Rate</p>
-                    <p className="text-2xl font-bold text-green-400">
-                      {parseFloat(walletData.commission_rate).toFixed(0)}%
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Earnings Tab */}
-          <TabsContent value="earnings" className="space-y-6">
-            <EarningsTable earnings={earnings} loading={earningsLoading} />
-          </TabsContent>
-
-          {/* Withdrawals Tab */}
-          <TabsContent value="withdrawals" className="space-y-6">
-            <WithdrawalRequestsTable requests={withdrawalRequests} loading={withdrawalsLoading} />
-          </TabsContent>
-
-          {/* Game History Tab */}
-          <TabsContent value="history" className="space-y-6">
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Card className="bg-black/40 border-purple-500/30">
             <CardContent className="pt-6 text-center">
               <BarChart3 className="w-8 h-8 text-purple-400 mx-auto mb-2" />
@@ -537,8 +366,6 @@ export default function PartnerDashboard() {
             )}
           </CardContent>
         </Card>
-          </TabsContent>
-        </Tabs>
       </div>
     </div>
   );

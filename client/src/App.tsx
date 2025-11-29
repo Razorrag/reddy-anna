@@ -29,7 +29,8 @@ import AppProviders from "@/providers/AppProviders.tsx";
 // 🤝 Partner Pages
 import PartnerLogin from "@/pages/partner/partner-login.tsx";
 import PartnerSignup from "@/pages/partner/partner-signup.tsx";
-import PartnerDashboard from "@/pages/partner/partner-dashboard.tsx";
+import PartnerGameHistory from "@/pages/partner/partner-game-history.tsx";
+import PartnerProfile from "@/pages/partner/partner-profile.tsx";
 
 // 📱 Import mobile performance optimizations
 import "@/styles/mobile-optimizations.css";
@@ -130,7 +131,17 @@ function Router() {
       <Route path="/partner/signup" component={PartnerSignup} />
       <Route path="/partner/dashboard">
         <ProtectedPartnerRoute>
-          <PartnerDashboard />
+          <PartnerGameHistory />
+        </ProtectedPartnerRoute>
+      </Route>
+      <Route path="/partner/wallet">
+        <ProtectedPartnerRoute>
+          <PartnerProfile />
+        </ProtectedPartnerRoute>
+      </Route>
+      <Route path="/partner/profile">
+        <ProtectedPartnerRoute>
+          <PartnerProfile />
         </ProtectedPartnerRoute>
       </Route>
 

@@ -9,6 +9,15 @@ import {
   refreshPartnerToken,
   getPartnerProfile,
 } from '../partner-auth';
+import {
+  getPartnerWallet,
+  getDashboardStats,
+  getWalletTransactions,
+  getEarningsHistory,
+  requestWithdrawal,
+  getWithdrawalRequests,
+  cancelWithdrawalRequest,
+} from '../controllers/partnerWalletController';
 
 const router = Router();
 
@@ -275,5 +284,30 @@ router.get('/game-history', requirePartnerAuth, async (req: Request, res: Respon
     });
   }
 });
+
+// =====================================================
+// PARTNER WALLET ROUTES (Protected)
+// =====================================================
+
+// GET /api/partner/wallet - Get wallet balance and info
+router.get('/wallet', requirePartnerAuth, getPartnerWallet);
+
+// GET /api/partner/wallet/stats - Get comprehensive dashboard stats
+router.get('/wallet/stats', requirePartnerAuth, getDashboardStats);
+
+// GET /api/partner/wallet/transactions - Get wallet transaction history
+router.get('/wallet/transactions', requirePartnerAuth, getWalletTransactions);
+
+// GET /api/partner/wallet/earnings - Get earnings history (per game)
+router.get('/wallet/earnings', requirePartnerAuth, getEarningsHistory);
+
+// POST /api/partner/wallet/withdraw - Request withdrawal
+router.post('/wallet/withdraw', requirePartnerAuth, requestWithdrawal);
+
+// GET /api/partner/wallet/withdrawals - Get withdrawal requests
+router.get('/wallet/withdrawals', requirePartnerAuth, getWithdrawalRequests);
+
+// DELETE /api/partner/wallet/withdrawals/:requestId - Cancel withdrawal request
+router.delete('/wallet/withdrawals/:requestId', requirePartnerAuth, cancelWithdrawalRequest);
 
 export default router;

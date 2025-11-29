@@ -442,6 +442,13 @@ export const partners = pgTable("partners", {
   approved_at: timestamp("approved_at"),
   rejection_reason: text("rejection_reason"),
   
+  // Wallet and earnings
+  wallet_balance: decimal("wallet_balance", { precision: 15, scale: 2 }).default("0.00"),
+  total_earned: decimal("total_earned", { precision: 15, scale: 2 }).default("0.00"),
+  total_withdrawn: decimal("total_withdrawn", { precision: 15, scale: 2 }).default("0.00"),
+  commission_rate: decimal("commission_rate", { precision: 5, scale: 2 }).default("10.00"),
+  min_withdrawal_amount: decimal("min_withdrawal_amount", { precision: 15, scale: 2 }).default("5000.00"),
+  
   // Timestamps
   last_login: timestamp("last_login"),
   created_at: timestamp("created_at").defaultNow(),
@@ -459,8 +466,80 @@ export const adminPartnerSettings = pgTable("admin_partner_settings", {
   updated_at: timestamp("updated_at").defaultNow(),
 });
 
+// Partner wallet transactions table
+export const partnerWalletTransactions = pgTable("partner_wallet_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partner_id: varchar("partner_id").notNull(),
+  transaction_type: varchar("transaction_type").notNull(), // earning, withdrawal, adjustment
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  balance_before: decimal("balance_before", { precision: 15, scale: 2 }).notNull(),
+  balance_after: decimal("balance_after", { precision: 15, scale: 2 }).notNull(),
+  game_id: varchar("game_id"),
+  shown_profit: decimal("shown_profit", { precision: 15, scale: 2 }),
+  commission_rate: decimal("commission_rate", { precision: 5, scale: 2 }),
+  withdrawal_request_id: varchar("withdrawal_request_id"),
+  description: text("description"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// Partner withdrawal requests table
+export const partnerWithdrawalRequests = pgTable("partner_withdrawal_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partner_id: varchar("partner_id").notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  status: varchar("status").default("pending"), // pending, approved, rejected, completed
+  partner_phone: varchar("partner_phone"),
+  partner_whatsapp: varchar("partner_whatsapp"),
+  partner_name: text("partner_name"),
+  processed_by: varchar("processed_by"),
+  processed_at: timestamp("processed_at"),
+  rejection_reason: text("rejection_reason"),
+  admin_notes: text("admin_notes"),
+  payment_method: varchar("payment_method"),
+  payment_reference: varchar("payment_reference"),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+// Partner game earnings table
+export const partnerGameEarnings = pgTable("partner_game_earnings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partner_id: varchar("partner_id").notNull(),
+  game_id: varchar("game_id").notNull(),
+  real_profit: decimal("real_profit", { precision: 15, scale: 2 }).notNull(),
+  shown_profit: decimal("shown_profit", { precision: 15, scale: 2 }).notNull(),
+  share_percentage: decimal("share_percentage", { precision: 5, scale: 2 }).notNull(),
+  commission_rate: decimal("commission_rate", { precision: 5, scale: 2 }).notNull(),
+  earned_amount: decimal("earned_amount", { precision: 15, scale: 2 }).notNull(),
+  credited: boolean("credited").default(false),
+  credited_at: timestamp("credited_at"),
+  transaction_id: varchar("transaction_id"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// Partner WhatsApp messages table
+export const partnerWhatsappMessages = pgTable("partner_whatsapp_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  partner_id: varchar("partner_id").notNull(),
+  partner_phone: varchar("partner_phone").notNull(),
+  admin_phone: varchar("admin_phone").notNull(),
+  request_type: varchar("request_type").notNull(), // withdrawal, support, query
+  message: text("message").notNull(),
+  status: varchar("status").default("pending"), // pending, sent, responded
+  withdrawal_request_id: varchar("withdrawal_request_id"),
+  amount: decimal("amount", { precision: 15, scale: 2 }),
+  created_at: timestamp("created_at").defaultNow(),
+  sent_at: timestamp("sent_at"),
+  responded_at: timestamp("responded_at"),
+  response_message: text("response_message"),
+});
+
 // Partner Types
 export type Partner = typeof partners.$inferSelect;
 export type InsertPartner = typeof partners.$inferInsert;
 export type AdminPartnerSetting = typeof adminPartnerSettings.$inferSelect;
 export type PartnerStatus = 'pending' | 'active' | 'suspended' | 'banned';
+export type PartnerWalletTransaction = typeof partnerWalletTransactions.$inferSelect;
+export type PartnerWithdrawalRequest = typeof partnerWithdrawalRequests.$inferSelect;
+export type PartnerGameEarning = typeof partnerGameEarnings.$inferSelect;
+export type PartnerWhatsappMessage = typeof partnerWhatsappMessages.$inferSelect;
