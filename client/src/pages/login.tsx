@@ -84,6 +84,19 @@ export default function Login() {
       login(userData, token, refreshToken);
       console.log('✅ Login successful - token stored');
 
+      // Check if account is suspended (login succeeded but with warning)
+      if (response.error && response.error.toLowerCase().includes('suspend')) {
+        setError('⚠️ ' + response.error);
+        // Still redirect to game after showing warning
+        setTimeout(() => {
+          setShowFlashScreen(true);
+          setTimeout(() => {
+            setLocation('/game');
+          }, 2500);
+        }, 3000); // Show warning for 3 seconds before flash screen
+        return;
+      }
+
       // Show flash screen overlay for 2.5 seconds before redirecting to game
       setShowFlashScreen(true);
       setTimeout(() => {

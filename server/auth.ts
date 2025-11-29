@@ -310,7 +310,37 @@ export const loginUser = async (phone: string, password: string): Promise<AuthRe
     
     if (user.status === 'suspended') {
       console.log('⚠️ Suspended user login attempt:', user.id, '- Login allowed but betting will be blocked');
-      // Allow login but betting will be blocked in game handlers
+      
+      // Update last login
+      try {
+        await storage.updateUser(user.id, {
+          last_login: new Date()
+        });
+      } catch (updateError) {
+        console.error('Error updating last login:', updateError);
+      }
+
+      // Generate authentication tokens (allow login)
+      const { accessToken, refreshToken } = generateTokens({
+        id: user.id,
+        phone: user.phone,
+        role: user.role || 'player'
+      });
+
+      // Return success with suspension warning message
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          phone: user.phone,
+          balance: parseFloat(user.balance || '0'),
+          role: user.role || 'player',
+          status: 'suspended',
+          token: accessToken,
+          refreshToken
+        },
+        error: 'Your account is suspended. You can view the game but betting is disabled. Please contact admin for support.'
+      };
     }
 
     console.log('User found, attempting password validation for user ID:', user.id);
