@@ -328,6 +328,7 @@ export interface IStorage {
     depositAmount: number;
     bonusAmount: number;
     bonusPercentage: number;
+    linkedDepositBonusId?: string; // ✅ NEW: Link to deposit bonus
   }): Promise<string>;
 
   // Referral Code Fix Method
@@ -5314,11 +5315,11 @@ export class SupabaseStorage implements IStorage {
    */
   async creditLinkedReferralBonuses(depositBonusId: string, userId: string): Promise<void> {
     try {
-      // Find all locked referral bonuses for this user
+      // Find all locked referral bonuses LINKED to this deposit bonus
       const { data: lockedBonuses, error } = await supabaseServer
         .from('referral_bonuses')
         .select('*')
-        .eq('referrer_user_id', userId)
+        .eq('linked_deposit_bonus_id', depositBonusId)
         .eq('status', 'locked');
         
       if (error || !lockedBonuses || lockedBonuses.length === 0) {
@@ -5348,6 +5349,7 @@ export class SupabaseStorage implements IStorage {
     depositAmount: number;
     bonusAmount: number;
     bonusPercentage: number;
+    linkedDepositBonusId?: string; // ✅ NEW: Link to deposit bonus
   }): Promise<string> {
     // ✅ CRITICAL FIX: Find the referrer's LATEST deposit bonus (locked or unlocked) to link to
     // The referral bonus should be linked to whatever deposit bonus the referrer currently has

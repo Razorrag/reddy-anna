@@ -20,6 +20,7 @@ import { GameHistoryModal } from '../components/GameHistoryModal';
 import { WalletModal } from '../components/WalletModal';
 import RoundNotification from '../components/RoundNotification';
 import NoWinnerTransition from '../components/NoWinnerTransition';
+import FlashScreenOverlay from '../components/FlashScreenOverlay';
 import type { BetSide } from '../types/game';
 
 export default function PlayerGame() {
@@ -51,9 +52,18 @@ export default function PlayerGame() {
   const [showRoundNotification, setShowRoundNotification] = useState(false);
   const [showNoWinnerTransition, setShowNoWinnerTransition] = useState(false);
   const [previousRound, setPreviousRound] = useState(gameState.currentRound);
+  
+  // ✅ NEW: Flash screen state - shows every time page loads
+  const [showFlashScreen, setShowFlashScreen] = useState(true);
 
   // Available bet amounts - matching schema limits (1000-100000)
   const betAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
+
+  // ✅ NEW: Show flash screen on component mount
+  useEffect(() => {
+    console.log('🎮 Game page loaded - showing flash screen');
+    setShowFlashScreen(true);
+  }, []); // Empty dependency array - runs once on mount
 
   // Update user balance from BalanceContext
   useEffect(() => {
@@ -384,6 +394,13 @@ export default function PlayerGame() {
 
   return (
     <div className="relative">
+      {/* ✅ NEW: Flash Screen - Shows every time game page loads */}
+      <FlashScreenOverlay
+        show={showFlashScreen}
+        onComplete={() => setShowFlashScreen(false)}
+        duration={2500}
+      />
+
       {shouldShowAuthLoading && (
         <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center">
           <div className="text-white text-xl">Loading...</div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,8 +8,10 @@ import { Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/contexts/AuthContext";
+import FlashScreenOverlay from "@/components/FlashScreenOverlay";
 
 export default function Signup() {
+  const [, setLocation] = useLocation();
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -32,6 +34,7 @@ export default function Signup() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [showFlashScreen, setShowFlashScreen] = useState(false);
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,10 +116,11 @@ export default function Signup() {
       login(userData, token, refreshToken);
       console.log('✅ Registration successful - token stored via AuthContext');
 
-      // Redirect after 1 second to show success message
+      // ✅ Show flash screen and redirect to game after it completes
+      setShowFlashScreen(true);
       setTimeout(() => {
-        window.location.href = '/game';
-      }, 1000);
+        setLocation('/game');
+      }, 2500);
     } catch (err: any) {
       console.error('Signup error:', err);
       
@@ -164,7 +168,15 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+    <>
+      {/* ✅ Flash Screen - Shows after successful signup */}
+      <FlashScreenOverlay
+        show={showFlashScreen}
+        onComplete={() => setLocation('/game')}
+        duration={2500}
+      />
+
+      <div className="min-h-screen bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-20 left-10 w-32 h-32 bg-gold/10 rounded-full blur-xl animate-pulse"></div>
@@ -397,6 +409,7 @@ export default function Signup() {
           </form>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </>
   );
 }
