@@ -86,14 +86,15 @@ export default function Login() {
 
       // Check if account is suspended (login succeeded but with warning)
       if (response.error && response.error.toLowerCase().includes('suspend')) {
+        setIsLoading(false); // Stop loading to show the message
         setError('⚠️ ' + response.error);
-        // Still redirect to game after showing warning
+        // Still redirect to game after showing warning for 5 seconds
         setTimeout(() => {
           setShowFlashScreen(true);
           setTimeout(() => {
             setLocation('/game');
           }, 2500);
-        }, 3000); // Show warning for 3 seconds before flash screen
+        }, 5000); // Show warning for 5 seconds before flash screen
         return;
       }
 
