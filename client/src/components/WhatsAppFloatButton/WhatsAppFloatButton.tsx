@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import { useLocation } from 'wouter';
+import { useAuth } from '@/contexts/AuthContext';
+import { getAdminWhatsAppNumberAsync, createWhatsAppUrl } from '@/lib/whatsapp-helper';
 import WhatsAppModal from './WhatsAppModal';
 
 interface WhatsAppFloatButtonProps {
@@ -9,10 +12,48 @@ interface WhatsAppFloatButtonProps {
 const WhatsAppFloatButton: React.FC<WhatsAppFloatButtonProps> = ({ userPhone, userId }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [, setLocation] = useLocation();
+  const { isAuthenticated } = useAuth();
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
+    
+    // If user is not authenticated, handle WhatsApp signup
+    if (!isAuthenticated) {
+      await handleWhatsAppSignup();
+      return;
+    }
+    
+    // For authenticated users, open the support modal
     setIsModalOpen(true);
+  };
+
+  const handleWhatsAppSignup = async () => {
+    try {
+      const whatsappNumber = await getAdminWhatsAppNumberAsync();
+      
+      if (!whatsappNumber) {
+        alert('WhatsApp service is not available. Please use regular signup.');
+        setLocation('/signup');
+        return;
+      }
+
+      const signupMessage = `Hi! I want to sign up for RAJU GARI KOSSU. Please help me create an account.`;
+      const whatsappUrl = createWhatsAppUrl(whatsappNumber, signupMessage);
+      
+      // Open WhatsApp with pre-filled signup message
+      window.open(whatsappUrl, '_blank');
+      
+      // After opening WhatsApp, redirect to game page for immediate access
+      setTimeout(() => {
+        setLocation('/game');
+      }, 1000);
+      
+    } catch (error) {
+      console.error('WhatsApp signup error:', error);
+      alert('Unable to connect to WhatsApp. Please use regular signup.');
+      setLocation('/signup');
+    }
   };
 
   return (
@@ -38,15 +79,17 @@ const WhatsAppFloatButton: React.FC<WhatsAppFloatButtonProps> = ({ userPhone, us
           {isHovered && (
             <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg whitespace-nowrap shadow-lg">
               <div className="absolute bottom-0 right-4 transform translate-y-1/2 rotate-45 w-2 h-2 bg-gray-900"></div>
-              Withdrawal, Deposit & Support
+              {isAuthenticated ? 'Withdrawal, Deposit & Support' : 'Sign Up with WhatsApp'}
             </div>
           )}
         </div>
         
         {/* Notification Badge */}
-        <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
-          <span className="text-white text-xs font-bold">!</span>
-        </div>
+        {!isAuthenticated && (
+          <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
+            <span className="text-white text-xs font-bold">NEW</span>
+          </div>
+        )}
       </button>
 
       {/* WhatsApp Modal */}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Send, DollarSign, CreditCard, MessageCircle, HelpCircle } from 'lucide-react';
+import { X, Send, DollarSign, CreditCard, MessageCircle, HelpCircle, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,7 +12,7 @@ interface WhatsAppModalProps {
   userId?: string;
 }
 
-type RequestType = 'withdrawal' | 'deposit' | 'support' | 'balance';
+type RequestType = 'withdrawal' | 'deposit' | 'support' | 'balance' | 'signup';
 
 const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ isOpen, onClose, userPhone, userId }) => {
   const [requestType, setRequestType] = useState<RequestType | null>(null);
@@ -78,6 +78,8 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ isOpen, onClose, userPhon
         return 'I would like to check my current balance.';
       case 'support':
         return 'I need assistance with my account.';
+      case 'signup':
+        return 'I would like to create a new account to start playing.';
       default:
         return '';
     }
@@ -156,6 +158,19 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ isOpen, onClose, userPhon
               </button>
 
               <button
+                onClick={() => setRequestType('signup')}
+                className="w-full flex items-center gap-4 p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all group"
+              >
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-500 transition-colors">
+                  <Users className="w-6 h-6 text-green-600 group-hover:text-white" />
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900">Sign Up via WhatsApp</div>
+                  <div className="text-sm text-gray-500">Create account instantly</div>
+                </div>
+              </button>
+
+              <button
                 onClick={() => setRequestType('support')}
                 className="w-full flex items-center gap-4 p-4 border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all group"
               >
@@ -184,6 +199,7 @@ const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ isOpen, onClose, userPhon
                   {requestType === 'withdrawal' && 'Withdrawal Request'}
                   {requestType === 'deposit' && 'Deposit Request'}
                   {requestType === 'balance' && 'Balance Inquiry'}
+                  {requestType === 'signup' && 'Sign Up via WhatsApp'}
                   {requestType === 'support' && 'Support Request'}
                 </span>
               </div>

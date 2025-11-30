@@ -2,6 +2,8 @@
 import { Router, Request, Response } from 'express';
 import { supabaseServer } from '../lib/supabaseServer';
 import { requireAdmin } from '../auth';
+import { hashPartnerPassword } from '../partner-auth';
+import bcrypt from 'bcrypt';
 
 const router = Router();
 
@@ -190,6 +192,208 @@ router.put('/:id/share', requireAdmin, async (req: Request, res: Response) => {
       success: false,
       error: 'Failed to update share percentage'
     });
+  }
+});
+
+// PUT /api/admin/partners/:id/reset-password - Reset partner password
+router.put('/:id/reset-password', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    const adminId = req.user?.id;
+    
+    // Validate new password
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Password must be at least 8 characters long' 
+      });
+    }
+    
+    // Password validation: 8+ chars with uppercase, lowercase, and number
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Password must contain uppercase, lowercase, and number' 
+      });
+    }
+    
+    // Get partner to verify they exist
+    const { data: partner, error: findError } = await supabaseServer
+      .from('partners')
+      .select('id, phone, full_name')
+      .eq('id', id)
+      .single();
+    
+    if (findError || !partner) {
+      return res.status(404).json({ success: false, error: 'Partner not found' });
+    }
+    
+    // Hash the new password
+    const hashedPassword = await hashPartnerPassword(newPassword);
+    
+    // Update password in database
+    const { error: updateError } = await supabaseServer
+      .from('partners')
+      .update({ password_hash: hashedPassword })
+      .eq('id', id);
+    
+    if (updateError) {
+      console.error('Partner password reset error:', updateError);
+      return res.status(500).json({ success: false, error: 'Failed to reset password' });
+    }
+    
+    console.log(`Admin ${adminId} reset password for partner ${partner.id} (${partner.phone})`);
+    
+    return res.status(200).json({
+      success: true,
+      message: `Password reset successfully for partner ${partner.full_name} (${partner.phone})`,
+      data: {
+        partnerId: partner.id,
+        phone: partner.phone,
+        fullName: partner.full_name
+      }
+    });
+  } catch (error: any) {
+    console.error('Partner password reset error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to reset password' });
+  }
+});
+
+// GET /api/admin/partners/phone/:phone - Find partner by phone number
+router.get('/phone/:phone', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { phone } = req.params;
+    
+    // Normalize phone number
+    const normalizedPhone = phone.replace(/\D/g, '');
+    
+    const { data: partner, error } = await supabaseServer
+      .from('partners')
+      .select('id, phone, full_name, email, status, created_at')
+      .eq('phone', normalizedPhone)
+      .single();
+    
+    if (error || !partner) {
+      return res.status(404).json({ success: false, error: 'Partner not found with this phone number' });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: partner.id,
+        phone: partner.phone,
+        fullName: partner.full_name,
+        email: partner.email,
+        status: partner.status,
+        createdAt: partner.created_at
+      }
+    });
+  } catch (error: any) {
+    console.error('Find partner by phone error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to find partner' });
+  }
+});
+
+// PUT /api/admin/partners/:id/reset-password - Reset partner password
+router.put('/:id/reset-password', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    const adminId = req.user?.id;
+    
+    // Validate new password
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Password must be at least 8 characters long' 
+      });
+    }
+    
+    // Password validation: 8+ chars with uppercase, lowercase, and number
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Password must contain uppercase, lowercase, and number' 
+      });
+    }
+    
+    // Get partner to verify they exist
+    const { data: partner, error: findError } = await supabaseServer
+      .from('partners')
+      .select('id, phone, full_name')
+      .eq('id', id)
+      .single();
+    
+    if (findError || !partner) {
+      return res.status(404).json({ success: false, error: 'Partner not found' });
+    }
+    
+    // Hash the new password
+    const hashedPassword = await hashPartnerPassword(newPassword);
+    
+    // Update password in database
+    const { error: updateError } = await supabaseServer
+      .from('partners')
+      .update({ password_hash: hashedPassword })
+      .eq('id', id);
+    
+    if (updateError) {
+      console.error('Partner password reset error:', updateError);
+      return res.status(500).json({ success: false, error: 'Failed to reset password' });
+    }
+    
+    console.log(`Admin ${adminId} reset password for partner ${partner.id} (${partner.phone})`);
+    
+    return res.status(200).json({
+      success: true,
+      message: `Password reset successfully for partner ${partner.full_name} (${partner.phone})`,
+      data: {
+        partnerId: partner.id,
+        phone: partner.phone,
+        fullName: partner.full_name
+      }
+    });
+  } catch (error: any) {
+    console.error('Partner password reset error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to reset password' });
+  }
+});
+
+// GET /api/admin/partners/phone/:phone - Find partner by phone number
+router.get('/phone/:phone', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { phone } = req.params;
+    
+    // Normalize phone number
+    const normalizedPhone = phone.replace(/\D/g, '');
+    
+    const { data: partner, error } = await supabaseServer
+      .from('partners')
+      .select('id, phone, full_name, email, status, created_at')
+      .eq('phone', normalizedPhone)
+      .single();
+    
+    if (error || !partner) {
+      return res.status(404).json({ success: false, error: 'Partner not found with this phone number' });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: partner.id,
+        phone: partner.phone,
+        fullName: partner.full_name,
+        email: partner.email,
+        status: partner.status,
+        createdAt: partner.created_at
+      }
+    });
+  } catch (error: any) {
+    console.error('Find partner by phone error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to find partner' });
   }
 });
 

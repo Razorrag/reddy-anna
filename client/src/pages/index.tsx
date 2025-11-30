@@ -9,6 +9,7 @@ import LanguageSelector from "@/components/LanguageSelector/LanguageSelector";
 import About from "@/components/About/About";
 import GameRules from "@/components/GameRules/GameRules";
 import Footer from "@/components/Footer/Footer";
+import WhatsAppFloatButton from "@/components/WhatsAppFloatButton/WhatsAppFloatButton";
 
 export default function Index() {
   const [, setLocation] = useLocation();
@@ -162,6 +163,9 @@ export default function Index() {
 
       {/* Footer */}
       <Footer />
+
+      {/* WhatsApp Floating Button - Signup & Support */}
+      <WhatsAppFloatButton />
 
       {/* Floating Elements for visual appeal */}
       <div className="fixed top-20 left-10 w-32 h-32 bg-gold/10 rounded-full blur-xl animate-pulse pointer-events-none"></div>

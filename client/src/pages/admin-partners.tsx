@@ -17,7 +17,9 @@ import {
   ChevronRight,
   RefreshCw,
   Check,
-  X
+  X,
+  Key,
+  AlertTriangle
 } from "lucide-react";
 
 interface Partner {
@@ -46,6 +48,65 @@ export default function AdminPartners() {
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
   const [editingShare, setEditingShare] = useState<string | null>(null);
   const [newShare, setNewShare] = useState('');
+  
+  // Emergency password reset states
+  const [resetPhone, setResetPhone] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetResult, setResetResult] = useState('');
+
+  const handleEmergencyPasswordReset = async () => {
+    if (!resetPhone || !newPassword) {
+      setResetResult('Please enter both phone number and new password');
+      return;
+    }
+    
+    setResetLoading(true);
+    setResetResult('');
+    
+    try {
+      // First find partner by phone
+      const findResponse = await fetch(`/api/admin/partners/phone/${resetPhone}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const findData = await findResponse.json();
+      
+      if (!findData.success) {
+        setResetResult(`Partner not found: ${findData.error}`);
+        return;
+      }
+      
+      const partner = findData.data;
+      
+      // Reset password
+      const resetResponse = await fetch(`/api/admin/partners/${partner.id}/reset-password`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ newPassword })
+      });
+      
+      const resetData = await resetResponse.json();
+      
+      if (resetData.success) {
+        setResetResult(`✅ Password reset successful for ${partner.fullName} (${partner.phone})`);
+        setResetPhone('');
+        setNewPassword('');
+      } else {
+        setResetResult(`❌ Failed to reset password: ${resetData.error}`);
+      }
+    } catch (error: any) {
+      console.error('Emergency password reset error:', error);
+      setResetResult('❌ Network error. Please try again.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Never';
@@ -167,6 +228,81 @@ export default function AdminPartners() {
   return (
     <AdminLayout>
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-4 md:p-6">
+        {/* Emergency Password Reset */}
+        <Card className="bg-red-900/20 border-red-500/30">
+          <CardHeader>
+            <CardTitle className="text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Emergency Partner Password Reset
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <p className="text-red-300 text-sm">
+                Use this section to immediately reset a partner's password in emergency situations.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-red-400 font-semibold mb-2">Partner Phone Number</label>
+                  <Input
+                    type="tel"
+                    placeholder="9700033313"
+                    value={resetPhone}
+                    onChange={(e) => setResetPhone(e.target.value)}
+                    className="bg-black/30 border-red-500/30 text-white placeholder:text-red-300/50 focus:border-red-400 focus:ring-red-400"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-red-400 font-semibold mb-2">New Password</label>
+                  <Input
+                    type="password"
+                    placeholder="Enter new password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="bg-black/30 border-red-500/30 text-white placeholder:text-red-300/50 focus:border-red-400 focus:ring-red-400"
+                  />
+                </div>
+                
+                <div className="flex items-end">
+                  <Button
+                    onClick={handleEmergencyPasswordReset}
+                    disabled={resetLoading || !resetPhone || !newPassword}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold"
+                  >
+                    {resetLoading ? (
+                      <div className="flex items-center">
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Resetting...
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <Key className="w-4 h-4 mr-2" />
+                        Reset Password
+                      </div>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              
+              {resetResult && (
+                <div className={`p-3 rounded-lg text-sm ${
+                  resetResult.includes('✅') ? 'bg-green-500/20 border border-green-500/30 text-green-300' : 
+                  'bg-red-500/20 border border-red-500/30 text-red-300'
+                }`}>
+                  {resetResult}
+                </div>
+              )}
+              
+              <div className="text-xs text-red-300/70">
+                <strong>Important:</strong> Password must be at least 8 characters with uppercase, lowercase, and number.
+                This action is logged and cannot be undone.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
           <div>
