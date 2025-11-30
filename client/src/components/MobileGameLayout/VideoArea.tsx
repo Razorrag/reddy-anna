@@ -938,8 +938,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
     }
   };
 
-  // Determine if stream is live (not in loop mode and has URL)
-  const isLive = !!(streamConfig && !streamConfig.loopMode && streamConfig.streamUrl);
+  // Determine if stream is live (independent of pause state)
+  // Live when: stream is active, not in loop mode, and has URL
+  const isLive = !!(streamConfig && streamConfig.isActive && !streamConfig.loopMode && streamConfig.streamUrl);
 
   console.log('🎥 VideoArea render state:', {
     isLive,
