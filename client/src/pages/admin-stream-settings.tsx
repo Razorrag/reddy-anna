@@ -77,7 +77,7 @@ export default function AdminStreamSettings() {
 
     try {
       const payload = {
-        streamUrl: mode === 'stream' ? streamUrl : '',
+        streamUrl: streamUrl, // Always preserve the stream URL regardless of mode
         streamType,
         isPaused,
         streamTitle: 'Live Game Stream',
