@@ -347,9 +347,10 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
           fragLoadingMaxRetry: 4,             // Moderate retries for stability
           fragLoadingRetryDelay: 500,         // 0.5s retry delay - quick recovery
 
-          // Quality selection
+          // Quality selection - Enhanced for better color reproduction
           startLevel: -1,                     // Auto quality selection
           abrEwmaDefaultEstimate: 5000000,    // Higher for better quality
+          testBandwidth: true,                // Test bandwidth for optimal quality
 
           // Additional low-latency settings
           abrBandWidthFactor: 0.95,           // Aggressive bandwidth usage
@@ -857,7 +858,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            zIndex: 1
+            zIndex: 1,
+            // ✅ ENHANCED VIDEO QUALITY: Boost colors to match frozen frame vibrancy
+            filter: 'contrast(1.05) saturate(1.1) brightness(1.02)',
+            imageRendering: 'high-quality',
+            WebkitBackfaceVisibility: 'hidden',
+            backfaceVisibility: 'hidden'
           }}
           onWaiting={() => {
             console.log('⏳ Video buffering...');

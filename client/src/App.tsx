@@ -14,6 +14,7 @@ import AdminStreamSettings from "@/pages/admin-stream-settings.tsx";
 import GameHistoryPage from "@/pages/GameHistoryPage.tsx";
 import AdminPartners from "@/pages/admin-partners.tsx";
 import AdminPartnerDetail from "@/pages/admin-partner-detail.tsx";
+import AdminPartnerWithdrawals from "@/pages/admin-partner-withdrawals.tsx";
 
 import Login from "@/pages/login.tsx";
 import Signup from "@/pages/signup.tsx";
@@ -129,6 +130,11 @@ function Router() {
       <Route path="/admin/partner/:id">
         <ProtectedAdminRoute>
           <AdminPartnerDetail />
+        </ProtectedAdminRoute>
+      </Route>
+      <Route path="/admin/partner-withdrawals">
+        <ProtectedAdminRoute>
+          <AdminPartnerWithdrawals />
         </ProtectedAdminRoute>
       </Route>
 

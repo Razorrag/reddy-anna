@@ -34,6 +34,7 @@ interface Partner {
   email: string | null;
   status: 'pending' | 'active' | 'suspended' | 'banned';
   sharePercentage: number;
+  commissionRate: number;
   lastLogin: string | null;
   createdAt: string;
   // Financial fields
@@ -58,6 +59,8 @@ export default function AdminPartners() {
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
   const [editingShare, setEditingShare] = useState<string | null>(null);
   const [newShare, setNewShare] = useState('');
+  const [editingCommission, setEditingCommission] = useState<string | null>(null);
+  const [newCommission, setNewCommission] = useState('');
   
   // Emergency password reset states
   const [resetPhone, setResetPhone] = useState('');
@@ -184,17 +187,21 @@ export default function AdminPartners() {
   };
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await Promise.all([fetchPartners(), fetchStats()]);
-      setLoading(false);
-    };
-    loadData();
+    if (token) {
+      const loadData = async () => {
+        setLoading(true);
+        await Promise.all([fetchPartners(), fetchStats()]);
+        setLoading(false);
+      };
+      loadData();
+    }
   }, [token]);
 
   useEffect(() => {
-    fetchPartners();
-  }, [filters.page, filters.status, filters.search]);
+    if (token) {
+      fetchPartners();
+    }
+  }, [token, filters.page, filters.status, filters.search]);
 
   const updatePartnerStatus = async (partnerId: string, status: string) => {
     try {
@@ -243,6 +250,32 @@ export default function AdminPartners() {
     }
   };
 
+  const updateCommissionRate = async (partnerId: string, commissionRate: string) => {
+    const rate = parseFloat(commissionRate);
+    if (isNaN(rate) || rate < 0 || rate > 100) {
+      alert('Commission rate must be between 0 and 100');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/admin/partners/${partnerId}/commission`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commissionRate: rate })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setEditingCommission(null);
+        setNewCommission('');
+        fetchPartners();
+      } else {
+        alert(data.error || 'Failed to update commission rate');
+      }
+    } catch (err) {
+      console.error('Error updating commission:', err);
+      alert('Failed to update commission rate');
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
@@ -342,14 +375,24 @@ export default function AdminPartners() {
             <h1 className="text-2xl md:text-3xl font-bold text-gold">Partner Management</h1>
             <p className="text-gray-400">Manage partner accounts</p>
           </div>
-          <Button
-            variant="outline"
-            className="border-gold/30 text-gold hover:bg-gold/10"
-            onClick={() => { fetchPartners(); fetchStats(); }}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+              onClick={() => setLocation('/admin/partner-withdrawals')}
+            >
+              <Wallet className="h-4 w-4 mr-2" />
+              All Withdrawals
+            </Button>
+            <Button
+              variant="outline"
+              className="border-gold/30 text-gold hover:bg-gold/10"
+              onClick={() => { fetchPartners(); fetchStats(); }}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -447,6 +490,7 @@ export default function AdminPartners() {
                         <th className="text-left p-3 text-gold font-medium">Partner</th>
                         <th className="text-left p-3 text-gold font-medium">Status</th>
                         <th className="text-center p-3 text-gold font-medium">Share %</th>
+                        <th className="text-center p-3 text-gold font-medium">Commission %</th>
                         <th className="text-right p-3 text-gold font-medium">Wallet</th>
                         <th className="text-right p-3 text-gold font-medium">Earned</th>
                         <th className="text-right p-3 text-gold font-medium">Withdrawn</th>
@@ -490,6 +534,36 @@ export default function AdminPartners() {
                                 onClick={() => { setEditingShare(partner.id); setNewShare(partner.sharePercentage.toString()); }}
                               >
                                 {partner.sharePercentage}%
+                              </button>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {editingCommission === partner.id ? (
+                              <div className="flex items-center gap-1 justify-center">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                  value={newCommission}
+                                  onChange={(e) => setNewCommission(e.target.value)}
+                                  className="w-16 h-7 bg-black/30 border-orange-500/30 text-white text-center"
+                                />
+                                <Button size="sm" className="h-7 px-2 bg-green-600"
+                                  onClick={() => updateCommissionRate(partner.id, newCommission)}>
+                                  <Check className="h-3 w-3" />
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 px-2 border-gray-500"
+                                  onClick={() => { setEditingCommission(null); setNewCommission(''); }}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <button
+                                className="text-orange-400 font-bold hover:text-orange-300"
+                                onClick={() => { setEditingCommission(partner.id); setNewCommission(partner.commissionRate.toString()); }}
+                              >
+                                {partner.commissionRate}%
                               </button>
                             )}
                           </td>

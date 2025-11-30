@@ -3,7 +3,6 @@ import { Router, Request, Response } from 'express';
 import { supabaseServer } from '../lib/supabaseServer';
 import { requireAdmin } from '../auth';
 import { hashPartnerPassword } from '../partner-auth';
-import bcrypt from 'bcrypt';
 
 const router = Router();
 
@@ -65,6 +64,7 @@ router.get('/', requireAdmin, async (req: Request, res: Response) => {
       email: p.email,
       status: p.status,
       sharePercentage: parseFloat(p.share_percentage || '50'),
+      commissionRate: parseFloat(p.commission_rate || '10'),
       lastLogin: p.last_login,
       createdAt: p.created_at,
     })) || [];
@@ -79,6 +79,79 @@ router.get('/', requireAdmin, async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Get partners error:', error);
     return res.status(500).json({ success: false, error: 'Failed to get partners' });
+  }
+});
+
+// GET /api/admin/partners/withdrawals/all - Get all withdrawal requests from all partners (MUST be before /:id routes)
+router.get('/withdrawals/all', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { status = 'pending', page = '1', limit = '50' } = req.query;
+    
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const offset = (pageNum - 1) * limitNum;
+    
+    let query = supabaseServer
+      .from('partner_withdrawal_requests')
+      .select(`
+        *,
+        partners!inner (
+          id,
+          full_name,
+          phone,
+          wallet_balance,
+          whatsapp_number
+        )
+      `, { count: 'exact' });
+    
+    if (status && status !== 'all') {
+      query = query.eq('status', status as string);
+    }
+    
+    query = query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limitNum - 1);
+    
+    const { data, error, count } = await query;
+    
+    if (error) {
+      console.error('Get all withdrawals error:', error);
+      return res.status(500).json({ success: false, error: 'Failed to fetch withdrawal requests' });
+    }
+    
+    // Format the response
+    const formattedWithdrawals = data?.map(w => ({
+      id: w.id,
+      amount: w.amount,
+      status: w.status,
+      partner_id: w.partner_id,
+      partner_name: w.partners?.full_name,
+      partner_phone: w.partners?.phone,
+      partner_whatsapp: w.partners?.whatsapp_number,
+      partner_wallet_balance: w.partners?.wallet_balance,
+      created_at: w.created_at,
+      processed_at: w.processed_at,
+      processed_by: w.processed_by,
+      utr_number: w.utr_number,
+      rejection_reason: w.rejection_reason,
+      admin_notes: w.admin_notes
+    })) || [];
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        withdrawals: formattedWithdrawals,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: count || 0,
+          pages: Math.ceil((count || 0) / limitNum)
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('Get all withdrawals error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch withdrawal requests' });
   }
 });
 
@@ -195,104 +268,45 @@ router.put('/:id/share', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/admin/partners/:id/reset-password - Reset partner password
-router.put('/:id/reset-password', requireAdmin, async (req: Request, res: Response) => {
+// PUT /api/admin/partners/:id/commission - Update partner commission rate
+router.put('/:id/commission', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { newPassword } = req.body;
-    const adminId = req.user?.id;
+    const { commissionRate } = req.body;
     
-    // Validate new password
-    if (!newPassword || newPassword.length < 8) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Password must be at least 8 characters long' 
+    if (!commissionRate || isNaN(commissionRate) || commissionRate < 0 || commissionRate > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Commission rate must be between 0 and 100'
       });
     }
-    
-    // Password validation: 8+ chars with uppercase, lowercase, and number
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
-    if (!passwordRegex.test(newPassword)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Password must contain uppercase, lowercase, and number' 
-      });
-    }
-    
-    // Get partner to verify they exist
-    const { data: partner, error: findError } = await supabaseServer
-      .from('partners')
-      .select('id, phone, full_name')
-      .eq('id', id)
-      .single();
-    
-    if (findError || !partner) {
-      return res.status(404).json({ success: false, error: 'Partner not found' });
-    }
-    
-    // Hash the new password
-    const hashedPassword = await hashPartnerPassword(newPassword);
-    
-    // Update password in database
-    const { error: updateError } = await supabaseServer
-      .from('partners')
-      .update({ password_hash: hashedPassword })
-      .eq('id', id);
-    
-    if (updateError) {
-      console.error('Partner password reset error:', updateError);
-      return res.status(500).json({ success: false, error: 'Failed to reset password' });
-    }
-    
-    console.log(`Admin ${adminId} reset password for partner ${partner.id} (${partner.phone})`);
-    
-    return res.status(200).json({
-      success: true,
-      message: `Password reset successfully for partner ${partner.full_name} (${partner.phone})`,
-      data: {
-        partnerId: partner.id,
-        phone: partner.phone,
-        fullName: partner.full_name
-      }
-    });
-  } catch (error: any) {
-    console.error('Partner password reset error:', error);
-    return res.status(500).json({ success: false, error: 'Failed to reset password' });
-  }
-});
-
-// GET /api/admin/partners/phone/:phone - Find partner by phone number
-router.get('/phone/:phone', requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const { phone } = req.params;
-    
-    // Normalize phone number
-    const normalizedPhone = phone.replace(/\D/g, '');
     
     const { data: partner, error } = await supabaseServer
       .from('partners')
-      .select('id, phone, full_name, email, status, created_at')
-      .eq('phone', normalizedPhone)
+      .update({ commission_rate: commissionRate })
+      .eq('id', id)
+      .select()
       .single();
     
     if (error || !partner) {
-      return res.status(404).json({ success: false, error: 'Partner not found with this phone number' });
+      console.error('Update commission rate error:', error);
+      return res.status(404).json({
+        success: false,
+        error: 'Partner not found'
+      });
     }
     
     return res.status(200).json({
       success: true,
-      data: {
-        id: partner.id,
-        phone: partner.phone,
-        fullName: partner.full_name,
-        email: partner.email,
-        status: partner.status,
-        createdAt: partner.created_at
-      }
+      message: 'Commission rate updated successfully',
+      data: { commissionRate: partner.commission_rate }
     });
   } catch (error: any) {
-    console.error('Find partner by phone error:', error);
-    return res.status(500).json({ success: false, error: 'Failed to find partner' });
+    console.error('Update commission rate error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update commission rate'
+    });
   }
 });
 
@@ -607,12 +621,16 @@ router.put('/:id/withdrawals/:withdrawalId', requireAdmin, async (req: Request, 
       return res.status(404).json({ success: false, error: 'Withdrawal request not found or already processed' });
     }
     
-    const amount = parseFloat(withdrawal.amount);
+    const amount = Number(withdrawal.amount);
     
     if (action === 'approve') {
-      // Validate UTR number for approval
-      if (!utrNumber || utrNumber.trim().length < 5) {
-        return res.status(400).json({ success: false, error: 'Valid UTR number required for approval' });
+      // Validate UTR number for approval (12-22 alphanumeric characters)
+      const utrRegex = /^[A-Za-z0-9]{12,22}$/;
+      if (!utrNumber || !utrRegex.test(utrNumber.trim())) {
+        return res.status(400).json({
+          success: false,
+          error: 'Valid UTR number required (12-22 alphanumeric characters)'
+        });
       }
       
       // Get partner current balance

@@ -446,7 +446,8 @@ export const partners = pgTable("partners", {
   wallet_balance: decimal("wallet_balance", { precision: 15, scale: 2 }).default("0.00"),
   total_earned: decimal("total_earned", { precision: 15, scale: 2 }).default("0.00"),
   total_withdrawn: decimal("total_withdrawn", { precision: 15, scale: 2 }).default("0.00"),
-  commission_rate: decimal("commission_rate", { precision: 5, scale: 2 }).default("10.00"),
+  share_percentage: decimal("share_percentage", { precision: 5, scale: 2 }).default("50.00"), // % of profit shown to partner
+  commission_rate: decimal("commission_rate", { precision: 5, scale: 2 }).default("10.00"), // % partner earns from shown profit
   min_withdrawal_amount: decimal("min_withdrawal_amount", { precision: 15, scale: 2 }).default("5000.00"),
   
   // Timestamps

@@ -306,6 +306,7 @@ export interface IStorage {
   }): Promise<any>;
   updateDepositBonusWagering(userId: string, betAmount: number): Promise<void>;
   checkBonusThresholds(userId: string): Promise<void>;
+  creditPendingReferralBonuses(userId: string): Promise<void>;
   getBonusSummary(userId: string): Promise<any>;
   getDepositBonuses(userId: string, filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
   getReferralBonuses(userId: string, filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]>;
@@ -5158,20 +5159,24 @@ export class SupabaseStorage implements IStorage {
     for (const bonus of lockedBonuses) {
       if (remainingBetAmount <= 0) break;
       
-      const currentCompleted = parseFloat(bonus.wagering_completed);
-      const required = parseFloat(bonus.wagering_required);
-      const remainingToComplete = required - currentCompleted;
+      const currentCompleted = parseFloat(bonus.wagering_completed || '0');
+      const required = parseFloat(bonus.wagering_required || '0');
       
-      // Calculate how much of this bet applies to this bonus
-      const amountToApply = Math.min(remainingBetAmount, remainingToComplete + remainingBetAmount);
-      const newCompleted = currentCompleted + amountToApply;
-      const progress = (newCompleted / required) * 100;
+      // Skip if no wagering required
+      if (required <= 0) continue;
+      
+      const remainingToComplete = Math.max(0, required - currentCompleted);
+      
+      // ✅ FIX: Calculate how much of this bet applies to this bonus (capped at remaining)
+      const amountToApply = Math.min(remainingBetAmount, remainingToComplete);
+      const newCompleted = Math.min(currentCompleted + amountToApply, required); // ✅ Cap at required
+      const progress = Math.min(100, (newCompleted / required) * 100); // ✅ Cap at 100%
 
       const { error: updateError } = await supabaseServer
         .from('deposit_bonuses')
         .update({
           wagering_completed: newCompleted,
-          wagering_progress: Math.min(100, progress),
+          wagering_progress: progress,
           updated_at: new Date().toISOString()
         })
         .eq('id', bonus.id);
@@ -5185,22 +5190,23 @@ export class SupabaseStorage implements IStorage {
       if (newCompleted >= required) {
         await this.unlockDepositBonus(bonus.id);
         // ✅ FIX: Calculate overflow to apply to next bonus
-        remainingBetAmount = newCompleted - required;
-        console.log(`🔓 Bonus ${bonus.id} unlocked! Overflow ₹${remainingBetAmount} applies to next bonus`);
+        remainingBetAmount = remainingBetAmount - amountToApply;
+        console.log(`🔓 Bonus ${bonus.id} unlocked! Remaining ₹${remainingBetAmount} applies to next bonus`);
       } else {
         // All bet amount consumed by this bonus
         remainingBetAmount = 0;
       }
 
       // Log progress milestone (every 25%)
-      if (Math.floor(progress / 25) > Math.floor((progress - (betAmount / parseFloat(bonus.wagering_required)) * 100) / 25)) {
+      const prevProgress = (currentCompleted / required) * 100;
+      if (Math.floor(progress / 25) > Math.floor(prevProgress / 25)) {
         await this.logBonusTransaction({
           userId,
           bonusType: 'deposit_bonus',
           bonusSourceId: bonus.id,
-          amount: betAmount,
+          amount: amountToApply,
           action: 'wagering_progress',
-          description: `Wagering progress: ${Math.floor(progress)}% complete (₹${newCompleted.toFixed(2)} / ₹${bonus.wagering_required})`
+          description: `Wagering progress: ${Math.floor(progress)}% complete (₹${newCompleted.toFixed(2)} / ₹${required})`
         });
       }
     }
@@ -5315,19 +5321,30 @@ export class SupabaseStorage implements IStorage {
    */
   async creditLinkedReferralBonuses(depositBonusId: string, userId: string): Promise<void> {
     try {
+      console.log(`🔍 Checking for referral bonuses linked to deposit bonus ${depositBonusId} for user ${userId}`);
+      
       // Find all locked referral bonuses LINKED to this deposit bonus
+      // Note: These are bonuses where the REFERRER (userId) will receive the bonus
       const { data: lockedBonuses, error } = await supabaseServer
         .from('referral_bonuses')
         .select('*')
         .eq('linked_deposit_bonus_id', depositBonusId)
         .eq('status', 'locked');
         
-      if (error || !lockedBonuses || lockedBonuses.length === 0) {
-        console.log(`ℹ️ No locked referral bonuses found for user ${userId}`);
+      if (error) {
+        console.error(`❌ Error querying referral bonuses:`, error);
         return;
       }
       
-      console.log(`🎁 Found ${lockedBonuses.length} locked referral bonuses to credit`);
+      if (!lockedBonuses || lockedBonuses.length === 0) {
+        console.log(`ℹ️ No locked referral bonuses linked to deposit bonus ${depositBonusId}`);
+        return;
+      }
+      
+      console.log(`🎁 Found ${lockedBonuses.length} locked referral bonus(es) to credit for user ${userId}`);
+      for (const b of lockedBonuses) {
+        console.log(`   - Referral bonus ${b.id}: ₹${b.bonus_amount} (from referred user ${b.referred_user_id})`);
+      }
       
       // Credit all locked referral bonuses
       await this.creditReferralBonusesList(lockedBonuses, userId);
@@ -5339,8 +5356,9 @@ export class SupabaseStorage implements IStorage {
 
   /**
    * Create a referral bonus record (LOCKED initially)
-   * ✅ NEW LOGIC: Referral bonus is linked to referrer's LATEST locked deposit bonus
+   * ✅ NEW LOGIC: Referral bonus is linked to referrer's OLDEST LOCKED deposit bonus
    * It will be credited TOGETHER with that deposit bonus when wagering is complete
+   * If no locked bonus exists, credit immediately if referrer has no pending wagering
    */
   async createReferralBonus(data: {
     referrerUserId: string;
@@ -5351,25 +5369,25 @@ export class SupabaseStorage implements IStorage {
     bonusPercentage: number;
     linkedDepositBonusId?: string; // ✅ NEW: Link to deposit bonus
   }): Promise<string> {
-    // ✅ CRITICAL FIX: Find the referrer's LATEST deposit bonus (locked or unlocked) to link to
-    // The referral bonus should be linked to whatever deposit bonus the referrer currently has
-    // This ensures the referral bonus gets credited together with the referrer's deposit bonus
-    const { data: latestDepositBonus } = await supabaseServer
+    // ✅ CRITICAL FIX: Find the referrer's OLDEST LOCKED deposit bonus to link to
+    // This ensures FIFO ordering - referral bonus is credited with the oldest pending bonus
+    const { data: oldestLockedBonus } = await supabaseServer
       .from('deposit_bonuses')
       .select('id, status, wagering_required, wagering_completed')
       .eq('user_id', data.referrerUserId)
-      .order('created_at', { ascending: false })
+      .eq('status', 'locked') // ✅ FIX: Only link to LOCKED bonuses
+      .order('created_at', { ascending: true }) // ✅ FIX: FIFO - oldest first
       .limit(1)
       .single();
 
-    // ✅ FIX: Use the latest deposit bonus regardless of status
-    // If no deposit bonus exists, we'll still create the referral bonus but it won't be linked
-    const linkedDepositBonusId = latestDepositBonus?.id || null;
+    // Determine if we should link or credit immediately
+    const linkedDepositBonusId = oldestLockedBonus?.id || null;
+    const shouldCreditImmediately = !linkedDepositBonusId; // No locked bonus = credit now
     
-    console.log(`🔗 Creating referral bonus for referrer ${data.referrerUserId}, linking to deposit bonus: ${linkedDepositBonusId}`);
+    console.log(`🔗 Creating referral bonus for referrer ${data.referrerUserId}`);
+    console.log(`   Linked deposit bonus: ${linkedDepositBonusId || 'NONE (will credit immediately)'}`); 
     
-    // ✅ NEW: Referral bonus has NO separate wagering - it's linked to deposit bonus
-    // wagering_required = 0 means it relies on linked deposit bonus
+    // Create the referral bonus record
     const { data: bonus, error } = await supabaseServer
       .from('referral_bonuses')
       .insert({
@@ -5380,10 +5398,12 @@ export class SupabaseStorage implements IStorage {
         bonus_amount: data.bonusAmount,
         bonus_percentage: data.bonusPercentage,
         linked_deposit_bonus_id: linkedDepositBonusId,
-        status: 'locked', // ✅ FIXED: Start as 'locked' (not 'pending')
-        wagering_required: 0, // ✅ FIXED: No separate wagering requirement
+        status: shouldCreditImmediately ? 'pending_credit' : 'locked', // ✅ FIX: Mark for immediate credit if no linked bonus
+        wagering_required: 0,
         wagering_completed: 0,
-        notes: `Linked to deposit bonus ${linkedDepositBonusId}`,
+        notes: linkedDepositBonusId 
+          ? `Linked to deposit bonus ${linkedDepositBonusId}` 
+          : 'No locked deposit bonus - pending immediate credit',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -5398,18 +5418,25 @@ export class SupabaseStorage implements IStorage {
     // Log bonus transaction
     const linkMessage = linkedDepositBonusId 
       ? `Linked to deposit bonus ${linkedDepositBonusId}. Will be credited together.`
-      : `No active deposit bonus to link. Will be credited when referrer makes a deposit.`;
+      : `No locked deposit bonus. Will be credited immediately.`;
       
     await this.logBonusTransaction({
       userId: data.referrerUserId,
       bonusType: 'referral_bonus',
       bonusSourceId: bonus.id,
       amount: data.bonusAmount,
-      action: 'locked',
-      description: `Referral bonus locked: ₹${data.bonusAmount}. ${linkMessage}`
+      action: shouldCreditImmediately ? 'pending_credit' : 'locked',
+      description: `Referral bonus ${shouldCreditImmediately ? 'pending credit' : 'locked'}: ₹${data.bonusAmount}. ${linkMessage}`
     });
 
-    console.log(`✅ Referral bonus created (LOCKED): ₹${data.bonusAmount} for user ${data.referrerUserId}. Linked to deposit bonus: ${linkedDepositBonusId || 'NONE'}`);
+    console.log(`✅ Referral bonus created (${shouldCreditImmediately ? 'PENDING CREDIT' : 'LOCKED'}): ₹${data.bonusAmount} for user ${data.referrerUserId}`);
+    
+    // ✅ CRITICAL FIX: If no locked deposit bonus, credit immediately
+    if (shouldCreditImmediately) {
+      console.log(`🎁 No locked deposit bonus for referrer - crediting referral bonus immediately`);
+      await this.creditReferralBonus(bonus.id);
+    }
+    
     return bonus.id;
   }
 
@@ -5482,14 +5509,20 @@ export class SupabaseStorage implements IStorage {
       }
     }
     
-    // Log transaction
+    // Log transaction with appropriate description based on previous status
+    const creditReason = bonus.status === 'pending_credit' 
+      ? 'No locked deposit bonus - credited immediately'
+      : 'Linked deposit bonus credited';
+      
     await this.logBonusTransaction({
       userId: bonus.referrer_user_id,
       bonusType: 'referral_bonus',
       bonusSourceId: bonusId,
       amount: bonusAmount,
+      balanceBefore,
+      balanceAfter,
       action: 'credited',
-      description: `Referral bonus unlocked and credited: ₹${bonusAmount} (wagering complete)`
+      description: `Referral bonus credited: ₹${bonusAmount}. Reason: ${creditReason}`
     });
     
     console.log(`✅ Referral bonus credited to user ${bonus.referrer_user_id}: ₹${bonusAmount}`);
@@ -5526,6 +5559,8 @@ export class SupabaseStorage implements IStorage {
         .eq('status', 'unlocked'); // ✅ FIX: Only credit UNLOCKED bonuses, not locked ones
 
       if (error || !bonuses || bonuses.length === 0) {
+        // ✅ NEW: Still check for pending referral bonuses even if no deposit bonuses
+        await this.creditPendingReferralBonuses(userId);
         return;
       }
 
@@ -5559,11 +5594,46 @@ export class SupabaseStorage implements IStorage {
             description: `Threshold reached (≤ ₹${lower.toFixed(2)} or ≥ ₹${upper.toFixed(2)})`
           });
 
-          // ❌ REMOVED: Referral bonus is now created upon deposit approval, not bonus unlock
-          // await this.handleReferralForBonus(b.id);
+          // ✅ NEW: Credit linked referral bonuses when deposit bonus is credited via threshold
+          await this.creditLinkedReferralBonuses(b.id, userId);
         }
       }
+      
+      // ✅ NEW: Also check for any pending referral bonuses that need crediting
+      await this.creditPendingReferralBonuses(userId);
     } catch { }
+  }
+  
+  /**
+   * ✅ NEW: Credit any pending referral bonuses for a user
+   * This handles cases where referral bonus was created but no locked deposit bonus existed
+   */
+  async creditPendingReferralBonuses(userId: string): Promise<void> {
+    try {
+      // Find referral bonuses with 'pending_credit' status for this referrer
+      const { data: pendingBonuses, error } = await supabaseServer
+        .from('referral_bonuses')
+        .select('*')
+        .eq('referrer_user_id', userId)
+        .eq('status', 'pending_credit');
+        
+      if (error || !pendingBonuses || pendingBonuses.length === 0) {
+        return;
+      }
+      
+      console.log(`🎁 Found ${pendingBonuses.length} pending referral bonus(es) to credit for user ${userId}`);
+      
+      for (const bonus of pendingBonuses) {
+        try {
+          await this.creditReferralBonus(bonus.id);
+          console.log(`✅ Credited pending referral bonus ${bonus.id}: ₹${bonus.bonus_amount}`);
+        } catch (creditError: any) {
+          console.error(`❌ Error crediting pending referral bonus ${bonus.id}:`, creditError);
+        }
+      }
+    } catch (error) {
+      console.error('Error crediting pending referral bonuses:', error);
+    }
   }
 
   /**
@@ -6255,11 +6325,14 @@ export class SupabaseStorage implements IStorage {
 
   /**
    * Get all referral data with user details (admin)
-   * ✅ FIX: Now accepts filters as per interface definition
+   * ✅ FIX: Now fetches from both user_referrals AND referral_bonuses for complete picture
    */
   async getAllReferralData(filters?: { status?: string; limit?: number; offset?: number }): Promise<any[]> {
     const { status, limit = 100, offset = 0 } = filters || {};
 
+    console.log('📊 Fetching referral data with filters:', { status, limit, offset });
+
+    // First try user_referrals table
     let query = supabaseServer
       .from('user_referrals')
       .select(`
@@ -6280,7 +6353,6 @@ export class SupabaseStorage implements IStorage {
 
     // Apply status filter if provided
     if (status && status !== 'all') {
-      // Map 'active' to bonus_applied=true, 'pending' to bonus_applied=false
       if (status === 'active' || status === 'completed') {
         query = query.eq('bonus_applied', true);
       } else if (status === 'pending') {
@@ -6288,25 +6360,97 @@ export class SupabaseStorage implements IStorage {
       }
     }
 
-    const { data, error } = await query;
+    const { data: userReferrals, error: userReferralsError } = await query;
 
-    if (error) {
-      console.error('Error getting all referral data:', error);
-      return [];
+    if (userReferralsError) {
+      console.error('❌ Error getting user_referrals:', userReferralsError);
     }
+    
+    console.log(`📊 Found ${userReferrals?.length || 0} records in user_referrals`);
 
-    return (data || []).map((ref: any) => ({
-      id: ref.id,
-      referrerId: ref.referrer_user_id,
-      referrerUsername: ref.referrer?.phone || 'Unknown',
-      referredId: ref.referred_user_id,
-      referredUsername: ref.referred?.phone || 'Unknown',
-      depositAmount: parseFloat(ref.deposit_amount || '0'),
-      bonusAmount: parseFloat(ref.bonus_amount || '0'),
-      status: ref.bonus_applied ? 'completed' : 'pending',
-      createdAt: ref.created_at,
-      bonusAppliedAt: ref.bonus_applied_at
-    }));
+    // Also fetch from referral_bonuses table for complete picture
+    const { data: referralBonuses, error: referralBonusesError } = await supabaseServer
+      .from('referral_bonuses')
+      .select(`
+        *,
+        referrer:users!referral_bonuses_referrer_user_id_fkey (
+          id,
+          phone,
+          full_name
+        ),
+        referred:users!referral_bonuses_referred_user_id_fkey (
+          id,
+          phone,
+          full_name
+        )
+      `)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (referralBonusesError) {
+      console.error('❌ Error getting referral_bonuses:', referralBonusesError);
+    }
+    
+    console.log(`📊 Found ${referralBonuses?.length || 0} records in referral_bonuses`);
+
+    // Combine and deduplicate results
+    const combinedMap = new Map<string, any>();
+    
+    // Add user_referrals data
+    (userReferrals || []).forEach((ref: any) => {
+      const key = `${ref.referrer_user_id}-${ref.referred_user_id}`;
+      combinedMap.set(key, {
+        id: ref.id,
+        referrerId: ref.referrer_user_id,
+        referrerUsername: ref.referrer?.full_name || ref.referrer?.phone || 'Unknown',
+        referrerPhone: ref.referrer?.phone || '',
+        referredId: ref.referred_user_id,
+        referredUsername: ref.referred?.full_name || ref.referred?.phone || 'Unknown',
+        referredPhone: ref.referred?.phone || '',
+        depositAmount: parseFloat(ref.deposit_amount || '0'),
+        bonusAmount: parseFloat(ref.bonus_amount || '0'),
+        status: ref.bonus_applied ? 'completed' : 'pending',
+        createdAt: ref.created_at,
+        bonusAppliedAt: ref.bonus_applied_at,
+        source: 'user_referrals'
+      });
+    });
+    
+    // Add/update with referral_bonuses data (more detailed)
+    (referralBonuses || []).forEach((bonus: any) => {
+      const key = `${bonus.referrer_user_id}-${bonus.referred_user_id}`;
+      const existing = combinedMap.get(key);
+      
+      if (!existing) {
+        combinedMap.set(key, {
+          id: bonus.id,
+          referrerId: bonus.referrer_user_id,
+          referrerUsername: bonus.referrer?.full_name || bonus.referrer?.phone || 'Unknown',
+          referrerPhone: bonus.referrer?.phone || '',
+          referredId: bonus.referred_user_id,
+          referredUsername: bonus.referred?.full_name || bonus.referred?.phone || 'Unknown',
+          referredPhone: bonus.referred?.phone || '',
+          depositAmount: parseFloat(bonus.deposit_amount || '0'),
+          bonusAmount: parseFloat(bonus.bonus_amount || '0'),
+          status: bonus.status === 'credited' ? 'completed' : bonus.status,
+          createdAt: bonus.created_at,
+          bonusAppliedAt: bonus.credited_at,
+          source: 'referral_bonuses'
+        });
+      } else {
+        // Update with more accurate status from referral_bonuses
+        existing.bonusAmount = Math.max(existing.bonusAmount, parseFloat(bonus.bonus_amount || '0'));
+        if (bonus.status === 'credited') {
+          existing.status = 'completed';
+          existing.bonusAppliedAt = bonus.credited_at || existing.bonusAppliedAt;
+        }
+      }
+    });
+
+    const result = Array.from(combinedMap.values());
+    console.log(`📊 Returning ${result.length} combined referral records`);
+    
+    return result;
   }
 
   /**
@@ -6339,31 +6483,46 @@ export class SupabaseStorage implements IStorage {
       const referralBonuses = await this.getReferralBonuses(user.id);
       const bonusTransactions = await this.getBonusTransactions(user.id, { limit: 5, offset: 0 });
 
+      // ✅ FIX: Use correct property names (camelCase from getDepositBonuses/getReferralBonuses)
       const totalDepositBonusReceived = depositBonuses
         .filter((b: any) => b.status === 'credited')
-        .reduce((sum: number, b: any) => sum + parseFloat(b.bonus_amount || '0'), 0);
+        .reduce((sum: number, b: any) => sum + (b.bonusAmount || parseFloat(b.bonus_amount || '0')), 0);
 
       const totalReferralBonusReceived = referralBonuses
         .filter((b: any) => b.status === 'credited')
-        .reduce((sum: number, b: any) => sum + parseFloat(b.bonus_amount || '0'), 0);
+        .reduce((sum: number, b: any) => sum + (b.bonusAmount || parseFloat(b.bonus_amount || '0')), 0);
+      
+      // ✅ FIX: Calculate pending bonuses from locked deposit/referral bonuses
+      const pendingDepositBonus = depositBonuses
+        .filter((b: any) => b.status === 'locked' || b.status === 'unlocked')
+        .reduce((sum: number, b: any) => sum + (b.bonusAmount || parseFloat(b.bonus_amount || '0')), 0);
+        
+      const pendingReferralBonus = referralBonuses
+        .filter((b: any) => b.status === 'locked' || b.status === 'pending_credit')
+        .reduce((sum: number, b: any) => sum + (b.bonusAmount || parseFloat(b.bonus_amount || '0')), 0);
 
+      // ✅ FIX: Calculate total bonus earned from actual credited bonuses, not legacy user field
+      const calculatedTotalBonusEarned = totalDepositBonusReceived + totalReferralBonusReceived;
+      
       return {
         userId: user.id,
         username: user.phone,
         phone: user.phone,
         fullName: user.full_name,
-        currentDepositBonus: parseFloat(user.deposit_bonus_available || '0'),
-        currentReferralBonus: parseFloat(user.referral_bonus_available || '0'),
-        currentTotalPending: parseFloat(user.deposit_bonus_available || '0') + parseFloat(user.referral_bonus_available || '0'),
+        // ✅ FIX: Use calculated pending values from actual bonus records
+        currentDepositBonus: pendingDepositBonus,
+        currentReferralBonus: pendingReferralBonus,
+        currentTotalPending: pendingDepositBonus + pendingReferralBonus,
+        // ✅ FIX: Use calculated totals from actual credited bonuses
         totalDepositBonusReceived,
         totalReferralBonusReceived,
-        totalBonusApplied: parseFloat(user.total_bonus_earned || '0'),
-        totalBonusEarned: parseFloat(user.total_bonus_earned || '0'),
+        totalBonusApplied: calculatedTotalBonusEarned,
+        totalBonusEarned: calculatedTotalBonusEarned,
         depositBonusCount: depositBonuses.length,
         referralBonusCount: referralBonuses.length,
         totalBonusTransactions: bonusTransactions.length,
-        firstBonusDate: depositBonuses[0]?.created_at || null,
-        lastBonusDate: bonusTransactions[0]?.created_at || null,
+        firstBonusDate: depositBonuses[depositBonuses.length - 1]?.createdAt || depositBonuses[depositBonuses.length - 1]?.created_at || null,
+        lastBonusDate: bonusTransactions[0]?.created_at || bonusTransactions[0]?.createdAt || null,
         userCreatedAt: user.created_at,
         recentTransactions: bonusTransactions.slice(0, 5).map((tx: any) => ({
           id: tx.id,

@@ -40,14 +40,17 @@ interface ReferralData {
   id: string;
   referrerId: string;
   referrerUsername: string;
+  referrerPhone?: string;
   referredId: string;
   referredUsername: string;
+  referredPhone?: string;
   depositAmount: number;
   bonusAmount: number;
-  status: 'pending' | 'credited' | 'expired';
+  status: 'pending' | 'completed' | 'credited' | 'locked' | 'pending_credit' | 'expired';
   createdAt: string;
   creditedAt?: string;
   bonusAppliedAt?: string;
+  source?: string;
 }
 
 interface BonusSettings {
@@ -261,15 +264,17 @@ export default function AdminBonus() {
       case 'pending':
       case 'added':
       case 'locked':
+      case 'pending_credit':
         return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Pending</Badge>;
       case 'failed':
       case 'expired':
       case 'forfeited':
         return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Failed</Badge>;
       case 'wagering_progress':
+      case 'in_progress':
         return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">In Progress</Badge>;
       default:
-        return <Badge variant="outline">Unknown</Badge>;
+        return <Badge variant="outline">{statusOrAction || 'Unknown'}</Badge>;
     }
   };
 
