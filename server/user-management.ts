@@ -444,43 +444,100 @@ export const updateUserStatus = async (
 };
 
 export const updateUserBalance = async (
-  userId: string, 
-  amount: number, 
-  adminId: string, 
+  userId: string,
+  amount: number,
+  adminId: string,
   reason: string,
   type: 'add' | 'subtract' = 'add'
 ): Promise<UserManagementResponse> => {
   try {
-    // Use the storage function to update balance
     if (type === 'subtract') {
+      // ✅ For subtractions, just deduct balance (no bonuses apply)
       await storage.updateUserBalance(userId, -amount);
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+      
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          username: user.phone,
+          balance: user.balance,
+          createdAt: user.created_at,
+          updatedAt: user.updated_at
+        },
+        message: `Balance subtracted: ₹${amount.toLocaleString('en-IN')}, reason: ${reason}`
+      };
     } else {
-      await storage.updateUserBalance(userId, amount);
+      // ✅ UNIFIED SYSTEM: For additions, use approvePaymentRequestAtomic() to apply bonuses
+      // This ensures consistent bonus application whether admin adds balance or user deposits
+      
+      console.log(`💰 Admin ${adminId} adding ₹${amount} to user ${userId} via unified bonus system`);
+      
+      // Step 1: Create a payment request record for audit trail
+      const paymentRequest = await storage.createPaymentRequest({
+        userId: userId,
+        type: 'deposit',
+        amount: amount,
+        paymentMethod: 'admin_credit',
+        paymentDetails: `Admin direct balance addition: ${reason}`,
+        status: 'approved', // Pre-approved since admin is doing it directly
+        adminNotes: `Admin ${adminId}: ${reason}`
+      });
+      
+      console.log(`✅ Created payment request ${paymentRequest.id} for admin balance addition`);
+      
+      // Step 2: Use atomic approval function to add balance WITH bonuses
+      // This applies deposit bonus, referral bonus, and wagering requirements
+      const result = await storage.approvePaymentRequestAtomic(
+        paymentRequest.id,
+        userId,
+        amount,
+        adminId
+      );
+      
+      console.log(`✅ Balance added with bonuses:`, {
+        depositAmount: amount,
+        bonusAmount: result.bonusAmount,
+        wageringRequired: result.wageringRequirement,
+        newBalance: result.balance
+      });
+      
+      // Step 3: Get updated user details
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+      
+      // Return detailed response including bonus information
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          username: user.phone,
+          balance: user.balance,
+          createdAt: user.created_at,
+          updatedAt: user.updated_at
+        },
+        data: {
+          depositAmount: amount,
+          bonusAmount: result.bonusAmount,
+          totalCredited: amount + result.bonusAmount,
+          wageringRequirement: result.wageringRequirement,
+          newBalance: result.balance
+        },
+        message: `✅ Balance Added: ₹${amount.toLocaleString('en-IN')} + Bonus: ₹${result.bonusAmount.toLocaleString('en-IN')} = Total: ₹${(amount + result.bonusAmount).toLocaleString('en-IN')}${result.wageringRequirement > 0 ? ` (Wagering: ₹${result.wageringRequirement.toLocaleString('en-IN')})` : ''} | Reason: ${reason}`
+      };
     }
-
-    // Get updated user details
-    const user = await storage.getUser(userId);
-    if (!user) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Return updated user details
-    const userResponse = {
-      id: user.id,
-      username: user.phone, // Use phone as username since that's our identifier
-      balance: user.balance,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at
-    };
-
-    return { 
-      success: true, 
-      user: userResponse,
-      message: `Balance ${type === 'add' ? 'added' : 'subtracted'}: ${amount}, reason: ${reason}`
-    };
   } catch (error) {
-    console.error('User balance update error:', error);
-    return { success: false, error: 'User balance update failed' };
+    console.error('❌ User balance update error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'User balance update failed'
+    };
   }
 };
 

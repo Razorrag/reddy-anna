@@ -40,8 +40,23 @@ export default function PlayerGame() {
     balance: user?.balance || 0
   };
 
-  // Local state
-  const [selectedBetAmount, setSelectedBetAmount] = useState(2500);
+  // Local state - Initialize bet amount from localStorage to persist across page refreshes
+  const [selectedBetAmount, setSelectedBetAmount] = useState(() => {
+    try {
+      const saved = localStorage.getItem('selectedBetAmount');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        // Validate that saved amount is in betAmounts array
+        const validAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
+        if (validAmounts.includes(parsed)) {
+          return parsed;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load bet amount from localStorage:', error);
+    }
+    return 2500; // Default fallback
+  });
   const [selectedPosition, setSelectedPosition] = useState<BetSide | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
   const [userBalance, setUserBalance] = useState(user?.balance || 0); // Use user's balance from AuthContext
@@ -181,9 +196,14 @@ export default function PlayerGame() {
     showNotification(`Selected position: ${position.toUpperCase()} (Round ${gameState.currentRound})`, 'info');
   }, [gameState.phase, gameState.bettingLocked, gameState.countdownTimer, gameState.currentRound, showNotification]);
 
-  // Handle chip selection
+  // Handle chip selection - Save to localStorage for persistence across refreshes
   const handleChipSelect = useCallback((amount: number) => {
     setSelectedBetAmount(amount);
+    try {
+      localStorage.setItem('selectedBetAmount', amount.toString());
+    } catch (error) {
+      console.error('Failed to save bet amount to localStorage:', error);
+    }
     // Close the selector when a chip is selected
     setShowChipSelector(false);
   }, []);
@@ -384,6 +404,29 @@ export default function PlayerGame() {
       window.removeEventListener('refresh-balance', handleRefreshBalance as EventListener);
     };
   }, [showNotification, updateBalance]);
+
+  // Save selectedBetAmount to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('selectedBetAmount', selectedBetAmount.toString());
+    } catch (error) {
+      console.error('Failed to save bet amount to localStorage:', error);
+    }
+  }, [selectedBetAmount]);
+
+  // Optional: Clear bet amount from localStorage on logout
+  useEffect(() => {
+    const handleLogout = () => {
+      try {
+        localStorage.removeItem('selectedBetAmount');
+      } catch (error) {
+        console.error('Failed to clear bet amount from localStorage:', error);
+      }
+    };
+    
+    window.addEventListener('user-logout', handleLogout);
+    return () => window.removeEventListener('user-logout', handleLogout);
+  }, []);
 
 
 

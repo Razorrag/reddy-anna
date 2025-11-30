@@ -215,7 +215,7 @@ export default function UserAdmin() {
         phone: newUserPhone,
         name: newUserName,
         password: newUserPassword || newUserPhone, // Use provided password or default to phone number
-        initialBalance: parseFloat(newUserBalance) || 100000,
+        initialBalance: parseFloat(newUserBalance) || 0,
         role: newUserRole,
         status: newUserStatus
       };

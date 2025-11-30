@@ -711,24 +711,24 @@ const getCurrentGameStateForUser = async (userId: string) => {
       })));
     }
 
-    // Store individual bets as arrays (not cumulative totals)
-    const round1Bets = { andar: [] as number[], bahar: [] as number[] };
-    const round2Bets = { andar: [] as number[], bahar: [] as number[] };
+    // ✅ FIX: Store cumulative totals (not arrays) to match frontend expectations
+    const round1Bets = { andar: 0, bahar: 0 };
+    const round2Bets = { andar: 0, bahar: 0 };
 
-    // Group individual bets by round and side
+    // Sum up all bets by round and side (cumulative totals)
     userBets.forEach((bet: any) => {
       const amount = parseFloat(bet.amount);
       if (bet.round === '1' || bet.round === 1) {
         if (bet.side === 'andar') {
-          round1Bets.andar.push(amount);
+          round1Bets.andar += amount;
         } else if (bet.side === 'bahar') {
-          round1Bets.bahar.push(amount);
+          round1Bets.bahar += amount;
         }
       } else if (bet.round === '2' || bet.round === 2) {
         if (bet.side === 'andar') {
-          round2Bets.andar.push(amount);
+          round2Bets.andar += amount;
         } else if (bet.side === 'bahar') {
-          round2Bets.bahar.push(amount);
+          round2Bets.bahar += amount;
         }
       }
     });
