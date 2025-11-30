@@ -1017,9 +1017,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" style={{ zIndex: 2 }} />
       </div>
 
-      {/* LIVE Badge - Top Left */}
+      {/* LIVE Badge - Top Left - Above frozen frame */}
       {isLive && (
-        <div className="absolute top-3 left-3 z-40">
+        <div className="absolute top-3 left-3 z-[55]">
           <div className="flex items-center gap-2 bg-red-600/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg">
             <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
             <span className="text-white font-bold text-xs uppercase tracking-wider">LIVE</span>
@@ -1027,9 +1027,9 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         </div>
       )}
 
-      {/* Viewer Count - Top Right - Show when stream is live */}
+      {/* Viewer Count - Top Right - Above frozen frame */}
       {isLive && (
-        <div className="absolute top-3 right-3 z-40">
+        <div className="absolute top-3 right-3 z-[55]">
           <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full">
             <span className="text-red-400 text-[10px]">👁</span>
             <span className="text-white text-xs font-medium">
@@ -1039,7 +1039,7 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
         </div>
       )}
 
-      {/* 🛠️ Debug Overlay (Hidden by default) */}
+      {/* Debug Overlay (Hidden by default) */}
       {showDebug && (
         <div className="absolute top-12 left-3 z-50 bg-black/80 text-green-400 p-2 rounded text-xs font-mono pointer-events-none">
           <div>Latency: {debugStats.latency.toFixed(2)}s</div>
