@@ -13,6 +13,7 @@ import AdminWhatsAppSettings from "@/pages/admin-whatsapp-settings.tsx";
 import AdminStreamSettings from "@/pages/admin-stream-settings.tsx";
 import GameHistoryPage from "@/pages/GameHistoryPage.tsx";
 import AdminPartners from "@/pages/admin-partners.tsx";
+import AdminPartnerDetail from "@/pages/admin-partner-detail.tsx";
 
 import Login from "@/pages/login.tsx";
 import Signup from "@/pages/signup.tsx";
@@ -123,6 +124,11 @@ function Router() {
       <Route path="/admin/partners">
         <ProtectedAdminRoute>
           <AdminPartners />
+        </ProtectedAdminRoute>
+      </Route>
+      <Route path="/admin/partner/:id">
+        <ProtectedAdminRoute>
+          <AdminPartnerDetail />
         </ProtectedAdminRoute>
       </Route>
 

@@ -19,8 +19,13 @@ import {
   Check,
   X,
   Key,
-  AlertTriangle
+  AlertTriangle,
+  Wallet,
+  Eye,
+  TrendingUp,
+  IndianRupee
 } from "lucide-react";
+import { useLocation } from "wouter";
 
 interface Partner {
   id: string;
@@ -31,10 +36,15 @@ interface Partner {
   sharePercentage: number;
   lastLogin: string | null;
   createdAt: string;
+  // Financial fields
+  walletBalance?: number;
+  totalEarned?: number;
+  totalWithdrawn?: number;
 }
 
 export default function AdminPartners() {
   const { token } = useAuth();
+  const [, setLocation] = useLocation();
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, suspended: 0, banned: 0 });
@@ -128,7 +138,30 @@ export default function AdminPartners() {
       });
       const data = await response.json();
       if (data.success) {
-        setPartners(data.data.partners);
+        // Fetch wallet data for each partner
+        const partnersWithWallet = await Promise.all(
+          data.data.partners.map(async (partner: Partner) => {
+            try {
+              const walletRes = await fetch(`/api/admin/partners/${partner.id}/wallet`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              const walletData = await walletRes.json();
+              if (walletData.success) {
+                return {
+                  ...partner,
+                  walletBalance: parseFloat(walletData.data.wallet_balance || '0'),
+                  totalEarned: parseFloat(walletData.data.total_earned || '0'),
+                  totalWithdrawn: parseFloat(walletData.data.total_withdrawn || '0')
+                };
+              }
+            } catch (err) {
+              console.error(`Error fetching wallet for partner ${partner.id}:`, err);
+            }
+            return partner;
+          })
+        );
+        
+        setPartners(partnersWithWallet);
         setPagination(data.data.pagination);
       }
     } catch (err) {
@@ -414,13 +447,15 @@ export default function AdminPartners() {
                         <th className="text-left p-3 text-gold font-medium">Partner</th>
                         <th className="text-left p-3 text-gold font-medium">Status</th>
                         <th className="text-center p-3 text-gold font-medium">Share %</th>
-                        <th className="text-left p-3 text-gold font-medium">Last Login</th>
+                        <th className="text-right p-3 text-gold font-medium">Wallet</th>
+                        <th className="text-right p-3 text-gold font-medium">Earned</th>
+                        <th className="text-right p-3 text-gold font-medium">Withdrawn</th>
                         <th className="text-center p-3 text-gold font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {partners.map((partner, index) => (
-                        <tr key={partner.id} className={`border-b border-gold/20 ${index % 2 === 0 ? 'bg-black/20' : ''}`}>
+                        <tr key={partner.id} className={`border-b border-gold/20 hover:bg-black/30 cursor-pointer transition-colors ${index % 2 === 0 ? 'bg-black/20' : ''}`}>
                           <td className="p-3">
                             <div>
                               <p className="font-medium text-white">{partner.fullName}</p>
@@ -458,9 +493,40 @@ export default function AdminPartners() {
                               </button>
                             )}
                           </td>
-                          <td className="p-3 text-gray-400 text-sm">{formatDate(partner.lastLogin)}</td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Wallet className="w-3 h-3 text-green-400" />
+                              <span className="text-green-400 font-semibold">
+                                ₹{(partner.walletBalance || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <TrendingUp className="w-3 h-3 text-blue-400" />
+                              <span className="text-blue-400 font-semibold">
+                                ₹{(partner.totalEarned || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <IndianRupee className="w-3 h-3 text-purple-400" />
+                              <span className="text-purple-400 font-semibold">
+                                ₹{(partner.totalWithdrawn || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </td>
                           <td className="p-3">
                             <div className="flex items-center gap-1 justify-center flex-wrap">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-blue-500/30 text-blue-400 h-7 px-2 hover:bg-blue-500/10"
+                                onClick={() => setLocation(`/admin/partner/${partner.id}`)}
+                              >
+                                <Eye className="h-3 w-3 mr-1" /> Details
+                              </Button>
                               {partner.status === 'pending' && (
                                 <>
                                   <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 px-2"

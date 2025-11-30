@@ -397,4 +397,358 @@ router.get('/phone/:phone', requireAdmin, async (req: Request, res: Response) =>
   }
 });
 
+// =====================================================
+// ADMIN FINANCIAL ENDPOINTS
+// =====================================================
+
+// GET /api/admin/partners/:id/wallet - Get partner wallet details
+router.get('/:id/wallet', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const { data: partner, error } = await supabaseServer
+      .from('partners')
+      .select('wallet_balance, total_earned, total_withdrawn, min_withdrawal_amount, commission_rate, share_percentage')
+      .eq('id', id)
+      .single();
+    
+    if (error || !partner) {
+      return res.status(404).json({ success: false, error: 'Partner not found' });
+    }
+    
+    // Get pending withdrawals amount
+    const { data: pendingWithdrawals } = await supabaseServer
+      .from('partner_withdrawal_requests')
+      .select('amount')
+      .eq('partner_id', id)
+      .eq('status', 'pending');
+    
+    const pendingAmount = pendingWithdrawals?.reduce((sum, req) => sum + parseFloat(req.amount), 0) || 0;
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...partner,
+        pending_withdrawals: pendingAmount
+      }
+    });
+  } catch (error: any) {
+    console.error('Get partner wallet error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch wallet data' });
+  }
+});
+
+// GET /api/admin/partners/:id/earnings - Get partner earnings history
+router.get('/:id/earnings', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { page = '1', limit = '20', dateFrom, dateTo } = req.query;
+    
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const offset = (pageNum - 1) * limitNum;
+    
+    let query = supabaseServer
+      .from('partner_game_earnings')
+      .select('*', { count: 'exact' })
+      .eq('partner_id', id)
+      .eq('credited', true);
+    
+    if (dateFrom) query = query.gte('created_at', dateFrom as string);
+    if (dateTo) query = query.lte('created_at', dateTo as string);
+    
+    query = query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limitNum - 1);
+    
+    const { data, error, count } = await query;
+    
+    if (error) throw error;
+    
+    // Map database column names to frontend expected names
+    const mappedEarnings = (data || []).map(earning => ({
+      ...earning,
+      game_profit: earning.real_profit,  // Map real_profit to game_profit
+      earning_amount: earning.earned_amount  // Map earned_amount to earning_amount
+    }));
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        earnings: mappedEarnings,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: count || 0,
+          pages: Math.ceil((count || 0) / limitNum)
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('Get partner earnings error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch earnings' });
+  }
+});
+
+// GET /api/admin/partners/:id/withdrawals - Get partner withdrawal requests
+router.get('/:id/withdrawals', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { page = '1', limit = '20', status } = req.query;
+    
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const offset = (pageNum - 1) * limitNum;
+    
+    let query = supabaseServer
+      .from('partner_withdrawal_requests')
+      .select('*', { count: 'exact' })
+      .eq('partner_id', id);
+    
+    if (status && ['pending', 'approved', 'rejected', 'completed'].includes(status as string)) {
+      query = query.eq('status', status as string);
+    }
+    
+    query = query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limitNum - 1);
+    
+    const { data, error, count } = await query;
+    
+    if (error) throw error;
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        withdrawals: data || [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: count || 0,
+          pages: Math.ceil((count || 0) / limitNum)
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('Get partner withdrawals error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch withdrawals' });
+  }
+});
+
+// GET /api/admin/partners/:id/transactions - Get partner transaction history
+router.get('/:id/transactions', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { page = '1', limit = '20', type, dateFrom, dateTo } = req.query;
+    
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const offset = (pageNum - 1) * limitNum;
+    
+    let query = supabaseServer
+      .from('partner_wallet_transactions')
+      .select('*', { count: 'exact' })
+      .eq('partner_id', id);
+    
+    if (type && ['earning', 'withdrawal', 'adjustment'].includes(type as string)) {
+      query = query.eq('transaction_type', type as string);
+    }
+    
+    if (dateFrom) query = query.gte('created_at', dateFrom as string);
+    if (dateTo) query = query.lte('created_at', dateTo as string);
+    
+    query = query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limitNum - 1);
+    
+    const { data, error, count } = await query;
+    
+    if (error) throw error;
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        transactions: data || [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: count || 0,
+          pages: Math.ceil((count || 0) / limitNum)
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('Get partner transactions error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch transactions' });
+  }
+});
+
+// PUT /api/admin/partners/:id/withdrawals/:withdrawalId - Approve/Reject withdrawal
+router.put('/:id/withdrawals/:withdrawalId', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id, withdrawalId } = req.params;
+    const { action, utrNumber, rejectionReason } = req.body;
+    const adminId = req.user?.id;
+    
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ success: false, error: 'Invalid action' });
+    }
+    
+    // Get withdrawal request
+    const { data: withdrawal, error: fetchError } = await supabaseServer
+      .from('partner_withdrawal_requests')
+      .select('*')
+      .eq('id', withdrawalId)
+      .eq('partner_id', id)
+      .eq('status', 'pending')
+      .single();
+    
+    if (fetchError || !withdrawal) {
+      return res.status(404).json({ success: false, error: 'Withdrawal request not found or already processed' });
+    }
+    
+    const amount = parseFloat(withdrawal.amount);
+    
+    if (action === 'approve') {
+      // Validate UTR number for approval
+      if (!utrNumber || utrNumber.trim().length < 5) {
+        return res.status(400).json({ success: false, error: 'Valid UTR number required for approval' });
+      }
+      
+      // Get partner current balance
+      const { data: partner } = await supabaseServer
+        .from('partners')
+        .select('wallet_balance')
+        .eq('id', id)
+        .single();
+      
+      if (!partner) {
+        return res.status(404).json({ success: false, error: 'Partner not found' });
+      }
+      
+      const currentBalance = parseFloat(partner.wallet_balance);
+      
+      if (currentBalance < amount) {
+        return res.status(400).json({
+          success: false,
+          error: `Insufficient balance. Partner has ₹${currentBalance.toFixed(2)}, requested ₹${amount.toFixed(2)}`
+        });
+      }
+      
+      // Deduct from wallet balance and update totals
+      const newBalance = currentBalance - amount;
+      
+      // Get current total_withdrawn
+      const { data: partnerData } = await supabaseServer
+        .from('partners')
+        .select('total_withdrawn')
+        .eq('id', id)
+        .single();
+      
+      const currentTotalWithdrawn = parseFloat(partnerData?.total_withdrawn || '0');
+      const newTotalWithdrawn = currentTotalWithdrawn + amount;
+      
+      const { error: updateError } = await supabaseServer
+        .from('partners')
+        .update({
+          wallet_balance: newBalance,
+          total_withdrawn: newTotalWithdrawn
+        })
+        .eq('id', id);
+      
+      if (updateError) throw updateError;
+      
+      // Create transaction record
+      await supabaseServer
+        .from('partner_wallet_transactions')
+        .insert({
+          partner_id: id,
+          transaction_type: 'withdrawal',
+          amount: amount,
+          balance_before: currentBalance,
+          balance_after: newBalance,
+          description: `Withdrawal approved - UTR: ${utrNumber}`,
+          reference_id: withdrawalId
+        });
+      
+      // Update withdrawal request
+      const { error: withdrawalError } = await supabaseServer
+        .from('partner_withdrawal_requests')
+        .update({
+          status: 'completed',
+          utr_number: utrNumber,
+          processed_at: new Date().toISOString(),
+          processed_by: adminId
+        })
+        .eq('id', withdrawalId);
+      
+      if (withdrawalError) throw withdrawalError;
+      
+      return res.status(200).json({
+        success: true,
+        message: `Withdrawal of ₹${amount.toFixed(2)} approved successfully`,
+        data: { newBalance, utrNumber }
+      });
+      
+    } else {
+      // Reject withdrawal
+      const reason = rejectionReason || 'Rejected by admin';
+      
+      const { error: rejectError } = await supabaseServer
+        .from('partner_withdrawal_requests')
+        .update({
+          status: 'rejected',
+          rejection_reason: reason,
+          processed_at: new Date().toISOString(),
+          processed_by: adminId
+        })
+        .eq('id', withdrawalId);
+      
+      if (rejectError) throw rejectError;
+      
+      return res.status(200).json({
+        success: true,
+        message: `Withdrawal request rejected`,
+        data: { reason }
+      });
+    }
+  } catch (error: any) {
+    console.error('Process withdrawal error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to process withdrawal' });
+  }
+});
+
+// GET /api/admin/partners/:id/stats - Get comprehensive partner statistics
+router.get('/:id/stats', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Call the SQL function for comprehensive stats
+    const { data, error } = await supabaseServer
+      .rpc('get_partner_dashboard_stats', { p_partner_id: id });
+    
+    if (error) throw error;
+    
+    const stats = data && data.length > 0 ? data[0] : {
+      total_games: 0,
+      total_earnings: 0,
+      current_balance: 0,
+      total_withdrawn: 0,
+      pending_withdrawals: 0,
+      earnings_this_month: 0,
+      earnings_today: 0,
+      avg_earning_per_game: 0,
+      last_earning_date: null
+    };
+    
+    return res.status(200).json({
+      success: true,
+      data: stats
+    });
+  } catch (error: any) {
+    console.error('Get partner stats error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch statistics' });
+  }
+});
+
 export default router;
