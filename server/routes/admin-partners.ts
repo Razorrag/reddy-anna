@@ -155,6 +155,40 @@ router.get('/withdrawals/all', requireAdmin, async (req: Request, res: Response)
   }
 });
 
+// GET /api/admin/partners/:id - Get single partner by ID
+router.get('/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const { data: partner, error } = await supabaseServer
+      .from('partners')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error || !partner) {
+      return res.status(404).json({ success: false, error: 'Partner not found' });
+    }
+    
+    const formattedPartner = {
+      id: partner.id,
+      phone: partner.phone,
+      fullName: partner.full_name,
+      email: partner.email,
+      status: partner.status,
+      sharePercentage: parseFloat(partner.share_percentage || '50'),
+      commissionRate: parseFloat(partner.commission_rate || '10'),
+      lastLogin: partner.last_login,
+      createdAt: partner.created_at,
+    };
+    
+    return res.status(200).json({ success: true, data: formattedPartner });
+  } catch (error: any) {
+    console.error('Get partner by ID error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to get partner' });
+  }
+});
+
 // PUT /api/admin/partners/:id/status - Update partner status
 router.put('/:id/status', requireAdmin, async (req: Request, res: Response) => {
   try {

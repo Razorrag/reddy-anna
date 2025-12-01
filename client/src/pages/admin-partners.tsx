@@ -294,6 +294,14 @@ export default function AdminPartners() {
   return (
     <AdminLayout>
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-4 md:p-6">
+        {/* Header with Back Button */}
+        <div className="flex items-center gap-4 mb-6">
+          <Button onClick={() => setLocation('/admin')} variant="outline" className="border-gold/30 text-gold">
+            <ChevronLeft className="w-4 h-4 mr-2" /> Dashboard
+          </Button>
+          <h1 className="text-2xl md:text-3xl font-bold text-gold">Partner Management</h1>
+        </div>
+
         {/* Emergency Password Reset */}
         <Card className="bg-red-900/20 border-red-500/30">
           <CardHeader>

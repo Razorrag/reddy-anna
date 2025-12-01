@@ -126,14 +126,14 @@ export default function AdminPartnerDetail() {
 
   const fetchPartnerInfo = async () => {
     try {
-      // Get basic partner info
-      const response = await fetch(`/api/admin/partners?search=${partnerId}`, {
+      // Get basic partner info by ID
+      const response = await fetch(`/api/admin/partners/${partnerId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
       
-      if (data.success && data.data.partners.length > 0) {
-        const partnerData = data.data.partners[0];
+      if (data.success && data.data) {
+        const partnerData = data.data;
         
         // Get wallet info
         const walletRes = await fetch(`/api/admin/partners/${partnerId}/wallet`, {
@@ -148,6 +148,15 @@ export default function AdminPartnerDetail() {
             totalEarned: parseFloat(walletData.data.total_earned || '0'),
             totalWithdrawn: parseFloat(walletData.data.total_withdrawn || '0'),
             pendingWithdrawals: parseFloat(walletData.data.pending_withdrawals || '0')
+          });
+        } else {
+          // Set partner even if wallet fetch fails
+          setPartner({
+            ...partnerData,
+            walletBalance: 0,
+            totalEarned: 0,
+            totalWithdrawn: 0,
+            pendingWithdrawals: 0
           });
         }
       }
@@ -318,8 +327,11 @@ export default function AdminPartnerDetail() {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-4 md:p-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
+          <Button onClick={() => setLocation('/admin')} variant="outline" className="border-gold/30 text-gold">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Dashboard
+          </Button>
           <Button onClick={() => setLocation('/admin/partners')} variant="outline" className="border-gold/30 text-gold">
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back
+            <ArrowLeft className="w-4 h-4 mr-2" /> Partners
           </Button>
           <div className="flex-1">
             <h1 className="text-2xl md:text-3xl font-bold text-gold">{partner.fullName}</h1>

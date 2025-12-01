@@ -177,15 +177,9 @@ export default function UserAdmin() {
     }
   };
 
-  // Enhanced search with mobile number support
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = searchTerm === '' ||
-      user.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.phone?.includes(searchTerm) ||
-      user.phone?.replace(/\D/g, '').includes(searchTerm.replace(/\D/g, ''));
-    const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // Server already handles filtering, so just use the users array directly
+  // This prevents double-filtering which caused stats to show zero
+  const filteredUsers = users;
 
   // Handle search with debouncing
   useEffect(() => {
