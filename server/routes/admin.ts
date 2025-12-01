@@ -321,6 +321,35 @@ router.get('/bonus-settings', getAdminBonusSettings);
 
 router.put('/bonus-settings', updateAdminBonusSettings);
 
+// ✅ NEW: Get active/live players endpoint
+router.get('/active-players', async (req, res) => {
+  try {
+    // Import clients from routes.ts
+    const { clients } = await import('../routes');
+    
+    // Get all active player connections
+    const activeUserIds = Array.from(clients)
+      .filter(c => c.role === 'player')
+      .map(c => c.userId);
+    
+    // Get unique user IDs (in case of multiple connections)
+    const uniqueActiveUserIds = Array.from(new Set(activeUserIds));
+    
+    res.json({
+      success: true,
+      activeUserIds: uniqueActiveUserIds,
+      count: uniqueActiveUserIds.length,
+      timestamp: Date.now()
+    });
+  } catch (error: any) {
+    console.error('Error fetching active players:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch active players'
+    });
+  }
+});
+
 // ✅ NEW: Fix missing referral codes for existing users
 router.post('/fix-referral-codes', async (req, res) => {
   try {

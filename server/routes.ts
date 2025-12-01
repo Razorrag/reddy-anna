@@ -1722,6 +1722,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
           }
 
+          // Handle admin request for active users
+          case 'get_active_users': {
+            if (!client || !isAuthenticated) {
+              sendError(ws, 'Authentication required');
+              return;
+            }
+
+            // Only allow admins to query active users
+            if (client.role !== 'admin' && client.role !== 'super_admin') {
+              sendError(ws, 'Admin access required to view active users');
+              return;
+            }
+
+            // Get all active player connections
+            const activeUsers = Array.from(clients)
+              .filter(c => c.role === 'player')
+              .map(c => ({
+                userId: c.userId,
+                lastActivity: c.lastActivity,
+                authenticatedAt: c.authenticatedAt,
+                tokenExpiry: c.tokenExpiry
+              }));
+
+            ws.send(JSON.stringify({
+              type: 'active_users_list',
+              data: {
+                users: activeUsers,
+                count: activeUsers.length,
+                timestamp: Date.now()
+              }
+            }));
+
+            console.log(`📊 Active users list sent to admin ${client.userId}: ${activeUsers.length} players online`);
+            break;
+          }
+
           // WebRTC stream messages disabled - stream handled via stream-routes
           case 'stream_viewer_join':
           case 'request_stream':

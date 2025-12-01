@@ -54,6 +54,7 @@ export default function UserAdmin() {
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [activeUserIds, setActiveUserIds] = useState<string[]>([]);
   
   // State for user creation
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -94,8 +95,38 @@ export default function UserAdmin() {
     }
   };
 
+  // Load active/live players from API
+  const loadActiveUsers = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token) return;
+
+      const response = await fetch('/api/admin/active-players', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setActiveUserIds(data.activeUserIds || []);
+          console.log(`🟢 ${data.count} live players online`);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch active players:', error);
+    }
+  };
+
   useEffect(() => {
     loadUsers();
+    loadActiveUsers();
+
+    // Refresh active users every 10 seconds
+    const interval = setInterval(loadActiveUsers, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   // Handle balance update
@@ -178,8 +209,18 @@ export default function UserAdmin() {
   };
 
   // Server already handles filtering, so just use the users array directly
-  // This prevents double-filtering which caused stats to show zero
-  const filteredUsers = users;
+  // Sort users with live players at the top
+  const filteredUsers = [...users].sort((a, b) => {
+    const aIsLive = activeUserIds.includes(a.id);
+    const bIsLive = activeUserIds.includes(b.id);
+    
+    // Live players first
+    if (aIsLive && !bIsLive) return -1;
+    if (!aIsLive && bIsLive) return 1;
+    
+    // Otherwise maintain original order
+    return 0;
+  });
 
   // Handle search with debouncing
   useEffect(() => {
@@ -397,7 +438,7 @@ export default function UserAdmin() {
         {/* Stats Cards */}
         <div className="max-w-7xl mx-auto mb-8">
           <div className={cn(
-            "grid grid-cols-1 md:grid-cols-4 gap-6 transition-all duration-1000",
+            "grid grid-cols-1 md:grid-cols-5 gap-6 transition-all duration-1000",
             isLoaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           )}>
             <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
@@ -413,9 +454,24 @@ export default function UserAdmin() {
               </CardContent>
             </Card>
 
+            <Card className="bg-black/40 border-green-500/30 backdrop-blur-sm">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-green-400">🟢 Live Now</CardTitle>
+                <Activity className="h-4 w-4 text-green-400 animate-pulse" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-400">
+                  {activeUserIds.length}
+                </div>
+                <p className="text-xs text-gray-400">
+                  Players online
+                </p>
+              </CardContent>
+            </Card>
+
             <Card className="bg-black/40 border-gold/30 backdrop-blur-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gold">Active Users</CardTitle>
+                <CardTitle className="text-sm font-medium text-gold">Active Status</CardTitle>
                 <CheckCircle className="h-4 w-4 text-green-400" />
               </CardHeader>
               <CardContent>
@@ -423,7 +479,7 @@ export default function UserAdmin() {
                   {users.filter(u => u.status === 'active').length}
                 </div>
                 <p className="text-xs text-gray-400">
-                  Currently active
+                  Account active
                 </p>
               </CardContent>
             </Card>
@@ -583,14 +639,23 @@ export default function UserAdmin() {
                   <div key={user.id} className="p-6 bg-purple-950/30 rounded-lg border border-purple-400/20 hover:border-purple-400/40 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-indigo-600 rounded-full flex items-center justify-center">
+                        <div className="relative w-12 h-12 bg-gradient-to-br from-purple-400 to-indigo-600 rounded-full flex items-center justify-center">
                           <span className="text-white font-bold text-lg">
                             {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
                           </span>
+                          {/* Live indicator */}
+                          {activeUserIds.includes(user.id) && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-purple-950 animate-pulse" title="Live Now" />
+                          )}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="text-lg font-semibold text-white">{user.fullName}</h3>
+                            {activeUserIds.includes(user.id) && (
+                              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                                🟢 Live
+                              </Badge>
+                            )}
                             <Badge className={getStatusBadgeClass(user.status)}>
                               {user.status}
                             </Badge>
