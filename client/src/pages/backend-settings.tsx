@@ -23,7 +23,7 @@ export default function BackendSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
-    minBet: 1000,
+    minBet: 100,
     maxBet: 100000,
     timerDuration: 30,
     depositBonusPercent: 5,
@@ -43,7 +43,7 @@ export default function BackendSettingsPage() {
       const response = await apiClient.get<GameSettingsResponse>('/admin/game-settings');
       if (response.success && response.content) {
         setSettings({
-          minBet: response.content.minBet || 1000,
+          minBet: response.content.minBet || 100,
           maxBet: response.content.maxBet || 100000,
           timerDuration: response.content.bettingTimerDuration || 30,
           depositBonusPercent: response.content.depositBonusPercent || 5,

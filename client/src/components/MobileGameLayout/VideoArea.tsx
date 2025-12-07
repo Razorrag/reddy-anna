@@ -974,7 +974,12 @@ const VideoArea: React.FC<VideoAreaProps> = React.memo(({ className = '' }) => {
               left: 0,
               width: '100%',
               height: '100%',
-              objectFit: 'cover'
+              objectFit: 'cover',
+              // ✅ ENHANCED: Apply same color boost as live stream for consistent vibrancy
+              filter: 'contrast(1.05) saturate(1.1) brightness(1.02)',
+              imageRendering: 'high-quality',
+              WebkitBackfaceVisibility: 'hidden',
+              backfaceVisibility: 'hidden'
             }}
           />
           {/* No "Stream Paused" text overlay - clean experience for players */}

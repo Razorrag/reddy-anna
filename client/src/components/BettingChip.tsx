@@ -17,6 +17,7 @@ export function BettingChip({ amount, isSelected, onClick }: BettingChipProps) {
   // Map amount to image path - Matches Legacy Coins
   const getChipImage = (amount: number) => {
     switch (amount) {
+      case 100000: return "/coins/100000.png";
       case 50000: return "/coins/50000.png";
       case 40000: return "/coins/40000.png";
       case 30000: return "/coins/30000.png";
@@ -25,7 +26,10 @@ export function BettingChip({ amount, isSelected, onClick }: BettingChipProps) {
       case 5000: return "/coins/5000.png";
       case 2500: return "/coins/2500.png";
       case 1000: return "/coins/1000.png";
-      default: return "/coins/1000.png"; // Default to smallest chip
+      case 500: return "/coins/500.png";
+      case 200: return "/coins/200.png";
+      case 100: return "/coins/100.png";
+      default: return "/coins/100.png"; // Default to smallest chip
     }
   };
 

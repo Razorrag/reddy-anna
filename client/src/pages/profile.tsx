@@ -672,7 +672,7 @@ const Profile: React.FC = () => {
                   <div>
                     <Label className="text-white/80 mb-3">Quick Select</Label>
                     <div className="grid grid-cols-3 gap-2">
-                      {[1000, 5000, 10000, 25000, 50000, 100000].map((value) => (
+                      {[100, 500, 1000, 5000, 10000, 50000].map((value) => (
                         <Button
                           key={value}
                           onClick={() => setTransactionAmount(value.toString())}
@@ -864,7 +864,7 @@ const Profile: React.FC = () => {
                   <div>
                     <Label className="text-white/80 mb-3">Quick Select</Label>
                     <div className="grid grid-cols-3 gap-2">
-                      {[1000, 5000, 10000, 25000, 50000, 100000].map((value) => (
+                      {[100, 500, 1000, 5000, 10000, 50000].map((value) => (
                         <Button
                           key={value}
                           onClick={() => setTransactionAmount(value.toString())}

@@ -182,8 +182,8 @@ export function initializeGameState(): GameState {
  * Validate bet amount
  */
 export function validateBetAmount(amount: number): { isValid: boolean; error?: string } {
-  if (!amount || amount < 1000) {
-    return { isValid: false, error: 'Minimum bet is ₹1,000' };
+  if (!amount || amount < 100) {
+    return { isValid: false, error: 'Minimum bet is ₹100' };
   }
   
   if (amount > 100000) {

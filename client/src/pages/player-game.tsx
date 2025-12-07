@@ -47,7 +47,7 @@ export default function PlayerGame() {
       if (saved) {
         const parsed = parseInt(saved, 10);
         // Validate that saved amount is in betAmounts array
-        const validAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
+        const validAmounts = [100, 200, 500, 1000, 2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
         if (validAmounts.includes(parsed)) {
           return parsed;
         }
@@ -55,7 +55,7 @@ export default function PlayerGame() {
     } catch (error) {
       console.error('Failed to load bet amount from localStorage:', error);
     }
-    return 2500; // Default fallback
+    return 100; // Default fallback
   });
   const [selectedPosition, setSelectedPosition] = useState<BetSide | null>(null);
   const [isPlacingBet, setIsPlacingBet] = useState(false);
@@ -71,8 +71,8 @@ export default function PlayerGame() {
   // ✅ NEW: Flash screen state - shows every time page loads
   const [showFlashScreen, setShowFlashScreen] = useState(true);
 
-  // Available bet amounts - matching schema limits (1000-100000)
-  const betAmounts = [2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
+  // Available bet amounts - matching schema limits (100-100000)
+  const betAmounts = [100, 200, 500, 1000, 2500, 5000, 10000, 20000, 30000, 40000, 50000, 100000];
 
   // ✅ NEW: Show flash screen on component mount
   useEffect(() => {
