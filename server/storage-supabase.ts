@@ -2694,7 +2694,7 @@ export class SupabaseStorage implements IStorage {
     const adminWhatsappNumber = await this.getGameSetting('admin_whatsapp_number');
 
     return {
-      minBet: 1000,
+      minBet: 100,
       maxBet: 100000,
       timerDuration: 30,
       default_deposit_bonus_percent: parseFloat(defaultDepositBonusPercent || '5'),

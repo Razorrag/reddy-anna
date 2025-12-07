@@ -420,7 +420,7 @@ export const getGameSettings = async (): Promise<ContentResponse> => {
       content: {
         bettingTimerDuration: parseInt(bettingTimer || '30', 10),
         roundTransitionDelay: parseInt(transitionDelay || '2', 10),
-        minBetAmount: parseInt(minBet || '1000', 10),
+        minBetAmount: parseInt(minBet || '100', 10),
         maxBetAmount: parseInt(maxBet || '100000', 10),
         defaultStartingBalance: parseInt(startingBalance || '100000', 10),
         houseCommissionRate: parseFloat(commissionRate || '0.05'),

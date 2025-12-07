@@ -113,13 +113,13 @@ export async function handlePlayerBet(client: WSClient, data: any) {
 
   // ✅ FIX: Validate bet amount against MIN_BET and MAX_BET limits
   const { storage } = await import('../storage-supabase');
-  let minBet = 1000; // Default
+  let minBet = 100; // Default
   let maxBet = 100000; // Default
 
   try {
-    const minBetSetting = await storage.getGameSetting('min_bet_amount') || '1000';
+    const minBetSetting = await storage.getGameSetting('min_bet_amount') || '100';
     const maxBetSetting = await storage.getGameSetting('max_bet_amount') || '100000';
-    minBet = parseInt(minBetSetting) || 1000;
+    minBet = parseInt(minBetSetting) || 100;
     maxBet = parseInt(maxBetSetting) || 100000;
   } catch (error) {
     console.warn('Could not fetch bet limits, using defaults:', error);

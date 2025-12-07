@@ -421,7 +421,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
             showNotification(`Cannot place bet for this round. Current round: ${data.data.currentRound || 'unknown'}`, 'error');
             break;
           case 'MIN_BET_VIOLATION':
-            showNotification(`Minimum bet is ₹${data.data.minAmount || 1000}`, 'error');
+            showNotification(`Minimum bet is ₹${data.data.minAmount || 100}`, 'error');
             break;
           case 'MAX_BET_VIOLATION':
             showNotification(`Maximum bet is ₹${data.data.maxAmount || 100000}`, 'error');

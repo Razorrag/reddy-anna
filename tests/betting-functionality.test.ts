@@ -104,8 +104,8 @@ class MockBettingService {
     }
 
     // Validate bet amount
-    if (!betAmount || betAmount < 1000 || betAmount > 100000) {
-      return { success: false, message: `Invalid bet amount. Must be between ₹1,000 and ₹100,000` };
+    if (!betAmount || betAmount < 100 || betAmount > 100000) {
+      return { success: false, message: `Invalid bet amount. Must be between ₹100 and ₹100,000` };
     }
 
     // Validate bet side
