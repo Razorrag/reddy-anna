@@ -679,7 +679,7 @@ const Profile: React.FC = () => {
                           variant="outline"
                           className="border-green-500/30 text-green-400 hover:bg-green-500/20"
                         >
-                          ₹{(value / 1000).toFixed(0)}K
+                          ₹{value >= 1000 ? `${(value / 1000).toFixed(0)}K` : value}
                         </Button>
                       ))}
                     </div>
@@ -872,7 +872,7 @@ const Profile: React.FC = () => {
                           disabled={value > balance}
                           className="border-red-500/30 text-red-400 hover:bg-red-500/20 disabled:opacity-30"
                         >
-                          ₹{(value / 1000).toFixed(0)}K
+                          ₹{value >= 1000 ? `${(value / 1000).toFixed(0)}K` : value}
                         </Button>
                       ))}
                     </div>

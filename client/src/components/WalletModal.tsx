@@ -326,7 +326,7 @@ const quickAmounts = [100, 500, 1000, 5000, 10000, 50000];
                   onClick={() => handleQuickAmount(value)}
                   className="bg-gold/10 hover:bg-gold/20 border border-gold/30 rounded-lg py-2 px-3 text-gold font-semibold text-sm transition-colors"
                 >
-                  ₹{(value / 1000).toFixed(0)}K
+                  ₹{value >= 1000 ? `${(value / 1000).toFixed(0)}K` : value}
                 </button>
               ))}
             </div>
